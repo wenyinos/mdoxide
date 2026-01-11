@@ -371,7 +371,7 @@ impl AboutPanel {
             ui.label(RichText::new("📜 License").strong().size(16.0));
             ui.add_space(8.0);
             ui.label("MIT License");
-            ui.label(RichText::new("© 2024 Ferrite Contributors").weak());
+            ui.label(RichText::new("© 2026 Ferrite Contributors").weak());
 
             ui.add_space(16.0);
         });

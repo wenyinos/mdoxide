@@ -61,7 +61,7 @@ use crate::markdown::widgets::{
 use eframe::egui::{
     self, Color32, FontId, Key, Response, RichText, ScrollArea, TextEdit, Ui, Vec2,
 };
-use log::debug;
+use log::{debug, warn};
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Editor Mode
@@ -1512,7 +1512,15 @@ fn render_list_with_structural_keys(
     };
 
     for (idx, child) in node.children.iter().enumerate() {
-        if let MarkdownNodeType::Item = &child.node_type {
+        // Handle both regular list items (Item) and task list items (TaskItem)
+        // Note: In some markdown AST structures, task lists have TaskItem as direct
+        // children of List, not wrapped in an Item node
+        let should_render = matches!(
+            &child.node_type,
+            MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
+        );
+        
+        if should_render {
             render_list_item_with_structural_keys(
                 ui,
                 child,
@@ -1551,10 +1559,24 @@ fn render_list_item_with_structural_keys(
     item_number: u32,
     item_index: usize,
 ) {
-    let is_task = node
-        .children
-        .iter()
-        .any(|c| matches!(c.node_type, MarkdownNodeType::TaskItem { .. }));
+    // Check if this node IS a TaskItem (direct child of List) or CONTAINS a TaskItem child
+    let (is_task, task_checked) = if let MarkdownNodeType::TaskItem { checked } = &node.node_type {
+        // The node itself is a TaskItem (task list structure)
+        (true, *checked)
+    } else {
+        // Regular Item - check if it has a TaskItem child
+        let task_child = node
+            .children
+            .iter()
+            .find_map(|c| {
+                if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
+                    Some(*checked)
+                } else {
+                    None
+                }
+            });
+        (task_child.is_some(), task_child.unwrap_or(false))
+    };
 
     let para_node = node
         .children
@@ -1623,46 +1645,46 @@ fn render_list_item_with_structural_keys(
         None
     };
 
-    let indent_width = indent_level as f32 * 20.0;
+    // Base indentation to align with content area + nested indent
+    let base_indent = 16.0; // Align with other content
+    let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
     ui.horizontal(|ui| {
-        ui.add_space(indent_width);
+        // Total indentation: base + nested
+        ui.add_space(base_indent + nested_indent);
 
-        if is_task {
-            let checked = node
-                .children
-                .iter()
-                .find_map(|c| {
-                    if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
-                        Some(*checked)
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(false);
-
-            let mut task_checked = checked;
-            if ui.checkbox(&mut task_checked, "").changed() {
-                debug!("Task item toggled: {}", task_checked);
+        // Render list marker (bullet, number, or checkbox for tasks)
+        let marker = if is_task {
+            // Task list: ASCII-style checkbox (non-interactive for now)
+            // Will be made interactive in v0.3.0 with custom editor widget
+            if task_checked {
+                "[x]"
+            } else {
+                "[ ]"
             }
+            .to_string()
         } else {
-            let marker = match list_type {
-                ListType::Bullet => if indent_level == 0 {
-                    "\u{2022}" // bullet •
-                } else {
-                    "\u{25E6}" // white bullet ◦
+            // Regular list marker
+            match list_type {
+                ListType::Bullet => {
+                    if indent_level == 0 {
+                        "\u{2022}" // bullet •
+                    } else {
+                        "\u{25E6}" // white bullet ◦
+                    }
                 }
                 .to_string(),
                 ListType::Ordered { delimiter, .. } => format!("{}{}", item_number, delimiter),
-            };
-            ui.label(
-                RichText::new(&marker)
-                    .color(colors.list_marker)
-                    .font(FontId::new(font_size, font_family.clone())),
-            );
-            ui.add_space(4.0);
-        }
+            }
+        };
+        
+        ui.label(
+            RichText::new(&marker)
+                .color(colors.list_marker)
+                .font(FontId::new(font_size, font_family.clone())),
+        );
+        ui.add_space(4.0);
 
         // Render item content
         if has_inline_formatting {
@@ -2539,7 +2561,15 @@ fn render_list(
     };
 
     for (child_idx, child) in node.children.iter().enumerate() {
-        if let MarkdownNodeType::Item = &child.node_type {
+        // Handle both regular list items (Item) and task list items (TaskItem)
+        // Note: In some markdown AST structures, task lists have TaskItem as direct
+        // children of List, not wrapped in an Item node
+        let should_render = matches!(
+            &child.node_type,
+            MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
+        );
+        
+        if should_render {
             let _ = child_idx; // Suppress unused warning
             render_list_item(
                 ui,
@@ -2614,17 +2644,53 @@ fn render_list_item(
     list_type: &ListType,
     item_number: u32,
 ) {
-    // Check for task item
-    let is_task = node
-        .children
-        .iter()
-        .any(|c| matches!(c.node_type, MarkdownNodeType::TaskItem { .. }));
+    // Check if this node IS a TaskItem (direct child of List) or CONTAINS a TaskItem child
+    let (is_task, task_checked) = if let MarkdownNodeType::TaskItem { checked } = &node.node_type {
+        // The node itself is a TaskItem (task list structure)
+        (true, *checked)
+    } else {
+        // Regular Item - check if it has a TaskItem child
+        let task_child = node
+            .children
+            .iter()
+            .find_map(|c| {
+                if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
+                    Some(*checked)
+                } else {
+                    None
+                }
+            });
+        (task_child.is_some(), task_child.unwrap_or(false))
+    };
 
     // Find the paragraph node (contains the list item content)
+    // For TaskItem nodes, the Paragraph is a direct child
+    // For Item nodes, the Paragraph is also a direct child (sibling of TaskItem marker)
     let para_node = node
         .children
         .iter()
         .find(|c| matches!(c.node_type, MarkdownNodeType::Paragraph));
+
+    // DEBUG: Log the structure of this list item to diagnose rendering issues
+    debug!(
+        "[LIST_ITEM_DEBUG] Rendering item at line {}: node_type={:?}, is_task={}, para_node={}, children_count={}, children_types={:?}",
+        node.start_line,
+        std::mem::discriminant(&node.node_type),
+        is_task,
+        para_node.is_some(),
+        node.children.len(),
+        node.children.iter().map(|c| format!("{:?}", std::mem::discriminant(&c.node_type))).collect::<Vec<_>>()
+    );
+    if let Some(para) = para_node {
+        debug!(
+            "[LIST_ITEM_DEBUG] Para at line {}-{}: children_count={}, text_content='{}', children_types={:?}",
+            para.start_line,
+            para.end_line,
+            para.children.len(),
+            para.text_content().chars().take(50).collect::<String>(),
+            para.children.iter().map(|c| format!("{:?}", std::mem::discriminant(&c.node_type))).collect::<Vec<_>>()
+        );
+    }
 
     // Collect nested lists to render separately
     let nested_lists: Vec<&MarkdownNode> = node
@@ -2689,34 +2755,36 @@ fn render_list_item(
         None
     };
 
-    let indent_width = indent_level as f32 * 20.0;
+    // DEBUG: Log which rendering path will be taken
+    debug!(
+        "[LIST_ITEM_DEBUG] Rendering decision at line {}: has_inline_formatting={}, simple_text_node_id={}",
+        node.start_line,
+        has_inline_formatting,
+        simple_text_node_id.is_some()
+    );
+
+    // Base indentation to align with content area + nested indent
+    let base_indent = 16.0; // Align with other content
+    let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
     let focus_info: (bool, Option<(usize, usize)>, Option<usize>) = ui.horizontal(|ui| {
-        // Indentation
-        ui.add_space(indent_width);
+        // Total indentation: base + nested
+        ui.add_space(base_indent + nested_indent);
 
-        if is_task {
-            // Find the task item state
-            let checked = node
-                .children
-                .iter()
-                .find_map(|c| {
-                    if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
-                        Some(*checked)
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(false);
-
-            let mut task_checked = checked;
-            if ui.checkbox(&mut task_checked, "").changed() {
-                debug!("Task item toggled: {}", task_checked);
+        // Render list marker (bullet, number, or checkbox for tasks)
+        let marker = if is_task {
+            // Task list: ASCII-style checkbox (non-interactive for now)
+            // Will be made interactive in v0.3.0 with custom editor widget
+            if task_checked {
+                "[x]"
+            } else {
+                "[ ]"
             }
+            .to_string()
         } else {
-            // List marker - use different markers for nested levels
-            let marker = match list_type {
+            // Regular list marker
+            match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
                         "\u{2022}" // bullet •
@@ -2726,18 +2794,25 @@ fn render_list_item(
                 }
                 .to_string(),
                 ListType::Ordered { delimiter, .. } => format!("{}{}", item_number, delimiter),
-            };
-            ui.label(
-                RichText::new(&marker)
-                    .color(colors.list_marker)
-                    .font(FontId::new(font_size, font_family.clone())),
-            );
-            ui.add_space(4.0);
-        }
+            }
+        };
+        
+        ui.label(
+            RichText::new(&marker)
+                .color(colors.list_marker)
+                .font(FontId::new(font_size, font_family.clone())),
+        );
+        ui.add_space(4.0);
 
         // Render item content
         if has_inline_formatting {
+            debug!("[LIST_ITEM_DEBUG] Taking inline formatting path at line {}", node.start_line);
             if let Some(para) = para_node {
+                debug!(
+                    "[LIST_ITEM_DEBUG] Rendering formatted content: para.children.len()={}, rendering {} children",
+                    para.children.len(),
+                    para.children.len()
+                );
                 // Create unique ID using para.start_line (matches content extraction) 
                 // AND item_number for additional uniqueness guarantee
                 // FIX: Previously used node.start_line which could differ from para.start_line
@@ -2854,6 +2929,7 @@ fn render_list_item(
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
+            debug!("[LIST_ITEM_DEBUG] Taking simple text path at line {}", node.start_line);
             // Simple text - editable
             // Use egui memory to store the edit buffer so it persists across frames
             let edit_buffer_id = ui.id().with("list_item_edit_buffer").with(start_line);
@@ -2920,6 +2996,31 @@ fn render_list_item(
 
                 // Return focus info for tracking
                 return (has_focus, selection, Some(node_id));
+            }
+        } else {
+            // CRITICAL: Neither inline formatting path nor simple text path was taken
+            // This means no content will be rendered for this list item!
+            warn!(
+                "[LIST_ITEM_DEBUG] ⚠️ NO CONTENT RENDERED for list item at line {}! \
+                 has_inline_formatting={}, simple_text_node_id={}, para_node={}, is_task={}",
+                node.start_line,
+                has_inline_formatting,
+                simple_text_node_id.is_some(),
+                para_node.is_some(),
+                is_task
+            );
+            // Fallback: try to render any text content we can find
+            let fallback_text = node.text_content();
+            if !fallback_text.is_empty() {
+                warn!(
+                    "[LIST_ITEM_DEBUG] Attempting fallback render with text: '{}'",
+                    fallback_text.chars().take(50).collect::<String>()
+                );
+                ui.label(
+                    RichText::new(&fallback_text)
+                        .color(colors.text)
+                        .font(FontId::new(font_size, font_family)),
+                );
             }
         }
         (false, None, None)

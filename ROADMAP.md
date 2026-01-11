@@ -12,11 +12,23 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 
 ## Planned Features 🚀
 
-### v0.2.3 (Planned) - Mermaid Performance & Cleanup
+### v0.2.3 (Planned) - CJK Support & Polish
 
-> **Status:** Planned (deferred from v0.2.2)
+> **Status:** In Progress
 
-#### Mermaid Improvements
+#### Bug Fixes
+- [x] **Task list rendering** - Fixed! Task list items with inline formatting now render correctly. Also fixed checkbox alignment and replaced interactive checkboxes with non-interactive ASCII-style `[ ]`/`[x]` markers (interactive editing planned for v0.3.0).
+- [ ] **CJK character rendering** ([#7](https://github.com/OlaProeis/Ferrite/issues/7)) - Multi-region CJK support (Korean, Chinese, Japanese) via system font fallback using `font-kit` (PR [#8](https://github.com/OlaProeis/Ferrite/pull/8) by [@SteelCrab](https://github.com/SteelCrab) 🙏)
+- [x] **macOS Intel support** ([#16](https://github.com/OlaProeis/Ferrite/issues/16)) - Separate x86_64 build for Intel Macs via `macos-13` runner (PR [#2](https://github.com/OlaProeis/Ferrite/pull/2) fixed naming, Intel job added)
+- [ ] **Linux close button cursor flicker** - Fix cursor rapidly switching between pointer/move/resize near window close button on Linux (Mint)
+
+#### UX Improvements
+- [ ] **Configurable line width** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Option to limit text width for improved readability
+
+#### Platform & Distribution
+- [ ] **Linux musl build** - Provide statically-linked musl binary for maximum Linux compatibility (no glibc dependency)
+
+#### Mermaid Improvements (deferred from v0.2.2)
 - [ ] **Rendering performance** - Optimize mermaid.rs for complex diagrams
 - [ ] **Code cleanup** - Address unused code warnings, improve modularity
 
@@ -75,12 +87,21 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 - [ ] **macOS app signing & notarization** - Create proper `.app` bundle, sign with Developer ID, notarize with Apple
 
 ### Future (v0.4.0+)
+- [ ] **LaTeX/math support** - Inline (`$...$`) and display (`$$...$$`) math rendering
+- [ ] **TODO list editing UX** - Smart cursor behavior in task lists (respect line start position, don't jump past `- [ ]` syntax)
 - [ ] Spell checking
 - [ ] Custom themes (import/export)
 - [ ] Virtual/ghost text (AI completions, etc.)
 - [ ] Column/box selection
 
 ### Long-Term Vision
+
+#### Plugin System
+Extensibility architecture for custom functionality, inspired by Obsidian's plugin ecosystem.
+
+- [ ] **Plugin API design** - Define extension points (commands, views, file handlers)
+- [ ] **Scripting support** - Lua, WASM, or Rhai-based plugins
+- [ ] **Community plugins** - Distribution and discovery mechanism
 
 #### Headless Editor Library
 Extract `FerriteEditor` as a standalone, framework-agnostic text editing library for the Rust ecosystem.
@@ -108,7 +129,6 @@ A focused release addressing bugs reported after v0.2.1 launch, improving CLI us
 
 #### Bug Fixes
 - [x] **UTF-8 crash in tree viewer** - Fix string slicing panic when displaying JSON/YAML strings containing multi-byte characters (Norwegian øæå, Chinese, emoji, etc.)
-- [x] **CJK character rendering** ([#7](https://github.com/OlaProeis/Ferrite/issues/7)) - Multi-region CJK support (Korean, Chinese, Japanese) via system font fallback (PR [#8](https://github.com/OlaProeis/Ferrite/pull/8) by [@SteelCrab](https://github.com/SteelCrab) 🙏)
 - [x] **Ubuntu 22.04 .deb compatibility** ([#6](https://github.com/OlaProeis/Ferrite/issues/6)) - Build on Ubuntu 22.04 for glibc 2.35 compatibility
 - [x] **Undo/redo behavior** ([#5](https://github.com/OlaProeis/Ferrite/issues/5)) - Fixed scroll position reset, focus loss, double-press requirement, and cursor restoration on Ctrl+Z
 - [x] **Misleading code folding UI** ([#12](https://github.com/OlaProeis/Ferrite/issues/12)) - Hide non-functional fold indicators by default; remove confusing "Raw View" button from Rendered JSON view

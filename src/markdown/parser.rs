@@ -595,6 +595,199 @@ mod tests {
         assert_eq!(list.children.len(), 2);
     }
 
+    #[test]
+    fn test_parse_task_list_with_formatting() {
+        // Test task list with inline formatting (bold, links, code)
+        // This is the pattern that was failing to render in the preview
+        let markdown = "- [ ] **Bold text** ([link](https://example.com)) - description `code`";
+        let doc = parse_markdown(markdown).unwrap();
+
+        // Should have one list
+        assert_eq!(doc.root.children.len(), 1, "Expected 1 root child (the list)");
+        
+        let list = &doc.root.children[0];
+        assert!(
+            matches!(list.node_type, MarkdownNodeType::List { .. }),
+            "Expected List, got {:?}",
+            list.node_type
+        );
+
+        // Should have one child (could be Item or TaskItem depending on AST structure)
+        assert_eq!(list.children.len(), 1, "Expected 1 list child");
+        
+        let list_child = &list.children[0];
+        // Note: In comrak's AST for task lists, the list child can be either:
+        // - Item (with TaskItem as a child) in some versions
+        // - TaskItem directly (in current version)
+        // Our rendering code handles both cases
+        let is_valid_list_item = matches!(
+            list_child.node_type,
+            MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
+        );
+        assert!(
+            is_valid_list_item,
+            "Expected Item or TaskItem, got {:?}",
+            list_child.node_type
+        );
+
+        // Check for task item marker (either the node itself is TaskItem, or it has TaskItem child)
+        let is_task_marked = matches!(list_child.node_type, MarkdownNodeType::TaskItem { .. })
+            || list_child
+                .children
+                .iter()
+                .any(|c| matches!(c.node_type, MarkdownNodeType::TaskItem { .. }));
+        assert!(
+            is_task_marked,
+            "Task list should have TaskItem marker. Node type: {:?}, Children: {:?}",
+            list_child.node_type,
+            list_child.children
+                .iter()
+                .map(|c| format!("{:?}", c.node_type))
+                .collect::<Vec<_>>()
+        );
+
+        // Should have a Paragraph child containing the text
+        let para_node = list_child
+            .children
+            .iter()
+            .find(|c| matches!(c.node_type, MarkdownNodeType::Paragraph));
+        assert!(
+            para_node.is_some(),
+            "Task list item should have Paragraph child. Children types: {:?}",
+            list_child.children
+                .iter()
+                .map(|c| format!("{:?}", c.node_type))
+                .collect::<Vec<_>>()
+        );
+
+        let para = para_node.unwrap();
+        
+        // Paragraph should have children (not empty)
+        assert!(
+            !para.children.is_empty(),
+            "Paragraph should have children. Para: {:?}",
+            para
+        );
+
+        // Paragraph should contain Strong (bold) element
+        let has_strong = para
+            .children
+            .iter()
+            .any(|c| matches!(c.node_type, MarkdownNodeType::Strong));
+        assert!(
+            has_strong,
+            "Paragraph should contain Strong node. Children: {:?}",
+            para.children
+                .iter()
+                .map(|c| format!("{:?}", c.node_type))
+                .collect::<Vec<_>>()
+        );
+
+        // Paragraph should contain Link element
+        let has_link = para
+            .children
+            .iter()
+            .any(|c| matches!(c.node_type, MarkdownNodeType::Link { .. }));
+        assert!(
+            has_link,
+            "Paragraph should contain Link node. Children: {:?}",
+            para.children
+                .iter()
+                .map(|c| format!("{:?}", c.node_type))
+                .collect::<Vec<_>>()
+        );
+
+        // Text content should be preserved
+        let text = para.text_content();
+        assert!(
+            text.contains("Bold text"),
+            "Should contain 'Bold text', got: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_parse_tight_task_list_structure() {
+        // Test a tight task list (no blank lines between items) - similar to ROADMAP.md
+        let markdown = "#### Bug Fixes\n- [ ] **First issue** - description\n- [ ] **Second issue** - more text";
+        let doc = parse_markdown(markdown).unwrap();
+
+        // First child should be a heading
+        assert!(matches!(
+            doc.root.children[0].node_type,
+            MarkdownNodeType::Heading { .. }
+        ));
+
+        // Second child should be a list
+        let list = &doc.root.children[1];
+        assert!(
+            matches!(list.node_type, MarkdownNodeType::List { .. }),
+            "Expected List, got {:?}",
+            list.node_type
+        );
+
+        // List should have 2 items
+        assert_eq!(list.children.len(), 2, "List should have 2 items");
+
+        // Each item should be Item or TaskItem with Paragraph children
+        for (i, list_child) in list.children.iter().enumerate() {
+            // Can be either Item (with TaskItem child) or TaskItem directly
+            let is_valid_list_item = matches!(
+                list_child.node_type,
+                MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
+            );
+            assert!(
+                is_valid_list_item,
+                "List child {} should be Item or TaskItem, got {:?}",
+                i,
+                list_child.node_type
+            );
+
+            // Check for task marker (either the node itself or as child)
+            let is_task_marked = matches!(list_child.node_type, MarkdownNodeType::TaskItem { .. })
+                || list_child
+                    .children
+                    .iter()
+                    .any(|c| matches!(c.node_type, MarkdownNodeType::TaskItem { .. }));
+            let has_para = list_child
+                .children
+                .iter()
+                .any(|c| matches!(c.node_type, MarkdownNodeType::Paragraph));
+
+            assert!(
+                is_task_marked,
+                "Item {} should be marked as task. Children: {:?}",
+                i,
+                list_child.children
+                    .iter()
+                    .map(|c| format!("{:?}", c.node_type))
+                    .collect::<Vec<_>>()
+            );
+            assert!(
+                has_para,
+                "Item {} should have Paragraph. Children: {:?}",
+                i,
+                list_child.children
+                    .iter()
+                    .map(|c| format!("{:?}", c.node_type))
+                    .collect::<Vec<_>>()
+            );
+
+            // Check paragraph has content
+            if let Some(para) = list_child
+                .children
+                .iter()
+                .find(|c| matches!(c.node_type, MarkdownNodeType::Paragraph))
+            {
+                assert!(
+                    !para.children.is_empty(),
+                    "Item {} paragraph should have children",
+                    i
+                );
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Inline Element Tests
     // ─────────────────────────────────────────────────────────────────────────
