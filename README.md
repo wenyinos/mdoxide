@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/OlaProeis/Ferrite?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/OlaProeis/Ferrite?style=flat-square)](https://github.com/OlaProeis/Ferrite/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/OlaProeis/Ferrite?style=flat-square)](https://github.com/OlaProeis/Ferrite/issues)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/OlaProeis/Ferrite/rust.yml?branch=master&style=flat-square)](https://github.com/OlaProeis/Ferrite/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/OlaProeis/Ferrite/release.yml?branch=master&style=flat-square)](https://github.com/OlaProeis/Ferrite/actions)
 
 </div>
 
