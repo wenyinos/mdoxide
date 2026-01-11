@@ -8,7 +8,7 @@
 #![allow(dead_code)]
 
 use egui::{FontData, FontDefinitions, FontFamily, FontId, TextStyle};
-use log::info;
+use log::{info, warn};
 use std::collections::BTreeMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,6 +26,48 @@ const JETBRAINS_REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-R
 const JETBRAINS_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
 const JETBRAINS_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Italic.ttf");
 const JETBRAINS_BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-BoldItalic.ttf");
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System Font Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+use font_kit::family_name::FamilyName;
+use font_kit::handle::Handle;
+use font_kit::properties::Properties;
+use font_kit::source::SystemSource;
+use std::sync::Arc;
+
+// NanumGothic bundled fallback removed per user request.
+// We strictly rely on system fonts now.
+
+/// Attempt to load a specific system font from a list of candidates.
+///
+/// Returns `Some(FontData)` for the first candidate found on the system.
+fn load_system_font(families: &[&str]) -> Option<FontData> {
+    let source = SystemSource::new();
+
+    for family in families {
+        info!("Attempting to load system font: {}", family);
+        if let Ok(handle) =
+            source.select_best_match(&[FamilyName::Title(family.to_string())], &Properties::new())
+        {
+            match handle {
+                Handle::Path { path, .. } => {
+                    info!("Found system font at: {:?}", path);
+                    // Read file content
+                    if let Ok(bytes) = std::fs::read(&path) {
+                        return Some(FontData::from_owned(bytes));
+                    }
+                }
+                Handle::Memory { bytes, .. } => {
+                    info!("Found system font in memory ({} bytes)", bytes.len());
+                    return Some(FontData::from_owned(bytes.to_vec()));
+                }
+            }
+        }
+    }
+    None
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Family Names
@@ -48,6 +90,11 @@ pub const FONT_JETBRAINS_BOLD: &str = "JetBrainsMono-Bold";
 pub const FONT_JETBRAINS_ITALIC: &str = "JetBrainsMono-Italic";
 /// Custom font family for JetBrains Mono Bold Italic
 pub const FONT_JETBRAINS_BOLD_ITALIC: &str = "JetBrainsMono-BoldItalic";
+
+/// Keys for dynamically loaded CJK system fonts
+const FONT_CJK_KR: &str = "CJK_KR";
+const FONT_CJK_SC: &str = "CJK_SC";
+const FONT_CJK_JP: &str = "CJK_JP";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Loading
@@ -97,58 +144,201 @@ pub fn create_font_definitions() -> FontDefinitions {
         FontData::from_static(JETBRAINS_BOLD_ITALIC),
     );
 
-    // Set up Proportional font family (Inter with fallback to default)
-    // Order matters: first font is primary, rest are fallbacks
+    // ─────────────────────────────────────────────────────────────────────────
+    // Multi-Region CJK Support
+    // ─────────────────────────────────────────────────────────────────────────
+    // We try to load distinct system fonts for Korean, Simplified Chinese, and Japanese.
+    // This ensures coverage for glyphs that might be missing in a single region-specific font.
+
+    // 1. Korean Recommendations
+    // MacOS: Apple SD Gothic Neo
+    // Windows: Malgun Gothic
+    // Linux: Noto Sans CJK KR, NanumGothic
+    let kr_candidates = [
+        "Apple SD Gothic Neo",
+        "Malgun Gothic",
+        "Noto Sans CJK KR",
+        "NanumGothic",
+    ];
+    let kr_loaded = if let Some(data) = load_system_font(&kr_candidates) {
+        fonts.font_data.insert(FONT_CJK_KR.to_owned(), data);
+        true
+    } else {
+        false
+    };
+
+    // 2. Simplified Chinese Recommendations
+    // MacOS: PingFang SC
+    // Windows: Microsoft YaHei
+    // Linux: Noto Sans CJK SC
+    let sc_candidates = ["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC"];
+    let sc_loaded = if let Some(data) = load_system_font(&sc_candidates) {
+        fonts.font_data.insert(FONT_CJK_SC.to_owned(), data);
+        true
+    } else {
+        false
+    };
+
+    // 3. Japanese Recommendations
+    // MacOS: Hiragino Sans, Hiragino Kaku Gothic ProN
+    // Windows: Yu Gothic, Meiryo
+    // Linux: Noto Sans CJK JP
+    let jp_candidates = [
+        "Hiragino Sans",
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
+        "Meiryo",
+        "Noto Sans CJK JP",
+    ];
+    let jp_loaded = if let Some(data) = load_system_font(&jp_candidates) {
+        fonts.font_data.insert(FONT_CJK_JP.to_owned(), data);
+        true
+    } else {
+        false
+    };
+
+    if !kr_loaded && !sc_loaded && !jp_loaded {
+        warn!("No system CJK fonts were found (KR, SC, or JP). CJK rendering may fail.");
+    } else {
+        info!(
+            "System CJK fonts loaded: KR={}, SC={}, JP={}",
+            kr_loaded, sc_loaded, jp_loaded
+        );
+    }
+
+    // Set up Proportional font family
+    // Order matters: Inter -> KR -> SC -> JP
+    // This allows Korean users to see Korean glyphs preferred, but Chinese characters
+    // missing from the KR font will fall back to the SC font.
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
         .insert(0, FONT_INTER.to_owned());
 
-    // Set up Monospace font family (JetBrains Mono with fallback to default)
+    if kr_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .push(FONT_CJK_KR.to_owned());
+    }
+    if sc_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .push(FONT_CJK_SC.to_owned());
+    }
+    if jp_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .push(FONT_CJK_JP.to_owned());
+    }
+
+    // Set up Monospace font family
     fonts
         .families
         .entry(FontFamily::Monospace)
         .or_default()
         .insert(0, FONT_JETBRAINS.to_owned());
 
+    if kr_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .push(FONT_CJK_KR.to_owned());
+    }
+    if sc_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .push(FONT_CJK_SC.to_owned());
+    }
+    if jp_loaded {
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .push(FONT_CJK_JP.to_owned());
+    }
+
+    // Get fallback fonts from default families for CJK/Korean support
+    let proportional_fallbacks: Vec<String> = fonts
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    let monospace_fallbacks: Vec<String> = fonts
+        .families
+        .get(&FontFamily::Monospace)
+        .cloned()
+        .unwrap_or_default();
+
     // Create custom named font families for explicit style access
     // These allow us to directly select bold/italic fonts
-    fonts.families.insert(
-        FontFamily::Name(FONT_INTER.into()),
-        vec![FONT_INTER.to_owned()],
-    );
-    fonts.families.insert(
-        FontFamily::Name(FONT_INTER_BOLD.into()),
-        vec![FONT_INTER_BOLD.to_owned()],
-    );
+    // Each family includes fallbacks for CJK character support
+
+    // Inter variants with proportional fallbacks
+    let mut inter_family = vec![FONT_INTER.to_owned()];
+    inter_family.extend(proportional_fallbacks.clone());
+    fonts
+        .families
+        .insert(FontFamily::Name(FONT_INTER.into()), inter_family);
+
+    let mut inter_bold_family = vec![FONT_INTER_BOLD.to_owned()];
+    inter_bold_family.extend(proportional_fallbacks.clone());
+    fonts
+        .families
+        .insert(FontFamily::Name(FONT_INTER_BOLD.into()), inter_bold_family);
+
+    let mut inter_italic_family = vec![FONT_INTER_ITALIC.to_owned()];
+    inter_italic_family.extend(proportional_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_ITALIC.into()),
-        vec![FONT_INTER_ITALIC.to_owned()],
+        inter_italic_family,
     );
+
+    let mut inter_bold_italic_family = vec![FONT_INTER_BOLD_ITALIC.to_owned()];
+    inter_bold_italic_family.extend(proportional_fallbacks);
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_BOLD_ITALIC.into()),
-        vec![FONT_INTER_BOLD_ITALIC.to_owned()],
+        inter_bold_italic_family,
     );
 
-    fonts.families.insert(
-        FontFamily::Name(FONT_JETBRAINS.into()),
-        vec![FONT_JETBRAINS.to_owned()],
-    );
+    // JetBrains Mono variants with monospace fallbacks
+    let mut jetbrains_family = vec![FONT_JETBRAINS.to_owned()];
+    jetbrains_family.extend(monospace_fallbacks.clone());
+    fonts
+        .families
+        .insert(FontFamily::Name(FONT_JETBRAINS.into()), jetbrains_family);
+
+    let mut jetbrains_bold_family = vec![FONT_JETBRAINS_BOLD.to_owned()];
+    jetbrains_bold_family.extend(monospace_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_JETBRAINS_BOLD.into()),
-        vec![FONT_JETBRAINS_BOLD.to_owned()],
-    );
-    fonts.families.insert(
-        FontFamily::Name(FONT_JETBRAINS_ITALIC.into()),
-        vec![FONT_JETBRAINS_ITALIC.to_owned()],
-    );
-    fonts.families.insert(
-        FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into()),
-        vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned()],
+        jetbrains_bold_family,
     );
 
-    info!("Loaded custom fonts: Inter, JetBrains Mono");
+    let mut jetbrains_italic_family = vec![FONT_JETBRAINS_ITALIC.to_owned()];
+    jetbrains_italic_family.extend(monospace_fallbacks.clone());
+    fonts.families.insert(
+        FontFamily::Name(FONT_JETBRAINS_ITALIC.into()),
+        jetbrains_italic_family,
+    );
+
+    let mut jetbrains_bold_italic_family = vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned()];
+    jetbrains_bold_italic_family.extend(monospace_fallbacks);
+    fonts.families.insert(
+        FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into()),
+        jetbrains_bold_italic_family,
+    );
+
+    info!("Loaded custom fonts: Inter, JetBrains Mono, CJK");
 
     fonts
 }
