@@ -6,6 +6,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 
 - [README](../README.md) - Project overview and installation
 - [Building Guide](./building.md) - Build from source instructions
+- [CLI Reference](./cli.md) - Command-line interface documentation
 - [Contributing](../CONTRIBUTING.md) - Contribution guidelines
 
 ---
@@ -62,6 +63,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Zen Mode](./technical/zen-mode.md) | Distraction-free writing mode, centered text column, chrome hiding, F11 toggle |
 | [Search Highlight](./technical/search-highlight.md) | Search-in-files result navigation with transient highlight, auto Raw mode switch |
 | [Auto-Save](./technical/auto-save.md) | Configurable auto-save with temp file backups, toolbar toggle, recovery dialog |
+| [Log Level Config](./technical/log-level-config.md) | Configurable log verbosity via config.json and --log-level CLI flag |
 | [Code Folding](./technical/code-folding.md) | Fold region detection, gutter indicators (text hiding deferred to v0.3.0) |
 | [Split View](./technical/split-view.md) | Side-by-side raw editor + rendered preview, draggable splitter, independent scrolling |
 | [Live Pipeline](./technical/live-pipeline.md) | JSON/YAML command piping through shell commands (jq, yq), recent history, output display |
@@ -185,6 +187,7 @@ ferrite/
 | File Dialogs | rfd | 0.14 |
 | Platform Paths | dirs | 5 |
 | URL Opening | open | 5 |
+| CLI Parsing | clap | 4 |
 | Logging | log + env_logger | 0.4, 0.11 |
 | Regex | regex | 1.x |
 | Clipboard | arboard | 3 |

@@ -283,6 +283,104 @@ impl FerriteApp {
         }
     }
 
+    /// Open files or directories from CLI arguments.
+    ///
+    /// This is called after construction to handle paths passed via command line.
+    /// - Single directory: opens as workspace
+    /// - Files: opens each as a new tab
+    /// - Mixed: directory sets workspace, files open as tabs
+    ///
+    /// Non-existent paths are logged and skipped.
+    pub fn open_initial_paths(&mut self, paths: Vec<std::path::PathBuf>) {
+        use log::warn;
+
+        if paths.is_empty() {
+            return;
+        }
+
+        // Canonicalize and validate paths
+        let mut valid_files: Vec<std::path::PathBuf> = Vec::new();
+        let mut workspace_dir: Option<std::path::PathBuf> = None;
+
+        for path in paths {
+            // Try to canonicalize the path
+            let canonical = match path.canonicalize() {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!("Skipping non-existent path '{}': {}", path.display(), e);
+                    continue;
+                }
+            };
+
+            if canonical.is_dir() {
+                // Only take the first directory as workspace
+                if workspace_dir.is_none() {
+                    workspace_dir = Some(canonical);
+                } else {
+                    warn!(
+                        "Multiple directories provided; ignoring '{}'",
+                        path.display()
+                    );
+                }
+            } else if canonical.is_file() {
+                valid_files.push(canonical);
+            } else {
+                warn!("Path '{}' is neither a file nor directory", path.display());
+            }
+        }
+
+        // Open workspace if provided
+        if let Some(dir) = workspace_dir {
+            info!("Opening workspace from CLI: {}", dir.display());
+            if let Err(e) = self.state.open_workspace(dir.clone()) {
+                warn!("Failed to open workspace '{}': {}", dir.display(), e);
+            }
+        }
+
+        // Open files as tabs
+        if !valid_files.is_empty() {
+            // If we have CLI files, don't use the restored session tabs
+            // Clear the default/restored empty tab if we're opening files
+            if self.state.tab_count() == 1 {
+                if let Some(tab) = self.state.active_tab() {
+                    if tab.path.is_none() && tab.content.is_empty() {
+                        // Remove the empty default tab since we're opening specific files
+                        self.state.close_tab(0);
+                    }
+                }
+            }
+
+            let mut first_opened_tab_idx: Option<usize> = None;
+            for file_path in valid_files.iter() {
+                info!("Opening file from CLI: {}", file_path.display());
+                match self.state.open_file(file_path.clone()) {
+                    Ok(tab_idx) => {
+                        if first_opened_tab_idx.is_none() {
+                            first_opened_tab_idx = Some(tab_idx);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to open file '{}': {}", file_path.display(), e);
+                    }
+                }
+            }
+            // Focus on the first successfully opened file
+            if let Some(tab_idx) = first_opened_tab_idx {
+                self.state.set_active_tab(tab_idx);
+            }
+        }
+
+        info!(
+            "CLI initialization complete: {} files opened{}",
+            valid_files.len(),
+            if self.state.is_workspace_mode() {
+                ", workspace mode active"
+            } else {
+                ""
+            }
+        );
+    }
+
     /// Get elapsed time since app start in seconds.
     fn get_app_time(&self) -> f64 {
         self.start_time.elapsed().as_secs_f64()
@@ -2289,8 +2387,9 @@ impl FerriteApp {
                             let tree_state = self.tree_viewer_states.entry(tab_id).or_default();
 
                             if let Some(tab) = self.state.active_tab_mut() {
-                                // Capture content before editing for undo support
+                                // Capture content and cursor before editing for undo support
                                 let content_before = tab.content.clone();
+                                let cursor_before = tab.cursors.primary().head;
 
                                 let output =
                                     TreeViewer::new(&mut tab.content, file_type, tree_state)
@@ -2299,7 +2398,7 @@ impl FerriteApp {
 
                                 if output.changed {
                                     // Record edit for undo/redo support
-                                    tab.record_edit(content_before);
+                                    tab.record_edit(content_before, cursor_before);
                                     // Mark content as edited for auto-save scheduling
                                     tab.mark_content_edited();
                                     debug!("Content modified in tree viewer, recorded for undo");
@@ -2311,8 +2410,9 @@ impl FerriteApp {
                         } else {
                             // Markdown file: use the WYSIWYG MarkdownEditor
                             if let Some(tab) = self.state.active_tab_mut() {
-                                // Capture content before editing for undo support
+                                // Capture content and cursor before editing for undo support
                                 let content_before = tab.content.clone();
+                                let cursor_before = tab.cursors.primary().head;
                                 
                                 // Handle scroll sync: check for pending scroll ratio or offset
                                 let pending_offset = tab.pending_scroll_offset.take();
@@ -2331,7 +2431,7 @@ impl FerriteApp {
 
                                 if editor_output.changed {
                                     // Record edit for undo/redo support
-                                    tab.record_edit(content_before);
+                                    tab.record_edit(content_before, cursor_before);
                                     // Mark content as edited for auto-save scheduling
                                     tab.mark_content_edited();
                                     debug!("Content modified in rendered editor, recorded for undo");
@@ -3194,6 +3294,44 @@ impl FerriteApp {
         }
     }
 
+    /// Consume undo/redo keyboard events BEFORE rendering.
+    ///
+    /// This MUST be called before render_ui() to prevent egui's TextEdit from
+    /// processing Ctrl+Z/Y with its built-in undo functionality. TextEdit has
+    /// internal undo that would conflict with our custom undo system.
+    ///
+    /// By consuming these keys before the TextEdit is rendered, we ensure only
+    /// our undo system handles the events.
+    fn consume_undo_redo_keys(&mut self, ctx: &egui::Context) {
+        let consumed_action: Option<bool> = ctx.input_mut(|i| {
+            // Ctrl+Shift+Z: Redo (check first since it's more specific)
+            if i.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::Z) {
+                debug!("Keyboard shortcut: Ctrl+Shift+Z (Redo) - consumed before render");
+                return Some(false); // false = redo
+            }
+            // Ctrl+Z: Undo
+            if i.consume_key(egui::Modifiers::CTRL, egui::Key::Z) {
+                debug!("Keyboard shortcut: Ctrl+Z (Undo) - consumed before render");
+                return Some(true); // true = undo
+            }
+            // Ctrl+Y: Redo
+            if i.consume_key(egui::Modifiers::CTRL, egui::Key::Y) {
+                debug!("Keyboard shortcut: Ctrl+Y (Redo) - consumed before render");
+                return Some(false); // false = redo
+            }
+            None
+        });
+        
+        // If undo/redo was consumed, handle it
+        if let Some(is_undo) = consumed_action {
+            if is_undo {
+                self.handle_undo();
+            } else {
+                self.handle_redo();
+            }
+        }
+    }
+
     /// Handle keyboard shortcuts.
     ///
     /// Processes global keyboard shortcuts:
@@ -3205,6 +3343,9 @@ impl FerriteApp {
     /// - Ctrl+W: Close current tab
     /// - Ctrl+Tab: Next tab
     /// - Ctrl+Shift+Tab: Previous tab
+    ///
+    /// Note: Undo/Redo (Ctrl+Z/Y) are handled separately in consume_undo_redo_keys()
+    /// which must be called BEFORE render to prevent TextEdit from processing them.
     fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             // Ctrl+Shift+S: Save As (check first since it's more specific)
@@ -3229,24 +3370,6 @@ impl FerriteApp {
             if i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Tab) {
                 debug!("Keyboard shortcut: Ctrl+Shift+Tab (Previous Tab)");
                 return Some(KeyboardAction::PrevTab);
-            }
-
-            // Ctrl+Shift+Z: Redo (check before Ctrl+Z since it's more specific)
-            if i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z) {
-                debug!("Keyboard shortcut: Ctrl+Shift+Z (Redo)");
-                return Some(KeyboardAction::Redo);
-            }
-
-            // Ctrl+Z: Undo
-            if i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Z) {
-                debug!("Keyboard shortcut: Ctrl+Z (Undo)");
-                return Some(KeyboardAction::Undo);
-            }
-
-            // Ctrl+Y: Redo
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::Y) {
-                debug!("Keyboard shortcut: Ctrl+Y (Redo)");
-                return Some(KeyboardAction::Redo);
             }
 
             // Ctrl+S: Save
@@ -3851,11 +3974,22 @@ impl FerriteApp {
     /// Handle the Undo action (Ctrl+Z).
     ///
     /// Restores the previous content state from the undo stack.
+    /// Preserves scroll position, focus, and cursor position across the undo operation.
     fn handle_undo(&mut self) {
         if let Some(tab) = self.state.active_tab_mut() {
             if tab.can_undo() {
                 let undo_count = tab.undo_count();
-                if tab.undo() {
+                // Preserve scroll position before undo
+                let current_scroll = tab.scroll_offset;
+                // Perform undo - returns the cursor position from the undo entry
+                if let Some(restored_cursor) = tab.undo() {
+                    // Restore scroll position via pending_scroll_offset
+                    tab.pending_scroll_offset = Some(current_scroll);
+                    // Request focus to be restored after content_version change
+                    tab.needs_focus = true;
+                    // Restore cursor to the position from the undo entry (clamped to content length)
+                    let new_len = tab.content.len();
+                    tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
                     let time = self.get_app_time();
                     self.state.show_toast(
                         format!("Undo ({} remaining)", undo_count.saturating_sub(1)),
@@ -3875,11 +4009,22 @@ impl FerriteApp {
     /// Handle the Redo action (Ctrl+Y or Ctrl+Shift+Z).
     ///
     /// Restores the next content state from the redo stack.
+    /// Preserves scroll position, focus, and cursor position across the redo operation.
     fn handle_redo(&mut self) {
         if let Some(tab) = self.state.active_tab_mut() {
             if tab.can_redo() {
                 let redo_count = tab.redo_count();
-                if tab.redo() {
+                // Preserve scroll position before redo
+                let current_scroll = tab.scroll_offset;
+                // Perform redo - returns the cursor position from the redo entry
+                if let Some(restored_cursor) = tab.redo() {
+                    // Restore scroll position via pending_scroll_offset
+                    tab.pending_scroll_offset = Some(current_scroll);
+                    // Request focus to be restored after content_version change
+                    tab.needs_focus = true;
+                    // Restore cursor to the position from the redo entry (clamped to content length)
+                    let new_len = tab.content.len();
+                    tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
                     let time = self.get_app_time();
                     self.state.show_toast(
                         format!("Redo ({} remaining)", redo_count.saturating_sub(1)),
@@ -4193,8 +4338,9 @@ impl FerriteApp {
                         // Update the tab content
                         if let Some(tab) = self.state.active_tab_mut() {
                             let old_content = tab.content.clone();
+                            let old_cursor = tab.cursors.primary().head;
                             tab.content = formatted;
-                            tab.record_edit(old_content);
+                            tab.record_edit(old_content, old_cursor);
                         }
                         let time = self.get_app_time();
                         self.state.show_toast("Document formatted", time, 2.0);
@@ -4865,10 +5011,15 @@ impl eframe::App for FerriteApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
 
+        // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
+        // built-in undo from processing them. Must happen before render_ui().
+        self.consume_undo_redo_keys(ctx);
+
         // Render the main UI (this updates editor selection)
         let deferred_format = self.render_ui(ctx);
 
         // Handle keyboard shortcuts AFTER render so selection is up-to-date
+        // Note: Undo/redo is handled separately above, before render
         self.handle_keyboard_shortcuts(ctx);
 
         // Handle deferred format action from ribbon AFTER render so selection is up-to-date

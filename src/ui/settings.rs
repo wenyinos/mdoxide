@@ -3,7 +3,7 @@
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
 
-use crate::config::{EditorFont, Settings, Theme};
+use crate::config::{EditorFont, Settings, Theme, ViewMode};
 use eframe::egui::{self, Color32, RichText, Ui};
 
 /// Settings panel sections for navigation.
@@ -292,6 +292,36 @@ impl SettingsPanel {
             }
         });
 
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Default View Mode selection
+        ui.label(RichText::new("Default View Mode").strong());
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new("View mode for new tabs (existing tabs retain their saved view mode)")
+                .weak()
+                .small(),
+        );
+        ui.add_space(4.0);
+
+        for view_mode in ViewMode::all() {
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_value(
+                        &mut settings.default_view_mode,
+                        *view_mode,
+                        format!("{} {}", view_mode.icon(), view_mode.label()),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.label(RichText::new(view_mode.description()).weak().small());
+            });
+        }
+
         changed
     }
 
@@ -440,7 +470,7 @@ impl SettingsPanel {
             ui.indent("fold_options", |ui| {
                 if ui
                     .checkbox(&mut settings.folding_show_indicators, "Show Fold Indicators")
-                    .on_hover_text("Display fold indicators (▶/▼) in the gutter")
+                    .on_hover_text("Display fold indicators in the gutter (visual only - collapse not yet implemented)")
                     .changed()
                 {
                     changed = true;

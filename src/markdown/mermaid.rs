@@ -327,6 +327,16 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
 
         let line_lower = line.to_lowercase();
 
+        // Skip styling directives (not yet implemented, but shouldn't create nodes)
+        if line_lower.starts_with("classdef ")
+            || line_lower.starts_with("class ")
+            || line_lower.starts_with("style ")
+            || line_lower.starts_with("linkstyle ")
+            || line_lower.starts_with("click ")
+        {
+            continue;
+        }
+
         // Check for subgraph start
         if line_lower.starts_with("subgraph") {
             let (id, title) = parse_subgraph_header(line, &mut subgraph_counter);
@@ -373,7 +383,15 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
         // Try to parse as edge (contains arrow)
         if let Some((nodes, edge)) = parse_edge_line(line) {
             for (id, label, shape) in nodes {
-                if !node_map.contains_key(&id) {
+                if let Some(&idx) = node_map.get(&id) {
+                    // Node exists - update if new definition has more info
+                    let existing = &mut flowchart.nodes[idx];
+                    // Update label if new one is not just the ID (has actual content)
+                    if label != id && existing.label == existing.id {
+                        existing.label = label;
+                        existing.shape = shape;
+                    }
+                } else {
                     node_map.insert(id.clone(), flowchart.nodes.len());
                     flowchart.nodes.push(FlowNode { id: id.clone(), label, shape });
                     
@@ -388,7 +406,14 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
             }
         } else if let Some(node) = parse_node_definition(line) {
             // Standalone node definition
-            if !node_map.contains_key(&node.id) {
+            if let Some(&idx) = node_map.get(&node.id) {
+                // Node exists - update if new definition has more info
+                let existing = &mut flowchart.nodes[idx];
+                if node.label != node.id && existing.label == existing.id {
+                    existing.label = node.label;
+                    existing.shape = node.shape;
+                }
+            } else {
                 let id = node.id.clone();
                 node_map.insert(id.clone(), flowchart.nodes.len());
                 flowchart.nodes.push(node);
@@ -528,7 +553,8 @@ fn parse_edge_line(line: &str) -> Option<(Vec<(String, String, NodeShape)>, Opti
             // Check for label
             let (label, right) = if let Some(label_start) = right_part.find('|') {
                 if let Some(label_end) = right_part[label_start + 1..].find('|') {
-                    let label = right_part[label_start + 1..label_start + 1 + label_end].trim().to_string();
+                    let label = right_part[label_start + 1..label_start + 1 + label_end].trim();
+                    let label = clean_label(label);
                     let rest = right_part[label_start + 2 + label_end..].trim();
                     (Some(label), rest)
                 } else {
@@ -579,7 +605,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = if id.is_empty() { &text[..start.max(1)] } else { id };
             if let Some(end) = text.find("])") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Stadium));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Stadium));
             }
         }
     }
@@ -590,7 +616,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.find("))") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Circle));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Circle));
             }
         }
     }
@@ -601,7 +627,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.find(")]") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Cylinder));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Cylinder));
             }
         }
     }
@@ -612,7 +638,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.find("]]") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Subroutine));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Subroutine));
             }
         }
     }
@@ -623,7 +649,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.find("}}") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Hexagon));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Hexagon));
             }
         }
     }
@@ -634,7 +660,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.rfind('}') {
                 let label = text[start + 1..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Diamond));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Diamond));
             }
         }
     }
@@ -645,7 +671,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.rfind(')') {
                 let label = text[start + 1..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::RoundRect));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::RoundRect));
             }
         }
     }
@@ -656,7 +682,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.rfind(']') {
                 let label = text[start + 1..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Rectangle));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Rectangle));
             }
         }
     }
@@ -667,7 +693,7 @@ fn parse_node_from_text(text: &str) -> Option<(String, String, NodeShape)> {
             let id = text[..start].trim();
             if let Some(end) = text.rfind(']') {
                 let label = text[start + 1..end].trim();
-                return Some((extract_id(id, text), label.to_string(), NodeShape::Asymmetric));
+                return Some((extract_id(id, text), clean_label(label), NodeShape::Asymmetric));
             }
         }
     }
@@ -684,6 +710,14 @@ fn extract_id(id: &str, full_text: &str) -> String {
     } else {
         id.to_string()
     }
+}
+
+/// Clean up label text by converting HTML line breaks to newlines.
+fn clean_label(label: &str) -> String {
+    label
+        .replace("<br/>", "\n")
+        .replace("<br>", "\n")
+        .replace("<br />", "\n")
 }
 
 fn parse_node_definition(line: &str) -> Option<FlowNode> {

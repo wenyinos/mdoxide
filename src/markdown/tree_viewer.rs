@@ -23,6 +23,8 @@ use eframe::egui::{self, Color32, RichText, ScrollArea, TextEdit, Ui, Vec2};
 use log::warn;
 use std::collections::HashMap;
 
+use crate::string_utils::safe_slice_to;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // File Type Detection
 // ─────────────────────────────────────────────────────────────────────────────
@@ -673,18 +675,10 @@ impl<'a> TreeViewer<'a> {
                         self.state.collapse_all(&tree);
                     }
                 }
-                ui.separator();
             }
 
-            let raw_label = if self.state.show_raw {
-                "📊 Tree View"
-            } else {
-                "📝 Raw View"
-            };
-            if ui.button(raw_label).clicked() {
-                self.state.show_raw = !self.state.show_raw;
-                output.toggle_raw_requested = true;
-            }
+            // Note: "Raw View" button removed - users should use the view mode selector
+            // to switch to Raw mode for editing. The raw view here was non-editable and confusing.
         });
         ui.separator();
 
@@ -972,9 +966,9 @@ impl<'a> TreeViewer<'a> {
             TreeNode::Integer(i) => (i.to_string(), colors.number),
             TreeNode::Float(f) => (format!("{}", f), colors.number),
             TreeNode::String(s) => {
-                // Truncate long strings
+                // Truncate long strings safely (handle UTF-8 char boundaries)
                 let display = if s.len() > 100 {
-                    format!("\"{}...\"", &s[..97])
+                    format!("\"{}...\"", safe_slice_to(s, 97))
                 } else {
                     format!("\"{}\"", s)
                 };

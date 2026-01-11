@@ -1,6 +1,6 @@
 [package]
 name = "ferrite"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "A fast, lightweight text editor for Markdown, JSON, and more"
 repository = "https://github.com/OlaProeis/Ferrite"
@@ -30,6 +30,7 @@ log = "0.4"
 env_logger = "0.11"
 regex = "1"
 arboard = "3"
+clap = { version = "4", features = ["derive"] }
 # Workspace support
 notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
 fuzzy-matcher = "0.3"

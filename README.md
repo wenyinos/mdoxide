@@ -46,7 +46,7 @@ Native rendering of 11 diagram types directly in the preview:
 - Flowchart, Sequence, Pie, State, Mindmap
 - Class, ER, Git Graph, Gantt, Timeline, User Journey
 
-> ✨ **v0.2.1 Released:** Enhanced Mermaid support with sequence control-flow blocks (`loop`, `alt`, `opt`, `par`), activation boxes, notes, flowchart subgraphs with branching layout, and composite/nested states. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.2 Released:** Stability & CLI improvements! CJK font support, undo/redo fixes, command-line file opening (`ferrite file.md`), configurable log level, and default view mode setting. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
@@ -172,9 +172,20 @@ cargo run --release
 # Open a specific file
 ./target/release/ferrite path/to/file.md
 
+# Open multiple files as tabs
+./target/release/ferrite file1.md file2.md
+
 # Open a folder as workspace
 ./target/release/ferrite path/to/folder/
+
+# Show version
+./target/release/ferrite --version
+
+# Show help
+./target/release/ferrite --help
 ```
+
+See [docs/cli.md](docs/cli.md) for full CLI documentation.
 
 ### View Modes
 
@@ -284,6 +295,7 @@ git push origin feature/your-feature
 | Markdown Parser | comrak 0.22 |
 | Syntax Highlighting | syntect 5.1 |
 | Git Integration | git2 0.19 |
+| CLI Parsing | clap 4 |
 | File Dialogs | rfd 0.14 |
 | Clipboard | arboard 3 |
 | File Watching | notify 6 |

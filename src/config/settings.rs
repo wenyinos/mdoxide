@@ -11,6 +11,76 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Log Level Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Available log levels for controlling runtime log filtering.
+///
+/// Controls the verbosity of log output. Default is `Warn`.
+/// Reference: GitHub Issue #11
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    /// Most verbose - shows all debug messages
+    Debug,
+    /// Informational messages and above
+    Info,
+    /// Warnings and errors only (default)
+    #[default]
+    Warn,
+    /// Errors only
+    Error,
+    /// Disable all logging
+    Off,
+}
+
+impl LogLevel {
+    /// Get the display name for the log level.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            LogLevel::Debug => "Debug",
+            LogLevel::Info => "Info",
+            LogLevel::Warn => "Warn",
+            LogLevel::Error => "Error",
+            LogLevel::Off => "Off",
+        }
+    }
+
+    /// Get a description of the log level.
+    pub fn description(&self) -> &'static str {
+        match self {
+            LogLevel::Debug => "Most verbose, shows all debug messages",
+            LogLevel::Info => "Informational messages and above",
+            LogLevel::Warn => "Warnings and errors only (default)",
+            LogLevel::Error => "Errors only",
+            LogLevel::Off => "Disable all logging",
+        }
+    }
+
+    /// Get all available log levels.
+    pub fn all() -> &'static [LogLevel] {
+        &[
+            LogLevel::Debug,
+            LogLevel::Info,
+            LogLevel::Warn,
+            LogLevel::Error,
+            LogLevel::Off,
+        ]
+    }
+
+    /// Convert to log::LevelFilter for env_logger initialization.
+    pub fn to_level_filter(&self) -> log::LevelFilter {
+        match self {
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Off => log::LevelFilter::Off,
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Theme Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -121,6 +191,20 @@ impl ViewMode {
     /// Check if this mode shows the rendered preview.
     pub fn shows_rendered(&self) -> bool {
         matches!(self, ViewMode::Rendered | ViewMode::Split)
+    }
+
+    /// Get all available view modes.
+    pub fn all() -> &'static [ViewMode] {
+        &[ViewMode::Raw, ViewMode::Rendered, ViewMode::Split]
+    }
+
+    /// Get a description of the view mode.
+    pub fn description(&self) -> &'static str {
+        match self {
+            ViewMode::Raw => "Plain markdown text editing",
+            ViewMode::Rendered => "WYSIWYG rendered editing",
+            ViewMode::Split => "Raw editor + rendered preview side by side",
+        }
     }
 }
 
@@ -430,6 +514,23 @@ pub struct Settings {
     /// Whether to enable syntax highlighting for source code files in raw editor mode
     /// Supports Rust, Python, JavaScript, TypeScript, and many other languages
     pub syntax_highlighting_enabled: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Logging Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Log level for controlling runtime log verbosity.
+    /// Default is Warn. Can be overridden via --log-level CLI flag.
+    /// Reference: GitHub Issue #11
+    pub log_level: LogLevel,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Default View Mode
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Default view mode for new tabs.
+    /// Controls whether new tabs open in Raw, Rendered, or Split view.
+    /// Existing tabs retain their stored view mode (not overridden by this setting).
+    /// Reference: GitHub Issue #3
+    pub default_view_mode: ViewMode,
 }
 
 impl Default for Settings {
@@ -485,7 +586,7 @@ impl Default for Settings {
 
             // Code Folding Settings
             folding_enabled: true,           // Folding enabled by default
-            folding_show_indicators: true,   // Show fold indicators in gutter
+            folding_show_indicators: false,  // Hide fold indicators by default (they don't collapse yet)
             fold_headings: true,             // Fold headings by default
             fold_code_blocks: true,          // Fold code blocks by default
             fold_lists: true,                // Fold lists by default
@@ -508,6 +609,12 @@ impl Default for Settings {
 
             // Syntax Highlighting Settings
             syntax_highlighting_enabled: true, // Syntax highlighting enabled by default
+
+            // Logging Settings
+            log_level: LogLevel::default(), // Default to Warn level
+
+            // Default View Mode
+            default_view_mode: ViewMode::default(), // Default to Raw mode
         }
     }
 }
@@ -785,6 +892,54 @@ mod tests {
     }
 
     #[test]
+    fn test_view_mode_all() {
+        let all = ViewMode::all();
+        assert_eq!(all.len(), 3);
+        assert!(all.contains(&ViewMode::Raw));
+        assert!(all.contains(&ViewMode::Rendered));
+        assert!(all.contains(&ViewMode::Split));
+    }
+
+    #[test]
+    fn test_view_mode_description() {
+        assert!(!ViewMode::Raw.description().is_empty());
+        assert!(!ViewMode::Rendered.description().is_empty());
+        assert!(!ViewMode::Split.description().is_empty());
+        // Ensure descriptions are different
+        assert_ne!(ViewMode::Raw.description(), ViewMode::Rendered.description());
+        assert_ne!(ViewMode::Raw.description(), ViewMode::Split.description());
+    }
+
+    #[test]
+    fn test_settings_default_view_mode() {
+        let settings = Settings::default();
+        assert_eq!(settings.default_view_mode, ViewMode::Raw);
+    }
+
+    #[test]
+    fn test_settings_backward_compatibility_default_view_mode() {
+        // Old JSON without default_view_mode field should default to Raw
+        let json = r#"{"theme": "dark"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.default_view_mode, ViewMode::Raw);
+    }
+
+    #[test]
+    fn test_settings_serialize_default_view_mode() {
+        let mut settings = Settings::default();
+        settings.default_view_mode = ViewMode::Split;
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains("\"default_view_mode\":\"split\""));
+    }
+
+    #[test]
+    fn test_settings_deserialize_default_view_mode() {
+        let json = r#"{"default_view_mode": "rendered"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.default_view_mode, ViewMode::Rendered);
+    }
+
+    #[test]
     fn test_settings_serialization_roundtrip() {
         let original = Settings::default();
         let json = serde_json::to_string_pretty(&original).unwrap();
@@ -877,6 +1032,91 @@ mod tests {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // LogLevel tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_log_level_default() {
+        assert_eq!(LogLevel::default(), LogLevel::Warn);
+    }
+
+    #[test]
+    fn test_log_level_serialization() {
+        assert_eq!(serde_json::to_string(&LogLevel::Debug).unwrap(), "\"debug\"");
+        assert_eq!(serde_json::to_string(&LogLevel::Info).unwrap(), "\"info\"");
+        assert_eq!(serde_json::to_string(&LogLevel::Warn).unwrap(), "\"warn\"");
+        assert_eq!(serde_json::to_string(&LogLevel::Error).unwrap(), "\"error\"");
+        assert_eq!(serde_json::to_string(&LogLevel::Off).unwrap(), "\"off\"");
+    }
+
+    #[test]
+    fn test_log_level_deserialization() {
+        assert_eq!(
+            serde_json::from_str::<LogLevel>("\"debug\"").unwrap(),
+            LogLevel::Debug
+        );
+        assert_eq!(
+            serde_json::from_str::<LogLevel>("\"info\"").unwrap(),
+            LogLevel::Info
+        );
+        assert_eq!(
+            serde_json::from_str::<LogLevel>("\"warn\"").unwrap(),
+            LogLevel::Warn
+        );
+        assert_eq!(
+            serde_json::from_str::<LogLevel>("\"error\"").unwrap(),
+            LogLevel::Error
+        );
+        assert_eq!(
+            serde_json::from_str::<LogLevel>("\"off\"").unwrap(),
+            LogLevel::Off
+        );
+    }
+
+    #[test]
+    fn test_log_level_display_name() {
+        assert_eq!(LogLevel::Debug.display_name(), "Debug");
+        assert_eq!(LogLevel::Info.display_name(), "Info");
+        assert_eq!(LogLevel::Warn.display_name(), "Warn");
+        assert_eq!(LogLevel::Error.display_name(), "Error");
+        assert_eq!(LogLevel::Off.display_name(), "Off");
+    }
+
+    #[test]
+    fn test_log_level_all() {
+        let all = LogLevel::all();
+        assert_eq!(all.len(), 5);
+        assert!(all.contains(&LogLevel::Debug));
+        assert!(all.contains(&LogLevel::Info));
+        assert!(all.contains(&LogLevel::Warn));
+        assert!(all.contains(&LogLevel::Error));
+        assert!(all.contains(&LogLevel::Off));
+    }
+
+    #[test]
+    fn test_log_level_to_level_filter() {
+        assert_eq!(LogLevel::Debug.to_level_filter(), log::LevelFilter::Debug);
+        assert_eq!(LogLevel::Info.to_level_filter(), log::LevelFilter::Info);
+        assert_eq!(LogLevel::Warn.to_level_filter(), log::LevelFilter::Warn);
+        assert_eq!(LogLevel::Error.to_level_filter(), log::LevelFilter::Error);
+        assert_eq!(LogLevel::Off.to_level_filter(), log::LevelFilter::Off);
+    }
+
+    #[test]
+    fn test_settings_log_level_default() {
+        let settings = Settings::default();
+        assert_eq!(settings.log_level, LogLevel::Warn);
+    }
+
+    #[test]
+    fn test_settings_backward_compatibility_log_level() {
+        // Old JSON without log_level field should default to Warn
+        let json = r#"{"theme": "dark"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.log_level, LogLevel::Warn);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Sanitization tests
     // ─────────────────────────────────────────────────────────────────────────
     #[test]
@@ -943,5 +1183,35 @@ mod tests {
         let settings = Settings::from_json_sanitized(json).unwrap();
         assert_eq!(settings.font_size, Settings::MIN_FONT_SIZE);
         assert_eq!(settings.split_ratio, 1.0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Code Folding Settings tests (GitHub Issue #12)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_folding_show_indicators_default_false() {
+        // Issue #12: Fold indicators are hidden by default because
+        // they don't actually collapse yet (visual only)
+        let settings = Settings::default();
+        assert!(!settings.folding_show_indicators);
+        // But folding detection is still enabled
+        assert!(settings.folding_enabled);
+    }
+
+    #[test]
+    fn test_folding_show_indicators_backward_compatibility() {
+        // Old settings without folding_show_indicators should get the new default (false)
+        let json = r#"{"theme": "dark"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert!(!settings.folding_show_indicators);
+    }
+
+    #[test]
+    fn test_folding_show_indicators_explicit_true() {
+        // Users can still enable it via settings
+        let json = r#"{"folding_show_indicators": true}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert!(settings.folding_show_indicators);
     }
 }

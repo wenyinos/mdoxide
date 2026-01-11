@@ -40,7 +40,7 @@ jobs:
 
   build-linux:
     name: Build Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Use 22.04 for wider glibc compatibility
     
     steps:
       - name: Checkout

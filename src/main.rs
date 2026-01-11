@@ -22,9 +22,45 @@ mod vcs;
 mod workspaces;
 
 use app::FerriteApp;
-use config::load_config;
+use clap::Parser;
+use config::{load_config, LogLevel};
 use log::info;
+use std::path::PathBuf;
 use ui::get_app_icon;
+
+/// Ferrite - A fast, lightweight text editor for Markdown, JSON, and more.
+#[derive(Parser, Debug)]
+#[command(name = "ferrite", version, about, long_about = None)]
+struct Cli {
+    /// Files or directory to open on startup.
+    ///
+    /// Pass one or more file paths to open them as tabs.
+    /// Pass a directory path to open it as a workspace.
+    #[arg(value_name = "PATH")]
+    paths: Vec<PathBuf>,
+
+    /// Set the log level for debugging.
+    ///
+    /// Overrides the log_level setting in config.json.
+    /// Valid values: debug, info, warn, error, off
+    #[arg(long, value_name = "LEVEL", value_parser = parse_log_level)]
+    log_level: Option<LogLevel>,
+}
+
+/// Parse a log level string into a LogLevel enum.
+fn parse_log_level(s: &str) -> Result<LogLevel, String> {
+    match s.to_lowercase().as_str() {
+        "debug" => Ok(LogLevel::Debug),
+        "info" => Ok(LogLevel::Info),
+        "warn" | "warning" => Ok(LogLevel::Warn),
+        "error" => Ok(LogLevel::Error),
+        "off" | "none" => Ok(LogLevel::Off),
+        _ => Err(format!(
+            "Invalid log level '{}'. Valid values: debug, info, warn, error, off",
+            s
+        )),
+    }
+}
 
 // Note: Native window decorations are disabled for custom title bar styling.
 // This provides consistent appearance across all platforms (Windows, macOS, Linux).
@@ -33,13 +69,35 @@ use ui::get_app_icon;
 const APP_NAME: &str = "Ferrite";
 
 fn main() -> eframe::Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // Parse CLI arguments first (before logging, so --help/--version work without config)
+    let cli = Cli::parse();
+
+    // Load settings to get configuration (including log level)
+    let settings = load_config();
+
+    // Determine effective log level: CLI > config > default (Warn)
+    let effective_log_level = cli.log_level.unwrap_or(settings.log_level);
+
+    // Initialize logging with the effective log level
+    env_logger::Builder::new()
+        .filter_level(effective_log_level.to_level_filter())
+        .init();
 
     info!("Starting {}", APP_NAME);
+    info!(
+        "Log level: {} (source: {})",
+        effective_log_level.display_name(),
+        if cli.log_level.is_some() {
+            "CLI flag"
+        } else {
+            "config"
+        }
+    );
 
-    // Load settings to get window configuration
-    let settings = load_config();
+    // Log CLI paths if provided
+    if !cli.paths.is_empty() {
+        info!("CLI paths provided: {:?}", cli.paths);
+    }
     let window_size = &settings.window_size;
 
     info!(
@@ -88,10 +146,15 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         APP_NAME,
         native_options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             // Configure egui visuals based on theme (basic setup)
             // Full theme support will be implemented in a later task
-            Ok(Box::new(FerriteApp::new(cc)))
+            let mut app = FerriteApp::new(cc);
+
+            // Open files/directories from CLI arguments
+            app.open_initial_paths(cli.paths);
+
+            Ok(Box::new(app))
         }),
     )
 }

@@ -34,17 +34,49 @@ struct SyntaxCacheEntry {
     lines: Vec<HighlightedLine>,
 }
 
+/// Cached Galley for large files - avoids rebuilding LayoutJob every frame
+#[derive(Clone)]
+struct GalleyCacheEntry {
+    /// Hash of content + settings that affect the galley
+    cache_key: u64,
+    /// The cached galley
+    galley: Arc<egui::Galley>,
+}
+
+/// State for deferred syntax highlighting
+#[derive(Clone, Default)]
+struct DeferredHighlightState {
+    /// Content hash when highlighting was last deferred
+    deferred_hash: u64,
+    /// Frame count when content last changed
+    last_change_frame: u64,
+}
+
 /// Cached syntax highlighting data stored in egui's memory.
 #[derive(Clone, Default)]
 struct SyntaxHighlightCache {
-    /// Map from editor ID to cached entry
+    /// Map from editor ID to cached highlight entry
     cache: HashMap<egui::Id, SyntaxCacheEntry>,
+    /// Map from editor ID to cached galley (for large files)
+    galley_cache: HashMap<egui::Id, GalleyCacheEntry>,
+    /// Map from editor ID to deferred highlight state
+    deferred_state: HashMap<egui::Id, DeferredHighlightState>,
 }
 
 /// Compute a fast hash of a string for cache invalidation.
 fn compute_content_hash(s: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     s.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Compute a hash for galley cache key (content + layout settings).
+fn compute_galley_cache_key(content_hash: u64, wrap_width: f32, font_size: f32, is_dark: bool) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    content_hash.hash(&mut hasher);
+    wrap_width.to_bits().hash(&mut hasher);
+    font_size.to_bits().hash(&mut hasher);
+    is_dark.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -291,8 +323,12 @@ impl<'a> EditorWidget<'a> {
             self.tab.needs_focus = false;
         }
 
-        // Store original content for change detection
+        // Check if we need to restore cursor position (after undo/redo)
+        let pending_cursor = self.tab.pending_cursor_restore.take();
+
+        // Store original content and cursor for change detection and undo
         let original_content = self.tab.content.clone();
+        let original_cursor = self.tab.cursors.primary().head;
 
         // Capture values for closures
         let font_size = self.font_size;
@@ -348,15 +384,23 @@ impl<'a> EditorWidget<'a> {
         };
         let is_dark_mode = self.is_dark_mode;
 
-        // Get cached highlights if available (we'll verify freshness in the layouter)
-        let cached_entry: Option<SyntaxCacheEntry> = if syntax_language.is_some() {
-            ui.ctx().data_mut(|data| {
-                let cache = data.get_temp_mut_or_default::<SyntaxHighlightCache>(egui::Id::NULL);
-                cache.cache.get(&id).cloned()
-            })
-        } else {
-            None
-        };
+        // Get current frame count for deferred highlighting timing
+        let current_frame = ui.ctx().frame_nr();
+        
+        // Get cached data (highlights, galley, deferred state)
+        let (cached_entry, cached_galley, deferred_state): (Option<SyntaxCacheEntry>, Option<GalleyCacheEntry>, Option<DeferredHighlightState>) = 
+            if syntax_language.is_some() {
+                ui.ctx().data_mut(|data| {
+                    let cache = data.get_temp_mut_or_default::<SyntaxHighlightCache>(egui::Id::NULL);
+                    (
+                        cache.cache.get(&id).cloned(),
+                        cache.galley_cache.get(&id).cloned(),
+                        cache.deferred_state.get(&id).cloned(),
+                    )
+                })
+            } else {
+                (None, None, None)
+            };
 
         // Clone what we need for the layouter closure
         let syntax_lang_for_layouter = syntax_language.clone();
@@ -366,28 +410,99 @@ impl<'a> EditorWidget<'a> {
         let font_family_clone = font_family.clone();
         let mut layouter = move |ui: &Ui, text: &str, wrap_width: f32| -> Arc<egui::Galley> {
             let font_id = FontId::new(font_size, font_family_clone.clone());
+            let default_text_color = ui.visuals().text_color();
 
             // Use syntax highlighting if we have a recognized language
-            let layout_job = if let Some(ref lang) = syntax_lang_for_layouter {
-                // Compute hash of the actual text being laid out
+            if let Some(ref lang) = syntax_lang_for_layouter {
                 let text_hash = compute_content_hash(text);
-
-                // Check if cached entry is still valid for this exact text
-                let use_cached = cached_entry.as_ref().map_or(false, |entry| {
+                let galley_key = compute_galley_cache_key(text_hash, wrap_width, font_size, is_dark_mode);
+                let line_count = text.lines().count();
+                
+                // PERFORMANCE THRESHOLDS:
+                // - Small files (< 500 lines): Always full syntax highlighting
+                // - Medium files (500-1500 lines): Deferred highlighting while typing
+                // - Large files (1500+ lines): Deferred + galley caching
+                const SMALL_THRESHOLD: usize = 500;
+                const LARGE_THRESHOLD: usize = 1500;
+                
+                // Check if we can use cached galley (only for large files)
+                if line_count >= LARGE_THRESHOLD {
+                    if let Some(ref cached) = cached_galley {
+                        if cached.cache_key == galley_key {
+                            // Galley cache hit - return immediately, no work needed!
+                            return cached.galley.clone();
+                        }
+                    }
+                }
+                
+                // For medium and large files, use deferred highlighting
+                // This keeps typing responsive - colors appear after ~0.5s pause
+                // v0.3.0 will have a rebuilt text editor with proper virtual scrolling
+                let use_deferred = line_count >= SMALL_THRESHOLD;
+                
+                let should_use_fast_mode = if use_deferred {
+                    let state = deferred_state.clone().unwrap_or_default();
+                    let content_changed = state.deferred_hash != text_hash;
+                    let frames_since = current_frame.saturating_sub(state.last_change_frame);
+                    
+                    // Update deferred state
+                    ctx_clone.data_mut(|data| {
+                        let cache = data.get_temp_mut_or_default::<SyntaxHighlightCache>(egui::Id::NULL);
+                        let entry = cache.deferred_state.entry(id).or_default();
+                        
+                        if content_changed {
+                            entry.deferred_hash = text_hash;
+                            entry.last_change_frame = current_frame;
+                        }
+                    });
+                    
+                    // Use fast mode while typing - exit after ~0.5s of no changes
+                    // (~30 frames at 60fps = 500ms)
+                    content_changed || frames_since < 30
+                } else {
+                    // Small files always get immediate highlighting
+                    false
+                };
+                
+                if should_use_fast_mode {
+                    // FAST PATH: Simple layout while typing
+                    // Colors will appear ~0.5s after typing stops
+                    let job = if word_wrap {
+                        egui::text::LayoutJob::simple(
+                            text.to_owned(),
+                            font_id,
+                            default_text_color,
+                            wrap_width,
+                        )
+                    } else {
+                        egui::text::LayoutJob::simple_singleline(
+                            text.to_owned(),
+                            font_id,
+                            default_text_color,
+                        )
+                    };
+                    
+                    // Schedule repaint to restore colors after pause
+                    ctx_clone.request_repaint_after(std::time::Duration::from_millis(550));
+                    
+                    return ui.fonts(|f| f.layout_job(job));
+                }
+                
+                // HIGHLIGHTING PATH: Build full syntax-highlighted layout
+                
+                // Check if we have valid cached highlights
+                let use_cached_highlights = cached_entry.as_ref().map_or(false, |entry| {
                     entry.content_hash == text_hash
                         && entry.language == *lang
                         && entry.is_dark == is_dark_mode
                 });
 
-                let highlighted_lines = if use_cached {
-                    // Cache hit - use cached result
+                let highlighted_lines = if use_cached_highlights {
                     cached_entry.as_ref().unwrap().lines.clone()
                 } else {
-                    // Cache miss - regenerate and update cache
-                    debug!("Syntax highlighting: cache miss, regenerating");
+                    debug!("Syntax highlighting: cache miss, regenerating for {} lines", line_count);
                     let lines = highlight_code(text, lang, is_dark_mode);
 
-                    // Store in cache for next frame
                     ctx_clone.data_mut(|data| {
                         let cache = data.get_temp_mut_or_default::<SyntaxHighlightCache>(egui::Id::NULL);
                         cache.cache.insert(
@@ -404,11 +519,10 @@ impl<'a> EditorWidget<'a> {
                     lines
                 };
 
-                // Create a syntax-highlighted layout job
+                // Build the LayoutJob
                 let mut job = egui::text::LayoutJob::default();
                 job.wrap.max_width = if word_wrap { wrap_width } else { f32::INFINITY };
 
-                // Build the layout job from highlighted segments
                 for line in &highlighted_lines {
                     for segment in &line.segments {
                         let mut format = egui::text::TextFormat::default();
@@ -418,33 +532,48 @@ impl<'a> EditorWidget<'a> {
                     }
                 }
 
-                // Handle empty text case
                 if text.is_empty() {
                     let mut format = egui::text::TextFormat::default();
-                    format.font_id = font_id;
-                    format.color = ui.visuals().text_color();
+                    format.font_id = font_id.clone();
+                    format.color = default_text_color;
                     job.append("", 0.0, format);
                 }
 
-                job
+                let galley = ui.fonts(|f| f.layout_job(job));
+                
+                // Cache the galley for large files
+                if line_count >= LARGE_THRESHOLD {
+                    ctx_clone.data_mut(|data| {
+                        let cache = data.get_temp_mut_or_default::<SyntaxHighlightCache>(egui::Id::NULL);
+                        cache.galley_cache.insert(
+                            id,
+                            GalleyCacheEntry {
+                                cache_key: galley_key,
+                                galley: galley.clone(),
+                            },
+                        );
+                    });
+                }
+                
+                galley
             } else {
                 // No syntax highlighting - use simple layout
-                if word_wrap {
+                let job = if word_wrap {
                     egui::text::LayoutJob::simple(
                         text.to_owned(),
                         font_id,
-                        ui.visuals().text_color(),
+                        default_text_color,
                         wrap_width,
                     )
                 } else {
                     egui::text::LayoutJob::simple_singleline(
                         text.to_owned(),
                         font_id,
-                        ui.visuals().text_color(),
+                        default_text_color,
                     )
-                }
-            };
-            ui.fonts(|f| f.layout_job(layout_job))
+                };
+                ui.fonts(|f| f.layout_job(job))
+            }
         };
 
         // Calculate scroll offset for current match if needed
@@ -478,8 +607,11 @@ impl<'a> EditorWidget<'a> {
         }
 
         // Use ScrollArea for viewport management - line numbers scroll with content
+        // IMPORTANT: Use base_id (not id with content_version) for ScrollArea to preserve
+        // scroll position across undo/redo operations. Only TextEdit needs the content_version
+        // in its ID to force re-reading content after external changes.
         let mut scroll_area = ScrollArea::vertical()
-            .id_source(id.with("scroll"))
+            .id_source(base_id.with("scroll"))
             .auto_shrink([false, false]);
 
         // Priority: Apply pending scroll offset from mode switch first
@@ -1059,7 +1191,24 @@ impl<'a> EditorWidget<'a> {
             .inner
         });
 
-        let (text_output, fold_toggle_line) = scroll_output.inner;
+        let (mut text_output, fold_toggle_line) = scroll_output.inner;
+        
+        // Restore cursor position after undo/redo if pending
+        // This must happen after TextEdit is shown but before we use cursor_range
+        if let Some(cursor_pos) = pending_cursor {
+            // Create a cursor at the specified position
+            let ccursor = egui::text::CCursor::new(cursor_pos);
+            let cursor_range = egui::text::CCursorRange::one(ccursor);
+            
+            // Set the cursor in the TextEditState and persist it
+            text_output.state.cursor.set_char_range(Some(cursor_range));
+            text_output.state.store(ui.ctx(), id);
+            
+            // Also update our internal cursor tracking
+            self.tab.cursors.set_single(crate::state::Selection::cursor(cursor_pos));
+            self.tab.sync_cursor_from_primary();
+        }
+        
         let cursor_range_opt = text_output.cursor_range;
 
         // Determine if content changed
@@ -1068,8 +1217,8 @@ impl<'a> EditorWidget<'a> {
         // If content changed, record for undo tracking and auto-save
         if changed {
             // TextEdit modifies content directly, so we need to manually
-            // record the edit for undo/redo functionality
-            self.tab.record_edit(original_content);
+            // record the edit for undo/redo functionality (with old cursor position)
+            self.tab.record_edit(original_content, original_cursor);
             // Mark content as edited for auto-save scheduling
             self.tab.mark_content_edited();
             debug!("Editor content changed, recorded for undo");

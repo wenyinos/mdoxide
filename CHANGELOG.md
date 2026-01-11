@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-01-11
+
+### Added
+
+#### CLI Features
+- **Command-line file opening** ([#9](https://github.com/OlaProeis/Ferrite/issues/9)) - Open files directly: `ferrite file.md`, `ferrite file1.md file2.md`, or `ferrite ./folder/`
+- **Version and help flags** ([#10](https://github.com/OlaProeis/Ferrite/issues/10)) - Support for `-V/--version` and `-h/--help` CLI arguments
+- **Configurable log level** ([#11](https://github.com/OlaProeis/Ferrite/issues/11)) - New `log_level` setting in config.json with CLI override (`--log-level debug|info|warn|error|off`)
+
+#### UX Improvements
+- **Default view mode setting** ([#3](https://github.com/OlaProeis/Ferrite/issues/3)) - Choose default view mode (Raw/Rendered/Split) for new tabs in Settings > Appearance
+
+### Fixed
+
+#### Bug Fixes
+- **CJK character rendering** ([#7](https://github.com/OlaProeis/Ferrite/issues/7)) - Multi-region CJK support (Korean, Chinese, Japanese) via system font fallback (PR [#8](https://github.com/OlaProeis/Ferrite/pull/8) by [@SteelCrab](https://github.com/SteelCrab) 🙏)
+- **Undo/redo behavior** ([#5](https://github.com/OlaProeis/Ferrite/issues/5)) - Fixed scroll position reset, focus loss, double-press requirement, and cursor restoration
+- **UTF-8 tree viewer crash** - Fixed string slicing panic when displaying JSON/YAML with multi-byte characters (Norwegian øæå, Chinese, emoji)
+- **Misleading code folding UI** ([#12](https://github.com/OlaProeis/Ferrite/issues/12)) - Fold indicators now hidden by default (setting available for power users); removed confusing "Raw View" button from tree viewer toolbar
+
+#### Performance
+- **Large file editing** - Deferred syntax highlighting keeps typing responsive in 5000+ line files
+- **Scroll performance** - Galley caching for instant syntax colors when scrolling via minimap
+
+### Changed
+- **Ubuntu 22.04 compatibility** ([#6](https://github.com/OlaProeis/Ferrite/issues/6)) - Release builds now target Ubuntu 22.04 for glibc 2.35 compatibility
+
+### Documentation
+- Added CLI reference documentation (`docs/cli.md`)
+- Added technical docs for log level config, default view mode, and code folding UI changes
+
 ## [0.2.1] - 2025-01-10
 
 ### Added
@@ -142,11 +173,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.2.2** - Stability & CLI release (CJK fonts, undo/redo fixes, CLI arguments, default view mode)
 - **0.2.1** - Mermaid diagram improvements (control blocks, subgraphs, nested states, improved layout)
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/OlaProeis/Ferrite/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/OlaProeis/Ferrite/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/OlaProeis/Ferrite/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/OlaProeis/Ferrite/releases/tag/v0.1.0

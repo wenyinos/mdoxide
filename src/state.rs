@@ -941,6 +941,28 @@ impl FoldState {
 // Tab State (Runtime)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// An entry in the undo/redo stack.
+///
+/// Stores both the content state and cursor position so that undo/redo
+/// can restore the cursor to the correct position.
+#[derive(Debug, Clone)]
+pub struct UndoEntry {
+    /// The content at this point in history
+    pub content: String,
+    /// The cursor position (character index) at this point
+    pub cursor_position: usize,
+}
+
+impl UndoEntry {
+    /// Create a new undo entry with the given content and cursor position.
+    pub fn new(content: String, cursor_position: usize) -> Self {
+        Self {
+            content,
+            cursor_position,
+        }
+    }
+}
+
 /// Runtime state for an open tab.
 ///
 /// This struct holds the complete state of an open document tab,
@@ -972,6 +994,9 @@ pub struct Tab {
     pub viewport_height: f32,
     /// Pending scroll offset to apply on next render (for sync scrolling on mode switch)
     pub pending_scroll_offset: Option<f32>,
+    /// Pending cursor position to restore on next render (for undo/redo)
+    /// When Some, the editor widget will restore cursor to this char index
+    pub pending_cursor_restore: Option<usize>,
     /// Pending scroll ratio to apply (0.0 to 1.0) - used when content_height is unknown
     pub pending_scroll_ratio: Option<f32>,
     /// Line-to-Y mappings from last rendered mode render (for scroll sync)
@@ -983,10 +1008,10 @@ pub struct Tab {
     pub pending_scroll_to_line: Option<usize>,
     /// View mode for this tab (raw or rendered)
     pub view_mode: ViewMode,
-    /// Undo history stack
-    undo_stack: Vec<String>,
-    /// Redo history stack
-    redo_stack: Vec<String>,
+    /// Undo history stack (stores content + cursor position)
+    undo_stack: Vec<UndoEntry>,
+    /// Redo history stack (stores content + cursor position)
+    redo_stack: Vec<UndoEntry>,
     /// Maximum undo history size
     max_undo_size: usize,
     /// Content version counter - incremented on undo/redo to signal
@@ -1031,6 +1056,7 @@ impl Tab {
             content_height: 0.0,
             viewport_height: 0.0,
             pending_scroll_offset: None,
+            pending_cursor_restore: None,
             pending_scroll_ratio: None,
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
@@ -1052,10 +1078,16 @@ impl Tab {
         }
     }
 
-    /// Create a new empty tab with settings-based auto-save default.
-    pub fn new_with_settings(id: usize, auto_save_default: bool) -> Self {
+    /// Create a new empty tab with settings-based defaults.
+    ///
+    /// # Arguments
+    /// * `id` - Unique tab identifier
+    /// * `auto_save_default` - Whether auto-save is enabled by default
+    /// * `default_view_mode` - Default view mode for new tabs (Raw, Rendered, or Split)
+    pub fn new_with_settings(id: usize, auto_save_default: bool, default_view_mode: ViewMode) -> Self {
         let mut tab = Self::new(id);
         tab.auto_save_enabled = auto_save_default;
+        tab.view_mode = default_view_mode;
         tab
     }
 
@@ -1078,6 +1110,7 @@ impl Tab {
             content_height: 0.0,
             viewport_height: 0.0,
             pending_scroll_offset: None,
+            pending_cursor_restore: None,
             pending_scroll_ratio: None,
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
@@ -1099,10 +1132,24 @@ impl Tab {
         }
     }
 
-    /// Create a tab with content from a file, with settings-based auto-save.
-    pub fn with_file_and_settings(id: usize, path: PathBuf, content: String, auto_save_default: bool) -> Self {
+    /// Create a tab with content from a file, with settings-based defaults.
+    ///
+    /// # Arguments
+    /// * `id` - Unique tab identifier
+    /// * `path` - File path
+    /// * `content` - File content
+    /// * `auto_save_default` - Whether auto-save is enabled by default
+    /// * `default_view_mode` - Default view mode for new tabs (Raw, Rendered, or Split)
+    pub fn with_file_and_settings(
+        id: usize,
+        path: PathBuf,
+        content: String,
+        auto_save_default: bool,
+        default_view_mode: ViewMode,
+    ) -> Self {
         let mut tab = Self::with_file(id, path, content);
         tab.auto_save_enabled = auto_save_default;
+        tab.view_mode = default_view_mode;
         tab
     }
 
@@ -1131,6 +1178,7 @@ impl Tab {
             content_height: 0.0,
             viewport_height: 0.0,
             pending_scroll_offset: None,
+            pending_cursor_restore: None,
             pending_scroll_ratio: None,
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
@@ -1249,10 +1297,13 @@ impl Tab {
     }
 
     /// Set new content and push current to undo stack.
+    ///
+    /// The cursor position is captured from the current primary cursor.
     pub fn set_content(&mut self, new_content: String) {
         if new_content != self.content {
-            // Push current state to undo stack
-            self.undo_stack.push(self.content.clone());
+            // Push current state to undo stack (with cursor position)
+            let cursor_pos = self.cursors.primary().head;
+            self.undo_stack.push(UndoEntry::new(self.content.clone(), cursor_pos));
             if self.undo_stack.len() > self.max_undo_size {
                 self.undo_stack.remove(0);
             }
@@ -1266,31 +1317,39 @@ impl Tab {
 
     /// Undo the last edit.
     ///
-    /// Returns `true` if undo was performed.
+    /// Returns `Some(cursor_position)` if undo was performed, `None` otherwise.
+    /// The cursor position is the position that was saved when the edit was made.
     /// Increments `content_version` to signal external content change to UI widgets.
-    pub fn undo(&mut self) -> bool {
-        if let Some(previous) = self.undo_stack.pop() {
-            self.redo_stack.push(self.content.clone());
-            self.content = previous;
+    pub fn undo(&mut self) -> Option<usize> {
+        if let Some(entry) = self.undo_stack.pop() {
+            // Save current state to redo stack (with current cursor position)
+            let current_cursor = self.cursors.primary().head;
+            self.redo_stack.push(UndoEntry::new(self.content.clone(), current_cursor));
+            // Restore previous state
+            self.content = entry.content;
             self.content_version = self.content_version.wrapping_add(1);
-            true
+            Some(entry.cursor_position)
         } else {
-            false
+            None
         }
     }
 
     /// Redo the last undone edit.
     ///
-    /// Returns `true` if redo was performed.
+    /// Returns `Some(cursor_position)` if redo was performed, `None` otherwise.
+    /// The cursor position is the position that was saved when undo was performed.
     /// Increments `content_version` to signal external content change to UI widgets.
-    pub fn redo(&mut self) -> bool {
-        if let Some(next) = self.redo_stack.pop() {
-            self.undo_stack.push(self.content.clone());
-            self.content = next;
+    pub fn redo(&mut self) -> Option<usize> {
+        if let Some(entry) = self.redo_stack.pop() {
+            // Save current state to undo stack (with current cursor position)
+            let current_cursor = self.cursors.primary().head;
+            self.undo_stack.push(UndoEntry::new(self.content.clone(), current_cursor));
+            // Restore next state
+            self.content = entry.content;
             self.content_version = self.content_version.wrapping_add(1);
-            true
+            Some(entry.cursor_position)
         } else {
-            false
+            None
         }
     }
 
@@ -1326,17 +1385,17 @@ impl Tab {
     /// Record that an edit was made externally (e.g., by egui's TextEdit).
     ///
     /// Call this AFTER content has been modified, passing the OLD content
-    /// before the modification. This is needed because TextEdit modifies
-    /// the content string directly, bypassing `set_content()`.
+    /// and OLD cursor position before the modification. This is needed because
+    /// TextEdit modifies the content string directly, bypassing `set_content()`.
     ///
     /// This method:
-    /// - Pushes the old content to the undo stack
+    /// - Pushes the old content and cursor to the undo stack
     /// - Clears the redo stack (new edits invalidate redo history)
     /// - Enforces the maximum undo history size
-    pub fn record_edit(&mut self, old_content: String) {
+    pub fn record_edit(&mut self, old_content: String, old_cursor: usize) {
         // Only record if content actually changed
         if old_content != self.content {
-            self.undo_stack.push(old_content);
+            self.undo_stack.push(UndoEntry::new(old_content, old_cursor));
             if self.undo_stack.len() > self.max_undo_size {
                 self.undo_stack.remove(0);
             }
@@ -2061,15 +2120,16 @@ impl AppState {
     /// Create a new empty tab and make it active.
     ///
     /// Returns the index of the new tab.
-    /// Applies auto_save_enabled_default from settings.
+    /// Applies auto_save_enabled_default and default_view_mode from settings.
     pub fn new_tab(&mut self) -> usize {
         let auto_save_default = self.settings.auto_save_enabled_default;
-        let tab = Tab::new_with_settings(self.next_tab_id, auto_save_default);
+        let default_view_mode = self.settings.default_view_mode;
+        let tab = Tab::new_with_settings(self.next_tab_id, auto_save_default, default_view_mode);
         self.next_tab_id += 1;
         self.tabs.push(tab);
         self.active_tab_index = self.tabs.len() - 1;
-        debug!("Created new tab at index {} (auto-save: {})", 
-            self.active_tab_index, auto_save_default);
+        debug!("Created new tab at index {} (auto-save: {}, view_mode: {:?})", 
+            self.active_tab_index, auto_save_default, default_view_mode);
         self.active_tab_index
     }
 
@@ -2105,13 +2165,15 @@ impl AppState {
         // Read file content
         let content = std::fs::read_to_string(&path)?;
 
-        // Create new tab with settings-based auto-save default
+        // Create new tab with settings-based defaults
         let auto_save_default = self.settings.auto_save_enabled_default;
+        let default_view_mode = self.settings.default_view_mode;
         let tab = Tab::with_file_and_settings(
             self.next_tab_id,
             path.clone(),
             content,
             auto_save_default,
+            default_view_mode,
         );
         self.next_tab_id += 1;
         self.tabs.push(tab);
@@ -2119,11 +2181,11 @@ impl AppState {
 
         if focus {
             self.active_tab_index = new_index;
-            info!("Opened file: {} (with focus, auto-save: {})", 
-                path.display(), auto_save_default);
+            info!("Opened file: {} (with focus, auto-save: {}, view_mode: {:?})", 
+                path.display(), auto_save_default, default_view_mode);
         } else {
-            info!("Opened file: {} (in background, auto-save: {})", 
-                path.display(), auto_save_default);
+            info!("Opened file: {} (in background, auto-save: {}, view_mode: {:?})", 
+                path.display(), auto_save_default, default_view_mode);
         }
 
         // Update recent files
@@ -3052,7 +3114,7 @@ mod tests {
         // Simulate external edit (like TextEdit does)
         let old_content = tab.content.clone();
         tab.content = "first edit".to_string();
-        tab.record_edit(old_content);
+        tab.record_edit(old_content, 0);
 
         assert!(tab.can_undo());
         assert_eq!(tab.undo_count(), 1);
@@ -3060,15 +3122,16 @@ mod tests {
         // Simulate another edit
         let old_content = tab.content.clone();
         tab.content = "second edit".to_string();
-        tab.record_edit(old_content);
+        tab.record_edit(old_content, 5);
 
         assert_eq!(tab.undo_count(), 2);
         assert!(!tab.can_redo());
 
-        // Undo should restore previous state
-        tab.undo();
+        // Undo should restore previous state and return cursor position
+        let cursor = tab.undo();
         assert_eq!(tab.content, "first edit");
         assert!(tab.can_redo());
+        assert_eq!(cursor, Some(5)); // Should restore cursor from undo entry
     }
 
     #[test]
@@ -3078,7 +3141,7 @@ mod tests {
 
         // Recording with same content should not add to undo stack
         let old_content = tab.content.clone();
-        tab.record_edit(old_content);
+        tab.record_edit(old_content, 0);
 
         assert!(!tab.can_undo());
         assert_eq!(tab.undo_count(), 0);
@@ -3096,7 +3159,7 @@ mod tests {
         // New edit via record_edit should clear redo
         let old_content = tab.content.clone();
         tab.content = "new edit".to_string();
-        tab.record_edit(old_content);
+        tab.record_edit(old_content, 0);
 
         assert!(!tab.can_redo());
     }

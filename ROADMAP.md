@@ -12,31 +12,9 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 
 ## Planned Features 🚀
 
-### v0.2.2 (Planned) - Performance & Stability
+### v0.2.3 (Planned) - Mermaid Performance & Cleanup
 
-> **Status:** In Progress
-
-A focused release addressing performance issues with large files and fixing stability bugs.
-
-#### Bug Fixes
-- [ ] **UTF-8 crash in tree viewer** - Fix string slicing panic when displaying JSON/YAML strings containing multi-byte characters (Norwegian øæå, Chinese, emoji, etc.)
-- [ ] **CJK character rendering** ([#7](https://github.com/OlaProeis/Ferrite/issues/7)) - Add Noto Sans KR font fallback for Korean/Chinese/Japanese characters (PR [#8](https://github.com/OlaProeis/Ferrite/pull/8))
-- [x] **Ubuntu 22.04 .deb compatibility** ([#6](https://github.com/OlaProeis/Ferrite/issues/6)) - Build on Ubuntu 22.04 for glibc 2.35 compatibility
-- [ ] **Undo/redo behavior** ([#5](https://github.com/OlaProeis/Ferrite/issues/5)) - Fix scroll position reset, focus loss, and double-press requirement on Ctrl+Z
-- [ ] **Misleading code folding UI** ([#12](https://github.com/OlaProeis/Ferrite/issues/12)) - Hide non-functional fold buttons by default, add setting to show them; remove confusing "Raw View" button from Rendered JSON view
-
-#### Performance Optimizations
-- [x] **Large file performance** - Deferred syntax highlighting keeps typing responsive in 5000+ line files
-- [x] **Syntax highlighting optimization** - Galley caching for instant scrolling, deferred re-highlighting while typing
-- [x] **Scroll performance** - Instant syntax colors when scrolling/jumping via minimap
-
-#### UX Improvements
-- [ ] **Default view mode setting** ([#3](https://github.com/OlaProeis/Ferrite/issues/3)) - Option to enable split/preview view by default instead of per-tab
-
-#### CLI Improvements
-- [ ] **Command-line file opening** ([#9](https://github.com/OlaProeis/Ferrite/issues/9)) - `ferrite file.md` opens file directly in editor
-- [ ] **Version/help flags** ([#10](https://github.com/OlaProeis/Ferrite/issues/10)) - `-V/--version` and `-h/--help` CLI support
-- [ ] **Configurable log level** ([#11](https://github.com/OlaProeis/Ferrite/issues/11)) - `log_level` setting in config.json to reduce stderr noise
+> **Status:** Planned (deferred from v0.2.2)
 
 #### Mermaid Improvements
 - [ ] **Rendering performance** - Optimize mermaid.rs for complex diagrams
@@ -124,7 +102,31 @@ Extract `FerriteEditor` as a standalone, framework-agnostic text editing library
 
 ## Completed ✅
 
-### v0.2.1 (Current Release)
+### v0.2.2 (Current Release) - Performance & Stability
+
+A focused release addressing bugs reported after v0.2.1 launch, improving CLI usability, and adding quality-of-life features.
+
+#### Bug Fixes
+- [x] **UTF-8 crash in tree viewer** - Fix string slicing panic when displaying JSON/YAML strings containing multi-byte characters (Norwegian øæå, Chinese, emoji, etc.)
+- [x] **CJK character rendering** ([#7](https://github.com/OlaProeis/Ferrite/issues/7)) - Multi-region CJK support (Korean, Chinese, Japanese) via system font fallback (PR [#8](https://github.com/OlaProeis/Ferrite/pull/8) by [@SteelCrab](https://github.com/SteelCrab) 🙏)
+- [x] **Ubuntu 22.04 .deb compatibility** ([#6](https://github.com/OlaProeis/Ferrite/issues/6)) - Build on Ubuntu 22.04 for glibc 2.35 compatibility
+- [x] **Undo/redo behavior** ([#5](https://github.com/OlaProeis/Ferrite/issues/5)) - Fixed scroll position reset, focus loss, double-press requirement, and cursor restoration on Ctrl+Z
+- [x] **Misleading code folding UI** ([#12](https://github.com/OlaProeis/Ferrite/issues/12)) - Hide non-functional fold indicators by default; remove confusing "Raw View" button from Rendered JSON view
+
+#### Performance Optimizations
+- [x] **Large file performance** - Deferred syntax highlighting keeps typing responsive in 5000+ line files
+- [x] **Syntax highlighting optimization** - Galley caching for instant scrolling, deferred re-highlighting while typing
+- [x] **Scroll performance** - Instant syntax colors when scrolling/jumping via minimap
+
+#### UX Improvements
+- [x] **Default view mode setting** ([#3](https://github.com/OlaProeis/Ferrite/issues/3)) - Option to set default view mode (Raw/Rendered/Split) for new tabs
+
+#### CLI Improvements
+- [x] **Command-line file opening** ([#9](https://github.com/OlaProeis/Ferrite/issues/9)) - `ferrite file.md` opens file directly in editor
+- [x] **Version/help flags** ([#10](https://github.com/OlaProeis/Ferrite/issues/10)) - `-V/--version` and `-h/--help` CLI support
+- [x] **Configurable log level** ([#11](https://github.com/OlaProeis/Ferrite/issues/11)) - `log_level` setting in config.json with CLI override (`--log-level`)
+
+### v0.2.1
 
 #### Mermaid Diagram Enhancements
 - [x] **Accurate text measurement** - Replace character-count estimation with egui font metrics
