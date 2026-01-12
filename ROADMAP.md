@@ -12,7 +12,7 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 
 ## Planned Features 🚀
 
-### v0.2.5 (Planned) - Mermaid Update
+### v0.2.5 (Planned) - Mermaid Update, CSV Support & i18n
 
 > **Status:** Planned
 
@@ -21,6 +21,25 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 - [ ] **Code cleanup** - Address unused code warnings, improve modularity
 - [ ] **Diagram insertion toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert mermaid code blocks
 - [ ] **Syntax hints in Help** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Documentation of supported diagram types and syntax examples
+
+#### CSV Support ([#19](https://github.com/OlaProeis/Ferrite/issues/19))
+Native CSV file support with specialized viewing and editing capabilities.
+
+- [ ] **CSV Tree Viewer** - Table view with fixed-width column alignment (like EmEditor)
+- [ ] **Rainbow column coloring** - Alternating column colors for readability (like RainbowCSV)
+- [ ] **Delimiter detection** - Auto-detect comma, tab, semicolon, pipe separators
+- [ ] **Header row detection** - Highlight first row as column headers
+- [ ] **Large file performance** - Virtual scrolling for CSVs with thousands of rows
+
+#### Internationalization ([#18](https://github.com/OlaProeis/Ferrite/issues/18))
+Multi-language UI support with community-driven translations.
+
+- [ ] **i18n infrastructure** - Add `rust-i18n` crate with YAML translation files
+- [ ] **String extraction** - Move all UI strings (~300-400) to translation keys
+- [ ] **Language selector** - Settings option to choose UI language
+- [ ] **Locale detection** - Auto-detect system language on first launch
+- [ ] **Weblate integration** - Set up hosted.weblate.org for community translations
+- [ ] **Simplified Chinese** - First community translation (thanks @sr79368142!)
 
 ---
 
@@ -74,6 +93,7 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 
 ### Future (v0.4.0+)
 - [ ] **LaTeX/math support** - Inline (`$...$`) and display (`$$...$$`) math rendering
+- [ ] **Memory-mapped file I/O** ([#19](https://github.com/OlaProeis/Ferrite/issues/19)) - Handle GB-scale CSV/JSON files efficiently without loading into RAM
 - [ ] **TODO list editing UX** - Smart cursor behavior in task lists (respect line start position, don't jump past `- [ ]` syntax)
 - [ ] Spell checking
 - [ ] Custom themes (import/export)
