@@ -17,6 +17,8 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 > **Status:** Planned
 
 #### Mermaid Improvements
+- [ ] **YAML frontmatter support** - Parse `---` metadata blocks with `title:`, `config:` etc. (MermaidJS v8.13+ syntax)
+- [ ] **Parallel edge operator (`&`)** - Support `A --> B & C & D` syntax for multiple edges from one source
 - [ ] **Rendering performance** - Optimize mermaid.rs for complex diagrams with caching
 - [ ] **Code cleanup** - Address unused code warnings, improve modularity
 - [ ] **Diagram insertion toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert mermaid code blocks
@@ -40,6 +42,31 @@ Multi-language UI support with community-driven translations.
 - [ ] **Locale detection** - Auto-detect system language on first launch
 - [ ] **Weblate integration** - Set up hosted.weblate.org for community translations
 - [ ] **Simplified Chinese** - First community translation (thanks @sr79368142!)
+
+#### Bug Fixes & Polish
+- [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic to prevent unnecessary "recover work" dialogs
+- [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded; ensure it survives build-to-build testing
+- [ ] **Zen mode rendered centering** - Center content in rendered/split view when Zen mode is active (currently only centers raw text)
+- [ ] **Git status auto-refresh** - Refresh git indicators on file save and periodically (every ~10 seconds) instead of only on folder open
+- [ ] **Quick switcher mouse support** - Fix mouse hover/click not working (item flickers but doesn't select); arrow keys + Enter work fine
+- [ ] **Table editing cursor loss** - Fix cursor losing focus after each keystroke when editing tables in rendered mode (related to previous cursor issues)
+
+#### New Features
+- [ ] **Recent folders** - Extend the recent files menu (bottom-left status bar) into a split view with two columns: recent files and recent workspace folders for quick project switching
+- [ ] **Keyboard shortcut customization** - Let users rebind shortcuts via settings panel; store in config.json
+- [ ] **Drag & drop images** - Drop images into editor → auto-save to `./assets/` folder → insert markdown image link
+- [ ] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links; keep in sync on save
+- [ ] **Document statistics panel** - Tabbed info panel for .md files: Outline tab + Statistics tab (heading count, link count, code block count, image count, word count, reading time, average sentence length)
+- [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;sig` → signature block); JSON config in `~/.config/ferrite/snippets.json`
+
+#### Semantic Minimap
+Enhanced minimap designed specifically for Markdown documents - show structure, not just pixels.
+
+- [ ] **Header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
+- [ ] **Content type indicators** - Visual markers for code blocks (```), mermaid diagrams, tables, images, blockquotes
+- [ ] **Density visualization** - Show text density as subtle horizontal bars between headers
+- [ ] **Sleek design** - Minimal, elegant styling that complements the editor aesthetic
+- [ ] **Mode toggle** - Settings option to choose "Visual" (current pixel-based) or "Semantic" (new structured) mode
 
 ---
 
@@ -89,7 +116,19 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 - [ ] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file
 
 #### 5. Platform & Distribution
-- [ ] **macOS app signing & notarization** - Create proper `.app` bundle, sign with Developer ID, notarize with Apple
+Improve installation experience across all platforms.
+
+##### Windows Installer
+- [ ] **Inno Setup installer** - Professional `.exe` installer (like the Linux `.deb`)
+- [ ] **File associations** - Register as handler for `.md`, `.json`, `.yaml`, `.toml` files
+- [ ] **Context menu integration** - "Open with Ferrite" for files and folders (workspace mode)
+- [ ] **Add to PATH option** - Run `ferrite` from any terminal
+- [ ] **Start Menu & Desktop shortcuts** - Standard Windows integration
+- [ ] **Clean uninstaller** - Remove all registry entries on uninstall
+- [ ] **CI automation** - Build installer automatically in GitHub Actions release workflow
+
+##### macOS
+- [ ] **App signing & notarization** - Create proper `.app` bundle, sign with Developer ID, notarize with Apple
 
 ### v0.4.0 (Planned) - TeX Math Support
 

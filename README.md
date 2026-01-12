@@ -73,6 +73,7 @@ Native rendering of 11 diagram types directly in the preview:
 - **Formatting Toolbar** - Quick access to bold, italic, headings, lists, links, and more
 - **Live Pipeline** - Pipe JSON/YAML content through shell commands (for developers)
 - **Custom Window** - Borderless window with custom title bar and resize handles
+- **Recent Files** - Click the filename in the bottom-left status bar to quickly access recently opened files
 
 ## Installation
 
