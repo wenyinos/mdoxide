@@ -86,6 +86,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Branding](./branding.md) | Icon design, asset generation, platform integration guidelines |
 | **[Custom Editor Widget Plan](./technical/custom-editor-widget-plan.md)** | **v0.3.0 planning: Replace egui TextEdit with custom FerriteEditor widget** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
+| **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
 
 ---
 

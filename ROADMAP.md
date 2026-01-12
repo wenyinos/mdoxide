@@ -91,8 +91,37 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 #### 5. Platform & Distribution
 - [ ] **macOS app signing & notarization** - Create proper `.app` bundle, sign with Developer ID, notarize with Apple
 
-### Future (v0.4.0+)
-- [ ] **LaTeX/math support** - Inline (`$...$`) and display (`$$...$$`) math rendering
+### v0.4.0 (Planned) - TeX Math Support
+
+> **Status:** Planning  
+> **Docs:** [Math Support Plan](docs/math-support-plan.md)
+
+Native LaTeX/TeX math rendering - the most requested feature for academic and technical writing. Pure Rust implementation, no JavaScript dependencies.
+
+#### Math Rendering Engine
+- [ ] **LaTeX parser** - Parse `$...$` (inline) and `$$...$$` (display) syntax
+- [ ] **Layout engine** - TeX-style box model for fractions, subscripts, radicals
+- [ ] **Math fonts** - Embedded glyph subset for consistent cross-platform rendering
+- [ ] **egui integration** - Render math in preview and split views
+
+#### Supported LaTeX (Target)
+- [ ] **Fractions** - `\frac{a}{b}` with proper stacking
+- [ ] **Subscripts/superscripts** - `x^2`, `x_i`, `x_i^2`
+- [ ] **Greek letters** - `\alpha`, `\beta`, `\pi`, etc.
+- [ ] **Operators** - `\sum`, `\int`, `\prod`, `\lim`
+- [ ] **Roots** - `\sqrt{x}`, `\sqrt[n]{x}`
+- [ ] **Delimiters** - Auto-scaling `\left( \right)`
+- [ ] **Matrices** - `\begin{matrix}...\end{matrix}`
+- [ ] **Font styles** - `\mathbf`, `\mathit`, `\mathrm`
+
+#### WYSIWYG Features (Requires FerriteEditor from v0.3.0)
+- [ ] **Inline math preview** - See rendered math while typing (Typora-style)
+- [ ] **Click-to-edit** - Click rendered math to edit source
+- [ ] **Symbol palette** - Quick access to common symbols
+
+---
+
+### Future (v0.5.0+)
 - [ ] **Memory-mapped file I/O** ([#19](https://github.com/OlaProeis/Ferrite/issues/19)) - Handle GB-scale CSV/JSON files efficiently without loading into RAM
 - [ ] **TODO list editing UX** - Smart cursor behavior in task lists (respect line start position, don't jump past `- [ ]` syntax)
 - [ ] Spell checking
