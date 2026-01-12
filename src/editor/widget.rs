@@ -4,7 +4,7 @@
 //! with support for text input, cursor movement, selection, clipboard operations,
 //! scrolling, and optional line numbers.
 
-use crate::config::EditorFont;
+use crate::config::{EditorFont, MaxLineWidth};
 use crate::editor::matching::DelimiterMatcher;
 use crate::fonts;
 use crate::markdown::syntax::{highlight_code, language_from_path, HighlightedLine};
@@ -165,6 +165,8 @@ pub struct EditorWidget<'a> {
     file_path: Option<PathBuf>,
     /// Whether we're in dark mode (for syntax theme selection).
     is_dark_mode: bool,
+    /// Maximum line width setting (applies when not in Zen Mode).
+    max_line_width: MaxLineWidth,
 }
 
 impl<'a> EditorWidget<'a> {
@@ -189,6 +191,7 @@ impl<'a> EditorWidget<'a> {
             syntax_highlighting: false,
             file_path: None,
             is_dark_mode: true,
+            max_line_width: MaxLineWidth::Off,
         }
     }
 
@@ -306,6 +309,17 @@ impl<'a> EditorWidget<'a> {
         self.syntax_highlighting = enabled;
         self.file_path = file_path;
         self.is_dark_mode = is_dark;
+        self
+    }
+
+    /// Set the maximum line width for text centering.
+    ///
+    /// When enabled and the viewport is wider than the specified width,
+    /// text is constrained to that width and centered horizontally.
+    /// This setting is used when NOT in Zen Mode (Zen Mode has its own width setting).
+    #[must_use]
+    pub fn max_line_width(mut self, width: MaxLineWidth) -> Self {
+        self.max_line_width = width;
         self
     }
 
@@ -624,20 +638,37 @@ impl<'a> EditorWidget<'a> {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
 
-        // Calculate Zen Mode centering margin
-        let zen_margin = if self.zen_mode {
-            let char_width = font_size * 0.6; // Approximate average character width
+        // Calculate centering margin for Zen Mode or max_line_width setting
+        // Priority: Zen Mode uses its own setting, otherwise use max_line_width
+        let char_width = font_size * 0.6; // Approximate average character width
+        let (content_margin, max_content_width_px) = if self.zen_mode {
+            // Zen Mode: use zen_max_column_width (in characters)
             let max_content_width = char_width * self.zen_max_column_width;
             let available = ui.available_width();
             
-            if available > max_content_width {
+            let margin = if available > max_content_width {
                 (available - max_content_width) / 2.0
             } else {
                 0.0
-            }
+            };
+            (margin, Some(max_content_width))
+        } else if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
+            // max_line_width setting: apply width constraint and centering
+            let available = ui.available_width();
+            
+            let margin = if available > max_width_px {
+                (available - max_width_px) / 2.0
+            } else {
+                0.0
+            };
+            (margin, Some(max_width_px))
         } else {
-            0.0
+            // No width constraint
+            (0.0, None)
         };
+        
+        // For backward compatibility, keep zen_margin variable name
+        let zen_margin = content_margin;
         
         let scroll_output = scroll_area.show(ui, |ui| {
             // Use horizontal layout inside ScrollArea so gutter and editor scroll together
@@ -666,10 +697,9 @@ impl<'a> EditorWidget<'a> {
                 };
 
                 // Create the multiline text editor
-                // In Zen Mode, constrain width to max column width
-                let desired_width = if self.zen_mode && zen_margin > 0.0 {
-                    let char_width = font_size * 0.6;
-                    char_width * self.zen_max_column_width
+                // Constrain width when Zen Mode is enabled or max_line_width is set
+                let desired_width = if let Some(max_width) = max_content_width_px {
+                    max_width
                 } else {
                     f32::INFINITY
                 };

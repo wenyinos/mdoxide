@@ -3,7 +3,7 @@
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
 
-use crate::config::{EditorFont, Settings, Theme, ViewMode};
+use crate::config::{EditorFont, MaxLineWidth, Settings, Theme, ViewMode};
 use eframe::egui::{self, Color32, RichText, Ui};
 
 /// Settings panel sections for navigation.
@@ -378,6 +378,17 @@ impl SettingsPanel {
 
         ui.add_space(4.0);
 
+        // Auto-close brackets toggle
+        if ui
+            .checkbox(&mut settings.auto_close_brackets, "Auto-close Brackets & Quotes")
+            .on_hover_text("Automatically insert closing brackets and quotes. Wraps selected text when typing an opener.")
+            .changed()
+        {
+            changed = true;
+        }
+
+        ui.add_space(4.0);
+
         // Syntax highlighting toggle
         if ui
             .checkbox(&mut settings.syntax_highlighting_enabled, "Syntax Highlighting")
@@ -446,6 +457,71 @@ impl SettingsPanel {
                 }
             }
         });
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Maximum Line Width section
+        ui.label(RichText::new("Maximum Line Width").strong());
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new("Constrain text width and center the text column in the viewport")
+                .weak()
+                .small(),
+        );
+        ui.add_space(4.0);
+
+        // Dropdown for preset options
+        let current_display = settings.max_line_width.display_name();
+        egui::ComboBox::from_id_source("max_line_width_combo")
+            .selected_text(current_display)
+            .show_ui(ui, |ui| {
+                for preset in MaxLineWidth::presets() {
+                    let label = format!("{} - {}", preset.display_name(), preset.description());
+                    if ui
+                        .selectable_value(&mut settings.max_line_width, *preset, label)
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                }
+                // Custom option
+                let is_custom = settings.max_line_width.is_custom();
+                let custom_label = "Custom - Specify pixel width";
+                if ui.selectable_label(is_custom, custom_label).clicked() && !is_custom {
+                    // Switch to custom with a sensible default
+                    settings.max_line_width = MaxLineWidth::Custom(800);
+                    changed = true;
+                }
+            });
+
+        // Show numeric input when custom is selected
+        if let MaxLineWidth::Custom(px) = &mut settings.max_line_width {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("Width (pixels):");
+                let mut px_value = *px as f32;
+                let drag = ui.add(
+                    egui::DragValue::new(&mut px_value)
+                        .speed(10.0)
+                        .range(Settings::MIN_CUSTOM_LINE_WIDTH as f32..=Settings::MAX_CUSTOM_LINE_WIDTH as f32)
+                        .suffix("px"),
+                );
+                if drag.changed() {
+                    *px = px_value as u32;
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                for (label, value) in [("600px", 600u32), ("800px", 800), ("1000px", 1000)] {
+                    if ui.small_button(label).clicked() {
+                        *px = value;
+                        changed = true;
+                    }
+                }
+            });
+        }
 
         ui.add_space(16.0);
         ui.separator();

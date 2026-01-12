@@ -45,7 +45,7 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::needless_range_loop)]
 
-use crate::config::{EditorFont, Settings, Theme};
+use crate::config::{EditorFont, MaxLineWidth, Settings, Theme};
 use crate::fonts;
 use crate::markdown::ast_ops::{
     exit_list_to_paragraph, heading_enter, indent_list_item, merge_with_previous_list_item,
@@ -424,6 +424,8 @@ pub struct MarkdownEditor<'a> {
     scroll_to_line: Option<usize>,
     /// Pending scroll offset to apply (for sync scrolling on mode switch)
     pending_scroll_offset: Option<f32>,
+    /// Maximum line width setting for centering text column
+    max_line_width: MaxLineWidth,
 }
 
 impl<'a> MarkdownEditor<'a> {
@@ -439,6 +441,7 @@ impl<'a> MarkdownEditor<'a> {
             id: None,
             scroll_to_line: None,
             pending_scroll_offset: None,
+            max_line_width: MaxLineWidth::Off,
         }
     }
 
@@ -498,6 +501,16 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Set the maximum line width for text centering.
+    ///
+    /// When enabled and the viewport is wider than the specified width,
+    /// text is constrained to that width and centered horizontally.
+    #[must_use]
+    pub fn max_line_width(mut self, width: MaxLineWidth) -> Self {
+        self.max_line_width = width;
+        self
+    }
+
     /// Apply settings to the editor widget.
     #[must_use]
     pub fn with_settings(mut self, settings: &Settings) -> Self {
@@ -505,6 +518,7 @@ impl<'a> MarkdownEditor<'a> {
         self.font_family = settings.font_family;
         self.word_wrap = settings.word_wrap;
         self.theme = settings.theme;
+        self.max_line_width = settings.max_line_width;
         self
     }
 
@@ -660,41 +674,75 @@ impl<'a> MarkdownEditor<'a> {
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
         
+        // Calculate centering margin for max_line_width setting
+        let char_width = self.font_size * 0.6; // Approximate average character width
+        let (content_margin, max_content_width_px) = if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
+            let available = ui.available_width();
+            let margin = if available > max_width_px {
+                (available - max_width_px) / 2.0
+            } else {
+                0.0
+            };
+            (margin, Some(max_width_px))
+        } else {
+            (0.0, None)
+        };
+        
         let scroll_output = scroll_area.show(ui, |ui| {
             // Push the content hash as an ID scope so all inner widgets
             // get unique IDs when content changes
             ui.push_id(content_hash, |ui| {
-                // Minimal spacing - let individual elements control their margins
-                ui.spacing_mut().item_spacing = Vec2::new(4.0, 1.0);
+                // Wrap content in horizontal layout for centering when max_line_width is set
+                ui.horizontal(|ui| {
+                    // Add left margin for centering
+                    if content_margin > 0.0 {
+                        ui.add_space(content_margin);
+                    }
+                    
+                    // Container for the actual content with optional width constraint
+                    let content_width = max_content_width_px.unwrap_or(ui.available_width());
+                    ui.vertical(|ui| {
+                        // Constrain the content width
+                        ui.set_max_width(content_width);
+                        
+                        // Minimal spacing - let individual elements control their margins
+                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 1.0);
 
-                // Render all children of the document root
-                // Note: Using original render_node (not the structural_keys version) since
-                // structural key handling is currently disabled due to compatibility issues
-                for node in &doc.root.children {
-                    // Capture Y position before rendering this node for scroll sync
-                    let y_before = ui.cursor().top();
-                    
-                    render_node(
-                        ui,
-                        node,
-                        self.content,
-                        &mut edit_state,
-                        colors,
-                        self.font_size,
-                        self.font_family,
-                        0,
-                    );
-                    
-                    // Record the line mapping for this top-level node
-                    line_mappings.push(LineMapping {
-                        start_line: node.start_line,
-                        end_line: node.end_line,
-                        rendered_y: y_before,
+                        // Render all children of the document root
+                        // Note: Using original render_node (not the structural_keys version) since
+                        // structural key handling is currently disabled due to compatibility issues
+                        for node in &doc.root.children {
+                            // Capture Y position before rendering this node for scroll sync
+                            let y_before = ui.cursor().top();
+                            
+                            render_node(
+                                ui,
+                                node,
+                                self.content,
+                                &mut edit_state,
+                                colors,
+                                self.font_size,
+                                self.font_family,
+                                0,
+                            );
+                            
+                            // Record the line mapping for this top-level node
+                            line_mappings.push(LineMapping {
+                                start_line: node.start_line,
+                                end_line: node.end_line,
+                                rendered_y: y_before,
+                            });
+                        }
+
+                        // Keep structural_state alive to avoid unused variable warning
+                        let _ = &structural_state;
                     });
-                }
-
-                // Keep structural_state alive to avoid unused variable warning
-                let _ = &structural_state;
+                    
+                    // Add right margin for centering (fills remaining space)
+                    if content_margin > 0.0 {
+                        ui.add_space(content_margin);
+                    }
+                });
 
                 // Return a response from the scroll area content
                 ui.allocate_response(Vec2::ZERO, egui::Sense::hover())

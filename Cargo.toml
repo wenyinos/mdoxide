@@ -1,6 +1,6 @@
 [package]
 name = "ferrite"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "A fast, lightweight text editor for Markdown, JSON, and more"
 repository = "https://github.com/OlaProeis/Ferrite"
@@ -36,8 +36,8 @@ notify = { version = "6", default-features = false, features = ["macos_kqueue"] 
 fuzzy-matcher = "0.3"
 walkdir = "2"
 
-# Git integration
-git2 = "0.19"
+# Git integration (no SSH/HTTPS - we only need local repo status)
+git2 = { version = "0.19", default-features = false }
 
 # Icon loading
 image = { version = "0.25", default-features = false, features = ["png"] }

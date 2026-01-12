@@ -68,6 +68,13 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Split View](./technical/split-view.md) | Side-by-side raw editor + rendered preview, draggable splitter, independent scrolling |
 | [Live Pipeline](./technical/live-pipeline.md) | JSON/YAML command piping through shell commands (jq, yq), recent history, output display |
 | [Search Panel Viewport](./technical/search-panel-viewport.md) | Viewport constraints for Search panel, DPI handling, resize behavior |
+| [Go to Line](./technical/go-to-line.md) | Ctrl+G modal dialog for line navigation, viewport centering |
+| [Duplicate Line](./technical/duplicate-line.md) | Ctrl+Shift+D line/selection duplication, char-to-byte index handling |
+| [Move Line](./technical/move-line.md) | Alt+↑/↓ line reordering, pre-render key consumption, cursor following |
+| [Auto-close Brackets](./technical/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
+| [Smart Paste](./technical/smart-paste.md) | URL detection, markdown link creation with selection, image markdown insertion |
+| [Configurable Line Width](./technical/configurable-line-width.md) | MaxLineWidth setting (Off/80/100/120/Custom), text centering in all views |
+| [Linux Cursor Flicker Fix](./technical/linux-cursor-flicker-fix.md) | Title bar exclusion zone to prevent cursor conflicts with window controls |
 | [Ribbon Redesign](./technical/ribbon-redesign.md) | Design C streamlined ribbon, title bar integration, dropdown menus |
 | [Mermaid Diagrams](./technical/mermaid-diagrams.md) | MermaidJS code block detection, diagram type indicators, styled rendering |
 | [Mermaid Text Measurement](./technical/mermaid-text-measurement.md) | TextMeasurer trait, dynamic node sizing, egui font metrics integration |

@@ -1890,6 +1890,8 @@ pub struct UiState {
     pub show_recent_files_popup: bool,
     /// Whether Zen Mode is enabled (distraction-free writing)
     pub zen_mode: bool,
+    /// Go to Line dialog state (None = closed)
+    pub go_to_line_dialog: Option<crate::ui::GoToLineDialog>,
 }
 
 /// Actions that may need confirmation before execution.

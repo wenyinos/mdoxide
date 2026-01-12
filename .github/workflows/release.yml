@@ -112,22 +112,24 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
-    runs-on: macos-13  # macos-13 is Intel (x86_64)
+    runs-on: macos-14  # Cross-compile to x86_64 from ARM64 runner
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust with Intel target
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
 
-      - name: Build release
-        run: cargo build --release
+      - name: Build release for Intel
+        run: cargo build --release --target x86_64-apple-darwin
 
       - name: Create release archive
         run: |
           mkdir release
-          cp target/release/ferrite release/
+          cp target/x86_64-apple-darwin/release/ferrite release/
           tar -czvf ferrite-macos-x64.tar.gz -C release .
 
       - name: Upload artifact
@@ -135,6 +137,10 @@ jobs:
         with:
           name: ferrite-macos-x64
           path: ferrite-macos-x64.tar.gz
+
+  # NOTE: musl static build disabled - GUI apps with font rendering (freetype, fontconfig)
+  # and graphics (X11/Wayland) dependencies cannot be easily built as static musl binaries.
+  # The glibc build (Ubuntu 22.04) provides good compatibility across Linux distributions.
 
   # Create GitHub Release with all artifacts
   release:

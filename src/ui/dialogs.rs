@@ -476,9 +476,175 @@ fn show_delete_dialog(
     result
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Go to Line Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// State for the Go to Line dialog.
+#[derive(Debug, Clone)]
+pub struct GoToLineDialog {
+    /// Current input value (as string for text editing)
+    pub line_input: String,
+    /// Current line number (1-indexed) shown as placeholder
+    pub current_line: usize,
+    /// Maximum line number in the document
+    pub max_line: usize,
+    /// Error message if input is invalid
+    pub error_message: Option<String>,
+}
+
+/// Result from showing the Go to Line dialog.
+#[derive(Debug, Clone)]
+pub enum GoToLineResult {
+    /// No action taken (dialog still open)
+    None,
+    /// Dialog was cancelled
+    Cancelled,
+    /// Navigate to the specified line (1-indexed)
+    GoToLine(usize),
+}
+
+impl GoToLineDialog {
+    /// Create a new Go to Line dialog.
+    pub fn new(current_line: usize, max_line: usize) -> Self {
+        Self {
+            line_input: String::new(),
+            current_line,
+            max_line,
+            error_message: None,
+        }
+    }
+
+    /// Show the dialog and return the result.
+    pub fn show(&mut self, ctx: &egui::Context, is_dark: bool) -> GoToLineResult {
+        let mut result = GoToLineResult::None;
+
+        // Handle escape key globally
+        if ctx.input(|i| i.key_pressed(Key::Escape)) {
+            return GoToLineResult::Cancelled;
+        }
+
+        // Check for Enter key press globally (before rendering)
+        let enter_pressed = ctx.input(|i| i.key_pressed(Key::Enter));
+
+        // Colors
+        let bg_color = if is_dark {
+            Color32::from_rgb(40, 40, 45)
+        } else {
+            Color32::from_rgb(250, 250, 250)
+        };
+
+        let border_color = if is_dark {
+            Color32::from_rgb(70, 70, 80)
+        } else {
+            Color32::from_rgb(180, 180, 190)
+        };
+
+        let muted_color = if is_dark {
+            Color32::from_rgb(150, 150, 160)
+        } else {
+            Color32::from_rgb(100, 100, 110)
+        };
+
+        egui::Window::new("📍 Go to Line")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .frame(
+                egui::Frame::window(&ctx.style())
+                    .fill(bg_color)
+                    .stroke(egui::Stroke::new(1.0, border_color))
+                    .rounding(8.0),
+            )
+            .show(ctx, |ui| {
+                ui.set_min_width(280.0);
+
+                ui.add_space(8.0);
+                ui.label("Enter line number:");
+                ui.add_space(4.0);
+
+                // Text input
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.line_input)
+                        .hint_text(format!("{}", self.current_line))
+                        .desired_width(260.0),
+                );
+
+                // Auto-focus on first frame
+                response.request_focus();
+
+                // Show error message if any
+                if let Some(error) = &self.error_message {
+                    ui.add_space(4.0);
+                    ui.colored_label(Color32::from_rgb(220, 80, 80), error.as_str());
+                }
+
+                ui.add_space(8.0);
+
+                // Show line range hint
+                ui.label(
+                    RichText::new(format!("Range: 1 - {}", self.max_line))
+                        .small()
+                        .color(muted_color),
+                );
+
+                ui.add_space(12.0);
+
+                // Buttons
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Parse and validate input
+                        let input_text = if self.line_input.trim().is_empty() {
+                            // Use current line as default if input is empty
+                            self.current_line.to_string()
+                        } else {
+                            self.line_input.trim().to_string()
+                        };
+
+                        let parsed_line = input_text.parse::<usize>();
+                        let is_valid = parsed_line.is_ok();
+
+                        // Go button - also triggers on Enter key when input is valid
+                        let go_clicked = ui
+                            .add_enabled(is_valid, egui::Button::new("Go"))
+                            .clicked();
+
+                        if go_clicked || (enter_pressed && is_valid) {
+                            if let Ok(line) = parsed_line {
+                                // Clamp to valid range
+                                let target_line = line.clamp(1, self.max_line);
+                                result = GoToLineResult::GoToLine(target_line);
+                            }
+                        }
+
+                        ui.add_space(8.0);
+
+                        // Cancel button
+                        if ui.button("Cancel").clicked() {
+                            result = GoToLineResult::Cancelled;
+                        }
+                    });
+                });
+
+                ui.add_space(4.0);
+            });
+
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_go_to_line_dialog() {
+        let dialog = GoToLineDialog::new(10, 100);
+        assert_eq!(dialog.current_line, 10);
+        assert_eq!(dialog.max_line, 100);
+        assert!(dialog.line_input.is_empty());
+        assert!(dialog.error_message.is_none());
+    }
 
     #[test]
     fn test_new_file_dialog() {

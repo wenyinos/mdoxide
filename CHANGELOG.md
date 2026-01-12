@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2025-01-12
+
+### Added
+
+#### Editor Productivity
+- **Go to Line (Ctrl+G)** - Quick navigation to specific line number with modal dialog and viewport centering
+- **Duplicate Line (Ctrl+Shift+D)** - Duplicate current line or selection with proper char-to-byte index handling
+- **Move Line Up/Down (Alt+↑/↓)** - Rearrange lines without cut/paste, cursor follows moved line
+- **Auto-close Brackets & Quotes** - Type `(`, `[`, `{`, `"`, or `'` to get matching pair with cursor in middle; selection wrapping and skip-over behavior
+- **Smart Paste for Links** - Select text then paste URL to create `[text](url)` markdown link; image URLs create `![](url)` syntax
+
+#### UX Improvements
+- **Configurable line width** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Limit text width for improved readability with presets (Off/80/100/120) or custom value; text centered in viewport
+
+#### Platform & Distribution
+- **macOS Intel cross-compilation** - CI now cross-compiles for Intel Macs from ARM64 runner
+
+### Fixed
+
+#### Bug Fixes
+- **Task list rendering** - Task list items with inline formatting now render correctly; fixed checkbox alignment and replaced interactive checkboxes with non-interactive ASCII-style `[ ]`/`[x]` markers (interactive editing planned for v0.3.0)
+- **macOS Intel support** ([#16](https://github.com/OlaProeis/Ferrite/issues/16)) - Fixed artifact naming for Intel Mac builds; separate x86_64 build via `macos-13` runner
+- **Linux close button cursor flicker** - Fixed cursor rapidly switching between pointer/resize near window close button by adding title bar exclusion zone (35px) for north-edge resize detection and cursor caching
+
+### Technical
+- Added 7 new technical documentation files in `docs/technical/`
+- Extended keyboard shortcut system with pre-render key consumption for move line operations
+
 ## [0.2.2] - 2025-01-11
 
 ### Added
@@ -173,12 +201,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.2.3** - Editor productivity release (Go to Line, Duplicate Line, Move Line, Auto-close, Smart Paste, Line Width)
 - **0.2.2** - Stability & CLI release (CJK fonts, undo/redo fixes, CLI arguments, default view mode)
 - **0.2.1** - Mermaid diagram improvements (control blocks, subgraphs, nested states, improved layout)
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/OlaProeis/Ferrite/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/OlaProeis/Ferrite/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/OlaProeis/Ferrite/compare/v0.1.0...v0.2.0

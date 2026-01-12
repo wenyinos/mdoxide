@@ -11,6 +11,97 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Maximum Line Width Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Maximum line width setting for the editor.
+///
+/// Controls the maximum width of text content in the editor. When enabled,
+/// text is constrained to the specified width and centered in the viewport.
+/// This applies to Raw, Rendered, Split, and Zen mode views.
+/// Reference: GitHub Issue #15
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum MaxLineWidth {
+    /// No width limit (current behavior)
+    #[default]
+    Off,
+    /// 80 characters (traditional terminal width)
+    #[serde(rename = "80")]
+    Col80,
+    /// 100 characters (comfortable reading width)
+    #[serde(rename = "100")]
+    Col100,
+    /// 120 characters (wide monitors)
+    #[serde(rename = "120")]
+    Col120,
+    /// Custom pixel width
+    #[serde(rename = "custom")]
+    Custom(u32),
+}
+
+impl MaxLineWidth {
+    /// Get the display name for UI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            MaxLineWidth::Off => "Off",
+            MaxLineWidth::Col80 => "80 characters",
+            MaxLineWidth::Col100 => "100 characters",
+            MaxLineWidth::Col120 => "120 characters",
+            MaxLineWidth::Custom(_) => "Custom",
+        }
+    }
+
+    /// Get a description of the setting.
+    pub fn description(&self) -> &'static str {
+        match self {
+            MaxLineWidth::Off => "No width limit",
+            MaxLineWidth::Col80 => "Traditional terminal width",
+            MaxLineWidth::Col100 => "Comfortable reading width",
+            MaxLineWidth::Col120 => "Wide monitor width",
+            MaxLineWidth::Custom(_) => "Custom pixel width",
+        }
+    }
+
+    /// Get all preset width options (excludes Custom).
+    pub fn presets() -> &'static [MaxLineWidth] {
+        &[
+            MaxLineWidth::Off,
+            MaxLineWidth::Col80,
+            MaxLineWidth::Col100,
+            MaxLineWidth::Col120,
+        ]
+    }
+
+    /// Convert to pixel width given a font's approximate character width.
+    ///
+    /// Returns `None` for `Off` (no limit).
+    pub fn to_pixels(&self, char_width: f32) -> Option<f32> {
+        match self {
+            MaxLineWidth::Off => None,
+            MaxLineWidth::Col80 => Some(char_width * 80.0),
+            MaxLineWidth::Col100 => Some(char_width * 100.0),
+            MaxLineWidth::Col120 => Some(char_width * 120.0),
+            MaxLineWidth::Custom(px) => Some(*px as f32),
+        }
+    }
+
+    /// Check if this is a custom width setting.
+    pub fn is_custom(&self) -> bool {
+        matches!(self, MaxLineWidth::Custom(_))
+    }
+
+    /// Get the custom pixel value, if any.
+    pub fn custom_value(&self) -> Option<u32> {
+        if let MaxLineWidth::Custom(px) = self {
+            Some(*px)
+        } else {
+            None
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Log Level Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -508,12 +599,28 @@ pub struct Settings {
     /// Supports (), [], {}, <>, and markdown emphasis ** and __
     pub highlight_matching_pairs: bool,
 
+    /// Whether to automatically insert closing brackets and quotes when typing openers.
+    /// When enabled:
+    /// - Typing `(`, `[`, `{`, `"`, `'`, or `` ` `` inserts the closing pair
+    /// - If text is selected, wraps the selection with the pair
+    /// - Typing a closer when the next character is the same closer skips over it
+    pub auto_close_brackets: bool,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Syntax Highlighting Settings
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether to enable syntax highlighting for source code files in raw editor mode
     /// Supports Rust, Python, JavaScript, TypeScript, and many other languages
     pub syntax_highlighting_enabled: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Maximum Line Width Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Maximum line width for text content in the editor.
+    /// When enabled, constrains text width and centers the text column.
+    /// Applies to Raw, Rendered, Split, and Zen mode views.
+    /// Reference: GitHub Issue #15
+    pub max_line_width: MaxLineWidth,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Logging Settings
@@ -606,9 +713,13 @@ impl Default for Settings {
 
             // Bracket Matching Settings
             highlight_matching_pairs: true,  // Bracket matching enabled by default
+            auto_close_brackets: true,       // Auto-close brackets enabled by default
 
             // Syntax Highlighting Settings
             syntax_highlighting_enabled: true, // Syntax highlighting enabled by default
+
+            // Maximum Line Width Settings
+            max_line_width: MaxLineWidth::default(), // Off by default (no limit)
 
             // Logging Settings
             log_level: LogLevel::default(), // Default to Warn level
@@ -692,6 +803,10 @@ impl Settings {
     pub const MIN_MINIMAP_WIDTH: f32 = 40.0;
     /// Maximum minimap width.
     pub const MAX_MINIMAP_WIDTH: f32 = 150.0;
+    /// Minimum custom line width in pixels.
+    pub const MIN_CUSTOM_LINE_WIDTH: u32 = 400;
+    /// Maximum custom line width in pixels.
+    pub const MAX_CUSTOM_LINE_WIDTH: u32 = 2000;
 
     /// Sanitize settings by clamping values to valid ranges.
     ///
@@ -767,6 +882,12 @@ impl Settings {
         self.minimap_width = self
             .minimap_width
             .clamp(Self::MIN_MINIMAP_WIDTH, Self::MAX_MINIMAP_WIDTH);
+
+        // Clamp custom line width if set
+        if let MaxLineWidth::Custom(px) = self.max_line_width {
+            let clamped = px.clamp(Self::MIN_CUSTOM_LINE_WIDTH, Self::MAX_CUSTOM_LINE_WIDTH);
+            self.max_line_width = MaxLineWidth::Custom(clamped);
+        }
     }
 
     /// Load settings and sanitize them to ensure validity.
@@ -1213,5 +1334,152 @@ mod tests {
         let json = r#"{"folding_show_indicators": true}"#;
         let settings: Settings = serde_json::from_str(json).unwrap();
         assert!(settings.folding_show_indicators);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Auto-close Brackets tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_auto_close_brackets_default_true() {
+        let settings = Settings::default();
+        assert!(settings.auto_close_brackets);
+    }
+
+    #[test]
+    fn test_auto_close_brackets_backward_compatibility() {
+        // Old settings without auto_close_brackets should get the new default (true)
+        let json = r#"{"theme": "dark"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert!(settings.auto_close_brackets);
+    }
+
+    #[test]
+    fn test_auto_close_brackets_explicit_false() {
+        // Users can disable it via settings
+        let json = r#"{"auto_close_brackets": false}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert!(!settings.auto_close_brackets);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MaxLineWidth tests (GitHub Issue #15)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_max_line_width_default() {
+        assert_eq!(MaxLineWidth::default(), MaxLineWidth::Off);
+    }
+
+    #[test]
+    fn test_max_line_width_serialization() {
+        assert_eq!(serde_json::to_string(&MaxLineWidth::Off).unwrap(), "\"off\"");
+        assert_eq!(serde_json::to_string(&MaxLineWidth::Col80).unwrap(), "\"80\"");
+        assert_eq!(serde_json::to_string(&MaxLineWidth::Col100).unwrap(), "\"100\"");
+        assert_eq!(serde_json::to_string(&MaxLineWidth::Col120).unwrap(), "\"120\"");
+        assert_eq!(
+            serde_json::to_string(&MaxLineWidth::Custom(600)).unwrap(),
+            "{\"custom\":600}"
+        );
+    }
+
+    #[test]
+    fn test_max_line_width_deserialization() {
+        assert_eq!(
+            serde_json::from_str::<MaxLineWidth>("\"off\"").unwrap(),
+            MaxLineWidth::Off
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxLineWidth>("\"80\"").unwrap(),
+            MaxLineWidth::Col80
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxLineWidth>("\"100\"").unwrap(),
+            MaxLineWidth::Col100
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxLineWidth>("\"120\"").unwrap(),
+            MaxLineWidth::Col120
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxLineWidth>("{\"custom\":600}").unwrap(),
+            MaxLineWidth::Custom(600)
+        );
+    }
+
+    #[test]
+    fn test_max_line_width_to_pixels() {
+        let char_width = 10.0; // Example char width
+        assert_eq!(MaxLineWidth::Off.to_pixels(char_width), None);
+        assert_eq!(MaxLineWidth::Col80.to_pixels(char_width), Some(800.0));
+        assert_eq!(MaxLineWidth::Col100.to_pixels(char_width), Some(1000.0));
+        assert_eq!(MaxLineWidth::Col120.to_pixels(char_width), Some(1200.0));
+        assert_eq!(MaxLineWidth::Custom(600).to_pixels(char_width), Some(600.0));
+    }
+
+    #[test]
+    fn test_max_line_width_is_custom() {
+        assert!(!MaxLineWidth::Off.is_custom());
+        assert!(!MaxLineWidth::Col80.is_custom());
+        assert!(!MaxLineWidth::Col100.is_custom());
+        assert!(!MaxLineWidth::Col120.is_custom());
+        assert!(MaxLineWidth::Custom(600).is_custom());
+    }
+
+    #[test]
+    fn test_max_line_width_custom_value() {
+        assert_eq!(MaxLineWidth::Off.custom_value(), None);
+        assert_eq!(MaxLineWidth::Col80.custom_value(), None);
+        assert_eq!(MaxLineWidth::Custom(600).custom_value(), Some(600));
+    }
+
+    #[test]
+    fn test_settings_max_line_width_default() {
+        let settings = Settings::default();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Off);
+    }
+
+    #[test]
+    fn test_settings_backward_compatibility_max_line_width() {
+        // Old JSON without max_line_width field should default to Off
+        let json = r#"{"theme": "dark"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Off);
+    }
+
+    #[test]
+    fn test_settings_serialize_max_line_width() {
+        let mut settings = Settings::default();
+        settings.max_line_width = MaxLineWidth::Col80;
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains("\"max_line_width\":\"80\""));
+    }
+
+    #[test]
+    fn test_settings_deserialize_max_line_width() {
+        let json = r#"{"max_line_width": "100"}"#;
+        let settings: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Col100);
+    }
+
+    #[test]
+    fn test_settings_sanitize_custom_line_width() {
+        // Test clamping of custom line width
+        let mut settings = Settings::default();
+        
+        // Below minimum
+        settings.max_line_width = MaxLineWidth::Custom(100);
+        settings.sanitize();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(Settings::MIN_CUSTOM_LINE_WIDTH));
+        
+        // Above maximum
+        settings.max_line_width = MaxLineWidth::Custom(5000);
+        settings.sanitize();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(Settings::MAX_CUSTOM_LINE_WIDTH));
+        
+        // Valid value unchanged
+        settings.max_line_width = MaxLineWidth::Custom(800);
+        settings.sanitize();
+        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(800));
     }
 }

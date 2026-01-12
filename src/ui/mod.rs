@@ -16,7 +16,7 @@ mod view_segment;
 mod window;
 
 pub use about::AboutPanel;
-pub use dialogs::{FileOperationDialog, FileOperationResult};
+pub use dialogs::{FileOperationDialog, FileOperationResult, GoToLineDialog, GoToLineResult};
 pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::get_app_icon;
 pub use outline_panel::OutlinePanel;

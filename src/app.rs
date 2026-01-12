@@ -26,12 +26,12 @@ use crate::markdown::{
 // Note: SyncScrollState is available for future split-view sync scrolling
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
-use crate::state::{AppState, FileType, PendingAction};
+use crate::state::{AppState, FileType, PendingAction, Selection};
 use crate::theme::{ThemeColors, ThemeManager};
 use crate::ui::{
     handle_window_resize, AboutPanel, FileOperationDialog, FileOperationResult,
-    FileTreeContextAction, FileTreePanel, OutlinePanel, QuickSwitcher, Ribbon, RibbonAction,
-    SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton, ViewModeSegment,
+    FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, QuickSwitcher, Ribbon,
+    RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton,
     ViewSegmentAction, WindowResizeState,
 };
 use eframe::egui;
@@ -106,6 +106,14 @@ enum KeyboardAction {
     ToggleFoldAtCursor,
     /// Toggle Live Pipeline panel (Ctrl+Shift+L)
     TogglePipeline,
+    /// Open Go to Line dialog (Ctrl+G)
+    GoToLine,
+    /// Duplicate current line or selection (Ctrl+Shift+D)
+    DuplicateLine,
+    /// Move line(s) up (Alt+Up)
+    MoveLineUp,
+    /// Move line(s) down (Alt+Down)
+    MoveLineDown,
 }
 
 /// Information about a pending auto-save recovery for user confirmation.
@@ -1861,6 +1869,7 @@ impl FerriteApp {
                     ViewMode::Raw => {
                         // Raw mode: use the plain EditorWidget with optional minimap
                         let zen_max_column_width = self.state.settings.zen_max_column_width;
+                        let max_line_width = self.state.settings.max_line_width;
 
                         // Capture scroll offset before mutable borrow for scroll detection
                         let prev_scroll_offset = self.state.active_tab().map(|t| t.scroll_offset).unwrap_or(0.0);
@@ -1960,6 +1969,7 @@ impl FerriteApp {
                                 .id(egui::Id::new("main_editor_raw"))
                                 .scroll_to_line(scroll_to_line)
                                 .zen_mode(zen_mode, zen_max_column_width)
+                                .max_line_width(max_line_width) // Apply when not in Zen Mode
                                 .transient_highlight(transient_hl)
                                 .highlight_matching_pairs(highlight_matching_pairs)
                                 .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark);
@@ -2149,6 +2159,9 @@ impl FerriteApp {
                             // Get syntax highlighting setting
                             let syntax_highlighting_enabled = self.state.settings.syntax_highlighting_enabled;
 
+                            // Get line width setting
+                            let max_line_width = self.state.settings.max_line_width;
+
                             // Get content for preview (read-only clone) and path for syntax highlighting
                             let preview_content = self.state.active_tab().map(|t| t.content.clone()).unwrap_or_default();
                             let tab_path_for_syntax = self.state.active_tab().and_then(|t| t.path.clone());
@@ -2230,6 +2243,7 @@ impl FerriteApp {
                                     .theme_colors(theme_colors.clone())
                                     .id(egui::Id::new("split_editor_raw"))
                                     .scroll_to_line(scroll_to_line)
+                                    .max_line_width(max_line_width) // Apply line width limit
                                     .transient_highlight(transient_hl)
                                     .highlight_matching_pairs(highlight_matching_pairs)
                                     .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark);
@@ -2374,6 +2388,7 @@ impl FerriteApp {
                                 .font_family(font_family)
                                 .word_wrap(word_wrap)
                                 .theme(theme)
+                                .max_line_width(max_line_width) // Apply line width limit
                                 .id(egui::Id::new("split_preview_rendered"))
                                 .show(&mut right_ui);
                         }
@@ -2409,6 +2424,9 @@ impl FerriteApp {
                             }
                         } else {
                             // Markdown file: use the WYSIWYG MarkdownEditor
+                            // Capture max_line_width before mutable borrow
+                            let max_line_width = self.state.settings.max_line_width;
+                            
                             if let Some(tab) = self.state.active_tab_mut() {
                                 // Capture content and cursor before editing for undo support
                                 let content_before = tab.content.clone();
@@ -2424,6 +2442,7 @@ impl FerriteApp {
                                     .font_family(font_family)
                                     .word_wrap(word_wrap)
                                     .theme(theme)
+                                    .max_line_width(max_line_width) // Apply line width limit
                                     .id(egui::Id::new("main_editor_rendered"))
                                     .scroll_to_line(scroll_to_line)
                                     .pending_scroll_offset(pending_offset)
@@ -2587,6 +2606,28 @@ impl FerriteApp {
                 }
                 FileOperationResult::Delete(path) => {
                     self.handle_delete_file(path);
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Go to Line Dialog (Ctrl+G)
+        // ═══════════════════════════════════════════════════════════════════
+        if let Some(mut dialog) = self.state.ui.go_to_line_dialog.take() {
+            let result = dialog.show(ctx, is_dark);
+
+            match result {
+                GoToLineResult::None => {
+                    // Dialog still open, put it back
+                    self.state.ui.go_to_line_dialog = Some(dialog);
+                }
+                GoToLineResult::Cancelled => {
+                    // Dialog was cancelled, do nothing
+                    debug!("Go to Line dialog cancelled");
+                }
+                GoToLineResult::GoToLine(target_line) => {
+                    // Navigate to the specified line
+                    self.handle_go_to_line(target_line);
                 }
             }
         }
@@ -3332,6 +3373,481 @@ impl FerriteApp {
         }
     }
 
+    /// Consume Alt+Arrow keys BEFORE render to prevent TextEdit from processing them.
+    /// This must be called before the editor widget is rendered.
+    /// Returns the direction to move (-1 for up, 1 for down) if a move was requested.
+    fn consume_move_line_keys(&mut self, ctx: &egui::Context) -> Option<isize> {
+        ctx.input_mut(|i| {
+            // Alt+Up: Move line up
+            if i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp) {
+                debug!("Keyboard shortcut: Alt+Up (Move Line Up) - consumed before render");
+                return Some(-1);
+            }
+            // Alt+Down: Move line down
+            if i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowDown) {
+                debug!("Keyboard shortcut: Alt+Down (Move Line Down) - consumed before render");
+                return Some(1);
+            }
+            None
+        })
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Smart Paste for Links and Images
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Check if a string looks like a URL.
+    ///
+    /// Returns true for strings starting with common URL schemes:
+    /// - `http://` or `https://`
+    /// - Other schemes like `ftp://`, `file://`, etc.
+    fn is_url(s: &str) -> bool {
+        let s = s.trim();
+        if s.is_empty() {
+            return false;
+        }
+
+        // Check for common URL schemes
+        if s.starts_with("http://") || s.starts_with("https://") {
+            return true;
+        }
+
+        // Check for other valid URL schemes (alphanumeric + some chars, followed by ://)
+        // Examples: ftp://, file://, mailto:, data:
+        if let Some(colon_pos) = s.find(':') {
+            let scheme = &s[..colon_pos];
+            // Scheme must be alphanumeric or contain +, -, .
+            // and must be followed by //
+            if !scheme.is_empty()
+                && scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+                && scheme.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+            {
+                // Check for :// pattern
+                if s.len() > colon_pos + 2 && &s[colon_pos..colon_pos + 3] == "://" {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if a URL points to an image based on file extension.
+    ///
+    /// Checks for common image extensions: .png, .jpg, .jpeg, .gif, .webp, .svg, .bmp
+    /// The check is case-insensitive and handles URLs with query strings.
+    fn is_image_url(s: &str) -> bool {
+        if !Self::is_url(s) {
+            return false;
+        }
+
+        let s = s.trim();
+
+        // Remove query string and fragment for extension check
+        let path = s.split('?').next().unwrap_or(s);
+        let path = path.split('#').next().unwrap_or(path);
+
+        // Get the extension (case-insensitive)
+        let path_lower = path.to_lowercase();
+        
+        path_lower.ends_with(".png")
+            || path_lower.ends_with(".jpg")
+            || path_lower.ends_with(".jpeg")
+            || path_lower.ends_with(".gif")
+            || path_lower.ends_with(".webp")
+            || path_lower.ends_with(".svg")
+            || path_lower.ends_with(".bmp")
+            || path_lower.ends_with(".ico")
+            || path_lower.ends_with(".tiff")
+            || path_lower.ends_with(".tif")
+    }
+
+    /// Consume paste events BEFORE render to implement smart paste behavior.
+    ///
+    /// Smart paste transforms paste behavior based on context:
+    /// - Pasting a URL with text selected: Creates markdown link `[selected](url)`
+    /// - Pasting an image URL with no selection: Creates markdown image `![](url)`
+    /// - Otherwise: Normal paste behavior
+    ///
+    /// Returns true if a paste event was consumed and handled with smart behavior.
+    fn consume_smart_paste(&mut self, ctx: &egui::Context) -> bool {
+        let Some(tab) = self.state.active_tab_mut() else {
+            return false;
+        };
+
+        // Get cursor/selection info upfront
+        let primary = tab.cursors.primary();
+        let cursor_char_pos = primary.head;
+        let has_selection = primary.is_selection();
+        let selection_range = if has_selection { Some(primary.range()) } else { None };
+        let content = tab.content.clone();
+
+        // Helper to convert char position to byte position
+        let char_to_byte = |text: &str, char_idx: usize| -> usize {
+            text.char_indices()
+                .nth(char_idx)
+                .map(|(byte_idx, _)| byte_idx)
+                .unwrap_or(text.len())
+        };
+
+        // Scan for paste events
+        #[derive(Debug)]
+        enum SmartPasteAction {
+            /// Create markdown link: [selected_text](url)
+            CreateLink { url: String, selected_text: String },
+            /// Create markdown image: ![](url)
+            CreateImage { url: String },
+        }
+
+        let action: Option<(usize, SmartPasteAction)> = ctx.input(|input| {
+            for (idx, event) in input.events.iter().enumerate() {
+                if let egui::Event::Paste(pasted_text) = event {
+                    let trimmed = pasted_text.trim();
+
+                    // Case 1: URL pasted with text selected → create markdown link
+                    if has_selection && Self::is_url(trimmed) {
+                        let (start_char, end_char) = selection_range.unwrap();
+                        let start_byte = char_to_byte(&content, start_char);
+                        let end_byte = char_to_byte(&content, end_char);
+                        let selected_text = content[start_byte..end_byte].to_string();
+
+                        return Some((idx, SmartPasteAction::CreateLink {
+                            url: trimmed.to_string(),
+                            selected_text,
+                        }));
+                    }
+
+                    // Case 2: Image URL pasted with no selection → create markdown image
+                    if !has_selection && Self::is_image_url(trimmed) {
+                        return Some((idx, SmartPasteAction::CreateImage {
+                            url: trimmed.to_string(),
+                        }));
+                    }
+
+                    // Case 3: Regular URL with no selection → let normal paste handle it
+                    // Case 4: Non-URL paste → let normal paste handle it
+                }
+            }
+            None
+        });
+
+        // If we found an action, consume the event and apply it
+        if let Some((event_idx, action)) = action {
+            // Remove the paste event to prevent TextEdit from handling it
+            ctx.input_mut(|input| {
+                input.events.remove(event_idx);
+            });
+
+            // Get mutable access to tab again
+            let tab = self.state.active_tab_mut().unwrap();
+            let old_content = tab.content.clone();
+            let old_cursor = tab.cursors.primary().head;
+
+            match action {
+                SmartPasteAction::CreateLink { url, selected_text } => {
+                    let (start_char, end_char) = selection_range.unwrap();
+                    let start_byte = char_to_byte(&tab.content, start_char);
+                    let end_byte = char_to_byte(&tab.content, end_char);
+
+                    // Build markdown link: [selected_text](url)
+                    let link = format!("[{}]({})", selected_text, url);
+                    let link_len = link.chars().count();
+
+                    // Replace selection with link
+                    tab.content.replace_range(start_byte..end_byte, &link);
+
+                    // Position cursor after the link
+                    let new_cursor_pos = start_char + link_len;
+                    tab.pending_cursor_restore = Some(new_cursor_pos);
+                    tab.cursors.set_single(crate::state::Selection::cursor(new_cursor_pos));
+                    tab.sync_cursor_from_primary();
+
+                    // Record for undo
+                    tab.record_edit(old_content, old_cursor);
+
+                    debug!(
+                        "Smart paste: Created link [{}]({}) at position {}",
+                        selected_text, url, start_char
+                    );
+                }
+                SmartPasteAction::CreateImage { url } => {
+                    let cursor_byte = char_to_byte(&tab.content, cursor_char_pos);
+
+                    // Build markdown image: ![](url)
+                    let image = format!("![]({})", url);
+                    let image_len = image.chars().count();
+
+                    // Insert at cursor position
+                    tab.content.insert_str(cursor_byte, &image);
+
+                    // Position cursor after the image
+                    let new_cursor_pos = cursor_char_pos + image_len;
+                    tab.pending_cursor_restore = Some(new_cursor_pos);
+                    tab.cursors.set_single(crate::state::Selection::cursor(new_cursor_pos));
+                    tab.sync_cursor_from_primary();
+
+                    // Record for undo
+                    tab.record_edit(old_content, old_cursor);
+
+                    debug!(
+                        "Smart paste: Created image ![](url) with url='{}' at position {}",
+                        url, cursor_char_pos
+                    );
+                }
+            }
+
+            return true;
+        }
+
+        false
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Auto-close Brackets & Quotes
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Get the closing character for an opener, if it's a valid opener.
+    fn get_closing_bracket(opener: char) -> Option<char> {
+        match opener {
+            '(' => Some(')'),
+            '[' => Some(']'),
+            '{' => Some('}'),
+            '"' => Some('"'),
+            '\'' => Some('\''),
+            '`' => Some('`'),
+            _ => None,
+        }
+    }
+
+    /// Check if a character is a closing bracket/quote.
+    fn is_closing_bracket(ch: char) -> bool {
+        matches!(ch, ')' | ']' | '}' | '"' | '\'' | '`')
+    }
+
+    /// Get the opening character for a closer.
+    fn get_opening_bracket(closer: char) -> Option<char> {
+        match closer {
+            ')' => Some('('),
+            ']' => Some('['),
+            '}' => Some('{'),
+            '"' => Some('"'),
+            '\'' => Some('\''),
+            '`' => Some('`'),
+            _ => None,
+        }
+    }
+
+    /// Handle auto-close brackets BEFORE render.
+    ///
+    /// This handles two cases that require consuming input events before TextEdit:
+    /// 1. Skip-over: When typing a closer and the next character is the same closer,
+    ///    move cursor forward instead of inserting a duplicate.
+    /// 2. Selection wrapping: When typing an opener with text selected,
+    ///    wrap the selection with the bracket pair.
+    ///
+    /// Returns true if an event was consumed and handled.
+    fn handle_auto_close_pre_render(&mut self, ctx: &egui::Context) -> bool {
+        if !self.state.settings.auto_close_brackets {
+            return false;
+        }
+
+        let Some(tab) = self.state.active_tab_mut() else {
+            return false;
+        };
+
+        // Get cursor info upfront to avoid borrow issues
+        let primary = tab.cursors.primary();
+        let cursor_char_pos = primary.head;
+        let has_selection = primary.is_selection();
+        let selection_range = if has_selection { Some(primary.range()) } else { None };
+
+        // Get content for analysis
+        let content = tab.content.clone();
+
+        // Helper to convert char position to byte position
+        let char_to_byte = |text: &str, char_idx: usize| -> usize {
+            text.char_indices()
+                .nth(char_idx)
+                .map(|(byte_idx, _)| byte_idx)
+                .unwrap_or(text.len())
+        };
+
+        // First, check input events to determine what action to take (if any)
+        #[derive(Debug)]
+        enum AutoCloseAction {
+            WrapSelection { opener: char, closer: char },
+            SkipOver { closer: char },
+        }
+
+        let action: Option<(usize, AutoCloseAction)> = ctx.input(|input| {
+            for (idx, event) in input.events.iter().enumerate() {
+                if let egui::Event::Text(text) = event {
+                    // Only handle single-character input
+                    if text.chars().count() != 1 {
+                        continue;
+                    }
+
+                    let ch = text.chars().next().unwrap();
+
+                    // Case 1: Selection wrapping with opener
+                    if has_selection {
+                        if let Some(closer) = Self::get_closing_bracket(ch) {
+                            return Some((idx, AutoCloseAction::WrapSelection { opener: ch, closer }));
+                        }
+                    }
+
+                    // Case 2: Skip-over for closing brackets
+                    if !has_selection && Self::is_closing_bracket(ch) {
+                        // Check if the next character is the same closer
+                        let cursor_byte = char_to_byte(&content, cursor_char_pos);
+                        let next_char = content[cursor_byte..].chars().next();
+
+                        if next_char == Some(ch) {
+                            return Some((idx, AutoCloseAction::SkipOver { closer: ch }));
+                        }
+                    }
+                }
+            }
+            None
+        });
+
+        // If we found an action, consume the event and apply it
+        if let Some((event_idx, action)) = action {
+            // Remove the event first
+            ctx.input_mut(|input| {
+                input.events.remove(event_idx);
+            });
+
+            // Get mutable tab reference again
+            let tab = self.state.active_tab_mut().unwrap();
+
+            match action {
+                AutoCloseAction::WrapSelection { opener, closer } => {
+                    let (start_char, end_char) = selection_range.unwrap();
+                    let start_byte = char_to_byte(&tab.content, start_char);
+                    let end_byte = char_to_byte(&tab.content, end_char);
+
+                    // Get selected text
+                    let selected_text = tab.content[start_byte..end_byte].to_string();
+                    let selected_len = selected_text.chars().count();
+
+                    // Save for undo
+                    let old_content = tab.content.clone();
+                    let old_cursor = cursor_char_pos;
+
+                    // Build wrapped text: opener + selected + closer
+                    let wrapped = format!("{}{}{}", opener, selected_text, closer);
+
+                    // Replace selection with wrapped text
+                    tab.content.replace_range(start_byte..end_byte, &wrapped);
+
+                    // Position cursor after the closing bracket
+                    let new_cursor_pos = start_char + 1 + selected_len + 1;
+                    tab.pending_cursor_restore = Some(new_cursor_pos);
+                    tab.cursors.set_single(Selection::cursor(new_cursor_pos));
+                    tab.sync_cursor_from_primary();
+
+                    // Record for undo
+                    tab.record_edit(old_content, old_cursor);
+
+                    debug!("Auto-close: Wrapped selection '{}' with {}...{}", 
+                           selected_text, opener, closer);
+                }
+                AutoCloseAction::SkipOver { closer } => {
+                    // Just move cursor forward, don't insert
+                    let new_cursor_pos = cursor_char_pos + 1;
+                    tab.pending_cursor_restore = Some(new_cursor_pos);
+                    tab.cursors.set_single(Selection::cursor(new_cursor_pos));
+                    tab.sync_cursor_from_primary();
+
+                    debug!("Auto-close: Skip-over for '{}'", closer);
+                }
+            }
+
+            return true;
+        }
+
+        false
+    }
+
+    /// Handle auto-close brackets AFTER render.
+    ///
+    /// This handles auto-pair insertion: When an opener was just typed (no selection),
+    /// insert the closing bracket immediately after and position cursor between them.
+    ///
+    /// This runs after TextEdit has processed input, so we detect what was just typed
+    /// by comparing the current state with the pre-render snapshot.
+    fn handle_auto_close_post_render(
+        &mut self,
+        pre_render_content: &str,
+        _pre_render_cursor: usize,
+    ) {
+        if !self.state.settings.auto_close_brackets {
+            return;
+        }
+
+        let Some(tab) = self.state.active_tab_mut() else {
+            return;
+        };
+
+        // Check if exactly one character was inserted at the cursor position
+        let content_len_diff = tab.content.chars().count() as isize
+            - pre_render_content.chars().count() as isize;
+        
+        if content_len_diff != 1 {
+            return; // Not a single character insertion
+        }
+
+        // Get current cursor position (should be after the just-typed character)
+        let cursor_char_pos = tab.cursors.primary().head;
+        
+        // The just-typed character is at cursor_pos - 1
+        if cursor_char_pos == 0 {
+            return;
+        }
+
+        // Helper to convert char position to byte position
+        let char_to_byte = |text: &str, char_idx: usize| -> usize {
+            text.char_indices()
+                .nth(char_idx)
+                .map(|(byte_idx, _)| byte_idx)
+                .unwrap_or(text.len())
+        };
+
+        let prev_char_byte = char_to_byte(&tab.content, cursor_char_pos - 1);
+        let cursor_byte = char_to_byte(&tab.content, cursor_char_pos);
+        
+        let just_typed = tab.content[prev_char_byte..cursor_byte].chars().next();
+        
+        if let Some(opener) = just_typed {
+            if let Some(closer) = Self::get_closing_bracket(opener) {
+                // For quotes, check context to avoid unwanted auto-close
+                // Don't auto-close if the character before the opener is alphanumeric
+                // (e.g., don't auto-close after typing can't -> can't')
+                if matches!(opener, '"' | '\'' | '`') {
+                    if cursor_char_pos >= 2 {
+                        let prev_prev_byte = char_to_byte(&tab.content, cursor_char_pos - 2);
+                        let prev_char = tab.content[prev_prev_byte..prev_char_byte].chars().next();
+                        if let Some(c) = prev_char {
+                            if c.is_alphanumeric() {
+                                return; // Don't auto-close after alphanumeric
+                            }
+                        }
+                    }
+                }
+
+                // Insert the closing bracket at cursor position
+                tab.content.insert(cursor_byte, closer);
+
+                // Keep cursor between the brackets (position hasn't changed)
+                // TextEdit will update, but we want cursor to stay where it is
+                tab.pending_cursor_restore = Some(cursor_char_pos);
+
+                debug!("Auto-close: Inserted '{}' after '{}'", closer, opener);
+            }
+        }
+    }
+
     /// Handle keyboard shortcuts.
     ///
     /// Processes global keyboard shortcuts:
@@ -3425,6 +3941,21 @@ impl FerriteApp {
                 debug!("Keyboard shortcut: Ctrl+H (Open Find/Replace)");
                 return Some(KeyboardAction::OpenFindReplace);
             }
+
+            // Ctrl+G: Go to Line
+            if i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::G) {
+                debug!("Keyboard shortcut: Ctrl+G (Go to Line)");
+                return Some(KeyboardAction::GoToLine);
+            }
+
+            // Ctrl+Shift+D: Duplicate line or selection
+            if i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::D) {
+                debug!("Keyboard shortcut: Ctrl+Shift+D (Duplicate Line)");
+                return Some(KeyboardAction::DuplicateLine);
+            }
+
+            // Note: Alt+Up/Down (Move Line) are handled in consume_move_line_keys() 
+            // BEFORE render to prevent TextEdit from processing the arrow keys.
 
             // Ctrl+D: Select next occurrence (multi-cursor)
             if i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::D) {
@@ -3719,6 +4250,16 @@ impl FerriteApp {
             }
             KeyboardAction::TogglePipeline => {
                 self.handle_toggle_pipeline();
+            }
+            KeyboardAction::GoToLine => {
+                self.handle_open_go_to_line();
+            }
+            KeyboardAction::DuplicateLine => {
+                self.handle_duplicate_line();
+            }
+            // MoveLineUp/Down are handled in consume_move_line_keys() before render
+            KeyboardAction::MoveLineUp | KeyboardAction::MoveLineDown => {
+                // Should not reach here - these are consumed before render
             }
         });
     }
@@ -4167,6 +4708,232 @@ impl FerriteApp {
             self.state.show_toast("Pipeline panel closed", time, 1.5);
             info!("Pipeline panel closed for tab {}", tab_id);
         }
+    }
+
+    /// Handle opening the Go to Line dialog.
+    fn handle_open_go_to_line(&mut self) {
+        // Get current line and max line from active tab
+        let Some(tab) = self.state.active_tab() else {
+            return;
+        };
+
+        // Calculate current line (1-indexed) from cursor position
+        let current_line = tab.cursor_position.0 + 1;
+
+        // Calculate total line count
+        let max_line = tab.content.lines().count().max(1);
+
+        // Open the Go to Line dialog
+        self.state.ui.go_to_line_dialog =
+            Some(crate::ui::GoToLineDialog::new(current_line, max_line));
+    }
+
+    /// Handle navigating to a specific line number.
+    fn handle_go_to_line(&mut self, target_line: usize) {
+        // Get the active tab
+        let Some(tab) = self.state.active_tab_mut() else {
+            return;
+        };
+
+        // Calculate the character index for the start of the target line
+        // target_line is 1-indexed, we need 0-indexed for content iteration
+        let line_index = target_line.saturating_sub(1);
+        let mut char_index = 0;
+        let mut current_line = 0;
+
+        for (idx, ch) in tab.content.char_indices() {
+            if current_line == line_index {
+                char_index = tab.content[..idx].chars().count();
+                break;
+            }
+            if ch == '\n' {
+                current_line += 1;
+            }
+        }
+
+        // If we didn't find the line (end of file), go to last character
+        if current_line < line_index {
+            char_index = tab.content.chars().count();
+        }
+
+        // Update cursor position to the start of the target line
+        tab.cursors
+            .set_single(crate::state::Selection::cursor(char_index));
+        tab.sync_cursor_from_primary();
+
+        // Use the existing scroll_to_line mechanism to center the line in viewport
+        // This is already handled by EditorWidget when pending_scroll_to_line is set
+        self.pending_scroll_to_line = Some(target_line);
+
+        debug!("Go to Line: navigating to line {} (char index {})", target_line, char_index);
+    }
+
+    /// Handle duplicating the current line or selection.
+    ///
+    /// - If no selection: duplicates the entire current line (including newline)
+    /// - If selection: duplicates the selected text immediately after the selection
+    fn handle_duplicate_line(&mut self) {
+        let Some(tab) = self.state.active_tab_mut() else {
+            return;
+        };
+
+        // Save state for undo
+        let old_content = tab.content.clone();
+        let old_cursor = tab.cursors.primary().head;
+
+        let primary = tab.cursors.primary();
+        let has_selection = primary.is_selection();
+
+        // Helper to convert character index to byte index
+        let char_to_byte = |text: &str, char_idx: usize| -> usize {
+            text.char_indices()
+                .nth(char_idx)
+                .map(|(byte_idx, _)| byte_idx)
+                .unwrap_or(text.len())
+        };
+
+        if has_selection {
+            // Duplicate selection: insert selected text at the end of selection
+            let (start_char, end_char) = primary.range();
+
+            // Convert character indices to byte indices
+            let start_byte = char_to_byte(&tab.content, start_char);
+            let end_byte = char_to_byte(&tab.content, end_char);
+
+            let selected_text = tab.content[start_byte..end_byte].to_string();
+            let selected_char_len = selected_text.chars().count();
+
+            // Insert the selected text at the end of the selection
+            tab.content.insert_str(end_byte, &selected_text);
+
+            // Set new selection to cover the duplicated text (using character indices)
+            let new_start = end_char;
+            let new_end = end_char + selected_char_len;
+            tab.cursors
+                .set_single(crate::state::Selection::new(new_start, new_end));
+        } else {
+            // No selection: duplicate entire current line
+            let cursor_char_pos = primary.head;
+            let cursor_byte_pos = char_to_byte(&tab.content, cursor_char_pos);
+
+            // Find the start of the current line (byte position)
+            let line_start_byte = tab.content[..cursor_byte_pos]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+
+            // Find the end of the current line (byte position)
+            let line_end_byte = tab.content[cursor_byte_pos..]
+                .find('\n')
+                .map(|i| cursor_byte_pos + i)
+                .unwrap_or(tab.content.len());
+
+            // Get the line content (without the newline)
+            let line_content = tab.content[line_start_byte..line_end_byte].to_string();
+
+            // Build the text to insert: newline + line content
+            let insert_text = format!("\n{}", line_content);
+
+            // Insert after the current line (at line_end_byte position)
+            tab.content.insert_str(line_end_byte, &insert_text);
+
+            // Keep cursor on the original line at the same relative position
+            // (cursor position doesn't change since we inserted after it)
+        }
+
+        tab.sync_cursor_from_primary();
+
+        // Record the edit for undo support
+        tab.record_edit(old_content, old_cursor);
+
+        debug!("Duplicate line/selection: has_selection={}", has_selection);
+    }
+
+    /// Handle moving line(s) up or down.
+    ///
+    /// `direction`: -1 for up, 1 for down
+    fn handle_move_line(&mut self, direction: isize) {
+        let Some(tab) = self.state.active_tab_mut() else {
+            return;
+        };
+
+        // Save state for undo
+        let old_content = tab.content.clone();
+        let old_cursor = tab.cursors.primary().head;
+
+        // Get cursor position - cursor_position gives (line, column) directly
+        let (current_line_num, cursor_col) = tab.cursor_position;
+        let total_lines = tab.content.matches('\n').count() + 1;
+
+        // Check boundaries
+        if direction < 0 && current_line_num == 0 {
+            return; // Can't move up from first line
+        }
+        if direction > 0 && current_line_num >= total_lines - 1 {
+            return; // Can't move down from last line
+        }
+
+        // Split into lines for manipulation
+        let lines: Vec<&str> = tab.content.split('\n').collect();
+        let mut new_lines = lines.clone();
+
+        // Perform the swap
+        if direction < 0 {
+            // Moving up: swap with line above
+            new_lines.swap(current_line_num, current_line_num - 1);
+        } else {
+            // Moving down: swap with line below
+            new_lines.swap(current_line_num, current_line_num + 1);
+        }
+
+        // Build new content
+        let new_content = new_lines.join("\n");
+
+        // Calculate new cursor position
+        // The cursor should be on the same line content, which has moved
+        let new_line_num = if direction < 0 {
+            current_line_num - 1
+        } else {
+            current_line_num + 1
+        };
+
+        // Find byte offset of the new line position
+        let mut new_line_start = 0usize;
+        for (i, line) in new_lines.iter().enumerate() {
+            if i == new_line_num {
+                break;
+            }
+            new_line_start += line.len() + 1; // +1 for newline
+        }
+
+        // Calculate new cursor byte position (line start + column, clamped to line length)
+        let new_line_len = new_lines.get(new_line_num).map(|l| l.len()).unwrap_or(0);
+        let new_cursor_byte = new_line_start + cursor_col.min(new_line_len);
+
+        // Convert byte position to character position
+        let new_cursor_char = new_content[..new_cursor_byte].chars().count();
+
+        debug!(
+            "Move line: new_line_num={}, new_line_start={}, new_cursor_byte={}, new_cursor_char={}",
+            new_line_num, new_line_start, new_cursor_byte, new_cursor_char
+        );
+
+        // Apply changes
+        tab.content = new_content;
+        
+        // Use pending_cursor_restore to ensure the cursor position is applied
+        // This is necessary because egui's TextEdit has its own cursor state
+        // that would otherwise override our changes on the next frame
+        tab.pending_cursor_restore = Some(new_cursor_char);
+        
+        // Also update internal state for consistency
+        tab.cursors.set_single(crate::state::Selection::cursor(new_cursor_char));
+        tab.sync_cursor_from_primary();
+
+        // Record for undo
+        tab.record_edit(old_content, old_cursor);
+
+        debug!("Move line: direction={}, line {} -> {}", direction, current_line_num, new_line_num);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -5014,9 +5781,37 @@ impl eframe::App for FerriteApp {
         // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
         // built-in undo from processing them. Must happen before render_ui().
         self.consume_undo_redo_keys(ctx);
+        
+        // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
+        // from processing the arrow keys and moving the cursor before we can handle the move.
+        // We save the direction and handle the move AFTER render so cursor updates stick.
+        let move_line_direction = self.consume_move_line_keys(ctx);
+
+        // IMPORTANT: Handle smart paste BEFORE rendering to intercept paste events
+        // and transform them into markdown links/images when appropriate.
+        self.consume_smart_paste(ctx);
+
+        // Capture pre-render state for auto-close bracket detection
+        let (pre_render_content, pre_render_cursor) = self.state.active_tab()
+            .map(|tab| (tab.content.clone(), tab.cursors.primary().head))
+            .unwrap_or_default();
+
+        // IMPORTANT: Handle auto-close skip-over and selection wrapping BEFORE render
+        // This consumes events that would otherwise be processed by TextEdit
+        let auto_close_handled = self.handle_auto_close_pre_render(ctx);
 
         // Render the main UI (this updates editor selection)
         let deferred_format = self.render_ui(ctx);
+        
+        // Handle auto-close pair insertion AFTER render (if not already handled pre-render)
+        if !auto_close_handled {
+            self.handle_auto_close_post_render(&pre_render_content, pre_render_cursor);
+        }
+
+        // Handle move line AFTER render so cursor position updates are preserved
+        if let Some(direction) = move_line_direction {
+            self.handle_move_line(direction);
+        }
 
         // Handle keyboard shortcuts AFTER render so selection is up-to-date
         // Note: Undo/redo is handled separately above, before render
@@ -5027,6 +5822,9 @@ impl eframe::App for FerriteApp {
             debug!("Applying deferred format command from ribbon: {:?}", cmd);
             self.handle_format_command(cmd);
         }
+
+        // Apply resize cursor at end of frame (to override any UI cursor settings)
+        self.window_resize_state.apply_cursor(ctx);
 
         // Request exit if confirmed
         if self.should_exit {

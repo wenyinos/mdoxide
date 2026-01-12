@@ -33,6 +33,7 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 - **Multi-Format Support** - Native support for Markdown, JSON, YAML, and TOML files
 - **Tree Viewer** - Hierarchical view for JSON/YAML/TOML with inline editing, expand/collapse, and path copying
 - **Find & Replace** - Search with regex support and match highlighting
+- **Go to Line (Ctrl+G)** - Quick navigation to specific line number
 - **Undo/Redo** - Full undo/redo support per tab
 
 ### View Modes
@@ -45,15 +46,20 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 - **Code Folding** - Fold detection with gutter indicators (▶/▼) for headings, code blocks, and lists (text hiding deferred to v0.3.0)
 - **Minimap** - VS Code-style navigation panel with click-to-jump and search highlights
 - **Bracket Matching** - Highlight matching brackets `()[]{}<>` and emphasis pairs `**` `__`
+- **Auto-close Brackets & Quotes** - Type `(`, `[`, `{`, `"`, or `'` to get matching pair; selection wrapping supported
+- **Duplicate Line (Ctrl+Shift+D)** - Duplicate current line or selection
+- **Move Line Up/Down (Alt+↑/↓)** - Rearrange lines without cut/paste
+- **Smart Paste for Links** - Select text then paste URL to create `[text](url)` markdown link
 - **Auto-Save** - Configurable auto-save with temp-file safety
 - **Line Numbers** - Optional line number gutter
+- **Configurable Line Width** - Limit text width for readability (80/100/120 or custom)
 
 ### MermaidJS Diagrams
 Native rendering of 11 diagram types directly in the preview:
 - Flowchart, Sequence, Pie, State, Mindmap
 - Class, ER, Git Graph, Gantt, Timeline, User Journey
 
-> ✨ **v0.2.2 Released:** Stability & CLI improvements! CJK font support, undo/redo fixes, command-line file opening (`ferrite file.md`), configurable log level, and default view mode setting. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.3 Released:** Editor productivity features! Go to Line (Ctrl+G), Duplicate Line (Ctrl+Shift+D), Move Line (Alt+↑/↓), Auto-close brackets/quotes, Smart Paste for links, and configurable line width. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
@@ -77,8 +83,9 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | Platform | Download |
 |----------|----------|
 | Windows  | `ferrite-windows-x64.zip` |
-| Linux    | `ferrite-editor_amd64.deb` (recommended) or `ferrite-linux-x64.tar.gz` |
-| macOS    | `ferrite-macos-x64.tar.gz` |
+| Linux | `ferrite-editor_amd64.deb` (recommended) or `ferrite-linux-x64.tar.gz` |
+| macOS (Apple Silicon) | `ferrite-macos-arm64.tar.gz` |
+| macOS (Intel) | `ferrite-macos-x64.tar.gz` |
 
 #### Linux Installation
 
@@ -233,6 +240,10 @@ Toggle between modes using the toolbar buttons or keyboard shortcuts.
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+F` | Find |
 | `Ctrl+H` | Find and replace |
+| `Ctrl+G` | Go to line |
+| `Ctrl+Shift+D` | Duplicate line |
+| `Alt+↑` | Move line up |
+| `Alt+↓` | Move line down |
 | `Ctrl+B` | Bold |
 | `Ctrl+I` | Italic |
 | `Ctrl+K` | Insert link |
@@ -260,8 +271,8 @@ Workspace settings are stored in `.ferrite/` within the workspace folder.
 
 Access settings via `Ctrl+,` or the gear icon. Configure:
 
-- **Appearance:** Theme, font family, font size
-- **Editor:** Word wrap, line numbers, minimap, bracket matching, code folding, syntax highlighting
+- **Appearance:** Theme, font family, font size, default view mode
+- **Editor:** Word wrap, line numbers, minimap, bracket matching, code folding, syntax highlighting, auto-close brackets, line width
 - **Files:** Auto-save, recent files history
 
 ## Roadmap

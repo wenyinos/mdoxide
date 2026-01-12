@@ -28,6 +28,10 @@ const RESIZE_BORDER_WIDTH: f32 = 5.0;
 /// Corner grab area size (slightly larger than edge for easier corner detection).
 const CORNER_GRAB_SIZE: f32 = 10.0;
 
+/// Height of the title bar area to exclude from north edge resize detection.
+/// This prevents cursor flicker conflicts with window control buttons.
+const TITLE_BAR_EXCLUSION_HEIGHT: f32 = 35.0;
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -35,6 +39,8 @@ pub struct WindowResizeState {
     current_direction: Option<ResizeDirection>,
     /// Whether we're actively in a resize operation.
     is_resizing: bool,
+    /// Cursor to apply at end of frame (to override UI element cursors).
+    pending_cursor: Option<CursorIcon>,
 }
 
 impl WindowResizeState {
@@ -52,6 +58,15 @@ impl WindowResizeState {
     pub fn current_direction(&self) -> Option<ResizeDirection> {
         self.current_direction
     }
+
+    /// Apply the pending resize cursor if one was set.
+    /// Call this at the END of your update() function to ensure resize cursor
+    /// takes priority over UI element cursors.
+    pub fn apply_cursor(&mut self, ctx: &egui::Context) {
+        if let Some(cursor) = self.pending_cursor.take() {
+            ctx.set_cursor_icon(cursor);
+        }
+    }
 }
 
 /// Handle window resize for borderless windows.
@@ -63,6 +78,10 @@ impl WindowResizeState {
 /// 2. Changes the cursor icon to indicate resize capability
 /// 3. Initiates resize operation when mouse is pressed
 ///
+/// The function excludes the title bar area from north-edge resize detection
+/// to prevent cursor flicker conflicts with window control buttons (close,
+/// maximize, minimize).
+///
 /// Returns `true` if a resize operation was initiated (the calling code may
 /// want to skip drag-to-move in this case).
 pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) -> bool {
@@ -71,6 +90,7 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
     if is_maximized {
         state.current_direction = None;
         state.is_resizing = false;
+        state.pending_cursor = None;
         return false;
     }
 
@@ -91,6 +111,7 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
         if !primary_down {
             state.current_direction = None;
             state.is_resizing = false;
+            state.pending_cursor = None;
         }
         return false;
     };
@@ -100,19 +121,27 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
         if !primary_down {
             state.is_resizing = false;
             state.current_direction = None;
+            state.pending_cursor = None;
         }
         return true;
     }
 
     // Detect resize direction based on pointer position
-    let direction = detect_resize_direction(window_rect, pointer_pos);
+    // Pass title bar exclusion height to avoid conflicts with window control buttons
+    let direction = detect_resize_direction_with_exclusion(
+        window_rect,
+        pointer_pos,
+        TITLE_BAR_EXCLUSION_HEIGHT,
+    );
 
     // Update state
     state.current_direction = direction;
 
     // Set cursor based on direction
+    // We store it as pending and apply at the end of the frame to override UI cursors
     if let Some(dir) = direction {
-        ctx.set_cursor_icon(direction_to_cursor(dir));
+        let desired_cursor = direction_to_cursor(dir);
+        state.pending_cursor = Some(desired_cursor);
 
         // Initiate resize on mouse press
         if primary_pressed {
@@ -120,6 +149,8 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
             state.is_resizing = true;
             return true;
         }
+    } else {
+        state.pending_cursor = None;
     }
 
     false
@@ -127,8 +158,25 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
 
 /// Detect which resize direction (if any) the pointer is in.
 fn detect_resize_direction(window_rect: Rect, pointer_pos: Pos2) -> Option<ResizeDirection> {
+    detect_resize_direction_with_exclusion(window_rect, pointer_pos, 0.0)
+}
+
+/// Detect which resize direction (if any) the pointer is in, with title bar exclusion.
+///
+/// The `title_bar_height` parameter specifies the height of the title bar area
+/// where north-edge resize detection should be disabled to avoid conflicts
+/// with window control buttons (close, maximize, minimize).
+fn detect_resize_direction_with_exclusion(
+    window_rect: Rect,
+    pointer_pos: Pos2,
+    title_bar_height: f32,
+) -> Option<ResizeDirection> {
     let min = window_rect.min;
     let max = window_rect.max;
+
+    // Check if pointer is in the title bar exclusion zone
+    // If so, disable ONLY north-edge and north-corner resize detection
+    let in_title_bar = pointer_pos.y < min.y + title_bar_height;
 
     // Check if pointer is near each edge
     let near_left = pointer_pos.x < min.x + RESIZE_BORDER_WIDTH;
@@ -137,13 +185,15 @@ fn detect_resize_direction(window_rect: Rect, pointer_pos: Pos2) -> Option<Resiz
     let near_bottom = pointer_pos.y > max.y - RESIZE_BORDER_WIDTH;
 
     // Check if pointer is in corner zones (larger area for easier grabbing)
+    // These are used to exclude corners from edge detection
     let in_left_zone = pointer_pos.x < min.x + CORNER_GRAB_SIZE;
     let in_right_zone = pointer_pos.x > max.x - CORNER_GRAB_SIZE;
     let in_top_zone = pointer_pos.y < min.y + CORNER_GRAB_SIZE;
     let in_bottom_zone = pointer_pos.y > max.y - CORNER_GRAB_SIZE;
 
     // Corners take priority (check corner combinations first)
-    if near_top || in_top_zone {
+    // NorthWest and NorthEast corners are DISABLED when in title bar
+    if !in_title_bar && (near_top || in_top_zone) {
         if (near_left || in_left_zone)
             && pointer_pos.x < min.x + CORNER_GRAB_SIZE
             && pointer_pos.y < min.y + CORNER_GRAB_SIZE
@@ -158,6 +208,7 @@ fn detect_resize_direction(window_rect: Rect, pointer_pos: Pos2) -> Option<Resiz
         }
     }
 
+    // South corners always work
     if near_bottom || in_bottom_zone {
         if (near_left || in_left_zone)
             && pointer_pos.x < min.x + CORNER_GRAB_SIZE
@@ -173,14 +224,18 @@ fn detect_resize_direction(window_rect: Rect, pointer_pos: Pos2) -> Option<Resiz
         }
     }
 
-    // Then check edges (only if clearly on an edge, not in a corner zone)
-    if near_left && !in_top_zone && !in_bottom_zone {
+    // Edge detection - exclude corner zones
+    // For East/West: when in title bar area, don't exclude top zone (since corners are disabled there)
+    let exclude_top_for_sides = if in_title_bar { false } else { in_top_zone };
+    
+    if near_left && !exclude_top_for_sides && !in_bottom_zone {
         return Some(ResizeDirection::West);
     }
-    if near_right && !in_top_zone && !in_bottom_zone {
+    if near_right && !exclude_top_for_sides && !in_bottom_zone {
         return Some(ResizeDirection::East);
     }
-    if near_top && !in_left_zone && !in_right_zone {
+    // North edge disabled in title bar area
+    if !in_title_bar && near_top && !in_left_zone && !in_right_zone {
         return Some(ResizeDirection::North);
     }
     if near_bottom && !in_left_zone && !in_right_zone {
