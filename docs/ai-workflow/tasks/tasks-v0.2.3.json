@@ -1,0 +1,195 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Implement Go to Line dialog and navigation (Ctrl+G)",
+        "description": "Add a Go to Line feature with a modal dialog that jumps the cursor to a specified line and centers it in the editor viewport.",
+        "details": "Target files: src/editor/widget.rs, src/ui/dialogs.rs.\n\nImplementation outline:\n- In src/ui/dialogs.rs, define a new GoToLineDialog struct using the existing UI framework (same modal style as other dialogs, if present), with:\n  - Numeric text input field for the line number.\n  - OK/Go and Cancel buttons.\n  - Placeholder text showing the current cursor line number (1-based).\n- Expose dialog API such as:\n  - fn open_goto_line(current_line: usize, max_line: usize, on_confirm: impl Fn(usize)).\n- In src/editor/widget.rs:\n  - Add keyboard shortcut handling for Ctrl+G in the main key event handler.\n  - On Ctrl+G, compute current line index and total line count from the editor’s document model.\n  - Open GoToLineDialog, passing current line as placeholder and max_line.\n  - On confirm, clamp the requested line to [1, max_line].\n  - Convert 1-based line number to internal 0-based index.\n  - Move the editor’s cursor to the target line at: column 0 or preserve prior horizontal column using a stored desired_column field.\n  - Call existing scroll/viewport API to center the target line (e.g., scroll_to_line_center(line_index)).\n  - Ensure dialog closes on Escape or clicking outside; wire this into the dialog manager.\n- Wire up focus management so the dialog text input is focused when opened.\n\nPseudo-code (editor key handler):\n```rust\nmatch event {\n    KeyEvent { key: 'g' | 'G', ctrl: true, .. } => {\n        let current_line = doc.cursor().line() + 1; // 1-based\n        let max_line = doc.line_count();\n        dialogs::open_goto_line(current_line, max_line, move |line| {\n            let line = line.clamp(1, max_line);\n            let line_idx = line - 1;\n            doc.move_cursor_to(LineCol { line: line_idx, col: desired_col });\n            editor.center_line_in_view(line_idx);\n        });\n    }\n    _ => {}\n}\n```\n",
+        "testStrategy": "Manual tests:\n- Open a file with at least 100 lines.\n- Press Ctrl+G and verify a modal dialog appears with current line as placeholder.\n- Enter a valid line number (e.g., 50) and press Enter: cursor moves to that line and it is centered in the viewport.\n- Enter line 1 and verify cursor jumps to the first line.\n- Enter a line number greater than total lines: verify cursor goes to the last line.\n- Hit Escape: dialog closes without moving the cursor.\n- Click outside dialog: dialog closes.\n- Verify shortcut does not trigger when focus is not in the editor (e.g., in settings).",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T00:04:53.316Z"
+      },
+      {
+        "id": "2",
+        "title": "Implement Duplicate Line / Selection (Ctrl+Shift+D)",
+        "description": "Add a keyboard shortcut to duplicate the current line or the current selection, preserving cursor position relative to duplicated content.",
+        "details": "Target file: src/editor/widget.rs.\n\nImplementation outline:\n- In the editor key event handler, add a binding for Ctrl+Shift+D.\n- Obtain current selection range from the document model. Assume an API like:\n  - doc.selection(): Range { start: Position, end: Position }\n  - doc.has_selection(): bool\n- Behavior with no selection:\n  - Identify current line via cursor.line().\n  - Get full line text including newline (or manage newline insertion separately).\n  - Insert a copy of that line immediately after the current line index.\n  - Keep cursor on the original line, preserving its column, or optionally move to the duplicated line depending on existing UX conventions; follow PRD by preserving relative position to duplicated content (i.e., if cursor was on column c of the original, after duplication keep it on column c of the line that was originally active, not moved).\n- Behavior with selection:\n  - Extract text for the selection range.\n  - Insert duplicated text at selection.end.\n  - Update selection to cover the newly inserted text, preserving a similar shape (start' = old_end, end' = old_end + len(duplicated_text)).\n  - Cursor should be at the end of the duplicated block but selection still active.\n- Ensure operation participates in the undo/redo history as a single atomic edit.\n\nPseudo-code:\n```rust\nif key == 'D' && event.ctrl && event.shift {\n    let sel = doc.selection();\n    if sel.is_empty() {\n        let line = doc.cursor().line();\n        let line_range = doc.line_range(line);\n        let line_text = doc.text(line_range.clone());\n        doc.insert_text(line_range.end, &line_text);\n        // cursor stays on original line\n        doc.set_cursor(LineCol { line, col: cursor_col });\n    } else {\n        let text = doc.text(sel.clone());\n        let insert_pos = sel.end;\n        doc.insert_text(insert_pos, &text);\n        let new_end = insert_pos + text.len();\n        doc.set_selection(Range { start: insert_pos, end: new_end });\n    }\n}\n```\n",
+        "testStrategy": "Manual tests:\n- Place cursor on a non-empty line with no selection; press Ctrl+Shift+D and verify the full line appears duplicated directly below, including indentation, and cursor remains on the original line with same column.\n- Repeat with the cursor in the middle/end of the line; verify relative cursor position is preserved.\n- Select a word on a line; press Ctrl+Shift+D and verify that word appears immediately after the original selection and remains selected.\n- Select multiple lines and partial lines; press Ctrl+Shift+D and verify the exact selection is duplicated after itself.\n- Verify undo reverts the duplication in a single step and redo reapplies it.\n- Verify shortcut does nothing (or is ignored) when editor is read-only if such mode exists.",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T00:13:55.987Z"
+      },
+      {
+        "id": "3",
+        "title": "Implement Move Line Up/Down (Alt+↑/↓)",
+        "description": "Allow users to move the current line or selected block of lines up or down with Alt+Up and Alt+Down, maintaining selection and respecting document boundaries.",
+        "details": "Target file: src/editor/widget.rs.\n\nImplementation outline:\n- Add keybindings for Alt+Up and Alt+Down in the editor key event handler.\n- Determine affected line range:\n  - If no selection: affected_lines = [cursor.line(), cursor.line()].\n  - If selection: expand selection to full line boundaries encompassing selection.start.line..=selection.end.line.\n- For moving up:\n  - If the first affected line is 0 (top of document), do nothing.\n  - Otherwise, remove the block of text for the affected lines and reinsert it starting one line above.\n- For moving down:\n  - If the last affected line is the last document line, do nothing.\n  - Otherwise, remove the block and reinsert one line below.\n- Update cursor and selection:\n  - If there was no selection: move cursor line index up or down by 1, preserve column.\n  - If selection existed: shift selection line indices by ±1, and keep same columns.\n- Ensure operation is atomic for undo/redo.\n- Consider multi-cursor support if present; if not, explicitly operate on the primary caret.\n\nPseudo-code:\n```rust\nfn move_lines(delta: isize) {\n    let (start_line, end_line, had_sel, sel_cols) = doc.selection_line_span();\n    if delta < 0 && start_line == 0 { return; }\n    if delta > 0 && end_line == doc.last_line() { return; }\n\n    let block_text = doc.text_for_lines(start_line..=end_line);\n    doc.delete_lines(start_line..=end_line);\n    let new_start = (start_line as isize + delta) as usize;\n    doc.insert_lines(new_start, &block_text);\n\n    // update selection and cursor\n    let new_end = new_start + (end_line - start_line);\n    if had_sel {\n        doc.set_selection_lines(new_start, new_end, sel_cols);\n    } else {\n        let cur = doc.cursor();\n        doc.set_cursor(LineCol { line: (cur.line as isize + delta) as usize, col: cur.col });\n    }\n}\n```\n",
+        "testStrategy": "Manual tests:\n- With cursor on a middle line, press Alt+Up and Alt+Down repeatedly; verify the line swaps position with adjacent lines and does not move past top or bottom.\n- Select three consecutive lines; press Alt+Down and ensure the block moves down one line as a unit, with selection preserved over the moved block.\n- Move selected lines up to the top of the document and verify they stop moving further.\n- Move selected lines down to the bottom and verify they stop.\n- Verify indentation and line contents are unchanged except for reordering.\n- Confirm undo/redo restores original ordering in single steps.",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T00:25:55.143Z"
+      },
+      {
+        "id": "4",
+        "title": "Implement Auto-close Brackets & Quotes with configurable setting",
+        "description": "Add automatic insertion of closing brackets and quotes while typing, including selection wrapping and skip-over behavior, controlled by an editor setting auto_close_brackets.",
+        "details": "Target files: src/editor/widget.rs, src/config/settings.rs, src/ui/settings.rs.\n\nConfig & settings UI:\n- In src/config/settings.rs:\n  - Add a new boolean field to the editor settings struct, e.g., `pub auto_close_brackets: bool`, with default true.\n  - Ensure deserialization provides a default when the field is missing so existing config.json files remain valid.\n- In src/ui/settings.rs:\n  - Add a checkbox or toggle under Editor settings labeled \"Auto-close brackets and quotes\" bound to auto_close_brackets.\n  - Wire change events to update in-memory settings and persist changes through existing config save flow.\n\nEditor behavior in src/editor/widget.rs:\n- In the text input handler (on character insertion), when auto_close_brackets is true:\n  - Define a mapping of opener to closer: `('(' -> ')', '[' -> ']', '{' -> '}', '\"' -> '\"', '\\'' -> '\\'', '`' -> '`', \"**\" -> \"**\", \"__\" -> \"__\")`.\n  - For single-character openers: on typing an opener:\n    - If there is a non-empty selection: wrap selection with opener/closer.\n    - Else: insert opener+closer and move cursor between them.\n  - For multi-character pairs like ** and __:\n    - Detect when user types the second `*` or `_` in a pair (e.g., previous char also `*`).\n    - If there is a selection: wrap selection with the pair.\n    - Else: insert the full pair and move cursor between them.\n  - Skip-over behavior: when user types a closing character (e.g., `)`, `]`, `}`, `\"`, `'`, '`', `*`, `_`) and the next character in the buffer is the same closer:\n    - Prevent inserting another character and instead move cursor one position to the right.\n- Edge cases:\n  - Inside existing quotes/brackets, avoid inserting duplicates for `\"` based on simple heuristic: if the character before the cursor is a word character and next char is not whitespace/closing, treat typed `\"` as literal; otherwise auto-close.\n  - For backticks, support ``` pairs similarly to other delimiters; for triple backticks, keep current behavior for fenced blocks if already implemented.\n- Ensure the auto-close logic is integrated before generic insertion so it can decide whether to override the default insertion.\n\nPseudo-code (simplified):\n```rust\nif settings.auto_close_brackets {\n    if let Some(pair) = opener_for_char(ch) {\n        let sel = doc.selection();\n        if !sel.is_empty() {\n            doc.wrap_selection(sel, pair.open, pair.close);\n        } else {\n            doc.insert_text(cursor_pos, &format!(\"{}{}\", pair.open, pair.close));\n            doc.set_cursor(cursor_pos + pair.open.len());\n        }\n        return; // prevent default insertion\n    }\n\n    if is_closer(ch) {\n        let next = doc.char_at(cursor_pos);\n        if Some(ch) == next {\n            doc.set_cursor(cursor_pos + ch.len_utf8());\n            return; // skip over\n        }\n    }\n}\ninsert_char_default(ch);\n```\n",
+        "testStrategy": "Manual tests:\n- Enable auto-close in settings; type (, [, {, \", ', ` and verify the closing character is inserted and cursor is between them.\n- Select a word (e.g., hello), type ( and verify it becomes (hello); repeat for [, {, \", ', `, **, and __.\n- With `()` already present and cursor before `)`, type ) and ensure the cursor jumps over the existing ) instead of inserting another.\n- Repeat skip-over behavior for ], }, \", ', and `.\n- Disable auto-close in settings and verify typing brackets/quotes behaves as normal with no auto insertion or wrapping.\n- Restart the app and verify existing config.json without the new field still loads, defaulting auto_close_brackets to true.\n- Verify undo/redo works for auto-close operations as expected.",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2",
+          "3"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T01:17:36.001Z"
+      },
+      {
+        "id": "5",
+        "title": "Implement Smart Paste for Links and images",
+        "description": "Enhance paste behavior so that pasting a URL on selected text creates a markdown link, and pasting an image URL with no selection inserts a markdown image reference.",
+        "details": "Target file: src/editor/widget.rs (or centralized paste handling code if present).\n\nImplementation outline:\n- Intercept paste events in the editor component:\n  - Use existing platform abstraction for clipboard paste (e.g., on_paste(text: String)).\n- URL detection:\n  - Define a helper `fn is_url(s: &str) -> bool` that checks:\n    - Starts with `http://` or `https://`, OR\n    - A more general regex-like pattern: `[a-zA-Z][a-zA-Z0-9+.-]*://`.\n  - Define `fn is_image_url(s: &str) -> bool` that checks file extension (.png, .jpg, .jpeg, .gif, .webp, .svg, .bmp) case-insensitively.\n- Behavior with selection:\n  - If `is_url(pasted)` is true and there is a non-empty selection:\n    - Let selected text be `label`.\n    - Replace selection with `format!(\"[{}]({})\", label, pasted)`, preserving any existing markdown context.\n  - Cursor should land after the inserted link.\n- Behavior with no selection:\n  - If `is_image_url(pasted)` is true:\n    - Insert `format!(\"![]({})\", pasted)` at cursor position.\n  - Else if `is_url(pasted)` is true:\n    - Insert the URL text as-is (normal paste), as per PRD.\n  - Else:\n    - Fallback to default paste behavior (insert text as-is).\n- Ensure operation integrates with undo/redo as a single edit.\n\nPseudo-code:\n```rust\nfn on_paste(pasted: String) {\n    let sel = doc.selection();\n    if !sel.is_empty() && is_url(&pasted) {\n        let label = doc.text(sel.clone());\n        let link = format!(\"[{}]({})\", label, pasted.trim());\n        doc.replace_range(sel, &link);\n    } else if sel.is_empty() && is_image_url(&pasted) {\n        let img = format!(\"![]({})\", pasted.trim());\n        doc.insert_text(doc.cursor_pos(), &img);\n    } else {\n        insert_default_paste(pasted);\n    }\n}\n```\n",
+        "testStrategy": "Manual tests:\n- Type \"Click here\", select it, copy `https://example.com`, and paste: verify the result is `[Click here](https://example.com)` and cursor is after the closing parenthesis.\n- Select partial text in the middle of a sentence and paste a URL; confirm markdown link syntax is correct and surrounding text is unchanged.\n- With no selection, paste `https://example.com` and verify the plain URL is inserted.\n- With no selection, paste an image URL like `https://example.com/pic.png` and verify `![](https://example.com/pic.png)` is inserted.\n- Paste non-URL text with and without selection and verify normal paste behavior.\n- Undo and redo each scenario to ensure edits are grouped logically.\n- Test with URLs containing query strings and fragments to ensure detection still works.",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T01:24:12.143Z"
+      },
+      {
+        "id": "6",
+        "title": "Add Configurable Line Width setting and apply in all editor views",
+        "description": "Introduce a max_line_width editor setting and use it to limit and center the text column in Raw, Rendered, Split, and Zen mode views.",
+        "details": "Target files: src/config/settings.rs, src/ui/settings.rs, src/editor/widget.rs, src/markdown/editor.rs.\n\nConfig model:\n- In src/config/settings.rs:\n  - Add a field, e.g., `pub max_line_width: MaxLineWidth`, where MaxLineWidth is an enum such as:\n    ```rust\n    pub enum MaxLineWidth {\n        Off,\n        Col80,\n        Col100,\n        Col120,\n        Pixels(u32),\n    }\n    ```\n  - Implement serde (Serialize/Deserialize) with sensible defaults (Off) and backward-compatible tags.\n  - Optionally support legacy numeric values mapping to Pixels.\n\nSettings UI:\n- In src/ui/settings.rs:\n  - Add a dropdown under Editor for \"Maximum line width\" with options: Off, 80 characters, 100 characters, 120 characters, Custom pixel width.\n  - When Custom pixel width is chosen, show a numeric input field (pixels) to set the value.\n  - On change, update in-memory settings and trigger a UI refresh (e.g., via a message to editor views).\n\nEditor layout logic:\n- In src/editor/widget.rs (raw/split views):\n  - Convert `max_line_width` to a target column width if using monospace fonts: 80/100/120 characters correspond to a clamped layout width in pixels: width_px = char_width * columns.\n  - For Pixels(u32), use the provided pixel width directly.\n  - Compute available viewport width; if max_line_width is Off or width_px >= viewport width, keep existing behavior.\n  - Otherwise:\n    - Center the text column horizontally by applying horizontal padding: left_padding = (viewport_width - width_px) / 2.\n    - Apply a layout constraint so text content wraps at the target width (e.g., configure text layout engine’s max_width).\n- In src/markdown/editor.rs (rendered view):\n  - Apply the same width logic to the rendered markdown column, including Mermaid diagrams and other blocks, ensuring they respect the max width where possible.\n  - Use a container widget with fixed max width and center alignment.\n- Ensure Zen mode also uses the same width calculation, possibly with a different default padding but honoring the setting.\n- Provide a way to listen to settings changes (observer or message) so changing the setting results in immediate layout update without restart.\n\nPseudo-code (layout):\n```rust\nfn layout(&mut self, viewport_width: f32) {\n    let width_px = match settings.max_line_width {\n        MaxLineWidth::Off => viewport_width,\n        MaxLineWidth::Col80 => char_w * 80.0,\n        MaxLineWidth::Col100 => char_w * 100.0,\n        MaxLineWidth::Col120 => char_w * 120.0,\n        MaxLineWidth::Pixels(px) => px as f32,\n    };\n    let content_width = width_px.min(viewport_width);\n    let left_pad = (viewport_width - content_width) / 2.0;\n    self.inner.set_max_width(content_width);\n    self.inner.set_margin_left(left_pad);\n}\n```\n",
+        "testStrategy": "Manual tests:\n- In Settings > Editor, set max line width to Off and verify current behavior is unchanged in all views.\n- Set to 80 characters and open a document with long lines; verify text wraps at approximately 80 columns and the text column is centered in Raw view.\n- Switch to Rendered view and Split view; verify the same width and centering behavior.\n- Toggle between 80, 100, and 120 characters and confirm the column width changes immediately without restart.\n- Choose Custom pixel width (e.g., 600 px) and confirm visual column width corresponds approximately to that size.\n- Enter an extreme custom value (small and large) and ensure layout remains usable.\n- Enter Zen mode and ensure it respects the max_line_width setting.\n- Restart the app and verify the saved setting is persisted and applied on startup.",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T01:36:06.122Z"
+      },
+      {
+        "id": "7",
+        "title": "Add Linux musl static build job to CI",
+        "description": "Configure the release CI workflow to build a statically-linked Linux binary using musl libc targeting x86_64-unknown-linux-musl.",
+        "details": "Target file: .github/workflows/release.yml.\n\nImplementation outline:\n- In the GitHub Actions workflow for releases, add a new job named `build-linux-musl`.\n- Use either the rust-musl-builder Docker image or install the musl target directly.\n\nOption A – rust-musl-builder container (simple, common approach):\n- Use a job step like:\n  ```yaml\n  build-linux-musl:\n    runs-on: ubuntu-latest\n    container:\n      image: ekidd/rust-musl-builder:stable\n    steps:\n      - uses: actions/checkout@v4\n      - name: Build release binary\n        run: |\n          cargo build --release --target x86_64-unknown-linux-musl\n      - name: Package artifact\n        run: |\n          mkdir -p dist\n          cp target/x86_64-unknown-linux-musl/release/ferrite dist/ferrite\n          tar -czf ferrite-linux-musl-x64.tar.gz -C dist ferrite\n      - name: Upload artifact\n        uses: actions/upload-artifact@v4\n        with:\n          name: ferrite-linux-musl-x64\n          path: ferrite-linux-musl-x64.tar.gz\n  ```\n\nOption B – install musl target:\n- Add steps:\n  - `rustup target add x86_64-unknown-linux-musl`.\n  - Install musl tools (`musl-tools` on Ubuntu) if needed.\n  - Build with `cargo build --release --target x86_64-unknown-linux-musl`.\n\n- Integrate the new artifact into the release packaging step (e.g., attach to GitHub Releases if existing workflow does this).\n- Ensure no new Rust crates are added per PRD (only toolchain/image changes).\n",
+        "testStrategy": "Validation steps:\n- Trigger the workflow on a test branch or draft release and verify the `build-linux-musl` job passes.\n- Download the ferrite-linux-musl-x64.tar.gz artifact from CI.\n- In a local or CI-run Alpine Linux container:\n  - Extract the tarball and run `./ferrite --help` (or equivalent) to ensure the binary starts.\n- In an Ubuntu container or host:\n  - Run the same binary and ensure it starts without missing shared library errors (use `ldd ferrite` or equivalent to verify static linking).\n- Confirm the artifact is included alongside other release artifacts on tagged builds.",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T01:44:32.233Z"
+      },
+      {
+        "id": "8",
+        "title": "Fix Linux close button cursor flicker in custom window frame",
+        "description": "Investigate and resolve cursor flicker near the close button on Linux by adjusting hit-testing and cursor handling for the custom window frame.",
+        "details": "Target files: src/ui/window.rs, src/app.rs.\n\nImplementation outline:\n- Reproduce:\n  - Run Ferrite on Linux Mint (or similar compositing window manager) and observe cursor behavior near the custom title bar close button.\n- Code analysis:\n  - Inspect custom window frame implementation in src/ui/window.rs and any related hit-test logic in src/app.rs.\n  - Identify zones:\n    - Title bar drag area.\n    - Close/minimize/maximize button hit areas.\n    - Window resize borders.\n  - Look for overlapping rectangles or multiple cursor updates per frame that can cause flicker.\n- Fix strategy:\n  - Ensure hit-test order prioritizes window controls (close button) over resize zones.\n  - Refactor cursor update logic to compute desired cursor once per pointer move event:\n    - Start with default arrow.\n    - If inside close button rect → set pointer to default or hand, and mark event handled.\n    - Else if in resize border → set resize cursor.\n    - Else if in draggable title bar → set move cursor if required.\n  - Avoid rapid toggling by:\n    - Caching last cursor type; only call platform API to change cursor if it differs from current.\n    - Debouncing or coalescing pointer-move events if the toolkit supports it, though likely unnecessary if hit-test is correct.\n- Validate that close button click handling remains correct and resize zones are unaffected.\n\nPseudo-code:\n```rust\nfn on_pointer_move(pos: Point) {\n    let mut desired = CursorIcon::Default;\n    if close_button_rect.contains(pos) {\n        desired = CursorIcon::Default; // or Pointer\n    } else if in_resize_zone(pos) {\n        desired = CursorIcon::NwseResize; // etc.\n    } else if title_bar_rect.contains(pos) {\n        desired = CursorIcon::Move;\n    }\n\n    if desired != self.current_cursor {\n        window.set_cursor(desired);\n        self.current_cursor = desired;\n    }\n}\n```\n",
+        "testStrategy": "Manual tests on Linux:\n- On Linux Mint (or similar distro), move the mouse slowly around the close button area and verify the cursor remains stable, without rapidly switching between pointer, resize, and move icons.\n- Click the close button to ensure the window still closes as expected.\n- Test resizing the window from edges and corners to ensure resize cursors still appear and resizing works.\n- Test dragging the window from the title bar area to ensure move behavior remains intact.\n- Regression check on other platforms (Windows, macOS) to confirm cursor behavior is unchanged or improved and no new flicker is introduced.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-12T01:51:16.200Z"
+      },
+      {
+        "id": "9",
+        "title": "Optimize Mermaid rendering performance with caching",
+        "description": "Profile and optimize Mermaid diagram rendering for complex diagrams by caching computations based on source hash and avoiding unnecessary recomputation.",
+        "details": "Target file: src/markdown/mermaid.rs.\n\nImplementation outline:\n- Profiling and hotspots:\n  - Add lightweight timing instrumentation around parsing, layout, and rendering functions (e.g., using std::time::Instant and logging in debug builds).\n  - Test with synthetic Mermaid diagrams containing 50+ nodes to identify the main bottlenecks.\n- Caching design:\n  - Define a cache keyed by a hash of the Mermaid source string (e.g., using a fast hash like FxHash or std::collections::hash_map::DefaultHasher).\n  - Cache structure may be:\n    ```rust\n    struct MermaidCacheEntry {\n        layout: LayoutData,\n        render: RenderData,\n    }\n    ```\n  - Store entries in a HashMap<String, MermaidCacheEntry> or an LRU cache if memory is a concern.\n- Render pipeline changes:\n  - On rendering a mermaid code block:\n    - Compute hash of the source text.\n    - If present in cache and source unchanged, reuse cached layout/render data and skip recomputation.\n    - If not present or source changed, run full parse + layout + render preparation, then store result in cache.\n  - Ensure cache is scoped appropriately (per-document or global) and invalidated when diagrams are edited.\n- Algorithmic optimizations:\n  - Parsing:\n    - Reuse token buffers; avoid allocations by using pre-allocated Vecs and `clear()` instead of creating new ones.\n    - Avoid repeated string cloning; use &str slices into the original source.\n  - Layout:\n    - Replace O(N²) loops where possible with more efficient graph traversal or adjacency lists.\n    - Cache intermediate computations (e.g., node sizes, edge routes) across rerenders of identical diagrams.\n  - Rendering:\n    - Batch draw calls for nodes and edges when using the graphics backend (e.g., combine into a single path where possible).\n    - Reuse shape objects or text layouts for identical nodes.\n\nPseudo-code:\n```rust\nfn render_mermaid(src: &str) -> RenderOutput {\n    let key = hash_src(src);\n    if let Some(entry) = CACHE.lock().unwrap().get(&key) {\n        return render_from_cached(&entry.render);\n    }\n    let parsed = parse_diagram(src, &mut parser_bufs);\n    let layout = compute_layout(&parsed, &mut layout_bufs);\n    let render_data = prepare_render_data(&layout, &mut render_bufs);\n    CACHE.lock().unwrap().insert(key.clone(), MermaidCacheEntry { layout, render: render_data.clone() });\n    render_from_cached(&render_data)\n}\n```\n",
+        "testStrategy": "Performance tests:\n- Create or use an existing Mermaid diagram with 50+ nodes and multiple edges.\n- Measure and log render time before changes (cold render and subsequent renders) in debug builds.\n- After implementing caching and optimizations, re-measure render time.\n  - Confirm significant reduction, especially on repeated renders where the source has not changed.\n- Edit a diagram (change text slightly) and verify the cache invalidates and recomputes only for the modified block.\n\nFunctional tests:\n- Compare screenshots or visual output of diagrams before and after optimization to ensure no visual regression.\n- Test different diagram types (flowchart, sequence, class, etc.) to ensure all still render correctly.\n- Run the existing test suite (if present) and add targeted unit tests for caching logic, ensuring correct hits/misses and no stale data usage.",
+        "priority": "medium",
+        "dependencies": [
+          "6",
+          "7",
+          "8"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "10",
+        "title": "Cleanup and modularize Mermaid codebase",
+        "description": "Refactor Mermaid implementation to reduce warnings, remove dead code, and optionally split into parser/layout/render submodules while preserving behavior.",
+        "details": "Target file(s): src/markdown/mermaid.rs → potentially src/markdown/mermaid/.\n\nImplementation outline:\n- Run static analysis:\n  - Execute `cargo clippy` focusing on the mermaid module and note warnings (unused code, needless clones, etc.).\n  - Execute `cargo doc` to ensure public API is documented.\n- Code cleanup:\n  - Remove dead code that is verifiably unused; if certain code must remain for future features, mark with `#[allow(dead_code)]` and add a comment explaining why.\n  - Address common Clippy warnings: prefer slices over Vec where possible, avoid unnecessary clones, use iterators idiomatically.\n  - Add `///` documentation comments to public functions/types explaining their purpose and behavior.\n- Optional modularization:\n  - If src/markdown/mermaid.rs is large and monolithic, split into submodules:\n    - src/markdown/mermaid/mod.rs\n    - src/markdown/mermaid/parser.rs\n    - src/markdown/mermaid/layout.rs\n    - src/markdown/mermaid/render.rs\n  - Move corresponding functions and types into each file.\n  - Update `mod` declarations and pub use statements to preserve the external API.\n- Ensure no new dependencies are introduced; use only std and existing crates.\n- Keep tests and benchmarks (if any) in sync with new module structure.\n",
+        "testStrategy": "Validation steps:\n- Run `cargo clippy` and verify there are no warnings in the mermaid module (or only explicitly allowed ones with comments).\n- Run `cargo doc` and ensure documentation builds without errors and public items in the mermaid module have clear descriptions.\n- Run the full test suite to ensure no regressions.\n- Manually open various Mermaid diagrams in the app and verify they render as before after the refactor.\n- If modularization was done, confirm that external callers (markdown renderer, toolbar, etc.) still compile and function without changes to their usage patterns.",
+        "priority": "medium",
+        "dependencies": [
+          "9"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "11",
+        "title": "Implement Mermaid diagram insertion toolbar with templates",
+        "description": "Add a \"Diagram\" or \"Mermaid\" button to the ribbon that provides a dropdown of Mermaid diagram templates and inserts fenced code blocks at the editor cursor.",
+        "details": "Target file: src/ui/ribbon.rs (plus any template storage).\n\nImplementation outline:\n- Ribbon UI:\n  - In src/ui/ribbon.rs, add a new button group labeled \"Diagram\" or \"Mermaid\".\n  - Attach a dropdown menu listing the template types: Flowchart, Sequence, Class, State, ER, Gantt, Pie, Mindmap, Timeline, Git Graph, User Journey.\n- Template storage:\n  - Define a static in-code map or enum with associated template strings for each type, e.g.:\n    ```rust\n    struct Template { name: &'static str, snippet: &'static str }\n    ```\n  - Example for Flowchart as given in PRD:\n    ```\n    ```mermaid\n    flowchart TD\n        A[Start] --> B{Decision}\n        B -->|Yes| C[Action]\n        B -->|No| D[End]\n    ```\n    ```\n  - Ensure escape sequences are correct in Rust string literals (use raw strings `r\"\"\"` where needed).\n- Insertion behavior:\n  - On selecting a template from the dropdown:\n    - Send a message/event to the editor to insert the corresponding snippet at the current cursor position.\n    - If there is a selection, optionally replace it or insert before/after; simplest is insertion at cursor, ignoring selection for now unless UX dictates otherwise.\n  - Ensure insertion respects current indentation level if the editor has line-indentation logic.\n- Integration with preview:\n  - Since diagrams are already supported, simply ensure the inserted ` ```mermaid` fenced block triggers the existing Mermaid renderer in preview.\n\nPseudo-code:\n```rust\nfn on_template_selected(kind: TemplateKind) {\n    let snippet = templates::get(kind);\n    app.send(EditCommand::InsertText(snippet.to_string()));\n}\n```\n",
+        "testStrategy": "Manual tests:\n- Open a markdown document with the editor focused.\n- Click the new \"Diagram\"/\"Mermaid\" button and choose \"Flowchart\"; verify a mermaid fenced code block with the example content is inserted at the cursor.\n- Switch to Rendered or Split view and confirm the flowchart diagram renders correctly.\n- Repeat for each template type (Sequence, Class, State, ER, Gantt, Pie, Mindmap, Timeline, Git Graph, User Journey) and ensure diagrams render or at least show valid Mermaid syntax.\n- Test insertion at the start, middle, and end of a document.\n- Test with existing text selected and verify insertion behavior is consistent and does not corrupt adjacent markdown.\n- Verify undo/redo works for template insertions.",
+        "priority": "low",
+        "dependencies": [
+          "9",
+          "10"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "12",
+        "title": "Add Mermaid syntax hints to Help panel",
+        "description": "Extend the Help panel to include a Mermaid reference section listing supported diagram types, basic syntax examples, and a link reference to official Mermaid documentation.",
+        "details": "Target file: src/ui/about.rs (Help panel implementation).\n\nImplementation outline:\n- Help panel UI:\n  - Locate the Help or About panel implementation in src/ui/about.rs.\n  - Add a new section titled \"Mermaid Diagrams\" or similar.\n- Content:\n  - List supported diagram types: Flowchart, Sequence, Class, State, ER, Gantt, Pie, Mindmap, Timeline, Git Graph, User Journey.\n  - For each type, add a concise fenced code example, e.g.:\n    - Flowchart:\n      ```\n      ```mermaid\n      flowchart TD\n          A[Start] --> B[End]\n      ```\n      ```\n    - Sequence:\n      ```\n      ```mermaid\n      sequenceDiagram\n          Alice->>Bob: Hello\n      ```\n      ```\n    - etc., keeping examples short.\n  - Include a text note such as \"For full syntax, see the official Mermaid documentation\"; present the URL as plain text rather than clickable if link widgets are not available.\n- Layout considerations:\n  - Use scrollable area if the content is long.\n  - Apply monospace font styling to fenced code blocks for readability.\n- Ensure keyboard shortcut (Ctrl+? or Help menu) still opens the panel and focuses content appropriately.\n",
+        "testStrategy": "Manual tests:\n- Open the Help panel via Ctrl+? or through the Help menu.\n- Scroll to the Mermaid section and verify it is present with clearly labeled diagram types and corresponding syntax examples.\n- Confirm that code blocks are readable and correctly formatted (backticks visible, indentation correct).\n- Copy-paste an example from the Help panel into the editor and verify it renders as a Mermaid diagram in preview.\n- Check that the rest of the Help content remains intact and visually consistent.",
+        "priority": "low",
+        "dependencies": [
+          "11"
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-01-12T01:51:16.200Z",
+      "taskCount": 12,
+      "completedCount": 8,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

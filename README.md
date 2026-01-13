@@ -14,7 +14,35 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 
 > ⚠️ **Platform Note:** Ferrite has been primarily developed and tested on **Windows**. While it should work on Linux and macOS, these platforms have not been extensively tested. If you encounter issues, please [report them](https://github.com/OlaProeis/Ferrite/issues).
 
-> 🤖 **AI Disclosure:** This project is 100% AI-generated code. All Rust code, documentation, and configuration was written by Claude (Anthropic) via [Cursor](https://cursor.com) with MCP tools. My role is product direction, testing, and learning to orchestrate AI-assisted development effectively. The code is reviewed and tested, not blindly accepted — but I want to be transparent about the development process. This project is partly a learning exercise in exploring how far AI-assisted development can go.
+## 🤖 AI-Assisted Development
+
+This project is 100% AI-generated code. All Rust code, documentation, and configuration was written by Claude (Anthropic) via [Cursor](https://cursor.com) with MCP tools.
+
+### My Role
+- **Product direction** — Deciding what to build and why
+- **Testing** — Running the app, finding bugs, verifying features
+- **Review** — Reading generated code, understanding what it does
+- **Orchestration** — Managing the AI workflow effectively
+
+### The Workflow
+1. **Idea refinement** — Discuss concepts with multiple AIs (Claude, Perplexity, Gemini Pro)
+2. **PRD creation** — Generate requirements using [Task Master](https://github.com/task-master-ai/task-master)
+3. **Task execution** — Claude Opus handles implementation (preferring larger tasks over many subtasks)
+4. **Session handover** — Structured prompts maintain context between sessions
+5. **Human review** — Every handover is reviewed; direction adjustments made as needed
+
+📖 **Full details:** [AI Development Workflow](docs/ai-workflow/ai-development-workflow.md)
+
+### Open Process
+The actual prompts and documents used to build Ferrite are public:
+
+| Document | Purpose |
+|----------|---------|
+| [`current-handover-prompt.md`](docs/current-handover-prompt.md) | Active session context |
+| [`ai-workflow/`](docs/ai-workflow/) | Full workflow docs, PRDs, historical handovers |
+| [`handover/`](docs/handover/) | Reusable handover templates |
+
+This transparency is intentional — I want others to learn from (and improve upon) this approach.
 
 ## Screenshots
 

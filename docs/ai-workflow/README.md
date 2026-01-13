@@ -1,0 +1,95 @@
+# AI Development Workflow
+
+This folder contains documentation about Ferrite's AI-assisted development process, plus historical archives of PRDs, tasks, and handovers.
+
+## Main Documentation
+
+- [**ai-development-workflow.md**](ai-development-workflow.md) — Full workflow explanation, handover system, templates
+- [**ai-workflow-disclosure-plan.md**](ai-workflow-disclosure-plan.md) — Planning doc for this disclosure
+
+## Folder Structure
+
+```
+docs/ai-workflow/
+├── README.md                        ← You are here
+├── ai-development-workflow.md       ← Main workflow documentation
+├── ai-workflow-disclosure-plan.md   ← Planning document
+├── handovers/                       ← Historical session handovers
+├── prds/                            ← Product Requirements Documents
+├── tasks/                           ← Task Master JSON files
+└── notes/                           ← Feedback and review notes
+```
+
+---
+
+## `/handovers/` - Historical Handover Prompts
+
+Past handover prompts from earlier development phases.
+
+| Document | Version | Description |
+|----------|---------|-------------|
+| `handover-about-help.md` | v0.1.x | About/Help dialog feature |
+| `handover-list-editing-bug.md` | v0.2.0 | List item editing bug fix |
+| `handover-minor-bugs.md` | v0.2.x | Minor UI bug fixes |
+| `code-review-handover.md` | v0.2.0 | Code review instructions |
+| `code-review-v0.2.0-findings.md` | v0.2.0 | Code review findings |
+
+---
+
+## `/prds/` - Product Requirements Documents
+
+PRDs define features and acceptance criteria for each version.
+
+| Document | Version | Description |
+|----------|---------|-------------|
+| `prd-v0.1.x.md` | v0.1.x | Initial MVP |
+| `prd-v0.2.0-list-editing-bug.md` | v0.2.0 | List editing bug fix |
+| `prd-v0.2.2.md` | v0.2.2 | Stability, CLI, QoL |
+| `prd-v0.2.3.md` | v0.2.3 | Editor productivity |
+| `prd-v0.2.5.md` | v0.2.5 | Mermaid, CSV, i18n |
+| `prd-v0.3.0-mermaid-crate.md` | v0.3.0 | Mermaid crate extraction |
+
+---
+
+## `/tasks/` - Task Master JSON Files
+
+Task files generated from PRDs showing how requirements were broken down.
+
+| File | Version | Description |
+|------|---------|-------------|
+| `tasks-v0.1.x-completed.json` | v0.1.x | MVP tasks |
+| `tasks-v0.2.0-completed.json` | v0.2.0 | v0.2.0 tasks |
+| `tasks-v0.2.0.json` | v0.2.0 | v0.2.0 structure |
+| `tasks-v0.2.2.json` | v0.2.2 | v0.2.2 structure |
+| `tasks-v0.2.3.json` | v0.2.3 | v0.2.3 structure |
+| `tasks-v0.3.0-mermaid-crate.json` | v0.3.0 | Mermaid crate tasks |
+
+---
+
+## `/notes/` - Feedback and Review Notes
+
+| Document | Description |
+|----------|-------------|
+| `gemini-code-review-v0.1.0.md` | Gemini code review (Dec 2025) |
+
+---
+
+## Current Session Files
+
+Active handover files are in the parent `docs/` folder for easy access:
+- [`current-handover-prompt.md`](../current-handover-prompt.md) — Active session context
+- [`update-handover-prompt.md`](../update-handover-prompt.md) — Update instructions
+
+## Handover Templates
+
+Reusable templates are in [`docs/handover/`](../handover/):
+- `template-handover-minimal.md` — Independent tasks
+- `template-handover-subtask.md` — Subtask chains  
+- `template-handover-bugfix.md` — Bug fixes
+- `template-update-handover.md` — Update instructions template
+
+---
+
+## Learn More
+
+- [README - AI Section](../../README.md#-ai-assisted-development) — Project AI disclosure
