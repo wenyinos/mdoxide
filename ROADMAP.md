@@ -7,6 +7,8 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 - [ ] **Multi-cursor incomplete** - Basic cursor rendering works, but text operations not implemented
 - [ ] **Code folding incomplete** - Detection works, but text hiding not possible
 - [ ] **Scroll sync imperfect** - Limited access to egui's internal scroll state
+- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window appears offset from cursor position; egui's IME support is limited
+- [ ] **IME undo behavior** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Undoing during IME composition may delete an extra character; related to egui's text input handling
 
 ---
 
@@ -43,6 +45,14 @@ Multi-language UI support with community-driven translations.
 - [ ] **Weblate integration** - Set up hosted.weblate.org for community translations
 - [ ] **Simplified Chinese** - First community translation (thanks @sr79368142!)
 
+#### CJK Writing Conventions ([#20](https://github.com/OlaProeis/Ferrite/issues/20))
+First-line paragraph indentation for Chinese, Japanese, and other languages with similar conventions.
+
+- [ ] **Paragraph indentation setting** - New option in Settings: Off / Chinese (2 chars) / Japanese (1 char) / Custom
+- [ ] **Rendered view support** - Apply `text-indent` styling to paragraphs in preview mode
+- [ ] **HTML export support** - Include indentation in exported HTML documents
+- [ ] **Per-document override** - Optional YAML frontmatter key to override global setting
+
 #### Bug Fixes & Polish
 - [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic to prevent unnecessary "recover work" dialogs
 - [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded; ensure it survives build-to-build testing
@@ -50,6 +60,20 @@ Multi-language UI support with community-driven translations.
 - [ ] **Git status auto-refresh** - Refresh git indicators on file save and periodically (every ~10 seconds) instead of only on folder open
 - [ ] **Quick switcher mouse support** - Fix mouse hover/click not working (item flickers but doesn't select); arrow keys + Enter work fine
 - [ ] **Table editing cursor loss** - Fix cursor losing focus after each keystroke when editing tables in rendered mode (related to previous cursor issues)
+- [ ] **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fix line width setting not respecting pane boundaries in rendered view; text should wrap at pane edge when line width exceeds available space
+
+#### Windows DWM Frame Offset Bug ([#22?](https://github.com/OlaProeis/Ferrite/issues))
+Borderless window causes click position offset and black bars on certain Windows 10 configurations.
+
+**Symptoms:** Black bar at top/left of window, click positions offset from visual elements, config shows `-8, -8` window position.
+
+**Root Cause:** Windows DWM reserves invisible ~8px border for shadows/resize handles on borderless windows. On certain Windows 10 22H2 configurations, this isn't properly accounted for in coordinate calculations.
+
+- [ ] **Investigate egui 0.32 upgrade** - Check if newer egui/eframe versions (currently on 0.28) have fixes or better handling
+- [ ] **Add Windows manifest DPI settings** - Explicit DPI awareness may affect coordinate reporting
+- [ ] **Test `with_transparent(true)`** - Some configurations work better with transparency enabled alongside `with_decorations(false)`
+- [ ] **DWM frame compensation** - Detect affected systems and apply coordinate offset correction
+- [ ] **Add "window offset" setting** - Allow users on affected systems to manually correct the offset as a workaround
 
 #### New Features
 - [ ] **Recent folders** - Extend the recent files menu (bottom-left status bar) into a split view with two columns: recent files and recent workspace folders for quick project switching
@@ -58,6 +82,7 @@ Multi-language UI support with community-driven translations.
 - [ ] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links; keep in sync on save
 - [ ] **Document statistics panel** - Tabbed info panel for .md files: Outline tab + Statistics tab (heading count, link count, code block count, image count, word count, reading time, average sentence length)
 - [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;sig` → signature block); JSON config in `~/.config/ferrite/snippets.json`
+- [ ] **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Allow users to select their preferred font for editor and UI; important for CJK users who have regional glyph preferences (SC vs TC vs JP vs KR variants)
 
 #### Semantic Minimap
 Enhanced minimap designed specifically for Markdown documents - show structure, not just pixels.
@@ -67,6 +92,16 @@ Enhanced minimap designed specifically for Markdown documents - show structure, 
 - [ ] **Density visualization** - Show text density as subtle horizontal bars between headers
 - [ ] **Sleek design** - Minimal, elegant styling that complements the editor aesthetic
 - [ ] **Mode toggle** - Settings option to choose "Visual" (current pixel-based) or "Semantic" (new structured) mode
+
+#### Branding
+New Ferrite logo and icon set.
+
+- [x] **New logo design** - Ferrite crystal icon (orange geometric crystal shape)
+- [x] **Windows icon** - Multi-size `.ico` file (16, 32, 48, 256px) embedded in executable
+- [x] **macOS iconset** - `.iconset` folder for CI-generated `.icns`
+- [x] **Linux icons** - PNG icons for `.deb` package (16-512px)
+- [x] **Window icon** - Embedded 256px icon replaces default eframe "E" logo
+- [x] **Icon generation script** - `assets/icons/generate_all_icons.py` for regenerating all sizes
 
 ---
 
@@ -167,6 +202,13 @@ Native LaTeX/TeX math rendering - the most requested feature for academic and te
 - [ ] Custom themes (import/export)
 - [ ] Virtual/ghost text (AI completions, etc.)
 - [ ] Column/box selection
+
+#### Additional Markup Formats ([#21](https://github.com/OlaProeis/Ferrite/issues/21))
+Support for markup languages beyond Markdown, enabled by the plugin system.
+
+- [ ] **AsciiDoc support** - Parser and renderer for AsciiDoc syntax (requires plugin system or native Rust parser)
+- [ ] **Zim-Wiki support** - Parser and renderer for Zim Desktop Wiki syntax
+- [ ] **Format auto-detection** - Detect markup format from file extension or content
 
 ### Long-Term Vision
 
