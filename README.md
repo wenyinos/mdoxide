@@ -18,6 +18,9 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 
 This project is 100% AI-generated code. All Rust code, documentation, and configuration was written by Claude (Anthropic) via [Cursor](https://cursor.com) with MCP tools.
 
+<details>
+<summary><strong>About the AI workflow</strong></summary>
+
 ### My Role
 - **Product direction** — Deciding what to build and why
 - **Testing** — Running the app, finding bugs, verifying features
@@ -44,6 +47,8 @@ The actual prompts and documents used to build Ferrite are public:
 
 This transparency is intentional — I want others to learn from (and improve upon) this approach.
 
+</details>
+
 ## Screenshots
 
 | Raw Editor | Rendered View |
@@ -53,6 +58,8 @@ This transparency is intentional — I want others to learn from (and improve up
 | Split View | Zen Mode |
 |------------|----------|
 | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
+
+> ✨ **v0.2.3 Released:** Editor productivity features! Go to Line (Ctrl+G), Duplicate Line (Ctrl+Shift+D), Move Line (Alt+↑/↓), Auto-close brackets/quotes, Smart Paste for links, and configurable line width. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## Features
 
@@ -87,7 +94,7 @@ Native rendering of 11 diagram types directly in the preview:
 - Flowchart, Sequence, Pie, State, Mindmap
 - Class, ER, Git Graph, Gantt, Timeline, User Journey
 
-> ✨ **v0.2.3 Released:** Editor productivity features! Go to Line (Ctrl+G), Duplicate Line (Ctrl+Shift+D), Move Line (Alt+↑/↓), Auto-close brackets/quotes, Smart Paste for links, and configurable line width. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ⚠️ **Current Limitations:** Mermaid support is basic and has known issues. Complex diagrams may not render correctly. Missing features include: YAML frontmatter (`title:`, `config:`), parallel edge syntax (`A --> B & C`), and `style`/`classDef` directives. Improvements are planned for v0.2.5. See [ROADMAP.md](ROADMAP.md) for details.
 
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
@@ -116,9 +123,11 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | macOS (Apple Silicon) | `ferrite-macos-arm64.tar.gz` |
 | macOS (Intel) | `ferrite-macos-x64.tar.gz` |
 
-#### Linux Installation
+<details>
+<summary><strong>Linux Installation Instructions</strong></summary>
 
-**Using .deb package (Debian/Ubuntu/Mint - Recommended):**
+#### Debian/Ubuntu/Mint (.deb)
+
 ```bash
 # Download the .deb file, then install with:
 sudo apt install ./ferrite-editor_amd64.deb
@@ -133,7 +142,7 @@ This will:
 - Register file associations for `.md`, `.json`, `.yaml`, `.toml` files
 - Install icons for the system
 
-**Arch Linux package**
+#### Arch Linux (AUR)
 
 [![Ferrite on AUR](https://img.shields.io/aur/version/ferrite?label=ferrite)](https://aur.archlinux.org/packages/ferrite/)
 [![Ferrite-bin on AUR](https://img.shields.io/aur/version/ferrite-bin?label=ferrite-bin)](https://aur.archlinux.org/packages/ferrite-bin/)
@@ -142,9 +151,6 @@ Ferrite is available on the [AUR](https://wiki.archlinux.org/index.php/Arch_User
 - [Ferrite](https://aur.archlinux.org/packages/ferrite/) (release package)
 - [Ferrite-bin](https://aur.archlinux.org/packages/ferrite-bin/) (binary package)
 
-You can install it using your [AUR helper](https://wiki.archlinux.org/index.php/AUR_helpers) of choice.
-
-Example:
 ```console
 # Release package
 yay -Sy ferrite
@@ -153,13 +159,17 @@ yay -Sy ferrite
 yay -Sy ferrite-bin
 ```
 
-**Using tar.gz (any Linux distro):**
+#### Other Linux (tar.gz)
+
 ```bash
 tar -xzf ferrite-linux-x64.tar.gz
 ./ferrite
 ```
 
-### Build from Source
+</details>
+
+<details>
+<summary><strong>Build from Source</strong></summary>
 
 #### Prerequisites
 
@@ -170,6 +180,7 @@ tar -xzf ferrite-linux-x64.tar.gz
 - Visual Studio Build Tools 2019+ with C++ workload
 
 **Linux:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt install build-essential pkg-config libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev
@@ -182,6 +193,7 @@ sudo pacman -S base-devel pkg-config gtk3 libxcb
 ```
 
 **macOS:**
+
 ```bash
 xcode-select --install
 ```
@@ -201,9 +213,20 @@ cargo build --release
 # Linux/macOS: target/release/ferrite
 ```
 
+</details>
+
 ## Usage
 
-### Launch
+```bash
+# Open a file
+ferrite path/to/file.md
+
+# Open a folder as workspace
+ferrite path/to/folder/
+```
+
+<details>
+<summary><strong>More CLI options</strong></summary>
 
 ```bash
 # Run from source
@@ -212,14 +235,8 @@ cargo run --release
 # Or run the binary directly
 ./target/release/ferrite
 
-# Open a specific file
-./target/release/ferrite path/to/file.md
-
 # Open multiple files as tabs
 ./target/release/ferrite file1.md file2.md
-
-# Open a folder as workspace
-./target/release/ferrite path/to/folder/
 
 # Show version
 ./target/release/ferrite --version
@@ -229,6 +246,8 @@ cargo run --release
 ```
 
 See [docs/cli.md](docs/cli.md) for full CLI documentation.
+
+</details>
 
 ### View Modes
 
@@ -241,6 +260,20 @@ Ferrite supports three view modes for Markdown files:
 Toggle between modes using the toolbar buttons or keyboard shortcuts.
 
 ## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+N` | New file |
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save file |
+| `Ctrl+W` | Close tab |
+| `Ctrl+P` | Quick file switcher |
+| `Ctrl+F` | Find |
+| `Ctrl+G` | Go to line |
+| `Ctrl+,` | Open settings |
+
+<details>
+<summary><strong>All Keyboard Shortcuts</strong></summary>
 
 ### File Operations
 
@@ -286,7 +319,14 @@ Toggle between modes using the toolbar buttons or keyboard shortcuts.
 | `Ctrl+Shift+[` | Fold all |
 | `Ctrl+Shift+]` | Unfold all |
 
+</details>
+
 ## Configuration
+
+Access settings via `Ctrl+,` or the gear icon. Configure appearance, editor behavior, and file handling.
+
+<details>
+<summary><strong>Configuration details</strong></summary>
 
 Settings are stored in platform-specific locations:
 
@@ -298,11 +338,11 @@ Workspace settings are stored in `.ferrite/` within the workspace folder.
 
 ### Settings Panel
 
-Access settings via `Ctrl+,` or the gear icon. Configure:
-
 - **Appearance:** Theme, font family, font size, default view mode
 - **Editor:** Word wrap, line numbers, minimap, bracket matching, code folding, syntax highlighting, auto-close brackets, line width
 - **Files:** Auto-save, recent files history
+
+</details>
 
 ## Roadmap
 
@@ -312,7 +352,8 @@ See [ROADMAP.md](ROADMAP.md) for planned features and known issues.
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Quick Start for Contributors
+<details>
+<summary><strong>Quick Start for Contributors</strong></summary>
 
 ```bash
 # Fork and clone
@@ -333,7 +374,14 @@ git commit -m "feat: your feature description"
 git push origin feature/your-feature
 ```
 
+</details>
+
 ## Tech Stack
+
+Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, and syntect for syntax highlighting.
+
+<details>
+<summary><strong>Full tech stack</strong></summary>
 
 | Component | Technology |
 |-----------|------------|
@@ -348,11 +396,16 @@ git push origin feature/your-feature
 | File Watching | notify 6 |
 | Fuzzy Matching | fuzzy-matcher 0.3 |
 
+</details>
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
+
+<details>
+<summary><strong>Libraries & Tools</strong></summary>
 
 ### Libraries
 - [egui](https://github.com/emilk/egui) - Immediate mode GUI library for Rust
@@ -365,3 +418,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Claude](https://anthropic.com) (Anthropic) - AI assistant that wrote the code
 - [Cursor](https://cursor.com) - AI-powered code editor
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) - AI task management for development workflows
+
+</details>

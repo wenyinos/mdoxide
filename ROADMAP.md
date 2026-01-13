@@ -138,6 +138,17 @@ Continue improving diagram rendering quality:
 - [ ] **Fork/join pseudostates** - Parallel regions
 - [ ] **History states** - Shallow (H) and deep (H*) history
 
+##### Manual Layout Support
+Enable manual node positioning while maintaining mermaid.js compatibility — a key differentiator for mermaid-rs.
+
+- [ ] **Comment-based position hints** - Parse `%% @pos <node_id> <x> <y>` directives (ignored by mermaid.js, respected by Ferrite)
+- [ ] **Layout mode toggle** - Support `%% @ferrite-layout: manual` to enable manual positioning
+- [ ] **Drag-to-reposition** - Drag nodes in rendered view → auto-update source with position comments
+- [ ] **Export options** - "Export clean" strips layout hints for sharing pure Mermaid syntax
+- [ ] **Fallback behavior** - Diagrams without position hints use auto-layout (Sugiyama, etc.)
+
+> **Why this matters:** Mermaid is declarative — layout is computed, not specified. This prevents "visual thinking" workflows where users want to arrange diagrams as thought tools. By using `%%` comments (which mermaid.js ignores), we add manual positioning without breaking compatibility. Diagrams remain valid Mermaid syntax and render everywhere — just with different layouts.
+
 #### 3. Custom Editor Widget (Stretch Goal)
 Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanced editing features.
 
