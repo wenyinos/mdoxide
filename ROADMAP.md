@@ -56,24 +56,27 @@ First-line paragraph indentation for Chinese, Japanese, and other languages with
 #### Bug Fixes & Polish
 - [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic to prevent unnecessary "recover work" dialogs
 - [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded; ensure it survives build-to-build testing
-- [ ] **Zen mode rendered centering** - Center content in rendered/split view when Zen mode is active (currently only centers raw text)
+- [ ] **Config.json persistence** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Settings reset on restart: recent files count reverts to 10, maximize state not restored, window size reverts after drag-to-open workflow
+- [ ] **Zen mode rendered centering** - Center content in rendered/split view when Zen mode (F11) is active (currently only centers raw text)
 - [ ] **Git status auto-refresh** - Refresh git indicators on file save and periodically (every ~10 seconds) instead of only on folder open
 - [ ] **Quick switcher mouse support** - Fix mouse hover/click not working (item flickers but doesn't select); arrow keys + Enter work fine
 - [ ] **Table editing cursor loss** - Fix cursor losing focus after each keystroke when editing tables in rendered mode (related to previous cursor issues)
 - [ ] **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fix line width setting not respecting pane boundaries in rendered view; text should wrap at pane edge when line width exceeds available space
 
-#### Windows DWM Frame Offset Bug ([#22?](https://github.com/OlaProeis/Ferrite/issues))
-Borderless window causes click position offset and black bars on certain Windows 10 configurations.
+#### macOS Intel Issues ([#24](https://github.com/OlaProeis/Ferrite/issues/24))
+Issues reported on Intel Macs (x86_64).
 
-**Symptoms:** Black bar at top/left of window, click positions offset from visual elements, config shows `-8, -8` window position.
+- [ ] **High CPU usage** - Constant elevated CPU usage when app is open (likely egui repaint loop not properly idling)
+- [ ] **Sync scrolling broken** - Bidirectional scroll sync between Raw/Rendered views not working on Intel Macs
+- [ ] **Window controls style** - Shows Windows-style Close/Minimize/Maximize icons instead of native macOS traffic lights
 
-**Root Cause:** Windows DWM reserves invisible ~8px border for shadows/resize handles on borderless windows. On certain Windows 10 22H2 configurations, this isn't properly accounted for in coordinate calculations.
+#### Windows Borderless Window Issues ([#15](https://github.com/OlaProeis/Ferrite/issues/15))
+Issues related to the custom borderless window on Windows.
 
-- [ ] **Investigate egui 0.32 upgrade** - Check if newer egui/eframe versions (currently on 0.28) have fixes or better handling
-- [ ] **Add Windows manifest DPI settings** - Explicit DPI awareness may affect coordinate reporting
-- [ ] **Test `with_transparent(true)`** - Some configurations work better with transparency enabled alongside `with_decorations(false)`
-- [ ] **DWM frame compensation** - Detect affected systems and apply coordinate offset correction
-- [ ] **Add "window offset" setting** - Allow users on affected systems to manually correct the offset as a workaround
+- [ ] **Window resize from top edge** - Currently can only resize window height by dragging the bottom edge; top edge doesn't respond to resize drag
+- [ ] **Fullscreen toggle** - No dedicated fullscreen button in UI; F11 triggers Zen mode (distraction-free writing) not OS-level fullscreen
+
+> **Note:** Previous reports of click offset and black bars on Windows 10 22H2 were resolved by switching GPU settings from "auto-select" to "discrete GPU" in Windows Graphics Settings. This is a system configuration issue, not a Ferrite bug.
 
 #### New Features
 - [ ] **Recent folders** - Extend the recent files menu (bottom-left status bar) into a split view with two columns: recent files and recent workspace folders for quick project switching
@@ -83,6 +86,27 @@ Borderless window causes click position offset and black bars on certain Windows
 - [ ] **Document statistics panel** - Tabbed info panel for .md files: Outline tab + Statistics tab (heading count, link count, code block count, image count, word count, reading time, average sentence length)
 - [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;sig` → signature block); JSON config in `~/.config/ferrite/snippets.json`
 - [ ] **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Allow users to select their preferred font for editor and UI; important for CJK users who have regional glyph preferences (SC vs TC vs JP vs KR variants)
+
+#### Executable Code Blocks
+Run code snippets directly in the rendered preview — inspired by Jupyter notebooks and Marco.
+
+- [ ] **Run button on code blocks** - Add "▶ Run" button to fenced code blocks in rendered/split view
+- [ ] **Shell/Bash execution** - Execute shell scripts via `std::process::Command`; display stdout/stderr below block
+- [ ] **Python support** - Detect `python` or `python3` and run with system interpreter
+- [ ] **Output persistence** - Option to keep output visible or clear on re-run
+- [ ] **Timeout handling** - Kill long-running scripts after configurable timeout (default 30s)
+- [ ] **Security warning** - First-run dialog warning about code execution risks; require opt-in in settings
+
+> **Security Note:** Code execution is inherently risky. This feature will be opt-in and disabled by default. Users must explicitly enable it in settings.
+
+#### Content Blocks (Callouts/Admonitions)
+Styled callout blocks for notes, warnings, tips — common in technical documentation (Obsidian, Notion, GitHub).
+
+- [ ] **GitHub-style syntax** - Support `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]`
+- [ ] **Custom titles** - Support `> [!NOTE] Custom Title` syntax
+- [ ] **Styled rendering** - Color-coded blocks with icons (ℹ️ 💡 ⚠️ 🔴 ❗) in rendered view
+- [ ] **Collapsible variant** - `> [!NOTE]- Collapsed by default` syntax for expandable sections
+- [ ] **Nesting support** - Allow content blocks inside other blocks and lists
 
 #### Semantic Minimap
 Enhanced minimap designed specifically for Markdown documents - show structure, not just pixels.

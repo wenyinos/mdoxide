@@ -51,13 +51,11 @@ This transparency is intentional — I want others to learn from (and improve up
 
 ## Screenshots
 
-| Raw Editor | Rendered View |
-|------------|---------------|
-| ![Raw Editor](assets/screenshots/raw-dark.png) | ![Rendered View](assets/screenshots/rendered-dark.png) |
+![Ferrite Demo](assets/screenshots/demo.gif)
 
-| Split View | Zen Mode |
-|------------|----------|
-| ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
+| Raw Editor | Split View | Zen Mode |
+|------------|------------|----------|
+| ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
 > ✨ **v0.2.3 Released:** Editor productivity features! Go to Line (Ctrl+G), Duplicate Line (Ctrl+Shift+D), Move Line (Alt+↑/↓), Auto-close brackets/quotes, Smart Paste for links, and configurable line width. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
