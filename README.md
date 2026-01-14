@@ -72,7 +72,6 @@ This transparency is intentional — I want others to learn from (and improve up
 ### View Modes
 - **Split View** - Side-by-side raw editor and rendered preview with resizable divider
 - **Zen Mode** - Distraction-free writing with centered text column
-- **Sync Scrolling** - Bidirectional scroll sync between raw and rendered views
 
 ### Editor Features
 - **Syntax Highlighting** - Full-file syntax highlighting for 40+ languages (Rust, Python, JavaScript, Go, etc.)
