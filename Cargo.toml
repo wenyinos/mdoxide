@@ -88,7 +88,7 @@ opt-level = 2         # Optimize dependencies in dev builds
 [package.metadata.deb]
 name = "ferrite-editor"
 maintainer = "OlaProeis <olaproeis@users.noreply.github.com>"
-copyright = "2024-2025, OlaProeis"
+copyright = "2024-2026, OlaProeis"
 license-file = ["LICENSE", "0"]
 extended-description = """Ferrite is a fast, lightweight text editor built with Rust and egui.
 Features include:
