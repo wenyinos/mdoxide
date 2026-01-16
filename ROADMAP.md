@@ -67,9 +67,20 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 - [x] **Keyboard shortcut customization** - Users can rebind shortcuts via settings panel; stored in config.json
 - [x] **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Select preferred font for editor and UI; important for CJK regional glyph preferences
 - [x] **Main menu UI redesign** - Modernized main menu with improved layout and visual design
+- [x] **Windows fullscreen toggle** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Dedicated fullscreen button (F10) separate from Zen mode (F11)
+- [x] **Session restore reliability** - Workspace folders and recent files now persist correctly with atomic file writes
+- [x] **Recent files persistence** - Recent files list saves immediately on file open, pruning stale paths
+- [x] **Recent folders** - Recent files menu now includes workspace folders
+- [x] **Drag & drop images** - Drop images into editor → auto-save to `./assets/` → insert markdown link
+- [x] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links (Ctrl+Shift+U)
+- [x] **Document statistics panel** - Tabbed info panel: Outline + Statistics (word count, reading time, heading/link/image counts)
+- [x] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;time` → current time)
 
 #### Semantic Minimap
 - [x] **Header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
+- [x] **Content type indicators** - Visual markers for code blocks, mermaid diagrams, tables, images
+- [x] **Density visualization** - Show text density as subtle horizontal bars between headers
+- [x] **Mode toggle** - Settings option to choose "Visual" or "Semantic" mode
 
 #### Branding
 New Ferrite logo and icon set.
@@ -83,11 +94,23 @@ New Ferrite logo and icon set.
 
 ---
 
-### v0.2.6 (Planned) - Flowchart Refactor & Polish
+### v0.2.6 (Planned) - Large File Performance & Polish
 
 > **Status:** Planned
 
-v0.2.6 focuses on code cleanup, flowchart refactoring, and additional polish.
+v0.2.6 focuses on **large file performance** (handling 80MB+ CSV files), code cleanup, and polish. egui's TextEdit cannot handle massive text buffers efficiently, so large files require a specialized read-only viewing mode.
+
+#### Large File Performance ([#19](https://github.com/OlaProeis/Ferrite/issues/19) partial)
+Critical performance improvements for handling large CSV/data files:
+
+- [ ] **Large file detection** - Auto-detect files > 10MB on open, show warning toast
+- [ ] **View-only mode for large files** - Disable Raw view editing for files > threshold (egui TextEdit can't handle 80MB)
+- [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index instead of loading all rows into `Vec<Vec<String>>`
+- [ ] **Row offset indexing** - First pass scans file to record byte offsets of each row start; parse only visible rows + buffer
+- [ ] **LRU row cache** - Cache recently parsed rows (max ~10K rows) for smooth scrolling
+- [ ] **Background CSV scanning** - Scan file in background thread with progress indicator; show first 1000 rows immediately
+- [ ] **Disable expensive features** - Skip minimap, syntax highlighting, and undo history for large files
+- [ ] **Memory optimization** - Don't store both raw content and parsed rows; use slices into original string where possible
 
 #### Flowchart Refactoring
 - [ ] **Modular refactor** - Split the 3500+ line `flowchart.rs` into smaller, maintainable modules (parser, layout, renderer, shapes, edges)
@@ -99,33 +122,15 @@ Additional mermaid fixes and enhancements:
 - [ ] **Testing & validation** - Comprehensive testing of all diagram types with edge cases
 - [ ] **Bug fixes** - Address rendering issues discovered during v0.2.5 testing
 
-#### Bug Fixes & Polish (Deferred from v0.2.5)
-- [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic
-- [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded
+#### Bug Fixes & Polish
 - [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs
 - [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons
-- [ ] **Windows fullscreen toggle** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Dedicated fullscreen button (F11 is Zen mode)
-
-#### New Features (Deferred from v0.2.5)
-- [ ] **Recent folders** - Extend recent files menu with workspace folder column
-- [ ] **Drag & drop images** - Drop images into editor → auto-save to `./assets/` → insert markdown link
-- [ ] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links
-- [ ] **Document statistics panel** - Tabbed info panel: Outline + Statistics (heading/link/code block counts)
-- [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date)
 
 #### Internationalization Polish
 - [ ] **Language selector** - Settings option to choose UI language
 - [ ] **Locale detection** - Auto-detect system language on first launch
 - [ ] **Simplified Chinese** - First community translation (thanks @sr79368142!)
 - [ ] **HTML export i18n** - Include CJK paragraph indentation in exported HTML
-
-#### CSV Polish
-- [ ] **Large file performance** - Virtual scrolling for CSVs with thousands of rows
-
-#### Semantic Minimap (Deferred from v0.2.5)
-- [ ] **Content type indicators** - Visual markers for code blocks, mermaid diagrams, tables, images
-- [ ] **Density visualization** - Show text density as subtle horizontal bars between headers
-- [ ] **Mode toggle** - Settings option to choose "Visual" or "Semantic" mode
 
 #### Executable Code Blocks
 Run code snippets directly in the rendered preview — inspired by Jupyter notebooks and Marco.
@@ -327,6 +332,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes. Key highlights:
 - **Mermaid modular refactor** - Split 7000+ line file into maintainable modules
 - **Mermaid improvements** - YAML frontmatter, parallel edges, classDef/linkStyle, subgraph improvements
 - **CSV/TSV viewer** - Native table view with rainbow columns, delimiter detection, header detection
+- **Semantic minimap** - Header labels, content type indicators, density visualization, mode toggle
 - **i18n infrastructure** - String extraction, YAML translation files, Weblate integration
 - **CJK paragraph indentation** - First-line indentation for Chinese/Japanese text
 - **Custom font selection** - Select preferred fonts for editor and UI
@@ -334,7 +340,13 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes. Key highlights:
 - **Split view dual editing** - Both panes now fully editable with undo/redo support
 - **Keyboard shortcut customization** - Rebind shortcuts via settings panel
 - **Git status auto-refresh** - Automatic refresh on save, focus, timer, and file events
-- **Bug fixes** - Table editing, quick switcher mouse, config persistence, line width, window resize
+- **Drag & drop images** - Drop images to auto-save to ./assets/ and insert markdown link
+- **Table of Contents generation** - Generate/update TOC with Ctrl+Shift+U
+- **Document statistics** - Tabbed panel with word count, reading time, heading/link/image counts
+- **Snippets** - Text expansions (`;date`, `;time`) with custom snippet support
+- **Recent folders** - Recent files menu now includes workspace folders
+- **Windows fullscreen toggle** - F10 for fullscreen (separate from F11 Zen mode)
+- **Bug fixes** - Session persistence, table editing, quick switcher, config persistence, line width, window resize
 
 ### v0.2.3 - Polish & Editor Productivity
 

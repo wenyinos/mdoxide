@@ -51,8 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### New Features
 - **Keyboard shortcut customization** - Users can rebind shortcuts via settings panel; stored in config.json
 - **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Select preferred font for editor and UI; important for CJK regional glyph preferences
-- **Semantic minimap header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
 - **Main menu UI redesign** - Modernized main menu with improved layout and visual design
+- **Windows fullscreen toggle** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Dedicated fullscreen button (F10) separate from Zen mode (F11)
+
+#### Semantic Minimap
+- **Header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
+- **Content type indicators** - Visual markers for code blocks, mermaid diagrams, tables, images
+- **Density visualization** - Text density shown as subtle horizontal bars between headers
+- **Mode toggle** - Settings option to choose "Visual" (pixel) or "Semantic" (labels) mode
+
+#### Editor Productivity
+- **Drag & drop images** - Drop images into editor → auto-save to `./assets/` → insert markdown link
+- **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links (Ctrl+Shift+U)
+- **Document statistics panel** - Tabbed info panel with word count, reading time, heading/link/image counts
+- **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;time` → current time)
+- **Recent folders** - Recent files menu now includes workspace folders
 
 #### Branding
 - **New Ferrite logo** - Orange geometric crystal icon
@@ -64,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Bug Fixes
 - **Search highlight drift** - Fixed find/search highlight boxes drifting progressively further from matched text; caused by byte vs character position mismatch in UTF-8 text
 - **Config.json persistence** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fixed window state dirty flag; settings now persist correctly across restarts
+- **Session restore reliability** - Workspace folders and recent files now persist correctly across restarts with atomic file writes
+- **Recent files persistence** - Recent files list now saves immediately on file open, pruning stale paths
 - **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Line width setting now respects pane boundaries with proper centering behavior
 - **Quick switcher mouse support** - Fixed mouse hover/click not working (item flickering but not selecting)
 - **Table editing cursor loss** - Table cells no longer lose focus after each keystroke in Rendered/Split modes; edits are buffered and committed when focus leaves (deferred update model)
@@ -281,7 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **0.2.5** - Mermaid refactor, CSV viewer, i18n, CJK indentation, custom fonts, main menu redesign, split view editing, bug fixes
+- **0.2.5** - Mermaid refactor, CSV viewer, semantic minimap, i18n, CJK indentation, custom fonts, snippets, TOC generation, drag-drop images, document statistics, main menu redesign, split view editing, bug fixes
 - **0.2.3** - Editor productivity release (Go to Line, Duplicate Line, Move Line, Auto-close, Smart Paste, Line Width)
 - **0.2.2** - Stability & CLI release (CJK fonts, undo/redo fixes, CLI arguments, default view mode)
 - **0.2.1** - Mermaid diagram improvements (control blocks, subgraphs, nested states, improved layout)

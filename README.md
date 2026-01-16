@@ -58,34 +58,39 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.5 Released:** Major Mermaid improvements! Modular refactor, YAML frontmatter, parallel edges (`A --> B & C`), classDef/linkStyle styling, subgraph improvements, and much more. Plus: split view dual editing, keyboard shortcut customization, git auto-refresh, and bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.5 Released:** Major Mermaid improvements, semantic minimap with header labels, drag-drop images, TOC generation, snippets, document statistics, and much more. Plus: split view dual editing, keyboard shortcut customization, git auto-refresh, and numerous bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## Features
 
 ### Core Editing
 - **WYSIWYG Markdown Editing** - Edit markdown with live preview, click-to-edit formatting, and syntax highlighting
-- **Multi-Format Support** - Native support for Markdown, JSON, YAML, and TOML files
+- **Multi-Format Support** - Native support for Markdown, JSON, CSV, YAML, and TOML files
 - **Tree Viewer** - Hierarchical view for JSON/YAML/TOML with inline editing, expand/collapse, and path copying
 - **Find & Replace** - Search with regex support and match highlighting
 - **Go to Line (Ctrl+G)** - Quick navigation to specific line number
 - **Undo/Redo** - Full undo/redo support per tab
 
 ### View Modes
-- **Split View** - Side-by-side raw editor and rendered preview with resizable divider
+- **Split View** - Side-by-side raw editor and rendered preview with resizable divider; both panes are fully editable
 - **Zen Mode** - Distraction-free writing with centered text column
 
 ### Editor Features
 - **Syntax Highlighting** - Full-file syntax highlighting for 40+ languages (Rust, Python, JavaScript, Go, etc.)
 - **Code Folding** - Fold detection with gutter indicators (▶/▼) for headings, code blocks, and lists (text hiding deferred to v0.3.0)
-- **Minimap** - VS Code-style navigation panel with click-to-jump and search highlights
+- **Semantic Minimap** - Navigation panel with clickable header labels, content type indicators, and text density bars (switchable to VS Code-style pixel view)
 - **Bracket Matching** - Highlight matching brackets `()[]{}<>` and emphasis pairs `**` `__`
 - **Auto-close Brackets & Quotes** - Type `(`, `[`, `{`, `"`, or `'` to get matching pair; selection wrapping supported
 - **Duplicate Line (Ctrl+Shift+D)** - Duplicate current line or selection
 - **Move Line Up/Down (Alt+↑/↓)** - Rearrange lines without cut/paste
 - **Smart Paste for Links** - Select text then paste URL to create `[text](url)` markdown link
+- **Drag & Drop Images** - Drop images into editor to auto-save to `./assets/` and insert markdown link
+- **Table of Contents** - Generate/update TOC from headings with `<!-- TOC -->` block (Ctrl+Shift+U)
+- **Snippets** - Text expansions like `;date` → current date, `;time` → current time, plus custom snippets
 - **Auto-Save** - Configurable auto-save with temp-file safety
 - **Line Numbers** - Optional line number gutter
 - **Configurable Line Width** - Limit text width for readability (80/100/120 or custom)
+- **Custom Font Selection** - Choose preferred fonts for editor and UI; important for CJK regional glyph preferences
+- **Keyboard Shortcut Customization** - Rebind shortcuts via settings panel
 
 ### MermaidJS Diagrams
 Native rendering of 11 diagram types directly in the preview:
@@ -94,19 +99,26 @@ Native rendering of 11 diagram types directly in the preview:
 
 > **v0.2.5 Mermaid Update:** Native Mermaid rendering now supports YAML frontmatter, parallel edges (`A --> B & C`), `classDef`/`linkStyle` styling, improved subgraphs, and more. Complex diagrams may still have rendering differences from mermaid.js. See [ROADMAP.md](ROADMAP.md) for planned improvements.
 
+### CSV/TSV Viewer
+- **Native Table View** - View CSV and TSV files in a formatted table with fixed-width column alignment
+- **Rainbow Column Coloring** - Alternating column colors for improved readability
+- **Delimiter Detection** - Auto-detect comma, tab, semicolon, and pipe separators
+- **Header Row Detection** - Intelligent detection and highlighting of header rows
+
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
-- **Git Integration** - Visual status indicators showing modified, added, untracked, and ignored files
+- **Git Integration** - Visual status indicators (modified, added, untracked, ignored) with auto-refresh on save, focus, and file changes
 - **Session Persistence** - Restore open tabs, cursor positions, and scroll offsets on restart
 
 ### Additional Features
 - **Light & Dark Themes** - Beautiful themes with runtime switching
-- **Document Outline** - Navigate large documents with the outline panel
+- **Document Outline & Statistics** - Navigate with outline panel; tabbed statistics showing word count, reading time, heading/link/image counts
 - **Export Options** - Export to HTML with themed styling, or copy as HTML
 - **Formatting Toolbar** - Quick access to bold, italic, headings, lists, links, and more
 - **Live Pipeline** - Pipe JSON/YAML content through shell commands (for developers)
 - **Custom Window** - Borderless window with custom title bar and resize handles
-- **Recent Files** - Click the filename in the bottom-left status bar to quickly access recently opened files
+- **Recent Files & Folders** - Click filename in status bar to access recently opened files and workspace folders
+- **CJK Paragraph Indentation** - First-line indentation options for Chinese (2 chars) and Japanese (1 char) writing conventions
 
 ## Installation
 
@@ -210,6 +222,8 @@ cargo build --release
 # Windows: target/release/ferrite.exe
 # Linux/macOS: target/release/ferrite
 ```
+
+> **Development Builds:** Building from the `main` branch gives you the latest features before they're officially released. These builds are untested and may contain bugs. For stable versions, download from [GitHub Releases](https://github.com/OlaProeis/Ferrite/releases).
 
 </details>
 
