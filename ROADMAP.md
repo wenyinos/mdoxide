@@ -125,6 +125,10 @@ Additional mermaid fixes and enhancements:
 #### Bug Fixes & Polish
 - [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs
 - [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons
+- [ ] **Workspace view close button misaligned** - X button to close workspace panel needs 5-10px shift to the left
+- [ ] **Workspace resize handle flicker** - Mouse hover near resize handle causes flickering; apply same fix used for right scrollbar
+- [ ] **Window controls redesign** - Redesign minimize/maximize/close icons for a more polished look
+- [ ] **JSON rendered view Zen mode centering** - JSON tree viewer not centering content when Zen mode is active
 
 #### Internationalization Polish
 - [ ] **Language selector** - Settings option to choose UI language
