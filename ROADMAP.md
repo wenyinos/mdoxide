@@ -14,78 +14,118 @@ These issues cannot be fixed without replacing egui's built-in text editor:
 
 ## Planned Features 🚀
 
-### v0.2.5 (Planned) - Mermaid Update, CSV Support & i18n
+### v0.2.5 (Released) - Mermaid Update & Editor Polish
+
+> **Status:** Released (2026-01-16)
+
+#### Mermaid Improvements
+- [x] **Modular refactor** - Split 7000+ line `mermaid.rs` into `src/markdown/mermaid/` directory with separate files per diagram type
+- [x] **Edge parsing fixes** - Fix chained edge parsing (`A --> B --> C`), arrow pattern matching, label extraction
+- [x] **Flowchart direction fix** - Respect LR/TB/RL/BT direction keywords in layout algorithm
+- [x] **Node detection fixes** - Fix missing nodes and improve branching layout in complex flowcharts
+- [x] **YAML frontmatter support** - Parse `---` metadata blocks with `title:`, `config:` etc. (MermaidJS v8.13+ syntax)
+- [x] **Parallel edge operator (`&`)** - Support `A --> B & C & D` syntax for multiple edges from one source
+- [x] **Rendering performance** - AST and layout caching with blake3 hashing for complex diagrams
+- [x] **Semicolon & ampersand syntax** - Support Mermaid semicolon line terminators and `&` parallel edge syntax
+- [x] **classDef/class styling** - Node styling via `classDef` and `class` directives
+- [x] **linkStyle edge styling** - Edge customization via `linkStyle` directive
+- [x] **Subgraph improvements** - Layer clustering, internal layout, edge routing, title expansion, nested margins
+- [x] **Asymmetric shape rendering** - Flag/asymmetric node shape with proper text centering
+- [x] **Viewport clipping fix** - Prevent diagram clipping with negative coordinate shifting
+- [x] **Crash prevention** - Infinite loop safety, panic handling for malformed input
+
+#### CSV Support ([#19](https://github.com/OlaProeis/Ferrite/issues/19))
+- [x] **CSV/TSV viewer** - Native table view for CSV and TSV files with fixed-width column alignment
+- [x] **Rainbow column coloring** - Alternating column colors for improved readability
+- [x] **Delimiter detection** - Auto-detect comma, tab, semicolon, pipe separators
+- [x] **Header row detection** - Intelligent detection and highlighting of header rows
+
+#### Internationalization ([#18](https://github.com/OlaProeis/Ferrite/issues/18))
+- [x] **i18n infrastructure** - YAML translation files in `locales/` directory
+- [x] **String extraction** - UI strings moved to translation keys
+- [x] **Weblate integration** - Community translations via [hosted.weblate.org/projects/ferrite](https://hosted.weblate.org/projects/ferrite/)
+
+#### CJK Writing Conventions ([#20](https://github.com/OlaProeis/Ferrite/issues/20))
+- [x] **Paragraph indentation setting** - New option in Settings: Off / Chinese (2 chars) / Japanese (1 char) / Custom
+- [x] **Rendered view support** - Apply `text-indent` styling to paragraphs in preview mode
+
+#### Split View Enhancements
+- [x] **Dual editable panes** - Split view rendered pane is now fully editable, matching full Rendered mode behavior with undo/redo support
+
+#### Bug Fixes & Polish
+- [x] **Search highlight drift** - Fixed find/search highlight boxes drifting progressively from matched text (byte vs character position mismatch)
+- [x] **Config.json persistence** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fixed window state dirty flag, settings now persist correctly across restarts
+- [x] **Zen mode rendered centering** - Center content in rendered/split view when Zen mode (F11) is active
+- [x] **Git status auto-refresh** - Refresh git indicators on file save, window focus, periodically (every ~10 seconds), and on file system events
+- [x] **Quick switcher mouse support** - Fixed mouse hover/click not working in quick switcher
+- [x] **Table editing cursor loss** - Fix cursor losing focus after each keystroke when editing tables in rendered mode (deferred update model)
+- [x] **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fixed line width setting respecting pane boundaries with proper centering behavior
+- [x] **Windows top edge resize** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Window can now be resized from all edges including top
+- [x] **macOS Intel CPU optimization** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Idle repaint scheduling to reduce CPU usage on Intel Macs
+
+#### New Features
+- [x] **Keyboard shortcut customization** - Users can rebind shortcuts via settings panel; stored in config.json
+- [x] **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Select preferred font for editor and UI; important for CJK regional glyph preferences
+- [x] **Main menu UI redesign** - Modernized main menu with improved layout and visual design
+
+#### Semantic Minimap
+- [x] **Header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
+
+#### Branding
+New Ferrite logo and icon set.
+
+- [x] **New logo design** - Ferrite crystal icon (orange geometric crystal shape)
+- [x] **Windows icon** - Multi-size `.ico` file (16, 32, 48, 256px) embedded in executable
+- [x] **macOS iconset** - `.iconset` folder for CI-generated `.icns`
+- [x] **Linux icons** - PNG icons for `.deb` package (16-512px)
+- [x] **Window icon** - Embedded 256px icon replaces default eframe "E" logo
+- [x] **Icon generation script** - `assets/icons/generate_all_icons.py` for regenerating all sizes
+
+---
+
+### v0.2.6 (Planned) - Flowchart Refactor & Polish
 
 > **Status:** Planned
 
+v0.2.6 focuses on code cleanup, flowchart refactoring, and additional polish.
+
+#### Flowchart Refactoring
+- [ ] **Modular refactor** - Split the 3500+ line `flowchart.rs` into smaller, maintainable modules (parser, layout, renderer, shapes, edges)
+- [ ] **Code cleanup** - Improve code organization, reduce duplication, add documentation
+
 #### Mermaid Improvements
-- [ ] **YAML frontmatter support** - Parse `---` metadata blocks with `title:`, `config:` etc. (MermaidJS v8.13+ syntax)
-- [ ] **Parallel edge operator (`&`)** - Support `A --> B & C & D` syntax for multiple edges from one source
-- [ ] **Rendering performance** - Optimize mermaid.rs for complex diagrams with caching
-- [ ] **Code cleanup** - Address unused code warnings, improve modularity
-- [ ] **Diagram insertion toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert mermaid code blocks
-- [ ] **Syntax hints in Help** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Documentation of supported diagram types and syntax examples
+Additional mermaid fixes and enhancements:
 
-#### CSV Support ([#19](https://github.com/OlaProeis/Ferrite/issues/19))
-Native CSV file support with specialized viewing and editing capabilities.
+- [ ] **Testing & validation** - Comprehensive testing of all diagram types with edge cases
+- [ ] **Bug fixes** - Address rendering issues discovered during v0.2.5 testing
 
-- [ ] **CSV Tree Viewer** - Table view with fixed-width column alignment (like EmEditor)
-- [ ] **Rainbow column coloring** - Alternating column colors for readability (like RainbowCSV)
-- [ ] **Delimiter detection** - Auto-detect comma, tab, semicolon, pipe separators
-- [ ] **Header row detection** - Highlight first row as column headers
-- [ ] **Large file performance** - Virtual scrolling for CSVs with thousands of rows
+#### Bug Fixes & Polish (Deferred from v0.2.5)
+- [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic
+- [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded
+- [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs
+- [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons
+- [ ] **Windows fullscreen toggle** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Dedicated fullscreen button (F11 is Zen mode)
 
-#### Internationalization ([#18](https://github.com/OlaProeis/Ferrite/issues/18))
-Multi-language UI support with community-driven translations.
+#### New Features (Deferred from v0.2.5)
+- [ ] **Recent folders** - Extend recent files menu with workspace folder column
+- [ ] **Drag & drop images** - Drop images into editor → auto-save to `./assets/` → insert markdown link
+- [ ] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links
+- [ ] **Document statistics panel** - Tabbed info panel: Outline + Statistics (heading/link/code block counts)
+- [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date)
 
-- [ ] **i18n infrastructure** - Add `rust-i18n` crate with YAML translation files
-- [ ] **String extraction** - Move all UI strings (~300-400) to translation keys
+#### Internationalization Polish
 - [ ] **Language selector** - Settings option to choose UI language
 - [ ] **Locale detection** - Auto-detect system language on first launch
-- [ ] **Weblate integration** - Set up hosted.weblate.org for community translations
 - [ ] **Simplified Chinese** - First community translation (thanks @sr79368142!)
+- [ ] **HTML export i18n** - Include CJK paragraph indentation in exported HTML
 
-#### CJK Writing Conventions ([#20](https://github.com/OlaProeis/Ferrite/issues/20))
-First-line paragraph indentation for Chinese, Japanese, and other languages with similar conventions.
+#### CSV Polish
+- [ ] **Large file performance** - Virtual scrolling for CSVs with thousands of rows
 
-- [ ] **Paragraph indentation setting** - New option in Settings: Off / Chinese (2 chars) / Japanese (1 char) / Custom
-- [ ] **Rendered view support** - Apply `text-indent` styling to paragraphs in preview mode
-- [ ] **HTML export support** - Include indentation in exported HTML documents
-- [ ] **Per-document override** - Optional YAML frontmatter key to override global setting
-
-#### Bug Fixes & Polish
-- [ ] **Session restore reliability** - Investigate workspace folder not being remembered on restart; audit all persistence logic to prevent unnecessary "recover work" dialogs
-- [ ] **Recent files persistence** - Audit when/how recent files list is saved and loaded; ensure it survives build-to-build testing
-- [ ] **Config.json persistence** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Settings reset on restart: recent files count reverts to 10, maximize state not restored, window size reverts after drag-to-open workflow
-- [ ] **Zen mode rendered centering** - Center content in rendered/split view when Zen mode (F11) is active (currently only centers raw text)
-- [ ] **Git status auto-refresh** - Refresh git indicators on file save and periodically (every ~10 seconds) instead of only on folder open
-- [ ] **Quick switcher mouse support** - Fix mouse hover/click not working (item flickers but doesn't select); arrow keys + Enter work fine
-- [ ] **Table editing cursor loss** - Fix cursor losing focus after each keystroke when editing tables in rendered mode (related to previous cursor issues)
-- [ ] **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fix line width setting not respecting pane boundaries in rendered view; text should wrap at pane edge when line width exceeds available space
-
-#### macOS Intel Issues ([#24](https://github.com/OlaProeis/Ferrite/issues/24))
-Issues reported on Intel Macs (x86_64).
-
-- [ ] **High CPU usage** - Constant elevated CPU usage when app is open (likely egui repaint loop not properly idling)
-- [ ] **Sync scrolling broken** - Bidirectional scroll sync between Raw/Rendered views not working on Intel Macs
-- [ ] **Window controls style** - Shows Windows-style Close/Minimize/Maximize icons instead of native macOS traffic lights
-
-#### Windows Borderless Window Issues ([#15](https://github.com/OlaProeis/Ferrite/issues/15))
-Issues related to the custom borderless window on Windows.
-
-- [ ] **Window resize from top edge** - Currently can only resize window height by dragging the bottom edge; top edge doesn't respond to resize drag
-- [ ] **Fullscreen toggle** - No dedicated fullscreen button in UI; F11 triggers Zen mode (distraction-free writing) not OS-level fullscreen
-
-> **Note:** Previous reports of click offset and black bars on Windows 10 22H2 were resolved by switching GPU settings from "auto-select" to "discrete GPU" in Windows Graphics Settings. This is a system configuration issue, not a Ferrite bug.
-
-#### New Features
-- [ ] **Recent folders** - Extend the recent files menu (bottom-left status bar) into a split view with two columns: recent files and recent workspace folders for quick project switching
-- [ ] **Keyboard shortcut customization** - Let users rebind shortcuts via settings panel; store in config.json
-- [ ] **Drag & drop images** - Drop images into editor → auto-save to `./assets/` folder → insert markdown image link
-- [ ] **Table of Contents generation** - Insert/update `<!-- TOC -->` block with auto-generated heading links; keep in sync on save
-- [ ] **Document statistics panel** - Tabbed info panel for .md files: Outline tab + Statistics tab (heading count, link count, code block count, image count, word count, reading time, average sentence length)
-- [ ] **Snippets/abbreviations** - User-defined text expansions (`;date` → current date, `;sig` → signature block); JSON config in `~/.config/ferrite/snippets.json`
-- [ ] **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Allow users to select their preferred font for editor and UI; important for CJK users who have regional glyph preferences (SC vs TC vs JP vs KR variants)
+#### Semantic Minimap (Deferred from v0.2.5)
+- [ ] **Content type indicators** - Visual markers for code blocks, mermaid diagrams, tables, images
+- [ ] **Density visualization** - Show text density as subtle horizontal bars between headers
+- [ ] **Mode toggle** - Settings option to choose "Visual" or "Semantic" mode
 
 #### Executable Code Blocks
 Run code snippets directly in the rendered preview — inspired by Jupyter notebooks and Marco.
@@ -99,7 +139,7 @@ Run code snippets directly in the rendered preview — inspired by Jupyter noteb
 
 > **Security Note:** Code execution is inherently risky. This feature will be opt-in and disabled by default. Users must explicitly enable it in settings.
 
-#### Content Blocks (Callouts/Admonitions)
+#### Content Blocks / Callouts
 Styled callout blocks for notes, warnings, tips — common in technical documentation (Obsidian, Notion, GitHub).
 
 - [ ] **GitHub-style syntax** - Support `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]`
@@ -107,25 +147,6 @@ Styled callout blocks for notes, warnings, tips — common in technical document
 - [ ] **Styled rendering** - Color-coded blocks with icons (ℹ️ 💡 ⚠️ 🔴 ❗) in rendered view
 - [ ] **Collapsible variant** - `> [!NOTE]- Collapsed by default` syntax for expandable sections
 - [ ] **Nesting support** - Allow content blocks inside other blocks and lists
-
-#### Semantic Minimap
-Enhanced minimap designed specifically for Markdown documents - show structure, not just pixels.
-
-- [ ] **Header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
-- [ ] **Content type indicators** - Visual markers for code blocks (```), mermaid diagrams, tables, images, blockquotes
-- [ ] **Density visualization** - Show text density as subtle horizontal bars between headers
-- [ ] **Sleek design** - Minimal, elegant styling that complements the editor aesthetic
-- [ ] **Mode toggle** - Settings option to choose "Visual" (current pixel-based) or "Semantic" (new structured) mode
-
-#### Branding
-New Ferrite logo and icon set.
-
-- [x] **New logo design** - Ferrite crystal icon (orange geometric crystal shape)
-- [x] **Windows icon** - Multi-size `.ico` file (16, 32, 48, 256px) embedded in executable
-- [x] **macOS iconset** - `.iconset` folder for CI-generated `.icns`
-- [x] **Linux icons** - PNG icons for `.deb` package (16-512px)
-- [x] **Window icon** - Embedded 256px icon replaces default eframe "E" logo
-- [x] **Icon generation script** - `assets/icons/generate_all_icons.py` for regenerating all sizes
 
 ---
 
@@ -147,6 +168,10 @@ Extract Ferrite's native Mermaid renderer (~6000 lines) into a standalone pure-R
 
 #### 2. Mermaid Diagram Improvements
 Continue improving diagram rendering quality:
+
+##### Deferred from v0.2.5
+- [ ] **Diagram insertion toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert mermaid code blocks with template syntax
+- [ ] **Syntax hints in Help** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Help panel documenting supported diagram types with syntax examples
 
 ##### Git Graph (Major Rewrite)
 - [ ] **Horizontal timeline layout** - Left-to-right commit flow like Mermaid
@@ -181,11 +206,33 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 - [ ] **Full multi-cursor editing** - Text operations at all cursor positions
 - [ ] **Code folding with text hiding** - Actually collapse regions visually
 
-#### 4. Markdown Enhancements
+#### 4. Semantic Minimap Polish
+- [ ] **Scroll position accuracy** - Fix navigation centering for variable line heights, word wrap, and editor padding (deferred from v0.2.5)
+
+#### 5. Markdown Enhancements
 - [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with auto-completion
 - [ ] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file
 
-#### 5. Platform & Distribution
+#### 6. HTML Rendering (GitHub Parity)
+Render embedded HTML in markdown preview, matching GitHub's supported subset.
+
+##### Phase 1: Block Elements
+- [ ] **`<div align="...">`** - Center/left/right alignment for content blocks
+- [ ] **`<details><summary>`** - Collapsible sections using egui's CollapsingHeader
+- [ ] **`<br>`** - Explicit line breaks
+
+##### Phase 2: Inline Elements
+- [ ] **`<kbd>`** - Keyboard key styling (monospace with border)
+- [ ] **`<sup>` / `<sub>`** - Superscript and subscript text
+- [ ] **`<img>` attributes** - Respect width/height on image tags
+
+##### Phase 3: Advanced
+- [ ] **Nested HTML** - HTML containing markdown containing HTML
+- [ ] **`<table>` (HTML tables)** - Render HTML table syntax (separate from GFM pipe tables)
+
+> **Note:** Only safe HTML elements supported — no `<script>`, `<style>`, `<iframe>`, or event handlers. This matches GitHub's security model.
+
+#### 7. Platform & Distribution
 Improve installation experience across all platforms.
 
 ##### Windows Installer
@@ -274,7 +321,22 @@ Extract `FerriteEditor` as a standalone, framework-agnostic text editing library
 
 ## Completed ✅
 
-### v0.2.3 (Current Release) - Polish & Editor Productivity
+### v0.2.5 (Current Release) - Mermaid Update & Editor Polish
+
+See [CHANGELOG.md](CHANGELOG.md) for full release notes. Key highlights:
+- **Mermaid modular refactor** - Split 7000+ line file into maintainable modules
+- **Mermaid improvements** - YAML frontmatter, parallel edges, classDef/linkStyle, subgraph improvements
+- **CSV/TSV viewer** - Native table view with rainbow columns, delimiter detection, header detection
+- **i18n infrastructure** - String extraction, YAML translation files, Weblate integration
+- **CJK paragraph indentation** - First-line indentation for Chinese/Japanese text
+- **Custom font selection** - Select preferred fonts for editor and UI
+- **Main menu UI redesign** - Modernized layout and visual design
+- **Split view dual editing** - Both panes now fully editable with undo/redo support
+- **Keyboard shortcut customization** - Rebind shortcuts via settings panel
+- **Git status auto-refresh** - Automatic refresh on save, focus, timer, and file events
+- **Bug fixes** - Table editing, quick switcher mouse, config persistence, line width, window resize
+
+### v0.2.3 - Polish & Editor Productivity
 
 A focused release adding editor productivity features and platform improvements.
 

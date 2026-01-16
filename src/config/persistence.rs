@@ -114,10 +114,10 @@ fn load_config_internal() -> Result<Settings> {
     // Check if config file exists
     if !config_path.exists() {
         debug!(
-            "Config file not found at {}, using defaults",
+            "Config file not found at {}, creating defaults with system locale",
             config_path.display()
         );
-        return Ok(Settings::default());
+        return Ok(Settings::default_with_system_locale());
     }
 
     debug!("Loading config from: {}", config_path.display());
@@ -135,7 +135,7 @@ fn load_config_internal() -> Result<Settings> {
     }
 
     // Parse and sanitize
-    let settings = Settings::from_json_sanitized(&contents).map_err(|e| {
+    let mut settings = Settings::from_json_sanitized(&contents).map_err(|e| {
         warn!(
             "Config file at {} contains invalid JSON: {}",
             config_path.display(),
@@ -146,6 +146,16 @@ fn load_config_internal() -> Result<Settings> {
             source: Some(Box::new(e)),
         }
     })?;
+
+    // Prune recent files and workspaces that no longer exist on disk
+    let pruned_files = settings.prune_stale_recent_files();
+    let pruned_workspaces = settings.prune_stale_recent_workspaces();
+    if pruned_files > 0 || pruned_workspaces > 0 {
+        // Save config immediately if we pruned any entries to keep it in sync
+        if let Err(e) = save_config(&settings) {
+            warn!("Failed to save config after pruning stale entries: {}", e);
+        }
+    }
 
     info!(
         "Configuration loaded successfully from {}",

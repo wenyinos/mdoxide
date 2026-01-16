@@ -56,6 +56,10 @@ pub enum RibbonAction {
     /// Apply a markdown formatting command
     Format(MarkdownFormatCommand),
 
+    // Markdown document operations
+    /// Insert or update Table of Contents
+    InsertToc,
+
     // Structured data operations (JSON/YAML/TOML)
     /// Format/pretty-print the structured data document
     FormatDocument,
@@ -487,6 +491,21 @@ impl Ribbon {
                 .clicked()
                 {
                     action = Some(RibbonAction::Format(MarkdownFormatCommand::CodeBlock));
+                }
+
+                ui.add_space(2.0);
+
+                // Table of Contents button
+                if icon_button(
+                    ui,
+                    "☰",
+                    &format!("Insert/Update Table of Contents ({}+Shift+U)", modifier_symbol()),
+                    has_editor,
+                    is_dark,
+                )
+                .clicked()
+                {
+                    action = Some(RibbonAction::InsertToc);
                 }
 
                 ui.add_space(4.0);

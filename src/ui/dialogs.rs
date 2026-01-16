@@ -14,6 +14,7 @@
 #![allow(clippy::collapsible_else_if)]
 
 use eframe::egui::{self, Color32, Key, RichText};
+use rust_i18n::t;
 use std::path::PathBuf;
 
 /// State for an active file operation dialog.
@@ -121,9 +122,9 @@ impl FileOperationDialog {
             } => {
                 result = show_create_dialog(
                     ctx,
-                    "New File",
+                    &t!("dialog.file.new_file"),
                     "📄",
-                    "Enter file name:",
+                    &t!("dialog.file.enter_file_name"),
                     parent_dir,
                     name_input,
                     error_message,
@@ -140,9 +141,9 @@ impl FileOperationDialog {
             } => {
                 result = show_create_dialog(
                     ctx,
-                    "New Folder",
+                    &t!("dialog.file.new_folder"),
                     "📁",
-                    "Enter folder name:",
+                    &t!("dialog.file.enter_folder_name"),
                     parent_dir,
                     name_input,
                     error_message,
@@ -217,9 +218,9 @@ fn show_create_dialog(
             let response = ui.add(
                 egui::TextEdit::singleline(name_input)
                     .hint_text(if is_file {
-                        "filename.md"
+                        t!("dialog.file.hint_file")
                     } else {
-                        "folder-name"
+                        t!("dialog.file.hint_folder")
                     })
                     .desired_width(330.0),
             );
@@ -239,7 +240,7 @@ fn show_create_dialog(
 
             // Show parent directory
             ui.label(
-                RichText::new(format!("Location: {}", parent_dir.display()))
+                RichText::new(t!("dialog.file.location", path = parent_dir.display().to_string()))
                     .small()
                     .color(if is_dark {
                         Color32::from_rgb(150, 150, 160)
@@ -257,7 +258,7 @@ fn show_create_dialog(
                     let create_enabled = !name_input.trim().is_empty()
                         && !name_input.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']);
                     if ui
-                        .add_enabled(create_enabled, egui::Button::new("Create"))
+                        .add_enabled(create_enabled, egui::Button::new(t!("dialog.file.create")))
                         .clicked()
                         || (response.lost_focus()
                             && ctx.input(|i| i.key_pressed(Key::Enter))
@@ -266,7 +267,7 @@ fn show_create_dialog(
                         let new_path = parent_dir.join(name_input.trim());
                         if new_path.exists() {
                             *error_message =
-                                Some("A file or folder with this name already exists".to_string());
+                                Some(t!("dialog.file.exists_error").to_string());
                         } else if is_file {
                             result = FileOperationResult::CreateFile(new_path);
                         } else {
@@ -277,7 +278,7 @@ fn show_create_dialog(
                     ui.add_space(8.0);
 
                     // Cancel button
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(t!("dialog.confirm.cancel")).clicked() {
                         result = FileOperationResult::Cancelled;
                     }
                 });
@@ -308,7 +309,7 @@ fn show_rename_dialog(
     let is_dir = target_path.is_dir();
     let icon = if is_dir { "📁" } else { "📄" };
 
-    egui::Window::new(format!("{} Rename", icon))
+    egui::Window::new(format!("{} {}", icon, t!("dialog.file.rename")))
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -322,7 +323,7 @@ fn show_rename_dialog(
             ui.set_min_width(350.0);
 
             ui.add_space(8.0);
-            ui.label("Enter new name:");
+            ui.label(t!("dialog.file.enter_new_name"));
             ui.add_space(4.0);
 
             // Text input
@@ -352,7 +353,7 @@ fn show_rename_dialog(
 
                     // Rename button
                     if ui
-                        .add_enabled(rename_enabled, egui::Button::new("Rename"))
+                        .add_enabled(rename_enabled, egui::Button::new(t!("dialog.file.rename")))
                         .clicked()
                         || (response.lost_focus()
                             && ctx.input(|i| i.key_pressed(Key::Enter))
@@ -365,7 +366,7 @@ fn show_rename_dialog(
 
                         if new_path.exists() {
                             *error_message =
-                                Some("A file or folder with this name already exists".to_string());
+                                Some(t!("dialog.file.exists_error").to_string());
                         } else {
                             result = FileOperationResult::Rename {
                                 old: target_path.clone(),
@@ -377,7 +378,7 @@ fn show_rename_dialog(
                     ui.add_space(8.0);
 
                     // Cancel button
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(t!("dialog.confirm.cancel")).clicked() {
                         result = FileOperationResult::Cancelled;
                     }
                 });
@@ -405,13 +406,17 @@ fn show_delete_dialog(
 
     let is_dir = target_path.is_dir();
     let icon = if is_dir { "📁" } else { "📄" };
-    let item_type = if is_dir { "folder" } else { "file" };
+    let item_type = if is_dir {
+        t!("dialog.file.folder")
+    } else {
+        t!("dialog.file.file")
+    };
     let name = target_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
-    egui::Window::new("🗑️ Confirm Delete")
+    egui::Window::new(format!("🗑️ {}", t!("dialog.file.confirm_delete")))
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -426,10 +431,7 @@ fn show_delete_dialog(
 
             ui.add_space(8.0);
 
-            ui.label(format!(
-                "Are you sure you want to delete this {}?",
-                item_type
-            ));
+            ui.label(t!("dialog.file.delete_confirm", item_type = item_type.to_string()));
 
             ui.add_space(8.0);
 
@@ -444,7 +446,7 @@ fn show_delete_dialog(
             if is_dir {
                 ui.colored_label(
                     Color32::from_rgb(220, 160, 80),
-                    "⚠ This will delete the folder and all its contents!",
+                    t!("dialog.file.delete_folder_warning"),
                 );
                 ui.add_space(8.0);
             }
@@ -454,7 +456,7 @@ fn show_delete_dialog(
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Delete button (red)
                     let delete_button =
-                        egui::Button::new(RichText::new("Delete").color(Color32::WHITE))
+                        egui::Button::new(RichText::new(t!("dialog.file.delete")).color(Color32::WHITE))
                             .fill(Color32::from_rgb(200, 60, 60));
 
                     if ui.add(delete_button).clicked() {
@@ -464,7 +466,7 @@ fn show_delete_dialog(
                     ui.add_space(8.0);
 
                     // Cancel button
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(t!("dialog.confirm.cancel")).clicked() {
                         result = FileOperationResult::Cancelled;
                     }
                 });
@@ -546,7 +548,7 @@ impl GoToLineDialog {
             Color32::from_rgb(100, 100, 110)
         };
 
-        egui::Window::new("📍 Go to Line")
+        egui::Window::new(format!("📍 {}", t!("dialog.go_to_line.title")))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -560,7 +562,7 @@ impl GoToLineDialog {
                 ui.set_min_width(280.0);
 
                 ui.add_space(8.0);
-                ui.label("Enter line number:");
+                ui.label(t!("dialog.go_to_line.enter_line"));
                 ui.add_space(4.0);
 
                 // Text input
@@ -583,7 +585,7 @@ impl GoToLineDialog {
 
                 // Show line range hint
                 ui.label(
-                    RichText::new(format!("Range: 1 - {}", self.max_line))
+                    RichText::new(t!("dialog.go_to_line.range", max = self.max_line))
                         .small()
                         .color(muted_color),
                 );
@@ -606,7 +608,7 @@ impl GoToLineDialog {
 
                         // Go button - also triggers on Enter key when input is valid
                         let go_clicked = ui
-                            .add_enabled(is_valid, egui::Button::new("Go"))
+                            .add_enabled(is_valid, egui::Button::new(t!("dialog.go_to_line.go")))
                             .clicked();
 
                         if go_clicked || (enter_pressed && is_valid) {
@@ -620,7 +622,7 @@ impl GoToLineDialog {
                         ui.add_space(8.0);
 
                         // Cancel button
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(t!("dialog.confirm.cancel")).clicked() {
                             result = GoToLineResult::Cancelled;
                         }
                     });

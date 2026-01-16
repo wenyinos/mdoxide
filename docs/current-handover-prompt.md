@@ -7,8 +7,8 @@
 - Run `cargo build` / `cargo check` after changes to verify code compiles
 - Follow existing code patterns and conventions
 - Update task status via Task Master when starting (`in-progress`) and completing (`done`)
-- Use Context7 MCP tool to fetch library documentation when needed (e.g., rust-i18n, egui)
-- Document by feature (e.g., `editor-widget.md`), not by task (e.g., `task-1.md`)
+- Use Context7 MCP tool to fetch library documentation when needed (e.g., egui)
+- Document by feature (e.g., `config-persistence.md`), not by task (e.g., `task-35.md`)
 - Update `docs/index.md` when adding new documentation
 
 ## Environment
@@ -17,72 +17,79 @@
 - **Path:** G:\DEV\markDownNotepad
 - **GitHub:** https://github.com/OlaProeis/Ferrite
 - **Version:** Working on v0.2.5
-- **Tech Stack:** Rust, egui 0.28, eframe 0.28, comrak 0.22, clap 4
+- **Tech Stack:** Rust, egui 0.28, eframe 0.28, comrak 0.22, pulldown-cmark 0.11, clap 4, rust-i18n 3, git2 0.19, csv 1.3, palette 0.7, chrono 0.4
 
 ---
 
-## Current Task
+## Current Task: Add custom font selection
 
 | Field | Value |
 |-------|-------|
-| **ID** | 1 |
-| **Title** | Add rust-i18n dependency and setup locales directory structure |
+| **ID** | 39 |
+| **Title** | Add custom font selection |
 | **Status** | `pending` |
-| **Priority** | High |
-| **Dependencies** | None |
+| **Priority** | Medium |
+| **Dependencies** | 3 |
+| **Issue** | [#15](https://github.com/OlaProeis/Ferrite/issues/15) |
 
 ### Description
 
-Integrate rust-i18n crate and create locales directory with en.yaml as base language. This is the foundation for all i18n work in v0.2.5.
+Allow users to select preferred font for editor and UI, important for CJK regional glyph preferences.
 
 ### Implementation Notes
 
-1. **Add dependency to Cargo.toml:**
-   ```toml
-   rust-i18n = "3"  # Check latest version on crates.io
-   ```
+1. **Settings UI for font selection**
+   - Add section in Settings panel for font configuration
+   - Separate options for: editor font, UI font, monospace font
+   - List available system fonts using `font-kit` crate
 
-2. **Create locales directory structure:**
-   ```
-   locales/
-   └── en.yaml    # English (base language)
-   ```
+2. **CJK regional glyph support**
+   - Important for users needing specific regional variants
+   - Simplified Chinese vs Traditional Chinese vs Japanese vs Korean glyphs
+   - Font selection affects which glyph variants are rendered
 
-3. **Configure rust-i18n in main.rs or lib.rs:**
-   ```rust
-   rust_i18n::i18n!("locales");
-   ```
+3. **Apply changes immediately**
+   - Font changes should apply without restart
+   - Store selections in `config.json`
 
-4. **Create initial en.yaml with a few test strings:**
-   ```yaml
-   app:
-     name: "Ferrite"
-     version: "v0.2.5"
-   menu:
-     file: "File"
-     edit: "Edit"
-   ```
-
-5. **Test basic usage:**
-   ```rust
-   use rust_i18n::t;
-   let text = t!("menu.file");  // Returns "File"
-   ```
-
-### Test Strategy
-
-| Test | Approach |
-|------|----------|
-| Compilation | `cargo build` passes without warnings |
-| Basic usage | Add a test `t!()` call somewhere visible |
-| Fallback | Missing keys should fallback gracefully |
-
----
-
-## Key Files
+### Key Files
 
 | File | Purpose |
 |------|---------|
-| `Cargo.toml` | Add rust-i18n dependency |
-| `src/main.rs` | Add i18n! macro initialization |
-| `locales/en.yaml` | English translation file (create new) |
+| `src/fonts.rs` | Font loading and `EditorFont` enum |
+| `src/ui/settings.rs` | Settings panel UI |
+| `src/config/settings.rs` | Settings struct with font preferences |
+| `src/app.rs` | Font application at runtime |
+
+### Relevant Dependencies
+
+- `font-kit` - System font enumeration and loading
+- `egui::FontDefinitions` - egui font configuration
+
+### Test Strategy
+
+- Test font picker shows system fonts
+- Test changing editor font applies to editor
+- Test CJK fonts render correct regional glyphs
+- Test persistence across restart
+
+---
+
+## Recently Completed (v0.2.5)
+
+- Task 38: Windows borderless window fixes (top edge resize, fullscreen toggle)
+- Task 37: macOS Intel CPU optimization (idle repaint scheduling)
+- Task 36: Fix line width in rendered/split view (centering behavior, pane boundaries)
+- Task 35: Fix config.json persistence (window state dirty flag)
+- Task 34: CJK paragraph indentation (done)
+- Task 28: Zen mode centering in rendered/split views (done)
+- Task 27: Table editing - data sync fixed
+- Task 26: Quick switcher mouse support (done)
+- Task 25: Keyboard shortcut customization (done)
+
+## Deferred
+
+- Task 29, 30: Mermaid toolbar/help (→ v0.3.0)
+- Task 31: Chinese translation (waiting for contributor)
+- Task 32: Mermaid code cleanup (→ v0.2.6)
+- Task 33: Weblate setup (manual task for maintainer)

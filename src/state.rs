@@ -48,6 +48,10 @@ pub enum FileType {
     Yaml,
     /// TOML files (.toml)
     Toml,
+    /// CSV files (.csv)
+    Csv,
+    /// TSV files (.tsv)
+    Tsv,
     /// Unknown or unsupported file type
     Unknown,
 }
@@ -68,6 +72,8 @@ impl FileType {
             "json" => Self::Json,
             "yaml" | "yml" => Self::Yaml,
             "toml" => Self::Toml,
+            "csv" => Self::Csv,
+            "tsv" => Self::Tsv,
             _ => Self::Unknown,
         }
     }
@@ -82,6 +88,11 @@ impl FileType {
         matches!(self, Self::Json | Self::Yaml | Self::Toml)
     }
 
+    /// Check if this is a tabular data file (CSV or TSV).
+    pub fn is_tabular(&self) -> bool {
+        matches!(self, Self::Csv | Self::Tsv)
+    }
+
     /// Get a display name for this file type.
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -89,6 +100,8 @@ impl FileType {
             Self::Json => "JSON",
             Self::Yaml => "YAML",
             Self::Toml => "TOML",
+            Self::Csv => "CSV",
+            Self::Tsv => "TSV",
             Self::Unknown => "Unknown",
         }
     }
@@ -1382,6 +1395,14 @@ impl Tab {
         self.content_version
     }
 
+    /// Increment the content version counter.
+    ///
+    /// Call this when content is modified programmatically (e.g., snippet expansion)
+    /// to signal to UI widgets that they need to re-read content from the source.
+    pub fn increment_content_version(&mut self) {
+        self.content_version = self.content_version.wrapping_add(1);
+    }
+
     /// Record that an edit was made externally (e.g., by egui's TextEdit).
     ///
     /// Call this AFTER content has been modified, passing the OLD content
@@ -1888,6 +1909,8 @@ pub struct UiState {
     pub toast_expires_at: Option<f64>,
     /// Whether the recent files popup is open
     pub show_recent_files_popup: bool,
+    /// Whether the recent folders popup is open
+    pub show_recent_folders_popup: bool,
     /// Whether Zen Mode is enabled (distraction-free writing)
     pub zen_mode: bool,
     /// Go to Line dialog state (None = closed)
@@ -2190,9 +2213,11 @@ impl AppState {
                 path.display(), auto_save_default, default_view_mode);
         }
 
-        // Update recent files
+        // Update recent files and save immediately for persistence
         self.settings.add_recent_file(path.clone());
         self.settings_dirty = true;
+        // Save immediately to survive app crashes/force-kills
+        self.save_settings_if_dirty();
 
         Ok(new_index)
     }
@@ -2311,9 +2336,11 @@ impl AppState {
         tab.path = Some(path.clone());
         tab.mark_saved();
 
-        // Update recent files
+        // Update recent files and save immediately for persistence
         self.settings.add_recent_file(path.clone());
         self.settings_dirty = true;
+        // Save immediately to survive app crashes/force-kills
+        self.save_settings_if_dirty();
 
         info!("Saved file as: {}", path.display());
         Ok(())
@@ -2553,15 +2580,28 @@ impl AppState {
                     has_unsaved_content: tab.is_modified(),
                     file_mtime,
                     original_content_hash,
+                    csv_delimiter: None, // Will be populated by inject_csv_delimiters in app.rs
                 }
             })
             .collect();
 
         let app_mode = if let Some(root) = self.app_mode.workspace_root() {
+            // Canonicalize and normalize the path to ensure consistent storage across restarts
+            // normalize_path removes Windows \\?\ prefix from canonicalized paths
+            let canonical_root = root
+                .canonicalize()
+                .map(crate::path_utils::normalize_path)
+                .unwrap_or_else(|_| root.clone());
+            debug!(
+                "Capturing session state with workspace: {} (canonical: {})",
+                root.display(),
+                canonical_root.display()
+            );
             SessionAppMode::Workspace {
-                root: Some(root.clone()),
+                root: Some(canonical_root),
             }
         } else {
+            debug!("Capturing session state in single-file mode");
             SessionAppMode::SingleFile
         };
 
@@ -2677,14 +2717,70 @@ impl AppState {
 
         // Restore workspace mode if it was active
         if let crate::config::SessionAppMode::Workspace { root: Some(root) } = &session.app_mode {
-            if root.exists() && root.is_dir() {
-                info!("Restoring workspace: {}", root.display());
-                if let Err(e) = self.open_workspace(root.clone()) {
-                    warn!("Failed to restore workspace {}: {}", root.display(), e);
-                }
+            // Validate the path is not empty
+            if root.as_os_str().is_empty() {
+                debug!("Session had workspace mode but path was empty, starting in single-file mode");
             } else {
-                warn!("Workspace path no longer exists: {}", root.display());
+                debug!(
+                    "Session had workspace mode active, attempting to restore: {}",
+                    root.display()
+                );
+
+                // Try to canonicalize the path to resolve any relative paths or symlinks
+                // normalize_path removes Windows \\?\ prefix from canonicalized paths
+                let canonical_root = root
+                    .canonicalize()
+                    .map(crate::path_utils::normalize_path)
+                    .unwrap_or_else(|e| {
+                        debug!(
+                            "Could not canonicalize workspace path {}: {}",
+                            root.display(),
+                            e
+                        );
+                        root.clone()
+                    });
+
+                if !canonical_root.exists() {
+                    // Workspace path no longer exists - could be deleted or moved
+                    warn!(
+                        "Workspace folder no longer exists: {}. Starting in single-file mode.",
+                        canonical_root.display()
+                    );
+                    debug!(
+                        "The saved workspace path does not exist on disk. \
+                         The folder may have been moved, renamed, or deleted. \
+                         Original path: {}, canonical: {}",
+                        root.display(),
+                        canonical_root.display()
+                    );
+                } else if !canonical_root.is_dir() {
+                    // Path exists but is not a directory - unlikely but handle it
+                    warn!(
+                        "Workspace path exists but is not a directory: {}. Starting in single-file mode.",
+                        canonical_root.display()
+                    );
+                } else {
+                    // Path exists and is a directory - try to open it
+                    info!("Restoring workspace: {}", canonical_root.display());
+                    match self.open_workspace(canonical_root.clone()) {
+                        Ok(_) => {
+                            debug!(
+                                "Successfully restored workspace mode for: {}",
+                                canonical_root.display()
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to restore workspace '{}': {}. Starting in single-file mode.",
+                                canonical_root.display(),
+                                e
+                            );
+                        }
+                    }
+                }
             }
+        } else {
+            debug!("Session was in single-file mode, no workspace to restore");
         }
 
         info!(
@@ -2940,6 +3036,10 @@ mod tests {
         assert_eq!(FileType::from_extension("yaml"), FileType::Yaml);
         assert_eq!(FileType::from_extension("yml"), FileType::Yaml);
         assert_eq!(FileType::from_extension("toml"), FileType::Toml);
+        assert_eq!(FileType::from_extension("csv"), FileType::Csv);
+        assert_eq!(FileType::from_extension("CSV"), FileType::Csv);
+        assert_eq!(FileType::from_extension("tsv"), FileType::Tsv);
+        assert_eq!(FileType::from_extension("TSV"), FileType::Tsv);
         assert_eq!(FileType::from_extension("txt"), FileType::Unknown);
         assert_eq!(FileType::from_extension("rs"), FileType::Unknown);
     }
@@ -2959,6 +3059,8 @@ mod tests {
             FileType::Yaml
         );
         assert_eq!(FileType::from_path(Path::new("Cargo.toml")), FileType::Toml);
+        assert_eq!(FileType::from_path(Path::new("data.csv")), FileType::Csv);
+        assert_eq!(FileType::from_path(Path::new("data.tsv")), FileType::Tsv);
         assert_eq!(FileType::from_path(Path::new("main.rs")), FileType::Unknown);
         assert_eq!(
             FileType::from_path(Path::new("no_extension")),
@@ -2975,12 +3077,22 @@ mod tests {
         assert!(FileType::Yaml.is_structured());
         assert!(FileType::Toml.is_structured());
         assert!(!FileType::Markdown.is_structured());
+        assert!(!FileType::Csv.is_structured());
+        assert!(!FileType::Tsv.is_structured());
         assert!(!FileType::Unknown.is_structured());
+
+        assert!(FileType::Csv.is_tabular());
+        assert!(FileType::Tsv.is_tabular());
+        assert!(!FileType::Json.is_tabular());
+        assert!(!FileType::Markdown.is_tabular());
+        assert!(!FileType::Unknown.is_tabular());
 
         assert_eq!(FileType::Markdown.display_name(), "Markdown");
         assert_eq!(FileType::Json.display_name(), "JSON");
         assert_eq!(FileType::Yaml.display_name(), "YAML");
         assert_eq!(FileType::Toml.display_name(), "TOML");
+        assert_eq!(FileType::Csv.display_name(), "CSV");
+        assert_eq!(FileType::Tsv.display_name(), "TSV");
         assert_eq!(FileType::Unknown.display_name(), "Unknown");
     }
 

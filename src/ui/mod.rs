@@ -19,7 +19,7 @@ pub use about::AboutPanel;
 pub use dialogs::{FileOperationDialog, FileOperationResult, GoToLineDialog, GoToLineResult};
 pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::get_app_icon;
-pub use outline_panel::OutlinePanel;
+pub use outline_panel::{OutlinePanel, OutlinePanelTab};
 pub use pipeline::{PipelinePanel, TabPipelineState};
 pub use quick_switcher::QuickSwitcher;
 pub use ribbon::{Ribbon, RibbonAction};

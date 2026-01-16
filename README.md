@@ -7,6 +7,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/OlaProeis/Ferrite?style=flat-square)](https://github.com/OlaProeis/Ferrite/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/OlaProeis/Ferrite?style=flat-square)](https://github.com/OlaProeis/Ferrite/issues)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/OlaProeis/Ferrite/release.yml?branch=master&style=flat-square)](https://github.com/OlaProeis/Ferrite/actions)
+[![Translation Status](https://hosted.weblate.org/widget/ferrite/ferrite-ui/svg-badge.svg)](https://hosted.weblate.org/engage/ferrite/)
 
 </div>
 
@@ -57,7 +58,7 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.3 Released:** Editor productivity features! Go to Line (Ctrl+G), Duplicate Line (Ctrl+Shift+D), Move Line (Alt+↑/↓), Auto-close brackets/quotes, Smart Paste for links, and configurable line width. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.5 Released:** Major Mermaid improvements! Modular refactor, YAML frontmatter, parallel edges (`A --> B & C`), classDef/linkStyle styling, subgraph improvements, and much more. Plus: split view dual editing, keyboard shortcut customization, git auto-refresh, and bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## Features
 
@@ -91,7 +92,7 @@ Native rendering of 11 diagram types directly in the preview:
 - Flowchart, Sequence, Pie, State, Mindmap
 - Class, ER, Git Graph, Gantt, Timeline, User Journey
 
-> ⚠️ **Current Limitations:** Mermaid support is basic and has known issues. Complex diagrams may not render correctly. Missing features include: YAML frontmatter (`title:`, `config:`), parallel edge syntax (`A --> B & C`), and `style`/`classDef` directives. Improvements are planned for v0.2.5. See [ROADMAP.md](ROADMAP.md) for details.
+> **v0.2.5 Mermaid Update:** Native Mermaid rendering now supports YAML frontmatter, parallel edges (`A --> B & C`), `classDef`/`linkStyle` styling, improved subgraphs, and more. Complex diagrams may still have rendering differences from mermaid.js. See [ROADMAP.md](ROADMAP.md) for planned improvements.
 
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
@@ -348,6 +349,14 @@ See [ROADMAP.md](ROADMAP.md) for planned features and known issues.
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Help Translate
+
+Ferrite is being translated into multiple languages with help from the community.
+
+[![Translation Status](https://hosted.weblate.org/widget/ferrite/ferrite-ui/multi-auto.svg)](https://hosted.weblate.org/engage/ferrite/)
+
+**[Help translate Ferrite on Weblate](https://hosted.weblate.org/engage/ferrite/)** - no coding required!
 
 <details>
 <summary><strong>Quick Start for Contributors</strong></summary>

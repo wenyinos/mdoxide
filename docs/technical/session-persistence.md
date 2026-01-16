@@ -128,6 +128,40 @@ Currently, conflict information is tracked but not actively surfaced to the user
 - `src/state.rs` - `capture_session_state()` and `restore_from_session_result()` methods
 - `src/app.rs` - Lifecycle integration (startup, periodic saves, shutdown)
 
+## Workspace Session Persistence
+
+### Workspace Path Handling
+
+The session system stores the workspace root path when in workspace mode:
+
+1. **On Save**: The workspace path is canonicalized before saving to ensure consistent storage across restarts and to resolve any relative paths or symlinks.
+
+2. **On Restore**: The system:
+   - Validates the saved path is non-empty
+   - Attempts to canonicalize the path for consistency
+   - Checks if the path exists on disk
+   - Verifies it's actually a directory
+   - Falls back to single-file mode if any validation fails
+
+### Debug Logging
+
+Comprehensive debug logging is available for troubleshooting session persistence issues. Enable debug logging with `--log-level debug` to see:
+
+- Session file selection (recovery vs. session.json)
+- File modification time comparisons
+- Workspace path during save/load operations
+- Path canonicalization results
+- Validation failures and reasons
+
+### Error Handling for Invalid Paths
+
+The system handles various error conditions gracefully:
+
+- **Empty path**: Session starts in single-file mode
+- **Non-existent path**: Warning logged, starts in single-file mode
+- **Path not a directory**: Warning logged, starts in single-file mode
+- **Workspace open failure**: Warning logged with error details, starts in single-file mode
+
 ## Testing Strategy
 
 ### Unit Tests

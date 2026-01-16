@@ -95,6 +95,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Generate macOS .icns icon
+        run: |
+          if [ -d "assets/icons/macos/app.iconset" ]; then
+            iconutil -c icns assets/icons/macos/app.iconset -o assets/icons/macos/app.icns
+            echo "Generated app.icns"
+          else
+            echo "Warning: app.iconset not found, skipping .icns generation"
+          fi
+
       - name: Build release
         run: cargo build --release
 

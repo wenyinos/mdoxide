@@ -89,6 +89,7 @@ task-master show <next-task-id>
 
 ## Notes
 
+- **Use MCP tools instead of CLI** — When using Task Master, prefer the MCP tools (e.g., `set_task_status`, `next_task`, `get_task`) over CLI commands. MCP tools provide better integration and performance.
 - Keep the handover **minimal and focused** on the next task
 - Don't include full task lists or project overviews
 - Templates available in `docs/handover/` if needed:

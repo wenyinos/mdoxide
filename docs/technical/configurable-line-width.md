@@ -75,21 +75,31 @@ The setting takes effect immediately without restart.
 
 ## Interaction with Zen Mode
 
-- In Zen Mode, the `zen_max_column_width` setting takes precedence
-- When not in Zen Mode, `max_line_width` is used
-- Both result in centered, width-constrained text when set
+- **Both Zen Mode and non-Zen Mode use the same `max_line_width` setting**
+- The only difference is centering behavior:
+  - **Zen Mode**: Content is constrained AND centered horizontally
+  - **Non-Zen Mode**: Content is constrained but left-aligned (no centering)
+- The legacy `zen_max_column_width` setting is no longer used for width calculation
+
+## Pane Boundary Behavior (Fix from Task 36)
+
+When `max_line_width` is set but the available pane width is smaller than the configured width:
+- Content width is capped to the available pane width
+- Text wraps at the pane edge instead of overflowing
+- This applies to split view panes when resizing the divider
 
 ## Test Strategy
 
 | Scenario | Expected Behavior |
 |----------|-------------------|
-| Set to Off | Current behavior unchanged in all views |
-| Set to 80 characters | Text wraps at ~80 columns, centered in Raw view |
-| Switch to Rendered/Split view | Same width and centering |
+| Set to Off | Full width, left-aligned in all views |
+| Set to 80 characters, wide window | Text constrained to ~80 columns, left-aligned |
+| Set to 80 characters, Zen Mode ON | Text constrained to ~80 columns, **centered** |
+| Switch to Split view | Same width constraint in both panes |
+| Narrow the split pane below 80 chars | Text wraps at pane edge (no overflow) |
 | Toggle 80/100/120 chars | Width changes immediately without restart |
 | Custom pixel width (600px) | Column width ~600px |
 | Extreme custom values | Clamped to 400-2000px range |
-| Zen mode | Respects zen_max_column_width (not max_line_width) |
 | App restart | Setting persisted and applied |
 
 ## Files Modified

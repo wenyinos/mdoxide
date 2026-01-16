@@ -9,9 +9,10 @@
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::ptr_arg)]
 
-use eframe::egui::{self, Color32, Key, RichText, Sense};
+use eframe::egui::{self, Color32, Key, LayerId, Order, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use rust_i18n::t;
 use std::path::PathBuf;
 
 /// Maximum number of results to show in the quick switcher.
@@ -189,7 +190,7 @@ impl QuickSwitcher {
 
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.query)
-                                    .hint_text("Search files...")
+                                    .hint_text(t!("quick_switcher.placeholder"))
                                     .frame(false)
                                     .desired_width(450.0)
                                     .font(egui::TextStyle::Body),
@@ -215,7 +216,7 @@ impl QuickSwitcher {
                             ui.horizontal(|ui| {
                                 ui.add_space(16.0);
                                 ui.label(
-                                    RichText::new("No matching files")
+                                    RichText::new(t!("quick_switcher.no_results"))
                                         .color(secondary_color)
                                         .italics(),
                                 );
@@ -225,29 +226,9 @@ impl QuickSwitcher {
                             for (idx, result) in results.iter().enumerate() {
                                 let is_selected = idx == self.selected_index;
 
-                                let response = ui
+                                // Draw content first with horizontal layout
+                                let row_response = ui
                                     .horizontal(|ui| {
-                                        let row_response = ui.interact(
-                                            ui.available_rect_before_wrap(),
-                                            ui.id().with(idx),
-                                            Sense::click(),
-                                        );
-
-                                        // Draw background
-                                        if is_selected {
-                                            ui.painter().rect_filled(
-                                                row_response.rect.expand2(egui::vec2(8.0, 2.0)),
-                                                4.0,
-                                                selected_bg,
-                                            );
-                                        } else if row_response.hovered() {
-                                            ui.painter().rect_filled(
-                                                row_response.rect.expand2(egui::vec2(8.0, 2.0)),
-                                                4.0,
-                                                hover_bg,
-                                            );
-                                        }
-
                                         ui.add_space(16.0);
 
                                         // File icon
@@ -275,7 +256,7 @@ impl QuickSwitcher {
                                             );
                                         }
 
-                                        // Recent indicator
+                                        // Recent indicator (right-aligned)
                                         if result.is_recent {
                                             ui.with_layout(
                                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -286,15 +267,43 @@ impl QuickSwitcher {
                                                             .color(secondary_color)
                                                             .size(12.0),
                                                     )
-                                                    .on_hover_text("Recently opened");
+                                                    .on_hover_text(t!("quick_switcher.recent_tooltip"));
                                                 },
                                             );
                                         }
-
-                                        row_response
                                     })
-                                    .inner;
+                                    .response;
 
+                                // Create clickable interaction over the entire row
+                                // This is placed AFTER content so it captures all clicks
+                                let row_rect = row_response.rect.expand2(egui::vec2(8.0, 2.0));
+                                let response = ui.interact(
+                                    row_rect,
+                                    ui.id().with(("row_click", idx)),
+                                    Sense::click(),
+                                );
+
+                                // Sync selection with hover for consistent mouse support
+                                if response.hovered() {
+                                    self.selected_index = idx;
+                                }
+
+                                // Draw background behind content using background layer
+                                let show_highlight = is_selected || response.hovered();
+                                if show_highlight {
+                                    // Paint to background layer so it appears behind text
+                                    let bg_layer = LayerId::new(
+                                        Order::Background,
+                                        ui.id().with(("row_bg", idx)),
+                                    );
+                                    ui.ctx().layer_painter(bg_layer).rect_filled(
+                                        row_rect,
+                                        4.0,
+                                        if is_selected { selected_bg } else { hover_bg },
+                                    );
+                                }
+
+                                // Handle click to open file
                                 if response.clicked() {
                                     output.selected_file = Some(result.path.clone());
                                     output.closed = true;
@@ -310,7 +319,7 @@ impl QuickSwitcher {
                         ui.horizontal(|ui| {
                             ui.add_space(12.0);
                             ui.label(
-                                RichText::new("↑↓ Navigate  ⏎ Open  Esc Close")
+                                RichText::new(t!("quick_switcher.keyboard_hints"))
                                     .color(secondary_color)
                                     .small(),
                             );

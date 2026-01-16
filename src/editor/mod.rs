@@ -15,9 +15,10 @@ mod widget;
 // Only export what's actually used by the app
 pub use find_replace::{FindReplacePanel, FindState};
 pub use line_numbers::count_lines;
-pub use minimap::Minimap;
+pub use minimap::{Minimap, SemanticMinimap};
 pub use outline::{
-    extract_outline_for_file, DocumentOutline, OutlineItem, OutlineType, StructuredStats,
+    extract_outline, extract_outline_for_file, ContentType, DocumentOutline, OutlineItem,
+    OutlineType, StructuredStats,
 };
-pub use stats::TextStats;
+pub use stats::{DocumentStats, TextStats};
 pub use widget::{EditorWidget, SearchHighlights};

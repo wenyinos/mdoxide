@@ -1,5 +1,7 @@
 # Editable Tables Widget
 
+**Version**: v0.2.5
+
 ## Overview
 
 The `EditableTable` widget provides a fully interactive table editing experience in the WYSIWYG markdown editor. Users can edit cell content, add/remove rows and columns, and control column alignment - all while the widget automatically regenerates valid GitHub Flavored Markdown (GFM) table syntax.
@@ -7,6 +9,8 @@ The `EditableTable` widget provides a fully interactive table editing experience
 ## Features
 
 - **Editable Cells**: Each cell renders as a `TextEdit` field for inline editing
+- **Deferred Updates**: Cell edits are buffered and only committed when focus leaves the table
+- **Keyboard Navigation**: Tab/Enter/Escape to navigate between cells
 - **Dynamic Cell Width**: Columns auto-size based on content (min 60px, max 400px)
 - **Add/Remove Rows**: `➕ Add row` button and 🗑 delete buttons per row
 - **Add/Remove Columns**: `➕` button to add columns, `×` buttons to delete columns
@@ -14,7 +18,42 @@ The `EditableTable` widget provides a fully interactive table editing experience
 - **Theme-Aware Styling**: Adapts colors for dark and light modes
 - **Persistent State**: Table data persists across frames using egui's memory
 
-> **Note:** Column alignment controls are disabled in the UI but the data structure (`TableData.alignments`) supports them for future implementation.
+> **Note:** Column alignment controls are available via the alignment buttons in the UI.
+
+## Edit Behavior
+
+### Deferred Updates
+
+Table cells use a deferred update model to prevent focus loss during editing:
+
+1. **While typing**: Edits are stored in memory but NOT committed to source
+2. **On focus loss**: When clicking outside the table, all changes are committed
+3. **On keyboard navigation**: Tab/Enter move focus between cells without committing
+4. **On structural changes**: Add/remove row/column commits immediately
+
+This prevents the re-parsing loop that would otherwise cause cursor focus loss after each keystroke.
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| Tab | Move to next cell (right, then wrap to next row) |
+| Shift+Tab | Move to previous cell (left, then wrap to previous row) |
+| Enter | Move to next row (same column) |
+| Escape | Exit table editing (commits changes) |
+
+### Focus State Tracking
+
+The `TableEditState` struct tracks focus across frames:
+
+```rust
+pub struct TableEditState {
+    pub focused_cell: Option<(usize, usize)>,    // Currently focused cell
+    pub pending_focus: Option<(usize, usize)>,   // Cell to focus next frame
+    pub had_focus_last_frame: bool,              // For focus loss detection
+    pub content_modified: bool,                   // Track if edits were made
+}
+```
 
 ## Architecture
 
@@ -246,10 +285,12 @@ Potential improvements for future iterations:
 4. **Multi-select**: Select multiple cells for bulk operations
 5. **Copy/Paste**: Clipboard support for table data
 6. **Column Sorting**: Sort rows by column values
-7. **Undo/Redo**: Table-specific undo stack
+7. **Live Preview**: Show changes in split view while typing (currently deferred until focus loss)
 
 ## Related Documentation
 
+- [Table Editing Focus Fix](./table-editing-focus.md) - Details on the deferred update solution
 - [WYSIWYG Editor](./wysiwyg-editor.md) - Overall editor architecture
 - [Editable Widgets](./editable-widgets.md) - Other editable widgets (headings, lists, etc.)
 - [Markdown Parser](./markdown-parser.md) - AST structure for tables
+- [Split View](./split-view.md) - Split view mode with editable preview pane

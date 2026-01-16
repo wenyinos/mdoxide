@@ -16,7 +16,7 @@
 
 use crate::config::Theme;
 use crate::markdown::parser::{HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
-use eframe::egui::{self, Color32, FontId, RichText, TextEdit, Ui};
+use eframe::egui::{self, Color32, FontId, Key, RichText, TextEdit, Ui};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget Output
@@ -29,6 +29,8 @@ pub struct WidgetOutput {
     pub changed: bool,
     /// The new markdown text for this element
     pub markdown: String,
+    /// Whether any cell currently has focus (for tables)
+    pub has_focus: bool,
 }
 
 impl WidgetOutput {
@@ -37,6 +39,7 @@ impl WidgetOutput {
         Self {
             changed: false,
             markdown,
+            has_focus: false,
         }
     }
 
@@ -45,7 +48,14 @@ impl WidgetOutput {
         Self {
             changed: true,
             markdown,
+            has_focus: false,
         }
+    }
+
+    /// Set the focus state.
+    pub fn with_focus(mut self, has_focus: bool) -> Self {
+        self.has_focus = has_focus;
+        self
     }
 }
 
@@ -909,6 +919,87 @@ fn serialize_table(
 // Editable Table Widget
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// State for tracking table cell editing and navigation.
+#[derive(Debug, Clone, Default)]
+pub struct TableEditState {
+    /// Currently focused cell (row, column). None if no cell is focused.
+    pub focused_cell: Option<(usize, usize)>,
+    /// Cell that should receive focus on the next frame.
+    pub pending_focus: Option<(usize, usize)>,
+    /// Whether any cell had focus in the previous frame.
+    /// Used to detect when focus leaves the table entirely.
+    pub had_focus_last_frame: bool,
+    /// Whether any cell content was modified while editing.
+    /// Reset when focus leaves the table.
+    pub content_modified: bool,
+}
+
+impl TableEditState {
+    /// Create a new table edit state with no focused cell.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Request focus on a specific cell.
+    pub fn focus_cell(&mut self, row: usize, col: usize) {
+        self.pending_focus = Some((row, col));
+    }
+
+    /// Clear focus from all cells.
+    pub fn clear_focus(&mut self) {
+        self.focused_cell = None;
+        self.pending_focus = None;
+    }
+
+    /// Move to the next cell (right, then down to next row).
+    pub fn move_next(&mut self, num_rows: usize, num_cols: usize) {
+        if let Some((row, col)) = self.focused_cell {
+            if col + 1 < num_cols {
+                // Move right
+                self.pending_focus = Some((row, col + 1));
+            } else if row + 1 < num_rows {
+                // Move to first cell of next row
+                self.pending_focus = Some((row + 1, 0));
+            }
+            // If at last cell, stay there
+        }
+    }
+
+    /// Move to the previous cell (left, then up to previous row).
+    pub fn move_prev(&mut self, num_cols: usize) {
+        if let Some((row, col)) = self.focused_cell {
+            if col > 0 {
+                // Move left
+                self.pending_focus = Some((row, col - 1));
+            } else if row > 0 {
+                // Move to last cell of previous row
+                self.pending_focus = Some((row - 1, num_cols - 1));
+            }
+            // If at first cell, stay there
+        }
+    }
+
+    /// Move to the cell in the next row (same column).
+    pub fn move_down(&mut self, num_rows: usize) {
+        if let Some((row, col)) = self.focused_cell {
+            if row + 1 < num_rows {
+                self.pending_focus = Some((row + 1, col));
+            }
+            // If at last row, stay there
+        }
+    }
+
+    /// Move to the cell in the previous row (same column).
+    pub fn move_up(&mut self) {
+        if let Some((row, col)) = self.focused_cell {
+            if row > 0 {
+                self.pending_focus = Some((row - 1, col));
+            }
+            // If at first row, stay there
+        }
+    }
+}
+
 /// State for an editable table cell.
 #[derive(Debug, Clone)]
 pub struct TableCellData {
@@ -1268,83 +1359,87 @@ impl<'a> EditableTable<'a> {
 
         let table_id = self.id.unwrap_or_else(|| ui.id().with("editable_table"));
 
-        // Track original state for change detection
-        let original_markdown = self.data.to_markdown();
+        // Get or create the table edit state
+        let mut edit_state: TableEditState = ui.memory_mut(|mem| {
+            mem.data
+                .get_temp_mut_or_insert_with(table_id.with("edit_state"), TableEditState::new)
+                .clone()
+        });
+
+        // Track if we should signal a change to the source
         let mut changed = false;
+        
+        // Track if any cell has focus this frame
+        let mut any_cell_has_focus = false;
 
         // Track actions to perform after iteration (to avoid borrow issues)
         let mut action: Option<TableAction> = None;
 
+        // Track which cell to request focus on
+        let pending_focus = edit_state.pending_focus.take();
+
         // Determine dark mode for styling
         let is_dark = colors.text.r() > 128;
 
-        // Table styling colors
+        // Table styling colors - modern, subtle palette
         let header_bg = if is_dark {
-            egui::Color32::from_rgb(45, 50, 60)
+            egui::Color32::from_rgb(40, 44, 52)
         } else {
-            egui::Color32::from_rgb(240, 242, 245)
+            egui::Color32::from_rgb(248, 249, 250)
         };
 
         let cell_bg = if is_dark {
-            egui::Color32::from_rgb(35, 38, 45)
+            egui::Color32::from_rgb(30, 33, 40)
         } else {
             egui::Color32::from_rgb(255, 255, 255)
         };
 
         let border_color = if is_dark {
-            egui::Color32::from_rgb(60, 65, 75)
+            egui::Color32::from_rgb(55, 60, 70)
         } else {
-            egui::Color32::from_rgb(200, 205, 210)
+            egui::Color32::from_rgb(222, 226, 230)
+        };
+
+        let hover_bg = if is_dark {
+            egui::Color32::from_rgb(50, 55, 65)
+        } else {
+            egui::Color32::from_rgb(240, 242, 245)
+        };
+
+        let control_color = if is_dark {
+            egui::Color32::from_rgb(140, 145, 155)
+        } else {
+            egui::Color32::from_rgb(130, 135, 145)
+        };
+
+        let control_hover_color = if is_dark {
+            egui::Color32::from_rgb(200, 205, 215)
+        } else {
+            egui::Color32::from_rgb(80, 85, 95)
         };
 
         ui.add_space(4.0);
 
-        // Main table frame
+        // Main table frame with modern styling
         egui::Frame::none()
             .stroke(egui::Stroke::new(1.0, border_color))
             .inner_margin(0.0)
-            .rounding(4.0)
-            .show(ui, |ui| {
-                // Alignment controls row (if enabled and there are columns)
-                if self.show_alignment_controls && self.data.num_columns > 0 {
-                    ui.horizontal(|ui| {
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Align:").small().color(colors.muted));
-
-                        for col in 0..self.data.num_columns {
-                            let align = self
-                                .data
-                                .alignments
-                                .get(col)
-                                .copied()
-                                .unwrap_or(TableAlignment::None);
-
-                            let align_icon = match align {
-                                TableAlignment::Left => "⬅",
-                                TableAlignment::Center => "⬌",
-                                TableAlignment::Right => "➡",
-                                TableAlignment::None => "—",
-                            };
-
-                            let tooltip = match align {
-                                TableAlignment::Left => "Left aligned (click to cycle)",
-                                TableAlignment::Center => "Center aligned (click to cycle)",
-                                TableAlignment::Right => "Right aligned (click to cycle)",
-                                TableAlignment::None => "No alignment (click to cycle)",
-                            };
-
-                            if ui.small_button(align_icon).on_hover_text(tooltip).clicked() {
-                                action = Some(TableAction::CycleAlignment(col));
-                            }
-                        }
-                    });
-                    ui.separator();
+            .rounding(6.0)
+            .shadow(if is_dark {
+                egui::epaint::Shadow::NONE
+            } else {
+                egui::epaint::Shadow {
+                    offset: egui::vec2(0.0, 1.0),
+                    blur: 3.0,
+                    spread: 0.0,
+                    color: egui::Color32::from_black_alpha(8),
                 }
-
+            })
+            .show(ui, |ui| {
                 // Calculate column widths based on content
-                let min_col_width = 60.0_f32; // Minimum column width
-                let char_width = self.font_size * 0.65; // Approximate character width for proportional font
-                let cell_padding = 24.0_f32; // Cell padding (left + right)
+                let min_col_width = 80.0_f32;
+                let char_width = self.font_size * 0.6;
+                let cell_padding = 28.0_f32;
 
                 let col_widths: Vec<f32> = (0..self.data.num_columns)
                     .map(|col_idx| {
@@ -1357,49 +1452,49 @@ impl<'a> EditableTable<'a> {
                             .max()
                             .unwrap_or(0);
 
-                        // Calculate width: text length * char width + padding, with min/max bounds
                         let text_width = (max_text_len as f32 * char_width) + cell_padding;
-                        text_width.max(min_col_width).min(400.0) // Clamp between 60 and 400
+                        text_width.max(min_col_width).min(400.0)
                     })
                     .collect();
 
-                // Render table using horizontal layouts (not Grid) for better width control
                 ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+
                     // Render each row
                     for row_idx in 0..self.data.rows.len() {
                         let is_header = row_idx == 0;
                         let row_bg = if is_header { header_bg } else { cell_bg };
 
                         ui.horizontal(|ui| {
-                            // Row delete button (if controls enabled and not the only row)
-                            if self.show_controls && self.data.rows.len() > 1 {
-                                egui::Frame::none()
-                                    .fill(row_bg)
-                                    .inner_margin(egui::Margin::symmetric(2.0, 4.0))
-                                    .show(ui, |ui| {
-                                        if ui
-                                            .small_button("🗑")
-                                            .on_hover_text("Delete row")
-                                            .clicked()
-                                        {
-                                            action = Some(TableAction::RemoveRow(row_idx));
-                                        }
-                                    });
-                            } else if self.show_controls {
-                                // Placeholder for alignment - same width as delete button
-                                ui.allocate_space(egui::vec2(24.0, 20.0));
-                            }
+                            ui.spacing_mut().item_spacing.x = 0.0;
 
                             // Render cells for this row
                             for col_idx in 0..self.data.num_columns {
-                                let col_width =
-                                    col_widths.get(col_idx).copied().unwrap_or(min_col_width);
+                                let col_width = col_widths.get(col_idx).copied().unwrap_or(min_col_width);
+                                let is_last_col = col_idx == self.data.num_columns - 1;
+
+                                // Cell styling with subtle borders
+                                let cell_stroke = if is_last_col {
+                                    egui::Stroke::NONE
+                                } else {
+                                    egui::Stroke::new(1.0, border_color)
+                                };
 
                                 egui::Frame::none()
                                     .fill(row_bg)
-                                    .stroke(egui::Stroke::new(0.5, border_color))
-                                    .inner_margin(egui::Margin::symmetric(8.0, 4.0))
+                                    .stroke(egui::Stroke::NONE)
+                                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                                     .show(ui, |ui| {
+                                        // Draw right border manually for cleaner look
+                                        if !is_last_col {
+                                            let rect = ui.available_rect_before_wrap();
+                                            ui.painter().vline(
+                                                rect.right() + 10.0,
+                                                rect.y_range(),
+                                                cell_stroke,
+                                            );
+                                        }
+
                                         if let Some(row) = self.data.rows.get_mut(row_idx) {
                                             if let Some(cell) = row.get_mut(col_idx) {
                                                 let cell_id = table_id
@@ -1413,88 +1508,244 @@ impl<'a> EditableTable<'a> {
                                                     colors.text
                                                 };
 
-                                                let font = FontId::proportional(self.font_size);
+                                                let font = if is_header {
+                                                    FontId::proportional(self.font_size)
+                                                } else {
+                                                    FontId::proportional(self.font_size)
+                                                };
 
-                                                // Allocate exact width for the cell
                                                 ui.set_min_width(col_width);
 
-                                                let response = ui.add(
-                                                    TextEdit::singleline(&mut cell.text)
-                                                        .id(cell_id)
-                                                        .font(font)
-                                                        .text_color(text_color)
-                                                        .frame(false)
-                                                        .min_size(egui::vec2(col_width, 0.0)),
-                                                );
+                                                let text_edit = TextEdit::singleline(&mut cell.text)
+                                                    .id(cell_id)
+                                                    .font(font)
+                                                    .text_color(text_color)
+                                                    .frame(false)
+                                                    .desired_width(col_width);
+
+                                                let output = text_edit.show(ui);
+                                                let response = output.response;
+
+                                                if pending_focus == Some((row_idx, col_idx)) {
+                                                    response.request_focus();
+                                                }
+
+                                                if response.has_focus() {
+                                                    edit_state.focused_cell = Some((row_idx, col_idx));
+                                                    any_cell_has_focus = true;
+
+                                                    let num_rows = self.data.rows.len();
+                                                    let num_cols = self.data.num_columns;
+
+                                                    if ui.input(|i| i.key_pressed(Key::Tab) && !i.modifiers.shift) {
+                                                        edit_state.move_next(num_rows, num_cols);
+                                                    } else if ui.input(|i| i.key_pressed(Key::Tab) && i.modifiers.shift) {
+                                                        edit_state.move_prev(num_cols);
+                                                    } else if ui.input(|i| i.key_pressed(Key::Enter)) {
+                                                        edit_state.move_down(num_rows);
+                                                    } else if ui.input(|i| i.key_pressed(Key::Escape)) {
+                                                        edit_state.clear_focus();
+                                                        ui.memory_mut(|mem| mem.surrender_focus(cell_id));
+                                                    }
+                                                }
 
                                                 if response.changed() {
-                                                    changed = true;
+                                                    edit_state.content_modified = true;
                                                 }
                                             }
                                         }
                                     });
                             }
 
-                            // Column add button on the right (only on first row)
-                            if self.show_controls && row_idx == 0 {
-                                egui::Frame::none()
-                                    .fill(row_bg)
-                                    .inner_margin(egui::Margin::symmetric(2.0, 4.0))
-                                    .show(ui, |ui| {
-                                        if ui
-                                            .small_button("➕")
-                                            .on_hover_text("Add column")
-                                            .clicked()
-                                        {
-                                            action = Some(TableAction::AddColumn);
+                            // Row controls (always visible when controls enabled)
+                            if self.show_controls {
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 2.0;
+                                    
+                                    // Delete row button (if more than one row)
+                                    if self.data.rows.len() > 1 {
+                                        let del_btn = ui.add(
+                                            egui::Button::new(
+                                                RichText::new("×")
+                                                    .size(self.font_size * 0.9)
+                                                    .color(control_color)
+                                            )
+                                            .frame(false)
+                                            .min_size(egui::vec2(18.0, 18.0))
+                                        );
+                                        if del_btn.hovered() {
+                                            ui.painter().text(
+                                                del_btn.rect.center(),
+                                                egui::Align2::CENTER_CENTER,
+                                                "×",
+                                                FontId::proportional(self.font_size * 0.9),
+                                                control_hover_color,
+                                            );
                                         }
-                                    });
-                            }
-                        }); // end horizontal row
-                    } // end for each row
-
-                    // Add row button row
-                    if self.show_controls {
-                        ui.horizontal(|ui| {
-                            // Offset to align with cells (skip delete button space)
-                            if self.data.rows.len() > 1 {
-                                ui.allocate_space(egui::vec2(24.0, 20.0));
-                            }
-
-                            if ui
-                                .button("➕ Add row")
-                                .on_hover_text("Add a new row")
-                                .clicked()
-                            {
-                                action = Some(TableAction::AddRow);
+                                        if del_btn.on_hover_text("Delete row").clicked() {
+                                            action = Some(TableAction::RemoveRow(row_idx));
+                                        }
+                                    }
+                                });
                             }
                         });
                     }
-                }); // end vertical
 
-                // Column delete buttons row (if controls enabled and more than one column)
-                if self.show_controls && self.data.num_columns > 1 {
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Del col:").small().color(colors.muted));
+                    // Modern toolbar at bottom
+                    if self.show_controls {
+                        ui.add_space(2.0);
+                        
+                        // Subtle toolbar background
+                        egui::Frame::none()
+                            .fill(hover_bg)
+                            .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                            .rounding(egui::Rounding {
+                                nw: 0.0,
+                                ne: 0.0,
+                                sw: 6.0,
+                                se: 6.0,
+                            })
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 12.0;
 
-                        for col in 0..self.data.num_columns {
-                            if ui
-                                .small_button("×")
-                                .on_hover_text(format!("Delete column {}", col + 1))
-                                .clicked()
-                            {
-                                action = Some(TableAction::RemoveColumn(col));
-                            }
-                        }
-                    });
-                }
+                                    // Add row button
+                                    let add_row_btn = ui.add(
+                                        egui::Button::new(
+                                            RichText::new("+ Row")
+                                                .size(self.font_size * 0.85)
+                                                .color(control_color)
+                                        )
+                                        .frame(false)
+                                    );
+                                    if add_row_btn.hovered() {
+                                        ui.painter().text(
+                                            add_row_btn.rect.center(),
+                                            egui::Align2::CENTER_CENTER,
+                                            "+ Row",
+                                            FontId::proportional(self.font_size * 0.85),
+                                            control_hover_color,
+                                        );
+                                    }
+                                    if add_row_btn.on_hover_text("Add a new row").clicked() {
+                                        action = Some(TableAction::AddRow);
+                                    }
+
+                                    // Add column button
+                                    let add_col_btn = ui.add(
+                                        egui::Button::new(
+                                            RichText::new("+ Column")
+                                                .size(self.font_size * 0.85)
+                                                .color(control_color)
+                                        )
+                                        .frame(false)
+                                    );
+                                    if add_col_btn.hovered() {
+                                        ui.painter().text(
+                                            add_col_btn.rect.center(),
+                                            egui::Align2::CENTER_CENTER,
+                                            "+ Column",
+                                            FontId::proportional(self.font_size * 0.85),
+                                            control_hover_color,
+                                        );
+                                    }
+                                    if add_col_btn.on_hover_text("Add a new column").clicked() {
+                                        action = Some(TableAction::AddColumn);
+                                    }
+
+                                    // Separator
+                                    if self.data.num_columns > 1 {
+                                        ui.add_space(4.0);
+                                        ui.separator();
+                                        ui.add_space(4.0);
+
+                                        // Column delete buttons (compact)
+                                        ui.label(
+                                            RichText::new("Delete column:")
+                                                .size(self.font_size * 0.8)
+                                                .color(control_color)
+                                        );
+                                        
+                                        for col in 0..self.data.num_columns {
+                                            let col_label = format!("{}", col + 1);
+                                            let del_col_btn = ui.add(
+                                                egui::Button::new(
+                                                    RichText::new(&col_label)
+                                                        .size(self.font_size * 0.8)
+                                                        .color(control_color)
+                                                )
+                                                .frame(false)
+                                                .min_size(egui::vec2(16.0, 16.0))
+                                            );
+                                            if del_col_btn.hovered() {
+                                                ui.painter().text(
+                                                    del_col_btn.rect.center(),
+                                                    egui::Align2::CENTER_CENTER,
+                                                    &col_label,
+                                                    FontId::proportional(self.font_size * 0.8),
+                                                    control_hover_color,
+                                                );
+                                            }
+                                            if del_col_btn
+                                                .on_hover_text(format!("Delete column {}", col + 1))
+                                                .clicked()
+                                            {
+                                                action = Some(TableAction::RemoveColumn(col));
+                                            }
+                                        }
+                                    }
+
+                                    // Alignment controls (if enabled)
+                                    if self.show_alignment_controls && self.data.num_columns > 0 {
+                                        ui.add_space(4.0);
+                                        ui.separator();
+                                        ui.add_space(4.0);
+
+                                        ui.label(
+                                            RichText::new("Align:")
+                                                .size(self.font_size * 0.8)
+                                                .color(control_color)
+                                        );
+
+                                        for col in 0..self.data.num_columns {
+                                            let align = self
+                                                .data
+                                                .alignments
+                                                .get(col)
+                                                .copied()
+                                                .unwrap_or(TableAlignment::None);
+
+                                            let (align_icon, tooltip) = match align {
+                                                TableAlignment::Left => ("⬅", "Left aligned"),
+                                                TableAlignment::Center => ("⬌", "Center aligned"),
+                                                TableAlignment::Right => ("➡", "Right aligned"),
+                                                TableAlignment::None => ("—", "No alignment"),
+                                            };
+
+                                            let align_btn = ui.add(
+                                                egui::Button::new(
+                                                    RichText::new(align_icon)
+                                                        .size(self.font_size * 0.8)
+                                                        .color(control_color)
+                                                )
+                                                .frame(false)
+                                            );
+                                            if align_btn.on_hover_text(format!("{} (click to cycle)", tooltip)).clicked() {
+                                                action = Some(TableAction::CycleAlignment(col));
+                                            }
+                                        }
+                                    }
+                                });
+                            });
+                    }
+                });
             });
 
         ui.add_space(4.0);
 
         // Apply the action (after the UI iteration is complete)
+        // Actions like add/remove row/column should trigger immediate change
         if let Some(action) = action {
             changed = true;
             match action {
@@ -1506,15 +1757,40 @@ impl<'a> EditableTable<'a> {
                 TableAction::RemoveColumn(idx) => self.data.remove_column(idx),
                 TableAction::CycleAlignment(col) => self.data.cycle_column_alignment(col),
             }
+            // Clear content_modified since we're committing via action
+            edit_state.content_modified = false;
         }
+
+        // Detect focus loss: had focus last frame but not this frame
+        // This is when we commit cell edits to the source
+        let focus_lost = edit_state.had_focus_last_frame && !any_cell_has_focus;
+        
+        if focus_lost && edit_state.content_modified {
+            // Focus left the table and content was modified - signal change
+            changed = true;
+            edit_state.content_modified = false;
+        }
+        
+        // Update focus tracking for next frame
+        edit_state.had_focus_last_frame = any_cell_has_focus;
+
+        // Check if any cell has focus (for output)
+        let has_focus = any_cell_has_focus;
+
+        // Save the edit state back to memory
+        ui.memory_mut(|mem| {
+            mem.data.insert_temp(table_id.with("edit_state"), edit_state);
+        });
 
         // Generate markdown output
         let markdown = self.data.to_markdown();
 
-        if changed || markdown != original_markdown {
-            WidgetOutput::modified(markdown)
+        // Only report as modified when explicitly set (focus lost with edits, or action performed)
+        // Don't use markdown comparison - edits are buffered until focus leaves the table
+        if changed {
+            WidgetOutput::modified(markdown).with_focus(has_focus)
         } else {
-            WidgetOutput::unchanged(markdown)
+            WidgetOutput::unchanged(markdown).with_focus(has_focus)
         }
     }
 }

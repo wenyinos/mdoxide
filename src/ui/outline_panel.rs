@@ -1,11 +1,13 @@
 //! Document Outline Panel Component
 //!
 //! This module implements a side panel that displays a live-updating,
-//! clickable outline of document headings (H1-H6) with collapsible sections.
+//! clickable outline of document headings (H1-H6) with collapsible sections,
+//! and a statistics tab showing document metrics.
 
 use crate::config::OutlinePanelSide;
-use crate::editor::{DocumentOutline, OutlineItem, OutlineType, StructuredStats};
+use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
 use eframe::egui::{self, Color32, Response, RichText, ScrollArea, Sense, Ui, Vec2};
+use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -23,6 +25,23 @@ const INDENT_PER_LEVEL: f32 = 16.0;
 /// Height of each outline item.
 const ITEM_HEIGHT: f32 = 24.0;
 
+/// Height of the tab bar.
+const TAB_HEIGHT: f32 = 28.0;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OutlinePanelTab
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The active tab in the outline panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutlinePanelTab {
+    /// Document outline view (headings, etc.)
+    #[default]
+    Outline,
+    /// Document statistics view
+    Statistics,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // OutlinePanelOutput
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,6 +53,10 @@ pub struct OutlinePanelOutput {
     pub scroll_to_line: Option<usize>,
     /// Character offset to scroll to, if a heading was clicked
     pub scroll_to_char: Option<usize>,
+    /// Heading title text for the clicked item (for text-based navigation)
+    pub scroll_to_title: Option<String>,
+    /// Heading level (1-6) for the clicked item
+    pub scroll_to_level: Option<u8>,
     /// Heading ID that was toggled (collapsed/expanded)
     pub toggled_id: Option<String>,
     /// Whether the close button was clicked
@@ -55,6 +78,8 @@ pub struct OutlinePanel {
     side: OutlinePanelSide,
     /// Currently highlighted heading index (based on cursor position)
     current_section: Option<usize>,
+    /// Currently active tab
+    active_tab: OutlinePanelTab,
 }
 
 impl Default for OutlinePanel {
@@ -70,6 +95,7 @@ impl OutlinePanel {
             width: 200.0,
             side: OutlinePanelSide::Right,
             current_section: None,
+            active_tab: OutlinePanelTab::Outline,
         }
     }
 
@@ -114,12 +140,24 @@ impl OutlinePanel {
         self.side
     }
 
+    /// Get the active tab.
+    #[allow(dead_code)]
+    pub fn active_tab(&self) -> OutlinePanelTab {
+        self.active_tab
+    }
+
+    /// Set the active tab.
+    pub fn set_active_tab(&mut self, tab: OutlinePanelTab) {
+        self.active_tab = tab;
+    }
+
     /// Render the outline panel.
     ///
     /// # Arguments
     ///
     /// * `ctx` - The egui context
     /// * `outline` - The document outline to display
+    /// * `doc_stats` - Optional document statistics (for markdown files)
     /// * `is_dark` - Whether using dark theme
     ///
     /// # Returns
@@ -129,6 +167,7 @@ impl OutlinePanel {
         &mut self,
         ctx: &egui::Context,
         outline: &DocumentOutline,
+        doc_stats: Option<&DocumentStats>,
         is_dark: bool,
     ) -> OutlinePanelOutput {
         let mut output = OutlinePanelOutput::default();
@@ -196,16 +235,15 @@ impl OutlinePanel {
 
                 ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
 
-                // Header section - different label for structured files
-                let (header_icon, header_text) = match &outline.outline_type {
-                    OutlineType::Markdown => ("📑", "Outline"),
-                    OutlineType::Structured(_) => ("📊", "Statistics"),
-                };
-
+                // Header section with close button
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
+                    let header_text = match &outline.outline_type {
+                        OutlineType::Markdown => t!("outline.panel_title"),
+                        OutlineType::Structured(_) => t!("outline.statistics"),
+                    };
                     ui.label(
-                        RichText::new(format!("{} {}", header_icon, header_text))
+                        RichText::new(header_text.to_string())
                             .size(12.0)
                             .strong()
                             .color(text_color),
@@ -219,7 +257,7 @@ impl OutlinePanel {
                                     .frame(false)
                                     .min_size(Vec2::new(20.0, 20.0)),
                             )
-                            .on_hover_text("Close outline (Ctrl+Shift+O)")
+                            .on_hover_text(t!("outline.close_tooltip"))
                             .clicked()
                         {
                             output.close_requested = true;
@@ -227,9 +265,21 @@ impl OutlinePanel {
                     });
                 });
 
-                ui.add_space(4.0);
+                ui.add_space(2.0);
 
-                // Different content based on outline type
+                // For markdown files, show tabs; for structured files, show stats directly
+                match &outline.outline_type {
+                    OutlineType::Markdown => {
+                        // Tab bar for Markdown documents
+                        self.render_tab_bar(ui, text_color, muted_color, highlight_bg, is_dark);
+                        ui.add_space(4.0);
+                    }
+                    OutlineType::Structured(_) => {
+                        // No tabs for structured files - they just show stats
+                    }
+                }
+
+                // Different content based on outline type and active tab
                 match &outline.outline_type {
                     OutlineType::Structured(stats) => {
                         // Show format name as subtitle
@@ -258,85 +308,118 @@ impl OutlinePanel {
                             });
                     }
                     OutlineType::Markdown => {
-                        // Summary stats for markdown
-                        if !outline.is_empty() {
-                            let summary = format!(
-                                "{} headings • ~{} min read",
-                                outline.heading_count, outline.estimated_read_time
-                            );
+                        match self.active_tab {
+                            OutlinePanelTab::Outline => {
+                                // Summary stats for markdown
+                                if !outline.is_empty() {
+                                    let summary = t!(
+                                        "outline.summary",
+                                        headings = outline.heading_count,
+                                        minutes = outline.estimated_read_time
+                                    );
 
-                            ui.horizontal(|ui| {
-                                ui.add_space(8.0);
-                                ui.label(RichText::new(summary).size(10.0).color(muted_color));
-                            });
-                            ui.add_space(4.0);
-                        }
-
-                        ui.separator();
-
-                        // Scrollable heading list
-                        ScrollArea::vertical()
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                if outline.is_empty() {
-                                    ui.add_space(20.0);
-                                    ui.vertical_centered(|ui| {
-                                        ui.label(
-                                            RichText::new("No headings found")
-                                                .size(11.0)
-                                                .color(muted_color)
-                                                .italics(),
-                                        );
+                                    ui.horizontal(|ui| {
                                         ui.add_space(8.0);
-                                        ui.label(
-                                            RichText::new("Add headings using # syntax")
-                                                .size(10.0)
-                                                .color(muted_color),
-                                        );
+                                        ui.label(RichText::new(summary).size(10.0).color(muted_color));
                                     });
-                                } else {
                                     ui.add_space(4.0);
-
-                                    for (index, item) in outline.items.iter().enumerate() {
-                                        // Check visibility (respects collapsed parents)
-                                        if !outline.is_visible(index) {
-                                            continue;
-                                        }
-
-                                        let is_current = self.current_section == Some(index);
-                                        let has_children = outline.has_children(index);
-
-                                        let response = self.render_outline_item(
-                                            ui,
-                                            item,
-                                            is_current,
-                                            has_children,
-                                            text_color,
-                                            muted_color,
-                                            highlight_bg,
-                                            hover_bg,
-                                            is_dark,
-                                        );
-
-                                        if response.clicked() {
-                                            log::debug!(
-                                                "Outline: clicked heading '{}' at line {}",
-                                                item.title,
-                                                item.line
-                                            );
-                                            output.scroll_to_line = Some(item.line);
-                                            output.scroll_to_char = Some(item.char_offset);
-                                        }
-
-                                        // Handle collapse/expand toggle (double-click or icon click)
-                                        if has_children && response.double_clicked() {
-                                            output.toggled_id = Some(item.id.clone());
-                                        }
-                                    }
-
-                                    ui.add_space(8.0);
                                 }
-                            });
+
+                                ui.separator();
+
+                                // Scrollable heading list
+                                ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        if outline.is_empty() {
+                                            ui.add_space(20.0);
+                                            ui.vertical_centered(|ui| {
+                                                ui.label(
+                                                    RichText::new(t!("outline.no_headings"))
+                                                        .size(11.0)
+                                                        .color(muted_color)
+                                                        .italics(),
+                                                );
+                                                ui.add_space(8.0);
+                                                ui.label(
+                                                    RichText::new(t!("outline.add_headings_hint"))
+                                                        .size(10.0)
+                                                        .color(muted_color),
+                                                );
+                                            });
+                                        } else {
+                                            ui.add_space(4.0);
+
+                                            for (index, item) in outline.items.iter().enumerate() {
+                                                // Check visibility (respects collapsed parents)
+                                                if !outline.is_visible(index) {
+                                                    continue;
+                                                }
+
+                                                let is_current = self.current_section == Some(index);
+                                                let has_children = outline.has_children(index);
+
+                                                let response = self.render_outline_item(
+                                                    ui,
+                                                    item,
+                                                    is_current,
+                                                    has_children,
+                                                    text_color,
+                                                    muted_color,
+                                                    highlight_bg,
+                                                    hover_bg,
+                                                    is_dark,
+                                                );
+
+                                                if response.clicked() {
+                                                    log::debug!(
+                                                        "Outline: clicked heading '{}' at line {}",
+                                                        item.title,
+                                                        item.line
+                                                    );
+                                                    output.scroll_to_line = Some(item.line);
+                                                    output.scroll_to_char = Some(item.char_offset);
+                                                    output.scroll_to_title = Some(item.title.clone());
+                                                    output.scroll_to_level = Some(item.level);
+                                                }
+
+                                                // Handle collapse/expand toggle (double-click or icon click)
+                                                if has_children && response.double_clicked() {
+                                                    output.toggled_id = Some(item.id.clone());
+                                                }
+                                            }
+
+                                            ui.add_space(8.0);
+                                        }
+                                    });
+                            }
+                            OutlinePanelTab::Statistics => {
+                                ui.separator();
+                                ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        if let Some(stats) = doc_stats {
+                                            self.render_document_stats(
+                                                ui,
+                                                stats,
+                                                text_color,
+                                                muted_color,
+                                                is_dark,
+                                            );
+                                        } else {
+                                            ui.add_space(20.0);
+                                            ui.vertical_centered(|ui| {
+                                                ui.label(
+                                                    RichText::new(t!("stats.no_data"))
+                                                        .size(11.0)
+                                                        .color(muted_color)
+                                                        .italics(),
+                                                );
+                                            });
+                                        }
+                                    });
+                            }
+                        }
                     }
                 }
             });
@@ -359,7 +442,7 @@ impl OutlinePanel {
         if !stats.parse_success {
             ui.vertical_centered(|ui| {
                 ui.label(
-                    RichText::new("⚠ Parse Error")
+                    RichText::new(t!("outline.parse_error"))
                         .size(12.0)
                         .color(Color32::from_rgb(220, 80, 80))
                         .strong(),
@@ -487,6 +570,280 @@ impl OutlinePanel {
         });
     }
 
+    /// Render the tab bar for switching between Outline and Statistics.
+    fn render_tab_bar(
+        &mut self,
+        ui: &mut Ui,
+        text_color: Color32,
+        muted_color: Color32,
+        highlight_bg: Color32,
+        is_dark: bool,
+    ) {
+        let tab_bg = if is_dark {
+            Color32::from_rgb(45, 45, 50)
+        } else {
+            Color32::from_rgb(240, 240, 245)
+        };
+
+        let active_tab_bg = if is_dark {
+            Color32::from_rgb(55, 55, 65)
+        } else {
+            Color32::from_rgb(255, 255, 255)
+        };
+
+        ui.horizontal(|ui| {
+            ui.add_space(4.0);
+
+            // Calculate tab width to fit both tabs
+            let available_width = ui.available_width() - 8.0;
+            let tab_width = (available_width / 2.0).min(100.0);
+
+            // Outline tab
+            let outline_active = self.active_tab == OutlinePanelTab::Outline;
+            let (outline_rect, outline_response) = ui.allocate_exact_size(
+                Vec2::new(tab_width, TAB_HEIGHT),
+                Sense::click(),
+            );
+
+            let outline_bg = if outline_active { active_tab_bg } else { tab_bg };
+            ui.painter().rect_filled(
+                outline_rect,
+                egui::Rounding {
+                    nw: 4.0,
+                    ne: 4.0,
+                    sw: 0.0,
+                    se: 0.0,
+                },
+                outline_bg,
+            );
+
+            let outline_text_color = if outline_active { text_color } else { muted_color };
+            ui.painter().text(
+                outline_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("📑 {}", t!("outline.tab_outline")),
+                egui::FontId::proportional(10.0),
+                outline_text_color,
+            );
+
+            if outline_response.clicked() {
+                self.active_tab = OutlinePanelTab::Outline;
+            }
+
+            // Small gap between tabs
+            ui.add_space(2.0);
+
+            // Statistics tab
+            let stats_active = self.active_tab == OutlinePanelTab::Statistics;
+            let (stats_rect, stats_response) = ui.allocate_exact_size(
+                Vec2::new(tab_width, TAB_HEIGHT),
+                Sense::click(),
+            );
+
+            let stats_bg = if stats_active { active_tab_bg } else { tab_bg };
+            ui.painter().rect_filled(
+                stats_rect,
+                egui::Rounding {
+                    nw: 4.0,
+                    ne: 4.0,
+                    sw: 0.0,
+                    se: 0.0,
+                },
+                stats_bg,
+            );
+
+            let stats_text_color = if stats_active { text_color } else { muted_color };
+            ui.painter().text(
+                stats_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("📊 {}", t!("outline.tab_statistics")),
+                egui::FontId::proportional(10.0),
+                stats_text_color,
+            );
+
+            if stats_response.clicked() {
+                self.active_tab = OutlinePanelTab::Statistics;
+            }
+
+            // Draw underline for active tab
+            let active_rect = if outline_active { outline_rect } else { stats_rect };
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(active_rect.min.x, active_rect.max.y - 2.0),
+                    Vec2::new(active_rect.width(), 2.0),
+                ),
+                0.0,
+                highlight_bg,
+            );
+        });
+    }
+
+    /// Render document statistics for Markdown files.
+    fn render_document_stats(
+        &self,
+        ui: &mut Ui,
+        stats: &DocumentStats,
+        text_color: Color32,
+        muted_color: Color32,
+        is_dark: bool,
+    ) {
+        ui.add_space(8.0);
+
+        // Colors for different stat types
+        let word_color = if is_dark {
+            Color32::from_rgb(156, 220, 254) // Light blue
+        } else {
+            Color32::from_rgb(0, 100, 150)
+        };
+
+        let heading_color = if is_dark {
+            Color32::from_rgb(181, 206, 168) // Light green
+        } else {
+            Color32::from_rgb(0, 128, 0)
+        };
+
+        let link_color = if is_dark {
+            Color32::from_rgb(206, 145, 120) // Orange
+        } else {
+            Color32::from_rgb(163, 21, 21)
+        };
+
+        let code_color = if is_dark {
+            Color32::from_rgb(86, 156, 214) // Blue
+        } else {
+            Color32::from_rgb(0, 0, 255)
+        };
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Reading Time (prominent at top)
+        // ─────────────────────────────────────────────────────────────────────
+        ui.vertical_centered(|ui| {
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(format!("⏱ {}", stats.format_reading_time()))
+                    .size(14.0)
+                    .strong()
+                    .color(text_color),
+            );
+            ui.add_space(4.0);
+        });
+
+        ui.add_space(4.0);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Text Statistics Section
+        // ─────────────────────────────────────────────────────────────────────
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!("📝 {}", t!("stats.text_stats")))
+                    .size(11.0)
+                    .strong()
+                    .color(text_color),
+            );
+        });
+        ui.add_space(4.0);
+
+        self.render_stat_row(ui, &t!("stats.words"), stats.text.words, word_color, muted_color);
+        self.render_stat_row(ui, &t!("stats.characters"), stats.text.characters, word_color, muted_color);
+        self.render_stat_row(ui, &t!("stats.characters_no_spaces"), stats.text.characters_no_spaces, muted_color, muted_color);
+        self.render_stat_row(ui, &t!("stats.lines"), stats.text.lines, muted_color, muted_color);
+        self.render_stat_row(ui, &t!("stats.paragraphs"), stats.text.paragraphs, muted_color, muted_color);
+
+        ui.add_space(12.0);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Structure Section
+        // ─────────────────────────────────────────────────────────────────────
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!("📑 {}", t!("stats.structure")))
+                    .size(11.0)
+                    .strong()
+                    .color(text_color),
+            );
+        });
+        ui.add_space(4.0);
+
+        // Headings breakdown
+        if stats.heading_count > 0 {
+            self.render_stat_row(ui, &t!("stats.headings_total"), stats.heading_count, heading_color, muted_color);
+
+            // Show per-level counts if any are non-zero
+            for (i, &count) in stats.headings_by_level.iter().enumerate() {
+                if count > 0 {
+                    let label = format!("  H{}", i + 1);
+                    self.render_stat_row(ui, &label, count, muted_color, muted_color);
+                }
+            }
+        } else {
+            self.render_stat_row(ui, &t!("stats.headings_total"), 0, muted_color, muted_color);
+        }
+
+        ui.add_space(4.0);
+
+        if stats.list_item_count > 0 {
+            self.render_stat_row(ui, &t!("stats.list_items"), stats.list_item_count, muted_color, muted_color);
+        }
+
+        if stats.horizontal_rule_count > 0 {
+            self.render_stat_row(ui, &t!("stats.horizontal_rules"), stats.horizontal_rule_count, muted_color, muted_color);
+        }
+
+        ui.add_space(12.0);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Media & Links Section
+        // ─────────────────────────────────────────────────────────────────────
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!("🔗 {}", t!("stats.media_links")))
+                    .size(11.0)
+                    .strong()
+                    .color(text_color),
+            );
+        });
+        ui.add_space(4.0);
+
+        self.render_stat_row(ui, &t!("stats.links"), stats.link_count, link_color, muted_color);
+        self.render_stat_row(ui, &t!("stats.images"), stats.image_count, link_color, muted_color);
+
+        ui.add_space(12.0);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Code & Diagrams Section
+        // ─────────────────────────────────────────────────────────────────────
+        if stats.code_block_count > 0 || stats.mermaid_count > 0 || stats.table_count > 0 || stats.blockquote_count > 0 {
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(format!("</> {}", t!("stats.code_diagrams")))
+                        .size(11.0)
+                        .strong()
+                        .color(text_color),
+                );
+            });
+            ui.add_space(4.0);
+
+            if stats.code_block_count > 0 {
+                self.render_stat_row(ui, &t!("stats.code_blocks"), stats.code_block_count, code_color, muted_color);
+            }
+            if stats.mermaid_count > 0 {
+                self.render_stat_row(ui, &t!("stats.mermaid_diagrams"), stats.mermaid_count, code_color, muted_color);
+            }
+            if stats.table_count > 0 {
+                self.render_stat_row(ui, &t!("stats.tables"), stats.table_count, code_color, muted_color);
+            }
+            if stats.blockquote_count > 0 {
+                self.render_stat_row(ui, &t!("stats.blockquotes"), stats.blockquote_count, muted_color, muted_color);
+            }
+        }
+
+        ui.add_space(8.0);
+    }
+
     /// Render a single outline item (for Markdown documents).
     #[allow(clippy::too_many_arguments)]
     fn render_outline_item(
@@ -578,9 +935,10 @@ impl OutlinePanel {
             title_color,
         );
 
-        response.on_hover_text(format!(
-            "{}\nLine {} • Click to navigate",
-            item.title, item.line
+        response.on_hover_text(t!(
+            "outline.item_tooltip",
+            title = item.title.clone(),
+            line = item.line
         ))
     }
 }
@@ -618,10 +976,15 @@ fn truncate_text(text: &str, max_width: f32, font_size: f32) -> String {
     let char_width = font_size * 0.55;
     let max_chars = (max_width / char_width) as usize;
 
-    if text.len() <= max_chars || max_chars < 4 {
+    // Use char count for proper UTF-8 handling (Korean, Chinese, Japanese, etc.)
+    let char_count = text.chars().count();
+
+    if char_count <= max_chars || max_chars < 4 {
         text.to_string()
     } else {
-        format!("{}…", &text[..max_chars.saturating_sub(1)])
+        // Take characters (not bytes) to avoid splitting multi-byte characters
+        let truncated: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{}…", truncated)
     }
 }
 

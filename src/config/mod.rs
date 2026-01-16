@@ -6,11 +6,16 @@
 //!
 //! The session submodule provides crash-safe session state persistence
 //! for restoring tabs and editor state after crashes or restarts.
+//!
+//! The snippets submodule provides user-defined text expansions
+//! with built-in date/time snippets.
 
 mod persistence;
 mod session;
 mod settings;
+mod snippets;
 
 pub use persistence::*;
 pub use session::*;
 pub use settings::*;
+pub use snippets::*;

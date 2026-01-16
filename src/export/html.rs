@@ -7,6 +7,7 @@
 // and error variants for future export enhancements
 #![allow(dead_code)]
 
+use crate::config::ParagraphIndent;
 use crate::theme::ThemeColors;
 use comrak::{markdown_to_html, Options};
 use std::path::Path;
@@ -53,6 +54,7 @@ impl From<std::io::Error> for HtmlExportError {
 /// * `title` - Optional document title
 /// * `theme_colors` - Theme colors for styling
 /// * `include_syntax_css` - Whether to include syntax highlighting CSS
+/// * `paragraph_indent` - Optional CJK paragraph indentation setting
 ///
 /// # Returns
 ///
@@ -62,6 +64,7 @@ pub fn generate_html_document(
     title: Option<&str>,
     theme_colors: &ThemeColors,
     include_syntax_css: bool,
+    paragraph_indent: ParagraphIndent,
 ) -> Result<String, HtmlExportError> {
     // Convert markdown to HTML body
     let html_body = markdown_to_html_body(markdown)?;
@@ -75,6 +78,9 @@ pub fn generate_html_document(
     } else {
         String::new()
     };
+
+    // Generate paragraph indentation CSS if needed
+    let indent_css = generate_paragraph_indent_css(paragraph_indent);
 
     // Build the complete HTML document
     let doc_title = title.unwrap_or("Exported Document");
@@ -93,6 +99,8 @@ pub fn generate_html_document(
 {theme_css}
 
 {syntax_css}
+
+{indent_css}
     </style>
 </head>
 <body>
@@ -105,6 +113,7 @@ pub fn generate_html_document(
         base_css = BASE_CSS,
         theme_css = theme_css,
         syntax_css = syntax_css,
+        indent_css = indent_css,
         body = html_body,
     );
 
@@ -150,6 +159,7 @@ fn markdown_to_html_body(markdown: &str) -> Result<String, HtmlExportError> {
 /// * `source_path` - Path to the markdown file
 /// * `output_path` - Path for the output HTML file
 /// * `theme_colors` - Theme colors for styling
+/// * `paragraph_indent` - CJK paragraph indentation setting
 ///
 /// # Returns
 ///
@@ -158,6 +168,7 @@ pub fn export_to_html_file(
     source_path: &Path,
     output_path: &Path,
     theme_colors: &ThemeColors,
+    paragraph_indent: ParagraphIndent,
 ) -> Result<(), HtmlExportError> {
     let markdown = std::fs::read_to_string(source_path)?;
 
@@ -166,7 +177,7 @@ pub fn export_to_html_file(
         .and_then(|s| s.to_str())
         .unwrap_or("Document");
 
-    let html = generate_html_document(&markdown, Some(title), theme_colors, true)?;
+    let html = generate_html_document(&markdown, Some(title), theme_colors, true, paragraph_indent)?;
 
     std::fs::write(output_path, html)?;
 
@@ -464,6 +475,25 @@ fn generate_syntax_css(colors: &ThemeColors) -> String {
     )
 }
 
+/// Generate CSS for CJK paragraph first-line indentation.
+///
+/// Returns CSS rule for text-indent on paragraphs, or empty string if Off.
+fn generate_paragraph_indent_css(indent: ParagraphIndent) -> String {
+    if let Some(em_value) = indent.to_css() {
+        format!(
+            r#"
+/* CJK Paragraph Indentation */
+.markdown-body > p {{
+    text-indent: {em};
+}}
+"#,
+            em = em_value
+        )
+    } else {
+        String::new()
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Functions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -505,7 +535,7 @@ mod tests {
     fn test_generate_html_document() {
         let markdown = "# Test\n\nParagraph text.";
         let colors = ThemeColors::light();
-        let html = generate_html_document(markdown, Some("Test Doc"), &colors, true).unwrap();
+        let html = generate_html_document(markdown, Some("Test Doc"), &colors, true, ParagraphIndent::Off).unwrap();
 
         // Check document structure
         assert!(html.contains("<!DOCTYPE html>"));
@@ -516,6 +546,26 @@ mod tests {
         // Check content
         assert!(html.contains("<h1"));
         assert!(html.contains("Test"));
+    }
+
+    #[test]
+    fn test_generate_html_document_with_chinese_indent() {
+        let markdown = "# Test\n\nParagraph text.";
+        let colors = ThemeColors::light();
+        let html = generate_html_document(markdown, Some("Test Doc"), &colors, true, ParagraphIndent::Chinese).unwrap();
+
+        // Check that Chinese indentation CSS is included
+        assert!(html.contains("text-indent: 2em"));
+    }
+
+    #[test]
+    fn test_generate_html_document_with_japanese_indent() {
+        let markdown = "# Test\n\nParagraph text.";
+        let colors = ThemeColors::light();
+        let html = generate_html_document(markdown, Some("Test Doc"), &colors, true, ParagraphIndent::Japanese).unwrap();
+
+        // Check that Japanese indentation CSS is included
+        assert!(html.contains("text-indent: 1em"));
     }
 
     #[test]

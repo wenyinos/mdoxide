@@ -48,7 +48,12 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Click-to-Edit Formatting](./technical/click-to-edit-formatting.md) | Hybrid editing for formatted list items and paragraphs |
 | [Formatting Toolbar](./technical/formatting-toolbar.md) | Markdown formatting toolbar, keyboard shortcuts, selection handling |
 | [Outline Panel](./technical/outline-panel.md) | Document outline side panel, heading extraction, statistics for structured files |
+| [Document Statistics](./technical/document-statistics.md) | Statistics panel tab with word count, reading time, heading/link/image counts |
 | [Tree Viewer](./technical/tree-viewer.md) | JSON/YAML/TOML tree viewer with inline editing, expand/collapse, path copying |
+| [CSV Viewer](./technical/csv-viewer.md) | CSV/TSV table viewer with scrolling, header highlighting, cell tooltips |
+| [CSV Delimiter Detection](./technical/csv-delimiter-detection.md) | Auto-detect delimiter (comma/tab/semicolon/pipe), manual override, session persistence |
+| [CSV Header Detection](./technical/csv-header-detection.md) | Auto-detect header rows with heuristics, toggle UI, column alignment |
+| [CSV Rainbow Columns](./technical/csv-rainbow-columns.md) | Subtle alternating column colors using Oklch, status bar toggle |
 | [Sync Scrolling](./technical/sync-scrolling.md) | Bidirectional scroll sync between Raw and Rendered views |
 | [Document Export](./technical/document-export.md) | HTML export with themed CSS, Copy-as-HTML clipboard functionality |
 | [Workspace Folder Support](./technical/workspace-folder-support.md) | Folder workspace mode, file tree, quick switcher, search in files, file watching |
@@ -60,6 +65,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Multi-Cursor (Partial)](./technical/multi-cursor.md) | Selection/MultiCursor data structures, Ctrl+D next occurrence, Ctrl+Click add cursor (text ops deferred) |
 | [Session Persistence](./technical/session-persistence.md) | Crash-safe session state, tab restoration, recovery dialog, lock file mechanism |
 | [Git Integration](./technical/git-integration.md) | Branch display in status bar, file tree Git status badges, git2 integration |
+| [Git Auto-Refresh](./technical/git-auto-refresh.md) | Automatic git status refresh on save, focus, and periodic intervals |
 | [Zen Mode](./technical/zen-mode.md) | Distraction-free writing mode, centered text column, chrome hiding, F11 toggle |
 | [Search Highlight](./technical/search-highlight.md) | Search-in-files result navigation with transient highlight, auto Raw mode switch |
 | [Auto-Save](./technical/auto-save.md) | Configurable auto-save with temp file backups, toolbar toggle, recovery dialog |
@@ -73,6 +79,8 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Move Line](./technical/move-line.md) | Alt+↑/↓ line reordering, pre-render key consumption, cursor following |
 | [Auto-close Brackets](./technical/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Smart Paste](./technical/smart-paste.md) | URL detection, markdown link creation with selection, image markdown insertion |
+| [Image Drag & Drop](./technical/image-drag-drop.md) | Drag images into editor, auto-save to assets/, insert markdown link at cursor |
+| [Table of Contents](./technical/table-of-contents.md) | TOC generation from headings, anchor links, update/insert modes, Ctrl+Shift+U |
 | [Configurable Line Width](./technical/configurable-line-width.md) | MaxLineWidth setting (Off/80/100/120/Custom), text centering in all views |
 | [Linux Cursor Flicker Fix](./technical/linux-cursor-flicker-fix.md) | Title bar exclusion zone to prevent cursor conflicts with window controls |
 | [Ribbon Redesign](./technical/ribbon-redesign.md) | Design C streamlined ribbon, title bar integration, dropdown menus |
@@ -81,9 +89,37 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Sequence Control Blocks](./technical/sequence-control-blocks.md) | Sequence diagram loop/alt/opt/par blocks, nested parsing, block rendering |
 | [Flowchart Layout Algorithm](./technical/flowchart-layout-algorithm.md) | Sugiyama-style layered graph layout, cycle detection, crossing reduction |
 | [Flowchart Subgraphs](./technical/flowchart-subgraphs.md) | Flowchart subgraph support, nested parsing, bounding box computation |
+| [Mermaid Edge Parsing](./technical/mermaid-edge-parsing.md) | Chained edge parsing fix, arrow pattern matching, label extraction |
 | [Sequence Activations & Notes](./technical/sequence-activations-notes.md) | Activation boxes, notes, +/- shorthand, state tracking |
-| [Editor Minimap](./technical/minimap.md) | VS Code-style minimap navigation, click-to-navigate, search highlights, split view support |
+| [Semantic Minimap](./technical/semantic-minimap.md) | Semantic minimap with clickable heading labels, content type indicators, density visualization bars |
+| [Editor Minimap (Legacy)](./technical/minimap.md) | VS Code-style pixel minimap (replaced by semantic minimap) |
+| [Mermaid Modular Structure](./technical/mermaid-modular-structure.md) | Modular directory layout for diagram types, TextMeasurer trait, shared utilities |
+| [Flowchart Direction](./technical/flowchart-direction.md) | Flow direction layout (LR/RL/TD/BT), axis transformation, edge anchoring |
+| [Flowchart Branch Ordering](./technical/flowchart-branch-ordering.md) | Decision node branch positioning, edge declaration order, barycenter algorithm |
+| [Mermaid classDef Styling](./technical/mermaid-classdef-styling.md) | Node styling with classDef/class directives, hex color parsing, NodeStyle struct |
+| [Subgraph Layer Clustering](./technical/subgraph-layer-clustering.md) | Subgraph-aware layer assignment, consecutive layer clustering, internal edge layout |
+| [Subgraph Internal Layout](./technical/subgraph-internal-layout.md) | Subgraph internal positioning, SubgraphLayoutEngine, bounding box computation |
+| [Subgraph Edge Routing](./technical/subgraph-edge-routing.md) | Edge routing through subgraph boundaries, orthogonal waypoints |
+| [Flowchart Subgraph Title](./technical/flowchart-subgraph-title.md) | Subgraph title width expansion, preventing title truncation |
+| [Flowchart Asymmetric Shape](./technical/flowchart-asymmetric-shape.md) | Asymmetric (flag) shape rendering, text centering |
+| [Nested Subgraph Layout](./technical/nested-subgraph-layout.md) | Nested subgraph margins, depth calculation, direction overrides |
+| [Flowchart Viewport Clipping](./technical/flowchart-viewport-clipping.md) | Viewport clipping fix, negative coordinate shifting, subgraph node membership |
+| [Flowchart linkStyle](./technical/flowchart-linkstyle.md) | Edge styling via linkStyle directive, stroke color/width customization |
+| [Flowchart Crash Prevention](./technical/flowchart-crash-prevention.md) | Infinite loop safety, panic handling, graceful degradation for malformed input |
+| [Mermaid YAML Frontmatter](./technical/mermaid-frontmatter.md) | YAML frontmatter support for diagram titles, config parsing, graceful error handling |
+| [Mermaid Caching](./technical/mermaid-caching.md) | AST and layout caching for flowcharts, blake3 hashing, LRU eviction |
+| **[Flowchart Refactor Plan](./technical/flowchart-refactor-plan.md)** | **Task 58: Comprehensive analysis and refactoring plan for flowchart.rs modularization** |
+| [Snippets System](./technical/snippets-system.md) | Text expansion system with built-in date/time snippets and custom user snippets |
+| [Windows Path Normalization](./technical/windows-path-normalization.md) | Strip Windows `\\?\` prefix from canonicalized paths to prevent duplicates and git issues |
+| [Keyboard Shortcut Customization](./technical/keyboard-shortcut-customization.md) | Settings panel for rebinding shortcuts with conflict detection, persistence, and reset |
+| [Quick Switcher Mouse Support](./technical/quick-switcher-mouse-support.md) | Mouse hover/click fix with layer-based background, interaction overlay, hover-selection sync |
+| [CJK Paragraph Indentation](./technical/cjk-paragraph-indentation.md) | First-line paragraph indentation for Chinese (2em) and Japanese (1em) typography conventions |
+| [Table Editing Focus](./technical/table-editing-focus.md) | Fix cursor loss during table cell editing, deferred source updates, keyboard navigation |
+| [macOS Intel CPU Optimization](./technical/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
+| [Windows Borderless Window](./technical/windows-borderless-window.md) | Top edge resize fix, fullscreen toggle (F10), title bar button area exclusion |
+| [Custom Font Selection](./technical/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 | [Branding](./branding.md) | Icon design, asset generation, platform integration guidelines |
+| [Internationalization](./technical/i18n.md) | rust-i18n integration, Language enum, translation keys, adding languages |
 | **[Custom Editor Widget Plan](./technical/custom-editor-widget-plan.md)** | **v0.3.0 planning: Replace egui TextEdit with custom FerriteEditor widget** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
@@ -94,7 +130,8 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 
 | Guide | Description |
 |-------|-------------|
-| *Coming soon* | Usage guides will be added as the app develops |
+| [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
+| *More coming soon* | Usage guides will be added as the app develops |
 
 ---
 
@@ -130,6 +167,7 @@ ferrite/
 │   │   ├── syntax.rs     # Syntax highlighting (syntect)
 │   │   ├── ast_ops.rs    # AST operations and manipulation
 │   │   ├── formatting.rs # Markdown formatting commands
+│   │   ├── toc.rs        # Table of Contents generation
 │   │   └── tree_viewer.rs # JSON/YAML/TOML tree viewer widget
 │   ├── preview/          # Preview and sync scrolling
 │   │   ├── mod.rs        # Module exports
@@ -204,6 +242,8 @@ ferrite/
 | Icon Loading | image | 0.25 |
 | Windows Icon | embed-resource | 2.4 |
 | Git Integration | git2 | 0.19 |
+| Hashing | blake3 | 1.5 |
+| Slugification | slug | 0.1 |
 
 ---
 

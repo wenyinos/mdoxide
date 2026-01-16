@@ -8,6 +8,7 @@
 
 use crate::app::modifier_symbol;
 use eframe::egui::{self, Color32, RichText, ScrollArea, Ui};
+use rust_i18n::t;
 
 /// Keyboard shortcut category for organized display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,15 +35,16 @@ impl ShortcutCategory {
     }
 
     /// Get the display label for the category.
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self) -> String {
         match self {
-            ShortcutCategory::File => "File",
-            ShortcutCategory::Edit => "Edit",
-            ShortcutCategory::View => "View",
-            ShortcutCategory::Formatting => "Formatting",
-            ShortcutCategory::Workspace => "Workspace",
-            ShortcutCategory::Navigation => "Navigation",
+            ShortcutCategory::File => t!("shortcuts.category.file"),
+            ShortcutCategory::Edit => t!("shortcuts.category.edit"),
+            ShortcutCategory::View => t!("shortcuts.category.view"),
+            ShortcutCategory::Formatting => t!("shortcuts.category.formatting"),
+            ShortcutCategory::Workspace => t!("shortcuts.category.workspace"),
+            ShortcutCategory::Navigation => t!("shortcuts.category.navigation"),
         }
+        .to_string()
     }
 
     /// Get the icon for the category.
@@ -61,12 +63,21 @@ impl ShortcutCategory {
 /// A keyboard shortcut entry.
 struct Shortcut {
     keys: String,
-    action: &'static str,
+    /// i18n key for the action description
+    action_key: &'static str,
 }
 
 impl Shortcut {
-    fn new(keys: impl Into<String>, action: &'static str) -> Self {
-        Self { keys: keys.into(), action }
+    fn new(keys: impl Into<String>, action_key: &'static str) -> Self {
+        Self {
+            keys: keys.into(),
+            action_key,
+        }
+    }
+
+    /// Get the localized action description.
+    fn action(&self) -> String {
+        t!(self.action_key).to_string()
     }
 }
 
@@ -75,49 +86,49 @@ fn get_shortcuts(category: ShortcutCategory) -> Vec<Shortcut> {
     let m = modifier_symbol();
     match category {
         ShortcutCategory::File => vec![
-            Shortcut::new(format!("{}+N", m), "New File"),
-            Shortcut::new(format!("{}+O", m), "Open File"),
-            Shortcut::new(format!("{}+S", m), "Save"),
-            Shortcut::new(format!("{}+Shift+S", m), "Save As"),
-            Shortcut::new(format!("{}+W", m), "Close Tab"),
+            Shortcut::new(format!("{}+N", m), "shortcuts.file.new"),
+            Shortcut::new(format!("{}+O", m), "shortcuts.file.open"),
+            Shortcut::new(format!("{}+S", m), "shortcuts.file.save"),
+            Shortcut::new(format!("{}+Shift+S", m), "shortcuts.file.save_as"),
+            Shortcut::new(format!("{}+W", m), "shortcuts.file.close_tab"),
         ],
         ShortcutCategory::Edit => vec![
-            Shortcut::new(format!("{}+Z", m), "Undo"),
-            Shortcut::new(format!("{}+Y", m), "Redo"),
-            Shortcut::new(format!("{}+F", m), "Find"),
-            Shortcut::new(format!("{}+H", m), "Find & Replace"),
-            Shortcut::new(format!("{}+A", m), "Select All"),
-            Shortcut::new(format!("{}+C", m), "Copy"),
-            Shortcut::new(format!("{}+X", m), "Cut"),
-            Shortcut::new(format!("{}+V", m), "Paste"),
+            Shortcut::new(format!("{}+Z", m), "shortcuts.edit.undo"),
+            Shortcut::new(format!("{}+Y", m), "shortcuts.edit.redo"),
+            Shortcut::new(format!("{}+F", m), "shortcuts.edit.find"),
+            Shortcut::new(format!("{}+H", m), "shortcuts.edit.find_replace"),
+            Shortcut::new(format!("{}+A", m), "shortcuts.edit.select_all"),
+            Shortcut::new(format!("{}+C", m), "shortcuts.edit.copy"),
+            Shortcut::new(format!("{}+X", m), "shortcuts.edit.cut"),
+            Shortcut::new(format!("{}+V", m), "shortcuts.edit.paste"),
         ],
         ShortcutCategory::View => vec![
-            Shortcut::new(format!("{}+E", m), "Toggle Raw/Rendered"),
-            Shortcut::new(format!("{}+Shift+O", m), "Toggle Outline"),
-            Shortcut::new(format!("{}++", m), "Zoom In"),
-            Shortcut::new(format!("{}+-", m), "Zoom Out"),
-            Shortcut::new(format!("{}+0", m), "Reset Zoom"),
-            Shortcut::new(format!("{}+,", m), "Settings"),
-            Shortcut::new("F1", "About / Help"),
+            Shortcut::new(format!("{}+E", m), "shortcuts.view.toggle_view"),
+            Shortcut::new(format!("{}+Shift+O", m), "shortcuts.view.toggle_outline"),
+            Shortcut::new(format!("{}++", m), "shortcuts.view.zoom_in"),
+            Shortcut::new(format!("{}+-", m), "shortcuts.view.zoom_out"),
+            Shortcut::new(format!("{}+0", m), "shortcuts.view.reset_zoom"),
+            Shortcut::new(format!("{}+,", m), "shortcuts.view.settings"),
+            Shortcut::new("F1", "shortcuts.view.about"),
         ],
         ShortcutCategory::Formatting => vec![
-            Shortcut::new(format!("{}+B", m), "Bold"),
-            Shortcut::new(format!("{}+I", m), "Italic"),
-            Shortcut::new(format!("{}+U", m), "Underline"),
-            Shortcut::new(format!("{}+K", m), "Insert Link"),
-            Shortcut::new(format!("{}+`", m), "Inline Code"),
+            Shortcut::new(format!("{}+B", m), "shortcuts.format.bold"),
+            Shortcut::new(format!("{}+I", m), "shortcuts.format.italic"),
+            Shortcut::new(format!("{}+U", m), "shortcuts.format.underline"),
+            Shortcut::new(format!("{}+K", m), "shortcuts.format.link"),
+            Shortcut::new(format!("{}+`", m), "shortcuts.format.code"),
         ],
         ShortcutCategory::Workspace => vec![
-            Shortcut::new(format!("{}+P", m), "Quick File Switcher"),
-            Shortcut::new(format!("{}+Shift+F", m), "Search in Files"),
-            Shortcut::new(format!("{}+Shift+E", m), "Export HTML"),
+            Shortcut::new(format!("{}+P", m), "shortcuts.workspace.quick_switcher"),
+            Shortcut::new(format!("{}+Shift+F", m), "shortcuts.workspace.search_files"),
+            Shortcut::new(format!("{}+Shift+E", m), "shortcuts.workspace.toggle_tree"),
         ],
         ShortcutCategory::Navigation => vec![
-            Shortcut::new(format!("{}+Tab", m), "Next Tab"),
-            Shortcut::new(format!("{}+Shift+Tab", m), "Previous Tab"),
-            Shortcut::new(format!("{}+G", m), "Go to Line"),
-            Shortcut::new("F3", "Find Next"),
-            Shortcut::new("Shift+F3", "Find Previous"),
+            Shortcut::new(format!("{}+Tab", m), "shortcuts.nav.next_tab"),
+            Shortcut::new(format!("{}+Shift+Tab", m), "shortcuts.nav.prev_tab"),
+            Shortcut::new(format!("{}+G", m), "shortcuts.nav.go_to_line"),
+            Shortcut::new("F3", "shortcuts.nav.find_next"),
+            Shortcut::new("Shift+F3", "shortcuts.nav.find_prev"),
         ],
     }
 }
@@ -132,11 +143,12 @@ pub enum AboutSection {
 
 impl AboutSection {
     /// Get the display label for the section.
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self) -> String {
         match self {
-            AboutSection::About => "About",
-            AboutSection::Shortcuts => "Shortcuts",
+            AboutSection::About => t!("about.tab.about"),
+            AboutSection::Shortcuts => t!("about.tab.shortcuts"),
         }
+        .to_string()
     }
 
     /// Get the icon for the section.
@@ -214,7 +226,7 @@ impl AboutPanel {
             });
 
         // About modal window
-        egui::Window::new("❓ About / Help")
+        egui::Window::new(format!("❓ {}", t!("about.title")))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -273,10 +285,10 @@ impl AboutPanel {
                 // Bottom buttons
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Close").clicked() {
+                        if ui.button(t!("dialog.confirm.close")).clicked() {
                             output.close_requested = true;
                         }
-                        ui.label(RichText::new("Press F1 or Escape to close").small().weak());
+                        ui.label(RichText::new(t!("about.close_hint")).small().weak());
                     });
                 });
             });
@@ -290,15 +302,15 @@ impl AboutPanel {
             // App name and version
             ui.vertical_centered(|ui| {
                 ui.add_space(8.0);
-                ui.heading(RichText::new("Ferrite").size(24.0).strong());
+                ui.heading(RichText::new(t!("app.name")).size(24.0).strong());
                 ui.add_space(4.0);
                 ui.label(
-                    RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))
+                    RichText::new(t!("about.version", version = env!("CARGO_PKG_VERSION")))
                         .size(14.0)
                         .weak(),
                 );
                 ui.add_space(8.0);
-                ui.label("A fast, lightweight text editor for Markdown, JSON, and more");
+                ui.label(t!("about.description"));
             });
 
             ui.add_space(16.0);
@@ -306,16 +318,16 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Links section
-            ui.label(RichText::new("🔗 Links").strong().size(16.0));
+            ui.label(RichText::new(format!("🔗 {}", t!("about.links"))).strong().size(16.0));
             ui.add_space(8.0);
 
             const GITHUB_REPO: &str = "https://github.com/OlaProeis/Ferrite";
 
             ui.horizontal(|ui| {
-                ui.label("GitHub:");
+                ui.label(t!("about.github_label"));
                 if ui
-                    .link("View on GitHub")
-                    .on_hover_text("Open repository in browser")
+                    .link(t!("about.view_on_github"))
+                    .on_hover_text(t!("about.github_tooltip"))
                     .clicked()
                 {
                     let _ = open::that(GITHUB_REPO);
@@ -323,10 +335,10 @@ impl AboutPanel {
             });
 
             ui.horizontal(|ui| {
-                ui.label("Report Issue:");
+                ui.label(t!("about.report_issue_label"));
                 if ui
-                    .link("Submit a bug report")
-                    .on_hover_text("Open issue tracker in browser")
+                    .link(t!("about.submit_bug"))
+                    .on_hover_text(t!("about.issue_tooltip"))
                     .clicked()
                 {
                     let _ = open::that(format!("{}/issues/new", GITHUB_REPO));
@@ -338,29 +350,29 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Built with section
-            ui.label(RichText::new("⚙ Built With").strong().size(16.0));
+            ui.label(RichText::new(format!("⚙ {}", t!("about.built_with"))).strong().size(16.0));
             ui.add_space(8.0);
 
             let libraries = [
-                ("egui", "Immediate mode GUI framework"),
-                ("comrak", "GitHub-flavored Markdown parser"),
-                ("syntect", "Syntax highlighting"),
-                ("serde", "Serialization framework"),
-                ("notify", "File system watcher"),
+                ("egui", t!("about.lib.egui")),
+                ("comrak", t!("about.lib.comrak")),
+                ("syntect", t!("about.lib.syntect")),
+                ("serde", t!("about.lib.serde")),
+                ("notify", t!("about.lib.notify")),
             ];
 
             egui::Grid::new("libraries_grid")
                 .num_columns(2)
                 .spacing([20.0, 4.0])
                 .show(ui, |ui| {
-                    for (name, desc) in libraries {
+                    for (name, desc) in &libraries {
                         let text_color = if is_dark {
                             Color32::from_rgb(130, 180, 255)
                         } else {
                             Color32::from_rgb(0, 102, 204)
                         };
-                        ui.label(RichText::new(name).color(text_color).strong());
-                        ui.label(RichText::new(desc).weak());
+                        ui.label(RichText::new(*name).color(text_color).strong());
+                        ui.label(RichText::new(desc.to_string()).weak());
                         ui.end_row();
                     }
                 });
@@ -370,10 +382,10 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // License section
-            ui.label(RichText::new("📜 License").strong().size(16.0));
+            ui.label(RichText::new(format!("📜 {}", t!("about.license"))).strong().size(16.0));
             ui.add_space(8.0);
-            ui.label("MIT License");
-            ui.label(RichText::new("© 2026 Ferrite Contributors").weak());
+            ui.label(t!("about.license_type"));
+            ui.label(RichText::new(t!("about.copyright")).weak());
 
             ui.add_space(16.0);
         });
@@ -383,10 +395,10 @@ impl AboutPanel {
     fn show_shortcuts_section(&mut self, ui: &mut Ui, is_dark: bool) {
         ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(4.0);
-            ui.label(RichText::new("Keyboard Shortcuts").size(16.0).strong());
+            ui.label(RichText::new(t!("shortcuts.title")).size(16.0).strong());
             ui.add_space(4.0);
             ui.label(
-                RichText::new("Click a category to expand/collapse")
+                RichText::new(t!("shortcuts.expand_hint"))
                     .weak()
                     .small(),
             );
@@ -455,7 +467,7 @@ impl AboutPanel {
                                             });
                                     });
 
-                                    ui.label(shortcut.action);
+                                    ui.label(shortcut.action());
                                     ui.end_row();
                                 }
                             });
@@ -488,12 +500,6 @@ mod tests {
     }
 
     #[test]
-    fn test_about_section_label() {
-        assert_eq!(AboutSection::About.label(), "About");
-        assert_eq!(AboutSection::Shortcuts.label(), "Shortcuts");
-    }
-
-    #[test]
     fn test_shortcut_category_all() {
         let categories = ShortcutCategory::all();
         assert_eq!(categories.len(), 6);
@@ -505,7 +511,7 @@ mod tests {
         let shortcuts = get_shortcuts(ShortcutCategory::File);
         assert!(!shortcuts.is_empty());
         assert_eq!(shortcuts[0].keys, format!("{}+N", modifier_symbol()));
-        assert_eq!(shortcuts[0].action, "New File");
+        assert_eq!(shortcuts[0].action_key, "shortcuts.file.new");
     }
 
     #[test]

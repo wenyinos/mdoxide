@@ -45,7 +45,7 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::needless_range_loop)]
 
-use crate::config::{EditorFont, MaxLineWidth, Settings, Theme};
+use crate::config::{EditorFont, MaxLineWidth, ParagraphIndent, Settings, Theme};
 use crate::fonts;
 use crate::markdown::ast_ops::{
     exit_list_to_paragraph, heading_enter, indent_list_item, merge_with_previous_list_item,
@@ -426,6 +426,12 @@ pub struct MarkdownEditor<'a> {
     pending_scroll_offset: Option<f32>,
     /// Maximum line width setting for centering text column
     max_line_width: MaxLineWidth,
+    /// Whether Zen Mode is enabled (centered text column)
+    zen_mode: bool,
+    /// Maximum column width in characters for Zen Mode centering
+    zen_max_column_width: f32,
+    /// CJK paragraph first-line indentation
+    paragraph_indent: ParagraphIndent,
 }
 
 impl<'a> MarkdownEditor<'a> {
@@ -442,6 +448,9 @@ impl<'a> MarkdownEditor<'a> {
             scroll_to_line: None,
             pending_scroll_offset: None,
             max_line_width: MaxLineWidth::Off,
+            zen_mode: false,
+            zen_max_column_width: 80.0,
+            paragraph_indent: ParagraphIndent::Off,
         }
     }
 
@@ -511,14 +520,37 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Enable Zen Mode with centered text column.
+    ///
+    /// When enabled, the text content is centered horizontally with a maximum
+    /// column width (in characters), while the editor background fills the available space.
+    /// Zen Mode takes priority over max_line_width setting.
+    #[must_use]
+    pub fn zen_mode(mut self, enabled: bool, max_column_width: f32) -> Self {
+        self.zen_mode = enabled;
+        self.zen_max_column_width = max_column_width;
+        self
+    }
+
+    /// Set the CJK paragraph first-line indentation.
+    ///
+    /// When enabled, paragraphs in rendered view will have first-line indentation
+    /// following Chinese (2em) or Japanese (1em) typography conventions.
+    #[must_use]
+    pub fn paragraph_indent(mut self, indent: ParagraphIndent) -> Self {
+        self.paragraph_indent = indent;
+        self
+    }
+
     /// Apply settings to the editor widget.
     #[must_use]
     pub fn with_settings(mut self, settings: &Settings) -> Self {
         self.font_size = settings.font_size;
-        self.font_family = settings.font_family;
+        self.font_family = settings.font_family.clone();
         self.word_wrap = settings.word_wrap;
         self.theme = settings.theme;
         self.max_line_width = settings.max_line_width;
+        self.paragraph_indent = settings.paragraph_indent;
         self
     }
 
@@ -538,10 +570,10 @@ impl<'a> MarkdownEditor<'a> {
         let original_content = self.content.clone();
         let font_size = self.font_size;
         let word_wrap = self.word_wrap;
-        let editor_font = self.font_family;
+        let editor_font = self.font_family.clone();
 
         // Get font family for regular text
-        let font_family = fonts::get_styled_font_family(false, false, editor_font);
+        let font_family = fonts::get_styled_font_family(false, false, &editor_font);
 
         let scroll_output = ScrollArea::vertical()
             .id_source(id.with("scroll"))
@@ -632,7 +664,7 @@ impl<'a> MarkdownEditor<'a> {
         let target_scroll_offset: Option<f32> = if let Some(target_line) = self.scroll_to_line {
             let font_id = FontId::new(
                 self.font_size,
-                fonts::get_styled_font_family(false, false, self.font_family),
+                fonts::get_styled_font_family(false, false, &self.font_family),
             );
             let line_height = ui.fonts(|f| f.row_height(&font_id));
             // Target scroll position: put the line roughly 1/3 from top of viewport
@@ -674,17 +706,31 @@ impl<'a> MarkdownEditor<'a> {
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
         
-        // Calculate centering margin for max_line_width setting
+        // Calculate content width and centering margin
+        // Both Zen mode and non-zen mode use max_line_width setting
+        // Zen mode: centers content; Non-zen mode: left-aligned
         let char_width = self.font_size * 0.6; // Approximate average character width
-        let (content_margin, max_content_width_px) = if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
-            let available = ui.available_width();
-            let margin = if available > max_width_px {
-                (available - max_width_px) / 2.0
+        let outer_available_width = ui.available_width();
+        
+        let (content_margin, effective_content_width) = if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
+            // max_line_width is set - constrain width
+            // Cap to available width to prevent overflow
+            let effective_width = max_width_px.min(outer_available_width);
+            
+            if self.zen_mode {
+                // Zen mode: center the content
+                let margin = if outer_available_width > effective_width {
+                    (outer_available_width - effective_width) / 2.0
+                } else {
+                    0.0
+                };
+                (margin, Some(effective_width))
             } else {
-                0.0
-            };
-            (margin, Some(max_width_px))
+                // Non-zen mode: left-aligned (no margin)
+                (0.0, Some(effective_width))
+            }
         } else {
+            // No max_line_width set - use full available width, no centering
             (0.0, None)
         };
         
@@ -700,7 +746,8 @@ impl<'a> MarkdownEditor<'a> {
                     }
                     
                     // Container for the actual content with optional width constraint
-                    let content_width = max_content_width_px.unwrap_or(ui.available_width());
+                    // Use pre-calculated effective width (already capped to available space)
+                    let content_width = effective_content_width.unwrap_or(ui.available_width());
                     ui.vertical(|ui| {
                         // Constrain the content width
                         ui.set_max_width(content_width);
@@ -722,8 +769,9 @@ impl<'a> MarkdownEditor<'a> {
                                 &mut edit_state,
                                 colors,
                                 self.font_size,
-                                self.font_family,
+                                &self.font_family,
                                 0,
+                                self.paragraph_indent,
                             );
                             
                             // Record the line mapping for this top-level node
@@ -804,10 +852,11 @@ fn render_node_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
     parent_list_type: Option<&ListType>,
     list_item_index: Option<usize>,
+    paragraph_indent: ParagraphIndent,
 ) {
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
@@ -834,6 +883,7 @@ fn render_node_with_structural_keys(
                 font_size,
                 editor_font,
                 indent_level,
+                paragraph_indent,
             );
         }
         MarkdownNodeType::CodeBlock {
@@ -854,6 +904,7 @@ fn render_node_with_structural_keys(
                 font_size,
                 editor_font,
                 indent_level,
+                paragraph_indent,
             );
         }
         MarkdownNodeType::List { list_type, .. } => {
@@ -880,16 +931,22 @@ fn render_node_with_structural_keys(
             render_front_matter(ui, colors, font_size, content);
         }
         MarkdownNodeType::HtmlBlock(html) => {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("HTML:").color(colors.quote_text).italics());
-            });
-            ui.add(
-                TextEdit::multiline(&mut html.clone())
-                    .code_editor()
-                    .font(FontId::monospace(font_size))
-                    .desired_width(f32::INFINITY)
-                    .interactive(false),
-            );
+            // Hide HTML comments completely (standard markdown behavior)
+            // HTML comments start with <!-- and end with -->
+            let trimmed = html.trim();
+            if trimmed.starts_with("<!--") && trimmed.ends_with("-->") {
+                // HTML comment - don't render anything
+            } else {
+                // Other HTML blocks - show with subtle indicator
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("⟨HTML⟩")
+                            .color(colors.quote_text)
+                            .small()
+                            .italics(),
+                    );
+                });
+            }
         }
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
@@ -932,6 +989,7 @@ fn render_node_with_structural_keys(
                     indent_level,
                     parent_list_type,
                     list_item_index,
+                    paragraph_indent,
                 );
             }
         }
@@ -959,8 +1017,9 @@ fn render_node(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
+    paragraph_indent: ParagraphIndent,
 ) {
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
@@ -985,6 +1044,7 @@ fn render_node(
                 font_size,
                 editor_font,
                 indent_level,
+                paragraph_indent,
             );
         }
         MarkdownNodeType::CodeBlock {
@@ -1004,6 +1064,7 @@ fn render_node(
                 font_size,
                 editor_font,
                 indent_level,
+                paragraph_indent,
             );
         }
         MarkdownNodeType::List { list_type, .. } => {
@@ -1029,17 +1090,22 @@ fn render_node(
             render_front_matter(ui, colors, font_size, content);
         }
         MarkdownNodeType::HtmlBlock(html) => {
-            // Show HTML blocks as code
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("HTML:").color(colors.quote_text).italics());
-            });
-            ui.add(
-                TextEdit::multiline(&mut html.clone())
-                    .code_editor()
-                    .font(FontId::monospace(font_size))
-                    .desired_width(f32::INFINITY)
-                    .interactive(false),
-            );
+            // Hide HTML comments completely (standard markdown behavior)
+            // HTML comments start with <!-- and end with -->
+            let trimmed = html.trim();
+            if trimmed.starts_with("<!--") && trimmed.ends_with("-->") {
+                // HTML comment - don't render anything
+            } else {
+                // Other HTML blocks - show with subtle indicator
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("⟨HTML⟩")
+                            .color(colors.quote_text)
+                            .small()
+                            .italics(),
+                    );
+                });
+            }
         }
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
@@ -1082,6 +1148,7 @@ fn render_node(
                     font_size,
                     editor_font,
                     indent_level,
+                    paragraph_indent,
                 );
             }
         }
@@ -1109,7 +1176,7 @@ fn render_heading(
     edit_state: &mut EditState,
     colors: &EditorColors,
     base_font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     level: HeadingLevel,
 ) {
     let text = node.text_content();
@@ -1223,7 +1290,7 @@ fn render_heading_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     base_font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     level: HeadingLevel,
 ) {
     let text = node.text_content();
@@ -1314,8 +1381,9 @@ fn render_paragraph_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
+    paragraph_indent: ParagraphIndent,
 ) {
     // Check if paragraph contains special inline elements
     let has_inline_elements = node.children.iter().any(|c| {
@@ -1342,6 +1410,13 @@ fn render_paragraph_with_structural_keys(
 
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    // Calculate CJK paragraph indentation (only for top-level paragraphs)
+    let cjk_indent = if indent_level == 0 {
+        paragraph_indent.to_pixels(font_size).unwrap_or(0.0)
+    } else {
+        0.0
+    };
+
     if has_inline_elements {
         // For formatted paragraphs, use hybrid click-to-edit approach
         let formatted_para_id = ui.id().with("formatted_paragraph_sk").with(node.start_line);
@@ -1358,7 +1433,8 @@ fn render_paragraph_with_structural_keys(
         let widget_id = formatted_para_id.with("text_edit");
 
         ui.horizontal(|ui| {
-            ui.add_space(4.0 + indent_level as f32 * 20.0);
+            // Base indent + list indent + CJK paragraph indent
+            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
 
             if para_edit_state.editing {
                 // EDIT MODE: Show TextEdit with raw markdown
@@ -1473,7 +1549,8 @@ fn render_paragraph_with_structural_keys(
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
         ui.horizontal(|ui| {
-            ui.add_space(4.0 + indent_level as f32 * 20.0);
+            // Base indent + list indent + CJK paragraph indent
+            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
                 let response = ui.add(
@@ -1506,8 +1583,9 @@ fn render_blockquote_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
+    paragraph_indent: ParagraphIndent,
 ) {
     ui.horizontal(|ui| {
         let (rect, _) =
@@ -1530,6 +1608,7 @@ fn render_blockquote_with_structural_keys(
                     indent_level + 1,
                     None,
                     None,
+                    paragraph_indent,
                 );
             }
         });
@@ -1545,7 +1624,7 @@ fn render_list_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
     list_type: &ListType,
 ) {
@@ -1601,7 +1680,7 @@ fn render_list_item_with_structural_keys(
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
     list_type: &ListType,
     item_number: u32,
@@ -1942,8 +2021,9 @@ fn render_paragraph(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
+    paragraph_indent: ParagraphIndent,
 ) {
     // Check if paragraph contains any special inline elements (links, formatting)
     let has_inline_elements = node.children.iter().any(|c| {
@@ -1972,6 +2052,13 @@ fn render_paragraph(
     // Get font family for regular (non-styled) text
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    // Calculate CJK paragraph indentation (only for top-level paragraphs)
+    let cjk_indent = if indent_level == 0 {
+        paragraph_indent.to_pixels(font_size).unwrap_or(0.0)
+    } else {
+        0.0
+    };
+
     if has_inline_elements {
         // For formatted paragraphs, use hybrid click-to-edit approach
         let formatted_para_id = ui.id().with("formatted_paragraph").with(node.start_line);
@@ -1989,7 +2076,8 @@ fn render_paragraph(
         let widget_id = formatted_para_id.with("text_edit");
 
         ui.horizontal(|ui| {
-            ui.add_space(4.0 + indent_level as f32 * 20.0);
+            // Base indent + list indent + CJK paragraph indent
+            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
 
             if para_edit_state.editing {
                 // EDIT MODE: Show TextEdit with raw markdown
@@ -2110,8 +2198,8 @@ fn render_paragraph(
 
         let (has_focus, selection, changed, new_text) = ui
             .horizontal(|ui| {
-                // Add base left indent + any extra indentation
-                ui.add_space(4.0 + indent_level as f32 * 20.0);
+                // Add base left indent + list indent + CJK paragraph indent
+                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
 
                 if let Some(editable) = edit_state.get_node_mut(node_id) {
                     let text_edit = TextEdit::multiline(&mut editable.text)
@@ -2211,7 +2299,7 @@ impl TextStyle {
     ///
     /// This uses explicit font families for bold/italic instead of relying
     /// on egui's `.strong()` method which may not work with all fonts.
-    fn apply(&self, text: RichText, font_size: f32, editor_font: EditorFont) -> RichText {
+    fn apply(&self, text: RichText, font_size: f32, editor_font: &EditorFont) -> RichText {
         // Get the appropriate font family for the style combination
         let family = fonts::get_styled_font_family(self.bold, self.italic, editor_font);
         let mut styled = text.font(FontId::new(font_size, family));
@@ -2232,7 +2320,7 @@ fn render_inline_content(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
 ) {
     ui.horizontal_wrapped(|ui| {
@@ -2264,7 +2352,7 @@ fn render_inline_node(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     style: TextStyle,
 ) {
     match &node.node_type {
@@ -2557,8 +2645,9 @@ fn render_blockquote(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
+    paragraph_indent: ParagraphIndent,
 ) {
     ui.horizontal(|ui| {
         // Quote border
@@ -2579,6 +2668,7 @@ fn render_blockquote(
                     font_size,
                     editor_font,
                     indent_level + 1,
+                    paragraph_indent,
                 );
             }
         });
@@ -2593,7 +2683,7 @@ fn render_list(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
     list_type: &ListType,
 ) {
@@ -2687,7 +2777,7 @@ fn render_list_item(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     indent_level: usize,
     list_type: &ListType,
     item_number: u32,
@@ -3313,7 +3403,7 @@ fn render_styled_inline(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
-    editor_font: EditorFont,
+    editor_font: &EditorFont,
     style: TextStyle,
 ) {
     // Render all children with the given style

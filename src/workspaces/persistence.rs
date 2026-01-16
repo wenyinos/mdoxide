@@ -84,9 +84,10 @@ pub fn load_workspace_state(workspace_root: &Path) -> Option<WorkspaceState> {
     }
 }
 
-/// Save workspace state to disk.
+/// Save workspace state to disk using atomic write.
 ///
 /// Creates the `.ferrite` directory if it doesn't exist.
+/// Uses write-to-temp-then-rename pattern to prevent partial/corrupted files.
 pub fn save_workspace_state(
     workspace_root: &Path,
     state: &WorkspaceState,
@@ -95,14 +96,33 @@ pub fn save_workspace_state(
 
     // Create directory if needed
     if !config_dir.exists() {
+        log::debug!("Creating workspace config directory: {:?}", config_dir);
         std::fs::create_dir_all(&config_dir)?;
     }
 
     let state_path = config_dir.join(STATE_FILE);
+    let temp_path = state_path.with_extension("tmp");
     let content = serde_json::to_string_pretty(state)?;
 
-    std::fs::write(&state_path, content)?;
-    log::debug!("Saved workspace state to {:?}", state_path);
+    // Atomic write: write to temp file, then rename
+    if let Err(e) = std::fs::write(&temp_path, &content) {
+        log::error!("Failed to write workspace state temp file: {}", e);
+        return Err(e);
+    }
+
+    if let Err(e) = std::fs::rename(&temp_path, &state_path) {
+        log::error!("Failed to rename workspace state temp file: {}", e);
+        // Clean up temp file on failure
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(e);
+    }
+
+    log::debug!(
+        "Saved workspace state to {:?} ({} recent files, {} expanded paths)",
+        state_path,
+        state.recent_files.len(),
+        state.expanded_paths.len()
+    );
 
     Ok(())
 }

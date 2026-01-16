@@ -5,6 +5,11 @@
 //!
 //! A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust and egui.
 
+// Initialize internationalization system
+// The locales directory contains YAML files for each supported language (e.g., en.yaml, zh.yaml)
+// Usage: rust_i18n::t!("menu.file.open") returns the translated string
+rust_i18n::i18n!("locales");
+
 mod app;
 mod config;
 mod editor;
@@ -13,6 +18,7 @@ mod export;
 mod files;
 mod fonts;
 mod markdown;
+mod path_utils;
 mod preview;
 mod state;
 mod string_utils;
@@ -25,6 +31,7 @@ use app::FerriteApp;
 use clap::Parser;
 use config::{load_config, LogLevel};
 use log::info;
+use rust_i18n::{set_locale, t};
 use std::path::PathBuf;
 use ui::get_app_icon;
 
@@ -72,8 +79,11 @@ fn main() -> eframe::Result<()> {
     // Parse CLI arguments first (before logging, so --help/--version work without config)
     let cli = Cli::parse();
 
-    // Load settings to get configuration (including log level)
+    // Load settings to get configuration (including log level and language)
     let settings = load_config();
+
+    // Apply saved language setting for i18n
+    set_locale(settings.language.locale_code());
 
     // Determine effective log level: CLI > config > default (Warn)
     let effective_log_level = cli.log_level.unwrap_or(settings.log_level);
@@ -84,6 +94,12 @@ fn main() -> eframe::Result<()> {
         .init();
 
     info!("Starting {}", APP_NAME);
+    info!(
+        "Language: {} ({})",
+        settings.language.native_name(),
+        settings.language.locale_code()
+    );
+    info!("i18n initialized: {}", t!("app.name")); // Test i18n system
     info!(
         "Log level: {} (source: {})",
         effective_log_level.display_name(),

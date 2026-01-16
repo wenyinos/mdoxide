@@ -24,11 +24,13 @@ The editor now supports three view modes that cycle through with `Ctrl+E`:
 - Splitter shows visual grip handles for easy identification
 - Resize cursor appears on hover
 
-### Real-Time Preview
+### Dual Editable Panes
 
-- Preview updates instantly as you type in the raw editor
-- No debouncing needed - preview reflects current content immediately
-- Preview pane scrolls independently from raw editor
+- Both panes edit the same content - changes sync instantly between them
+- Raw editor on the left for markdown source editing
+- Rendered view on the right for WYSIWYG editing (same as full Rendered mode)
+- Full undo/redo support for edits in either pane
+- Each pane scrolls independently
 
 ### Independent Scrolling
 
@@ -126,7 +128,6 @@ pub struct TabInfo {
 
 ## Limitations
 
-- Preview pane is interactive (Edit/Copy buttons work, cursor can be placed, but text edits don't persist)
 - Split view not available for structured data files (JSON, YAML, TOML)
 - In Zen Mode, only the raw editor is shown (preview hidden)
 - No scroll synchronization between panes (planned for v0.3.0)

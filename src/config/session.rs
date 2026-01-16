@@ -138,6 +138,27 @@ pub enum SessionAppMode {
     },
 }
 
+impl SessionAppMode {
+    /// Check if this is a valid workspace mode with a non-empty path.
+    pub fn is_valid_workspace(&self) -> bool {
+        match self {
+            Self::Workspace { root: Some(path) } => {
+                // Path must be non-empty and have valid components
+                !path.as_os_str().is_empty() && path.components().count() > 0
+            }
+            _ => false,
+        }
+    }
+
+    /// Get the workspace root path if in workspace mode and path is valid.
+    pub fn workspace_root(&self) -> Option<&PathBuf> {
+        match self {
+            Self::Workspace { root: Some(path) } if !path.as_os_str().is_empty() => Some(path),
+            _ => None,
+        }
+    }
+}
+
 /// State of a single tab in the session.
 ///
 /// This captures all the information needed to restore a tab,
@@ -184,6 +205,11 @@ pub struct SessionTabState {
     /// Hash of original content when file was opened (for quick conflict check)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_content_hash: Option<u64>,
+
+    /// CSV/TSV delimiter override (None = auto-detect)
+    /// Stored as single byte: ',' = 44, '\t' = 9, ';' = 59, '|' = 124
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub csv_delimiter: Option<u8>,
 }
 
 impl Default for SessionTabState {
@@ -201,6 +227,7 @@ impl Default for SessionTabState {
             has_unsaved_content: false,
             file_mtime: None,
             original_content_hash: None,
+            csv_delimiter: None,
         }
     }
 }
@@ -384,9 +411,29 @@ fn save_session_to_file(state: &SessionState, is_recovery: bool) -> bool {
         return false;
     };
 
+    // Log detailed session state info for debugging
+    let workspace_info = match &state.app_mode {
+        SessionAppMode::SingleFile => "SingleFile".to_string(),
+        SessionAppMode::Workspace { root } => {
+            if let Some(p) = root {
+                format!("Workspace({})", p.display())
+            } else {
+                "Workspace(None)".to_string()
+            }
+        }
+    };
+    debug!(
+        "Saving session state: is_recovery={}, app_mode={}, tabs={}, clean_shutdown={}",
+        is_recovery,
+        workspace_info,
+        state.tabs.len(),
+        state.clean_shutdown
+    );
+
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         if !parent.exists() {
+            debug!("Creating session directory: {}", parent.display());
             if let Err(e) = fs::create_dir_all(parent) {
                 error!("Failed to create config directory: {}", e);
                 return false;
@@ -405,11 +452,13 @@ fn save_session_to_file(state: &SessionState, is_recovery: bool) -> bool {
 
     // Atomic write: write to temp file, then rename
     let temp_path = path.with_extension("tmp");
+    debug!("Writing session to temp file: {}", temp_path.display());
     if let Err(e) = fs::write(&temp_path, &json) {
         error!("Failed to write session temp file: {}", e);
         return false;
     }
 
+    debug!("Renaming temp file to: {}", path.display());
     if let Err(e) = fs::rename(&temp_path, &path) {
         error!("Failed to rename session temp file: {}", e);
         // Try to clean up temp file
@@ -418,9 +467,10 @@ fn save_session_to_file(state: &SessionState, is_recovery: bool) -> bool {
     }
 
     debug!(
-        "Saved session state to {} ({} tabs)",
+        "Successfully saved session state to {} ({} tabs, {})",
         path.display(),
-        state.tabs.len()
+        state.tabs.len(),
+        workspace_info
     );
     true
 }
@@ -433,8 +483,14 @@ pub fn load_session_state() -> SessionRestoreResult {
     let recovery_path = get_crash_recovery_file_path();
     let session_path = get_session_file_path();
 
+    debug!(
+        "Loading session state: recovery_path={:?}, session_path={:?}",
+        recovery_path, session_path
+    );
+
     // Check if there's a lock file (indicates previous crash)
     let is_crash = check_and_clear_lock_file();
+    debug!("Lock file check: is_crash={}", is_crash);
 
     // Try to load crash recovery file if it exists and is newer
     let (session, from_recovery) = match (&recovery_path, &session_path) {
@@ -442,35 +498,85 @@ pub fn load_session_state() -> SessionRestoreResult {
             let recovery_exists = recovery.exists();
             let session_exists = session.exists();
 
+            debug!(
+                "Session file existence: recovery={}, session={}",
+                recovery_exists, session_exists
+            );
+
             if recovery_exists && session_exists {
                 // Compare modification times
                 let recovery_mtime = get_file_mtime(recovery);
                 let session_mtime = get_file_mtime(session);
 
+                debug!(
+                    "Session file mtimes: recovery={:?}, session={:?}",
+                    recovery_mtime, session_mtime
+                );
+
                 if recovery_mtime > session_mtime {
+                    debug!("Using recovery file (newer)");
                     (load_session_from_file(recovery), true)
                 } else {
+                    debug!("Using session file (newer or equal)");
                     (load_session_from_file(session), false)
                 }
             } else if recovery_exists {
+                debug!("Using recovery file (only one exists)");
                 (load_session_from_file(recovery), true)
             } else if session_exists {
+                debug!("Using session file (only one exists)");
                 (load_session_from_file(session), false)
             } else {
+                debug!("No session files found");
                 (None, false)
             }
         }
-        (Some(recovery), None) if recovery.exists() => (load_session_from_file(recovery), true),
-        (None, Some(session)) if session.exists() => (load_session_from_file(session), false),
-        _ => (None, false),
+        (Some(recovery), None) if recovery.exists() => {
+            debug!("Using recovery file (session path not available)");
+            (load_session_from_file(recovery), true)
+        }
+        (None, Some(session)) if session.exists() => {
+            debug!("Using session file (recovery path not available)");
+            (load_session_from_file(session), false)
+        }
+        _ => {
+            debug!("No session files available");
+            (None, false)
+        }
     };
 
     // Determine if this is a crash recovery situation
     result.is_crash_recovery = is_crash || (from_recovery && session.as_ref().map(|s| !s.clean_shutdown).unwrap_or(false));
+    debug!(
+        "Session recovery status: is_crash_recovery={}, from_recovery={}",
+        result.is_crash_recovery, from_recovery
+    );
 
     if let Some(mut session) = session {
+        // Log workspace mode info
+        let workspace_info = match &session.app_mode {
+            SessionAppMode::SingleFile => "SingleFile".to_string(),
+            SessionAppMode::Workspace { root } => {
+                if let Some(p) = root {
+                    format!("Workspace({})", p.display())
+                } else {
+                    "Workspace(None)".to_string()
+                }
+            }
+        };
+        debug!(
+            "Loaded session: app_mode={}, tabs={}, clean_shutdown={}",
+            workspace_info,
+            session.tabs.len(),
+            session.clean_shutdown
+        );
+
         // Load recovery content for tabs with unsaved changes
         result.recovered_content = load_all_recovery_content();
+        debug!(
+            "Loaded recovery content for {} tabs",
+            result.recovered_content.len()
+        );
 
         // Check for file conflicts
         for tab in &session.tabs {
@@ -485,12 +591,22 @@ pub fn load_session_state() -> SessionRestoreResult {
             }
         }
 
+        if !result.conflicted_tabs.is_empty() || !result.missing_file_tabs.is_empty() {
+            debug!(
+                "File status: {} conflicted, {} missing",
+                result.conflicted_tabs.len(),
+                result.missing_file_tabs.len()
+            );
+        }
+
         // Update recovery flag based on content
         if result.is_crash_recovery && session.has_unsaved_changes() {
             session.mark_crash_recovery();
         }
 
         result.session = Some(session);
+    } else {
+        debug!("No session to restore");
     }
 
     result
@@ -498,6 +614,8 @@ pub fn load_session_state() -> SessionRestoreResult {
 
 /// Load session from a specific file
 fn load_session_from_file(path: &PathBuf) -> Option<SessionState> {
+    debug!("Loading session from file: {}", path.display());
+
     let contents = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
@@ -508,10 +626,21 @@ fn load_session_from_file(path: &PathBuf) -> Option<SessionState> {
 
     match serde_json::from_str::<SessionState>(&contents) {
         Ok(state) => {
+            let workspace_info = match &state.app_mode {
+                SessionAppMode::SingleFile => "SingleFile".to_string(),
+                SessionAppMode::Workspace { root } => {
+                    if let Some(p) = root {
+                        format!("Workspace({})", p.display())
+                    } else {
+                        "Workspace(None)".to_string()
+                    }
+                }
+            };
             info!(
-                "Loaded session state from {} ({} tabs)",
+                "Loaded session state from {} ({} tabs, {})",
                 path.display(),
-                state.tabs.len()
+                state.tabs.len(),
+                workspace_info
             );
             Some(state)
         }
@@ -1161,6 +1290,7 @@ mod tests {
             has_unsaved_content: true,
             file_mtime: Some(1234567890),
             original_content_hash: Some(12345),
+            csv_delimiter: None,
         });
         state.active_tab_index = 0;
 

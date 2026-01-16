@@ -84,9 +84,17 @@ Boolean flag controlling popup visibility. Toggled by:
 
 Recent files are stored in `Settings.recent_files`:
 - Type: `Vec<PathBuf>`
-- Maximum: 10 files (configurable via `max_recent_files`)
+- Maximum: 20 files (configurable via `max_recent_files`)
 - Automatically updated on file open
-- Persisted in config file
+- **Persisted immediately** to config file on every file open/save-as
+- **Stale path pruning**: Non-existent files are automatically removed on app startup
+
+### Persistence Guarantees
+
+The recent files list is designed to survive unexpected shutdowns:
+- Settings are saved immediately after adding a file to the recent list
+- Uses atomic writes (write-to-temp-then-rename pattern) to prevent corruption
+- On load, files that no longer exist are automatically pruned from the list
 
 ## Testing
 
@@ -97,8 +105,15 @@ Unit tests in `src/state.rs`:
 - `test_open_file_already_open_without_focus` - Background duplicate
 - `test_open_file_updates_recent_files` - Recent files list updated
 
+Unit tests in `src/config/settings.rs`:
+- `test_add_recent_file` - Adding files, deduplication, and list trimming
+- `test_prune_stale_recent_files` - Pruning non-existent files
+- `test_prune_stale_recent_files_empty_list` - Edge case for empty list
+- `test_sanitize_recent_files` - Settings sanitization includes recent files
+
 ## Related Features
 
-- **Settings persistence**: Recent files saved/loaded from config
+- **Settings persistence**: Recent files saved/loaded from config, with immediate save on file open
 - **Tab management**: Opens in new tabs, reuses existing tabs for same file
 - **Toast messages**: Feedback for background opens
+- **Atomic writes**: Config file writes use temp-file-rename pattern (see `docs/technical/config-persistence.md`)

@@ -32,6 +32,13 @@ const CORNER_GRAB_SIZE: f32 = 10.0;
 /// This prevents cursor flicker conflicts with window control buttons.
 const TITLE_BAR_EXCLUSION_HEIGHT: f32 = 35.0;
 
+/// Width of the button area on the right side of the title bar.
+/// This area contains window control buttons (close, maximize, minimize, fullscreen)
+/// and other title bar buttons (settings, zen mode, view mode).
+/// North edge resize is only disabled in this area to allow resize from the
+/// left and center portions of the window's top edge.
+const TITLE_BAR_BUTTON_AREA_WIDTH: f32 = 280.0;
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -165,7 +172,11 @@ fn detect_resize_direction(window_rect: Rect, pointer_pos: Pos2) -> Option<Resiz
 ///
 /// The `title_bar_height` parameter specifies the height of the title bar area
 /// where north-edge resize detection should be disabled to avoid conflicts
-/// with window control buttons (close, maximize, minimize).
+/// with window control buttons (close, maximize, minimize, fullscreen).
+///
+/// North edge resize is only disabled in the RIGHT portion of the title bar
+/// where the window control buttons are located. The left and center portions
+/// of the top edge can still be used for resizing.
 fn detect_resize_direction_with_exclusion(
     window_rect: Rect,
     pointer_pos: Pos2,
@@ -174,9 +185,16 @@ fn detect_resize_direction_with_exclusion(
     let min = window_rect.min;
     let max = window_rect.max;
 
-    // Check if pointer is in the title bar exclusion zone
-    // If so, disable ONLY north-edge and north-corner resize detection
+    // Check if pointer is in the title bar exclusion zone (top area)
     let in_title_bar = pointer_pos.y < min.y + title_bar_height;
+
+    // Check if pointer is in the button area (right side of title bar)
+    // Window control buttons (close, max, min, fullscreen) and title bar buttons
+    // (settings, zen mode, view mode) are all on the right side.
+    let in_button_area = pointer_pos.x > max.x - TITLE_BAR_BUTTON_AREA_WIDTH;
+
+    // North edge/corner resize is only disabled when BOTH in title bar AND in button area
+    let disable_north_resize = in_title_bar && in_button_area;
 
     // Check if pointer is near each edge
     let near_left = pointer_pos.x < min.x + RESIZE_BORDER_WIDTH;
@@ -192,17 +210,22 @@ fn detect_resize_direction_with_exclusion(
     let in_bottom_zone = pointer_pos.y > max.y - CORNER_GRAB_SIZE;
 
     // Corners take priority (check corner combinations first)
-    // NorthWest and NorthEast corners are DISABLED when in title bar
-    if !in_title_bar && (near_top || in_top_zone) {
+    // NorthWest corner: always enabled (no buttons on left side)
+    // NorthEast corner: disabled when in button area (buttons are there)
+    if near_top || in_top_zone {
+        // NorthWest corner - enabled unless we're in the button area AND title bar
         if (near_left || in_left_zone)
             && pointer_pos.x < min.x + CORNER_GRAB_SIZE
             && pointer_pos.y < min.y + CORNER_GRAB_SIZE
+            && !disable_north_resize
         {
             return Some(ResizeDirection::NorthWest);
         }
+        // NorthEast corner - disabled when in button area (always disabled, as it's in button zone)
         if (near_right || in_right_zone)
             && pointer_pos.x > max.x - CORNER_GRAB_SIZE
             && pointer_pos.y < min.y + CORNER_GRAB_SIZE
+            && !in_title_bar  // NorthEast is always in button area, so disable if in title bar
         {
             return Some(ResizeDirection::NorthEast);
         }
@@ -225,17 +248,32 @@ fn detect_resize_direction_with_exclusion(
     }
 
     // Edge detection - exclude corner zones
-    // For East/West: when in title bar area, don't exclude top zone (since corners are disabled there)
-    let exclude_top_for_sides = if in_title_bar { false } else { in_top_zone };
+    // For East/West edges:
+    // - Normally exclude top and bottom corner zones so corners take priority
+    // - In title bar area, still exclude corner zones (NorthEast corner is disabled,
+    //   but we don't want to show East edge in that corner either as it conflicts with buttons)
+    // - West edge can work in top zone when NorthWest corner is enabled (but the corner will take priority)
     
-    if near_left && !exclude_top_for_sides && !in_bottom_zone {
+    // Check if we're in the actual corner zones (both dimensions)
+    let in_northwest_corner = in_left_zone && in_top_zone;
+    let in_northeast_corner = in_right_zone && in_top_zone;
+    let in_southwest_corner = in_left_zone && in_bottom_zone;
+    let in_southeast_corner = in_right_zone && in_bottom_zone;
+
+    // West edge: exclude corner zones
+    // In title bar outside button area, NorthWest corner works, so exclude that zone
+    // In title bar in button area, corners are disabled, but still exclude corner zones to avoid confusion
+    if near_left && !in_northwest_corner && !in_southwest_corner {
         return Some(ResizeDirection::West);
     }
-    if near_right && !exclude_top_for_sides && !in_bottom_zone {
+    // East edge: exclude corner zones
+    // In title bar, NorthEast corner is disabled, and we also want to block East edge there
+    // (since that's where the window control buttons are)
+    if near_right && !in_northeast_corner && !in_southeast_corner {
         return Some(ResizeDirection::East);
     }
-    // North edge disabled in title bar area
-    if !in_title_bar && near_top && !in_left_zone && !in_right_zone {
+    // North edge - only disabled when in button area of title bar
+    if near_top && !in_left_zone && !in_right_zone && !disable_north_resize {
         return Some(ResizeDirection::North);
     }
     if near_bottom && !in_left_zone && !in_right_zone {
@@ -711,5 +749,91 @@ mod tests {
             direction_to_cursor(ResizeDirection::SouthEast),
             CursorIcon::ResizeSouthEast
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Title Bar Exclusion Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_title_bar_north_edge_left_side() {
+        // Large window to test title bar exclusion
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // North edge on the LEFT side (outside button area) - should work
+        // Position: x=100 (well outside the button area which is at x > 800 - 280 = 520)
+        let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(100.0, 2.0), title_bar_height);
+        assert_eq!(direction, Some(ResizeDirection::North));
+    }
+
+    #[test]
+    fn test_title_bar_north_edge_button_area_blocked() {
+        // Large window to test title bar exclusion
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // North edge in the BUTTON AREA (right side) - should be blocked
+        // Button area starts at x = 800 - 280 = 520
+        let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(700.0, 2.0), title_bar_height);
+        assert_eq!(direction, None);
+    }
+
+    #[test]
+    fn test_title_bar_northwest_corner() {
+        // Large window to test title bar exclusion
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // NorthWest corner (left side, no buttons) - should work
+        let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(2.0, 2.0), title_bar_height);
+        assert_eq!(direction, Some(ResizeDirection::NorthWest));
+    }
+
+    #[test]
+    fn test_title_bar_northeast_corner_blocked() {
+        // Large window to test title bar exclusion
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // NorthEast corner (right side, in button area) - should be blocked
+        let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(798.0, 2.0), title_bar_height);
+        assert_eq!(direction, None);
+    }
+
+    #[test]
+    fn test_title_bar_south_corners_always_work() {
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // SouthWest corner - should always work
+        assert_eq!(
+            detect_resize_direction_with_exclusion(rect, Pos2::new(2.0, 598.0), title_bar_height),
+            Some(ResizeDirection::SouthWest)
+        );
+
+        // SouthEast corner - should always work
+        assert_eq!(
+            detect_resize_direction_with_exclusion(rect, Pos2::new(798.0, 598.0), title_bar_height),
+            Some(ResizeDirection::SouthEast)
+        );
+    }
+
+    #[test]
+    fn test_title_bar_east_west_edges_work_in_title_bar() {
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
+
+        // West edge in title bar area (but not in corner zone) - should work
+        // y=20 is outside the corner zone (CORNER_GRAB_SIZE = 10) but inside title bar (35)
+        assert_eq!(
+            detect_resize_direction_with_exclusion(rect, Pos2::new(2.0, 20.0), title_bar_height),
+            Some(ResizeDirection::West)
+        );
+
+        // East edge in title bar area (but not in corner zone) - should work
+        // y=25 is outside the corner zone (10px) but inside title bar (35px)
+        let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(798.0, 25.0), title_bar_height);
+        assert_eq!(direction, Some(ResizeDirection::East));
     }
 }

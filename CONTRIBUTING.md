@@ -221,6 +221,50 @@ src/
 
 See [docs/index.md](docs/index.md) for detailed technical documentation.
 
+## Translating
+
+Ferrite uses [Weblate](https://hosted.weblate.org/projects/ferrite/) for community translations. You can help translate Ferrite into your language!
+
+### How to Contribute Translations
+
+1. **Visit [Weblate](https://hosted.weblate.org/projects/ferrite/ferrite-ui/)** and create an account
+2. **Select your language** (or request a new one)
+3. **Start translating** - Weblate provides a user-friendly interface
+4. **Submit** - Your translations will be automatically synced via Pull Request
+
+### Translation Guidelines
+
+- **Keep translations concise** - UI elements have limited space
+- **Preserve placeholders** - Keep `%{variable}` placeholders intact (e.g., `%{count}`, `%{filename}`)
+- **Match tone** - Use a friendly, professional tone consistent with other translations
+- **Test context** - Consider where the string appears in the UI
+
+### Adding a New Language
+
+To add support for a new language:
+
+1. Request the language on Weblate, or
+2. Create `locales/<language-code>.yaml` based on `locales/en.yaml`
+
+Language codes follow ISO 639-1 (e.g., `de` for German, `fr` for French, `nb` for Norwegian Bokmål).
+
+### Translation File Structure
+
+Translations are stored in `locales/` as YAML files:
+- `en.yaml` - English (base language)
+- `de.yaml` - German
+- `fr.yaml` - French
+- etc.
+
+The file uses a nested key structure:
+```yaml
+menu:
+  file:
+    label: "File"
+    new: "New"
+    open: "Open..."
+```
+
 ## Getting Help
 
 - **Documentation:** Check [docs/](docs/) for technical details

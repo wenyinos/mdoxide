@@ -386,7 +386,7 @@ impl<'a> EditorWidget<'a> {
         let content = &mut self.tab.content;
 
         // Get font family for the editor
-        let font_family = fonts::get_styled_font_family(false, false, self.font_family);
+        let font_family = fonts::get_styled_font_family(false, false, &self.font_family);
 
         // Determine syntax language from file path (if syntax highlighting is enabled)
         let syntax_language = if self.syntax_highlighting {
@@ -638,32 +638,31 @@ impl<'a> EditorWidget<'a> {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
 
-        // Calculate centering margin for Zen Mode or max_line_width setting
-        // Priority: Zen Mode uses its own setting, otherwise use max_line_width
+        // Calculate content width and centering margin
+        // Both Zen mode and non-zen mode use max_line_width setting
+        // Zen mode: centers content; Non-zen mode: left-aligned
         let char_width = font_size * 0.6; // Approximate average character width
-        let (content_margin, max_content_width_px) = if self.zen_mode {
-            // Zen Mode: use zen_max_column_width (in characters)
-            let max_content_width = char_width * self.zen_max_column_width;
-            let available = ui.available_width();
+        let outer_available_width = ui.available_width();
+        
+        let (content_margin, effective_content_width) = if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
+            // max_line_width is set - constrain width
+            // Cap to available width to prevent overflow
+            let effective_width = max_width_px.min(outer_available_width);
             
-            let margin = if available > max_content_width {
-                (available - max_content_width) / 2.0
+            if self.zen_mode {
+                // Zen mode: center the content
+                let margin = if outer_available_width > effective_width {
+                    (outer_available_width - effective_width) / 2.0
+                } else {
+                    0.0
+                };
+                (margin, Some(effective_width))
             } else {
-                0.0
-            };
-            (margin, Some(max_content_width))
-        } else if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
-            // max_line_width setting: apply width constraint and centering
-            let available = ui.available_width();
-            
-            let margin = if available > max_width_px {
-                (available - max_width_px) / 2.0
-            } else {
-                0.0
-            };
-            (margin, Some(max_width_px))
+                // Non-zen mode: left-aligned (no margin)
+                (0.0, Some(effective_width))
+            }
         } else {
-            // No width constraint
+            // No max_line_width set - use full available width, no centering
             (0.0, None)
         };
         
@@ -698,17 +697,15 @@ impl<'a> EditorWidget<'a> {
 
                 // Create the multiline text editor
                 // Constrain width when Zen Mode is enabled or max_line_width is set
-                let desired_width = if let Some(max_width) = max_content_width_px {
-                    max_width
-                } else {
-                    f32::INFINITY
-                };
+                // Use pre-calculated effective width (already capped to available space)
+                let desired_width = effective_content_width.unwrap_or(f32::INFINITY);
                 
                 let text_edit = TextEdit::multiline(content)
                     .id(id)
                     .frame(self.frame)
                     .font(FontId::new(font_size, font_family.clone()))
                     .desired_width(desired_width)
+                    .lock_focus(true) // Prevent Tab from losing focus; Tab inserts indent instead
                     .layouter(&mut layouter);
 
                 // Show the editor and get the output
@@ -750,8 +747,11 @@ impl<'a> EditorWidget<'a> {
                             };
 
                             // Get rectangles for this text range from the galley
-                            let cursor_start = egui::text::CCursor::new(match_start);
-                            let cursor_end = egui::text::CCursor::new(match_end);
+                            // Convert byte positions to character positions for galley
+                            let char_start = byte_to_char_pos(content, match_start);
+                            let char_end = byte_to_char_pos(content, match_end);
+                            let cursor_start = egui::text::CCursor::new(char_start);
+                            let cursor_end = egui::text::CCursor::new(char_end);
 
                             // Get the row and position for start and end
                             let start_cursor = galley.from_ccursor(cursor_start);
@@ -830,8 +830,11 @@ impl<'a> EditorWidget<'a> {
                     };
 
                     // Get rectangles for the highlight range from the galley
-                    let cursor_start = egui::text::CCursor::new(hl_start);
-                    let cursor_end = egui::text::CCursor::new(hl_end);
+                    // Convert byte positions to character positions for galley
+                    let char_start = byte_to_char_pos(content, hl_start);
+                    let char_end = byte_to_char_pos(content, hl_end);
+                    let cursor_start = egui::text::CCursor::new(char_start);
+                    let cursor_end = egui::text::CCursor::new(char_end);
 
                     let start_cursor = galley.from_ccursor(cursor_start);
                     let end_cursor = galley.from_ccursor(cursor_end);

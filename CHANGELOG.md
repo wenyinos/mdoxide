@@ -5,7 +5,87 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.5] - 2026-01-16
+
+### Added
+
+#### Mermaid Improvements
+- **Modular refactor** - Split 7000+ line `mermaid.rs` into `src/markdown/mermaid/` directory with separate files per diagram type
+- **Edge parsing fixes** - Fix chained edge parsing (`A --> B --> C`), arrow pattern matching, label extraction
+- **Flowchart direction fix** - Respect LR/TB/RL/BT direction keywords in layout algorithm
+- **Node detection fixes** - Fix missing nodes and improve branching layout in complex flowcharts
+- **YAML frontmatter support** - Parse `---` metadata blocks with `title:`, `config:` etc. (MermaidJS v8.13+ syntax)
+- **Parallel edge operator** - Support `A --> B & C & D` syntax for multiple edges from one source
+- **Rendering performance** - AST and layout caching with blake3 hashing for complex diagrams
+- **classDef/class styling** - Node styling via `classDef` and `class` directives
+- **linkStyle edge styling** - Edge customization via `linkStyle` directive
+- **Subgraph improvements** - Layer clustering, internal layout, edge routing, title expansion, nested margins
+- **Asymmetric shape rendering** - Flag/asymmetric node shape with proper text centering
+- **Viewport clipping fix** - Prevent diagram clipping with negative coordinate shifting
+- **Crash prevention** - Infinite loop safety, panic handling for malformed input
+
+#### Split View Enhancements
+- **Dual editable panes** - Split view rendered pane is now fully editable, matching full Rendered mode behavior
+- Both panes edit the same content with changes syncing instantly
+- Full undo/redo support for edits in either pane
+
+#### Git Integration
+- **Git status auto-refresh** - Automatic refresh of file tree git badges on file save, window focus, periodic interval (10 seconds), and file system events
+- **Debounced refresh** - 500ms debounce prevents excessive git2 calls during rapid operations
+
+#### CSV Support ([#19](https://github.com/OlaProeis/Ferrite/issues/19))
+- **CSV/TSV viewer** - Native table view for CSV and TSV files with fixed-width column alignment
+- **Rainbow column coloring** - Alternating column colors for improved readability
+- **Delimiter detection** - Auto-detect comma, tab, semicolon, pipe separators
+- **Header row detection** - Intelligent detection and highlighting of header rows
+
+#### Internationalization ([#18](https://github.com/OlaProeis/Ferrite/issues/18))
+- **i18n infrastructure** - YAML translation files in `locales/` directory with rust-i18n integration
+- **Weblate integration** - Community translations via [hosted.weblate.org/projects/ferrite](https://hosted.weblate.org/projects/ferrite/)
+- **String extraction** - UI strings moved to translation keys
+
+#### CJK Writing Conventions ([#20](https://github.com/OlaProeis/Ferrite/issues/20))
+- **Paragraph indentation** - First-line indentation setting for Chinese (2 chars), Japanese (1 char), or custom
+- **Rendered view support** - Apply `text-indent` styling to paragraphs in preview mode
+
+#### New Features
+- **Keyboard shortcut customization** - Users can rebind shortcuts via settings panel; stored in config.json
+- **Custom font selection** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Select preferred font for editor and UI; important for CJK regional glyph preferences
+- **Semantic minimap header labels** - Display actual H1/H2/H3 text in minimap instead of unreadable scaled pixels
+- **Main menu UI redesign** - Modernized main menu with improved layout and visual design
+
+#### Branding
+- **New Ferrite logo** - Orange geometric crystal icon
+- **Platform icons** - Windows `.ico`, macOS `.iconset`, Linux PNGs (16-512px)
+- **Window icon** - Embedded 256px icon replaces default eframe "E" logo
+
+### Fixed
+
+#### Bug Fixes
+- **Search highlight drift** - Fixed find/search highlight boxes drifting progressively further from matched text; caused by byte vs character position mismatch in UTF-8 text
+- **Config.json persistence** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Fixed window state dirty flag; settings now persist correctly across restarts
+- **Line width in rendered/split view** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Line width setting now respects pane boundaries with proper centering behavior
+- **Quick switcher mouse support** - Fixed mouse hover/click not working (item flickering but not selecting)
+- **Table editing cursor loss** - Table cells no longer lose focus after each keystroke in Rendered/Split modes; edits are buffered and committed when focus leaves (deferred update model)
+- **Zen mode rendered centering** - Content now centers properly in rendered/split view when Zen mode (F11) is active
+- **Windows top edge resize** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Window can now be resized from all edges including top
+- **macOS Intel CPU optimization** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Idle repaint scheduling reduces CPU usage on Intel Macs
+
+### Technical
+- Split `mermaid.rs` into modular structure: `src/markdown/mermaid/` with `mod.rs`, `flowchart.rs`, `sequence.rs`, etc.
+- Added `GitAutoRefresh` struct for managing refresh timing and focus tracking
+- Added `had_focus_last_frame` and `content_modified` fields to `TableEditState` for focus tracking
+- Added blake3 hashing for Mermaid diagram caching
+- Added 11 unit tests for git auto-refresh logic
+- Added comprehensive technical documentation in `docs/technical/`
+
+### Deferred
+- **Mermaid diagram toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert mermaid code blocks (deferred to v0.3.0)
+- **Mermaid syntax hints** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Help panel with diagram type syntax examples (deferred to v0.3.0)
+- **Simplified Chinese translation** - Waiting for community contributor (deferred)
+- **Mermaid code cleanup** - Flowchart.rs modular refactor and documentation (deferred to v0.2.6)
+- **Executable code blocks** - Run code snippets in preview (deferred to v0.2.6)
+- **Content blocks/callouts** - GitHub-style `[!NOTE]` admonitions (deferred to v0.2.6)
 
 ## [0.2.3] - 2025-01-12
 
@@ -201,13 +281,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.2.5** - Mermaid refactor, CSV viewer, i18n, CJK indentation, custom fonts, main menu redesign, split view editing, bug fixes
 - **0.2.3** - Editor productivity release (Go to Line, Duplicate Line, Move Line, Auto-close, Smart Paste, Line Width)
 - **0.2.2** - Stability & CLI release (CJK fonts, undo/redo fixes, CLI arguments, default view mode)
 - **0.2.1** - Mermaid diagram improvements (control blocks, subgraphs, nested states, improved layout)
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/OlaProeis/Ferrite/compare/v0.2.3...HEAD
+[0.2.5]: https://github.com/OlaProeis/Ferrite/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.0...v0.2.1

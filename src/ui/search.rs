@@ -18,6 +18,7 @@
 use crate::string_utils::floor_char_boundary;
 use crate::ui::{center_panel_in_viewport, search_panel_constraints, PanelConstraints};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, RichText, ScrollArea, Sense, TextFormat, Vec2};
+use rust_i18n::t;
 use std::path::PathBuf;
 
 /// Maximum number of results to show per file.
@@ -431,7 +432,7 @@ impl SearchPanel {
         };
 
         // Build the window with constrained bounds
-        let mut window = egui::Window::new("🔍 Search in Files")
+        let mut window = egui::Window::new(format!("🔍 {}", t!("search.title")))
             .id(egui::Id::new("search_in_files_window"))
             .collapsible(false)
             .resizable(true)
@@ -455,10 +456,10 @@ impl SearchPanel {
         window.show(ctx, |ui| {
                 // Search input row
                 ui.horizontal(|ui| {
-                    ui.label("Search:");
+                    ui.label(t!("search.label"));
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
-                            .hint_text("Enter search text...")
+                            .hint_text(t!("search.placeholder"))
                             .desired_width(350.0)
                             .id(egui::Id::new("search_query_input")),
                     );
@@ -466,8 +467,8 @@ impl SearchPanel {
                     // Auto-focus on open
                     response.request_focus();
 
-                    ui.checkbox(&mut self.use_regex, "Regex");
-                    ui.checkbox(&mut self.case_sensitive, "Aa");
+                    ui.checkbox(&mut self.use_regex, t!("find.use_regex"));
+                    ui.checkbox(&mut self.case_sensitive, t!("find.match_case_short"));
                 });
 
                 ui.add_space(8.0);
@@ -484,7 +485,7 @@ impl SearchPanel {
                         ui.colored_label(Color32::from_rgb(220, 80, 80), error);
                     } else if self.results.is_empty() && self.last_query == self.query {
                         ui.label(
-                            RichText::new("No results found")
+                            RichText::new(t!("find.no_results"))
                                 .color(secondary_color)
                                 .italics(),
                         );
@@ -672,7 +673,7 @@ impl SearchPanel {
 
                                 if file_result.truncated {
                                     ui.label(
-                                        RichText::new("    ... more matches not shown")
+                                        RichText::new(t!("search.more_matches"))
                                             .color(secondary_color)
                                             .small()
                                             .italics(),
@@ -688,9 +689,7 @@ impl SearchPanel {
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(
-                            "Press Enter to search • Click result to open • Esc to close",
-                        )
+                        RichText::new(t!("search.keyboard_hints"))
                         .color(secondary_color)
                         .small(),
                     );

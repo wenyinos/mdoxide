@@ -45,6 +45,10 @@ pub fn detect_fold_regions(
                 detect_indentation_folds(&lines, &mut fold_state);
             }
         }
+        FileType::Csv | FileType::Tsv => {
+            // Tabular files don't support folding (flat structure)
+            // Just mark clean and return early
+        }
         FileType::Unknown => {
             // For unknown files, try indentation-based folding
             if fold_indentation {

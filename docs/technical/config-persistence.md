@@ -145,6 +145,62 @@ impl Tab {
 }
 ```
 
+## Window State Persistence
+
+The configuration system persists window size, position, and maximize state.
+
+### WindowSize Structure
+
+```rust
+pub struct WindowSize {
+    pub width: f32,
+    pub height: f32,
+    pub x: Option<f32>,      // Position (optional)
+    pub y: Option<f32>,
+    pub maximized: bool,
+}
+```
+
+### Dirty Flag Mechanism
+
+Settings are only saved when modified. The `AppState` tracks changes via a `settings_dirty` flag:
+
+```rust
+// Mark settings as needing save
+state.mark_settings_dirty();
+
+// Save if dirty (called periodically and on shutdown)
+state.save_settings_if_dirty();
+```
+
+### Window State Update Flow
+
+1. `update_window_state()` is called every frame in `app.rs`
+2. Detects size/position changes (threshold: 1.0 pixel)
+3. Updates `settings.window_size` with current values
+4. Calls `mark_settings_dirty()` to trigger eventual save
+
+**Key:** The dirty flag must be set when window state changes, otherwise settings won't be persisted (fixed in v0.2.5 - GitHub Issue #15).
+
+### Startup Restoration
+
+On startup (`main.rs`), window state is applied:
+
+```rust
+// Apply size
+viewport.with_inner_size([window_size.width, window_size.height])
+
+// Apply position if saved
+if let (Some(x), Some(y)) = (window_size.x, window_size.y) {
+    viewport.with_position([x, y])
+}
+
+// Apply maximized state
+if window_size.maximized {
+    viewport.with_maximized(true)
+}
+```
+
 ## Dependencies Used
 
 - `dirs` (5.x) - Platform-specific directory resolution

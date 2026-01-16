@@ -419,6 +419,138 @@ impl GitService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Git Auto-Refresh
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::time::{Duration, Instant};
+
+/// Configuration for Git auto-refresh behavior.
+const GIT_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+const GIT_DEBOUNCE_DURATION: Duration = Duration::from_millis(500);
+
+/// Manages automatic Git status refreshing with debouncing.
+///
+/// This struct handles:
+/// - Periodic refresh every 10 seconds when a workspace is open
+/// - Refresh on window focus gained
+/// - Refresh on file save
+/// - Debouncing to prevent excessive refresh calls
+#[derive(Debug)]
+pub struct GitAutoRefresh {
+    /// Last time git status was refreshed
+    last_refresh: Option<Instant>,
+    /// Time of last refresh request (for debouncing)
+    last_request: Option<Instant>,
+    /// Whether a refresh is pending (after debounce)
+    pending_refresh: bool,
+    /// Previous window focus state (to detect focus gained)
+    was_focused: bool,
+}
+
+impl Default for GitAutoRefresh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GitAutoRefresh {
+    /// Create a new GitAutoRefresh manager.
+    pub fn new() -> Self {
+        Self {
+            last_refresh: None,
+            last_request: None,
+            pending_refresh: false,
+            was_focused: true, // Assume focused at start
+        }
+    }
+
+    /// Request a git refresh with debouncing.
+    ///
+    /// Multiple rapid calls will be batched into a single refresh
+    /// after the debounce period (500ms).
+    pub fn request_refresh(&mut self) {
+        self.last_request = Some(Instant::now());
+        self.pending_refresh = true;
+        trace!("Git refresh requested, will execute after debounce");
+    }
+
+    /// Check and update focus state, returning true if focus was just gained.
+    ///
+    /// Call this each frame with the current focus state.
+    pub fn update_focus(&mut self, is_focused: bool) -> bool {
+        let focus_gained = is_focused && !self.was_focused;
+        self.was_focused = is_focused;
+        
+        if focus_gained {
+            debug!("Window focus gained, requesting git refresh");
+            self.request_refresh();
+        }
+        
+        focus_gained
+    }
+
+    /// Check if enough time has passed for periodic refresh.
+    ///
+    /// Returns true if it's time for a periodic refresh (every 10 seconds).
+    pub fn should_periodic_refresh(&self) -> bool {
+        match self.last_refresh {
+            Some(last) => last.elapsed() >= GIT_REFRESH_INTERVAL,
+            None => true, // Never refreshed, do it now
+        }
+    }
+
+    /// Check if debounce period has passed and a refresh should execute.
+    ///
+    /// Returns true if there's a pending refresh and the debounce period has elapsed.
+    pub fn should_execute_refresh(&self) -> bool {
+        if !self.pending_refresh {
+            return false;
+        }
+
+        match self.last_request {
+            Some(request_time) => request_time.elapsed() >= GIT_DEBOUNCE_DURATION,
+            None => false,
+        }
+    }
+
+    /// Mark that a refresh was executed.
+    ///
+    /// Call this after actually performing the git refresh.
+    pub fn mark_refreshed(&mut self) {
+        self.last_refresh = Some(Instant::now());
+        self.pending_refresh = false;
+        trace!("Git refresh completed");
+    }
+
+    /// Process auto-refresh logic and return true if a refresh should be performed.
+    ///
+    /// This is the main entry point called each frame. It checks:
+    /// 1. Debounced refresh requests
+    /// 2. Periodic refresh timer
+    ///
+    /// Returns true if git status should be refreshed.
+    pub fn tick(&mut self, workspace_open: bool) -> bool {
+        // Only refresh if a workspace is open (git repo likely present)
+        if !workspace_open {
+            return false;
+        }
+
+        // Check for debounced refresh
+        if self.should_execute_refresh() {
+            return true;
+        }
+
+        // Check for periodic refresh
+        if self.should_periodic_refresh() {
+            self.pending_refresh = true; // Will be cleared in mark_refreshed
+            return true;
+        }
+
+        false
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -535,5 +667,122 @@ mod tests {
             GitService::worse_status(GitFileStatus::Staged, GitFileStatus::StagedModified),
             GitFileStatus::StagedModified
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GitAutoRefresh Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_git_auto_refresh_new() {
+        let refresh = GitAutoRefresh::new();
+        assert!(refresh.last_refresh.is_none());
+        assert!(refresh.last_request.is_none());
+        assert!(!refresh.pending_refresh);
+        assert!(refresh.was_focused); // Assumes focused at start
+    }
+
+    #[test]
+    fn test_git_auto_refresh_default() {
+        let refresh = GitAutoRefresh::default();
+        assert!(refresh.last_refresh.is_none());
+        assert!(!refresh.pending_refresh);
+    }
+
+    #[test]
+    fn test_git_auto_refresh_request_refresh() {
+        let mut refresh = GitAutoRefresh::new();
+        assert!(!refresh.pending_refresh);
+
+        refresh.request_refresh();
+
+        assert!(refresh.pending_refresh);
+        assert!(refresh.last_request.is_some());
+    }
+
+    #[test]
+    fn test_git_auto_refresh_focus_gained() {
+        let mut refresh = GitAutoRefresh::new();
+        // Start as focused
+        refresh.was_focused = true;
+
+        // Still focused - no change
+        let gained = refresh.update_focus(true);
+        assert!(!gained);
+        assert!(!refresh.pending_refresh);
+
+        // Lost focus
+        let gained = refresh.update_focus(false);
+        assert!(!gained);
+        assert!(!refresh.pending_refresh);
+
+        // Gained focus again
+        let gained = refresh.update_focus(true);
+        assert!(gained);
+        assert!(refresh.pending_refresh);
+    }
+
+    #[test]
+    fn test_git_auto_refresh_periodic_refresh_never_refreshed() {
+        let refresh = GitAutoRefresh::new();
+        // Should refresh if never refreshed before
+        assert!(refresh.should_periodic_refresh());
+    }
+
+    #[test]
+    fn test_git_auto_refresh_periodic_refresh_recent() {
+        let mut refresh = GitAutoRefresh::new();
+        refresh.mark_refreshed();
+
+        // Should not refresh immediately after a refresh
+        assert!(!refresh.should_periodic_refresh());
+    }
+
+    #[test]
+    fn test_git_auto_refresh_mark_refreshed() {
+        let mut refresh = GitAutoRefresh::new();
+        refresh.request_refresh();
+        assert!(refresh.pending_refresh);
+
+        refresh.mark_refreshed();
+
+        assert!(!refresh.pending_refresh);
+        assert!(refresh.last_refresh.is_some());
+    }
+
+    #[test]
+    fn test_git_auto_refresh_tick_no_workspace() {
+        let mut refresh = GitAutoRefresh::new();
+
+        // Should not trigger refresh if no workspace open
+        let should_refresh = refresh.tick(false);
+        assert!(!should_refresh);
+    }
+
+    #[test]
+    fn test_git_auto_refresh_tick_with_workspace_first_time() {
+        let mut refresh = GitAutoRefresh::new();
+
+        // Should trigger refresh on first tick with workspace
+        // (because never refreshed before, periodic triggers)
+        let should_refresh = refresh.tick(true);
+        assert!(should_refresh);
+    }
+
+    #[test]
+    fn test_git_auto_refresh_debounce_not_ready() {
+        let mut refresh = GitAutoRefresh::new();
+        refresh.request_refresh();
+
+        // Immediately after request, debounce hasn't elapsed
+        assert!(!refresh.should_execute_refresh() || refresh.last_request.unwrap().elapsed() >= GIT_DEBOUNCE_DURATION);
+    }
+
+    #[test]
+    fn test_git_auto_refresh_debounce_no_pending() {
+        let refresh = GitAutoRefresh::new();
+
+        // No pending request, should not execute
+        assert!(!refresh.should_execute_refresh());
     }
 }
