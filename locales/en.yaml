@@ -1,0 +1,483 @@
+# Ferrite - English (Base Language)
+# This file contains all user-facing strings for internationalization.
+# Naming convention: category.subcategory.key (e.g., menu.file.open)
+
+# Application metadata
+app:
+  name: "Ferrite"
+  tagline: "A fast, lightweight text editor for Markdown"
+
+# Menu bar items
+menu:
+  file:
+    label: "File"
+    new: "New"
+    open: "Open..."
+    save: "Save"
+    save_as: "Save As..."
+    close: "Close"
+    close_all: "Close All"
+    recent: "Recent Files"
+    clear_recent: "Clear Recent"
+    export: "Export"
+    export_html: "Export to HTML..."
+    export_clipboard: "Copy as HTML"
+    quit: "Quit"
+  edit:
+    label: "Edit"
+    undo: "Undo"
+    redo: "Redo"
+    cut: "Cut"
+    copy: "Copy"
+    paste: "Paste"
+    select_all: "Select All"
+    find: "Find..."
+    find_replace: "Find & Replace..."
+    go_to_line: "Go to Line..."
+    duplicate_line: "Duplicate Line"
+    move_line_up: "Move Line Up"
+    move_line_down: "Move Line Down"
+  view:
+    label: "View"
+    raw: "Raw"
+    rendered: "Rendered"
+    split: "Split"
+    zen: "Zen Mode"
+    toggle_sidebar: "Toggle Sidebar"
+    toggle_outline: "Toggle Outline"
+    toggle_minimap: "Toggle Minimap"
+    zoom_in: "Zoom In"
+    zoom_out: "Zoom Out"
+    reset_zoom: "Reset Zoom"
+  format:
+    label: "Format"
+    bold: "Bold"
+    italic: "Italic"
+    strikethrough: "Strikethrough"
+    code: "Inline Code"
+    heading: "Heading"
+    link: "Insert Link"
+    image: "Insert Image"
+    bullet_list: "Bullet List"
+    numbered_list: "Numbered List"
+    task_list: "Task List"
+    blockquote: "Blockquote"
+    horizontal_rule: "Horizontal Rule"
+    code_block: "Code Block"
+    table: "Insert Table"
+  tools:
+    label: "Tools"
+    settings: "Settings..."
+    keyboard_shortcuts: "Keyboard Shortcuts..."
+  help:
+    label: "Help"
+    about: "About Ferrite"
+    documentation: "Documentation"
+    report_issue: "Report Issue"
+    check_updates: "Check for Updates"
+
+# Toolbar buttons
+toolbar:
+  new_file: "New File"
+  open_file: "Open File"
+  save_file: "Save File"
+  undo: "Undo"
+  redo: "Redo"
+  bold: "Bold"
+  italic: "Italic"
+  heading: "Heading"
+  link: "Link"
+  code: "Code"
+  list: "List"
+  quote: "Quote"
+  table: "Table"
+  image: "Image"
+
+# View mode labels
+view_mode:
+  raw: "Raw"
+  rendered: "Rendered"
+  split: "Split"
+
+# Status bar
+status:
+  line: "Line"
+  column: "Col"
+  words: "words"
+  characters: "chars"
+  modified: "Modified"
+  saved: "Saved"
+  encoding: "UTF-8"
+  language: "Language"
+
+# File dialogs
+dialog:
+  open:
+    title: "Open File"
+  save:
+    title: "Save File"
+  save_as:
+    title: "Save As"
+  export:
+    title: "Export"
+  unsaved_changes:
+    title: "Unsaved Changes"
+    message: "Do you want to save changes to \"%{filename}\"?"
+    save: "Save"
+    dont_save: "Don't Save"
+    cancel: "Cancel"
+  confirm:
+    title: "Confirm"
+    ok: "OK"
+    cancel: "Cancel"
+    close: "Close"
+    yes: "Yes"
+    no: "No"
+  # File operation dialogs
+  file:
+    new_file: "New File"
+    new_folder: "New Folder"
+    enter_file_name: "Enter file name:"
+    enter_folder_name: "Enter folder name:"
+    hint_file: "filename.md"
+    hint_folder: "folder-name"
+    location: "Location: %{path}"
+    create: "Create"
+    rename: "Rename"
+    enter_new_name: "Enter new name:"
+    exists_error: "A file or folder with this name already exists"
+    confirm_delete: "Confirm Delete"
+    delete_confirm: "Are you sure you want to delete this %{item_type}?"
+    delete_folder_warning: "⚠ This will delete the folder and all its contents!"
+    delete: "Delete"
+    file: "file"
+    folder: "folder"
+  # Go to Line dialog
+  go_to_line:
+    title: "Go to Line"
+    enter_line: "Enter line number:"
+    range: "Range: 1 - %{max}"
+    go: "Go"
+
+# Settings panel
+settings:
+  title: "Settings"
+  reset_all: "Reset All"
+  reset_tooltip: "Reset all settings to defaults"
+  auto_save_hint: "Settings are saved automatically"
+  default_view_hint: "View mode for new tabs (existing tabs retain their saved view mode)"
+  font_size:
+    small: "Small"
+    medium: "Medium"
+    large: "Large"
+  general:
+    title: "General"
+    theme: "Theme"
+    theme_dark: "Dark"
+    theme_light: "Light"
+    theme_system: "System"
+    language: "Language"
+    auto_save: "Auto-save"
+    auto_save_interval: "Auto-save interval (seconds)"
+    restore_session: "Restore previous session on startup"
+  editor:
+    title: "Editor"
+    font_family: "Font"
+    font_size: "Font Size"
+    line_height: "Line Height"
+    tab_size: "Tab Size"
+    tab_size_value: "%{count} spaces"
+    word_wrap: "Word Wrap"
+    word_wrap_tooltip: "Wrap long lines instead of horizontal scrolling"
+    show_line_numbers: "Show Line Numbers"
+    line_numbers_tooltip: "Display line numbers in the editor gutter"
+    show_minimap: "Show Minimap"
+    minimap_tooltip: "Display a minimap navigation panel on the right side of the editor"
+    minimap_mode: "Minimap Mode"
+    minimap_mode_hint: "Choose how the minimap displays document content"
+    minimap_mode_auto: "Auto"
+    minimap_mode_auto_desc: "Semantic for markdown, pixel for code"
+    minimap_mode_semantic: "Semantic"
+    minimap_mode_semantic_desc: "Structure overview with headings"
+    minimap_mode_pixel: "Pixel"
+    minimap_mode_pixel_desc: "Code overview with characters"
+    highlight_current_line: "Highlight Current Line"
+    highlight_brackets: "Highlight Matching Brackets"
+    brackets_tooltip: "Highlight matching brackets (), [], {}, <> and emphasis pairs ** and __ when cursor is adjacent"
+    auto_indent: "Auto Indent"
+    auto_close_brackets: "Auto-close Brackets & Quotes"
+    auto_close_tooltip: "Automatically insert closing brackets and quotes. Wraps selected text when typing an opener."
+    auto_close_quotes: "Auto Close Quotes"
+    syntax_highlighting: "Syntax Highlighting"
+    syntax_tooltip: "Enable syntax highlighting for source code files (Rust, Python, JavaScript, etc.)"
+    sync_scroll_tooltip: "Synchronize scroll position when switching between Raw and Rendered views"
+    use_spaces: "Use Spaces for Indentation"
+    use_spaces_tooltip: "Use spaces instead of tabs for indentation"
+    max_line_width: "Maximum Line Width"
+    max_line_width_hint: "Constrain text width and center the text column in the viewport"
+    custom_width: "Custom - Specify pixel width"
+    width_pixels: "Width (pixels):"
+    code_folding: "Code Folding"
+    enable_folding: "Enable Code Folding"
+    folding_tooltip: "Allow collapsing sections of the document (Ctrl+Shift+[ to fold all, Ctrl+Shift+] to unfold)"
+    show_fold_indicators: "Show Fold Indicators"
+    fold_indicators_tooltip: "Display fold indicators in the gutter (visual only - collapse not yet implemented)"
+    fold_types: "Fold Types:"
+    fold_headings: "Headings"
+    fold_headings_tooltip: "Fold markdown headings and their content"
+    fold_code_blocks: "Code Blocks"
+    fold_code_blocks_tooltip: "Fold fenced code blocks (```...```)"
+    fold_lists: "Lists"
+    fold_lists_tooltip: "Fold nested list hierarchies"
+    fold_indentation: "Indentation (JSON/YAML)"
+    fold_indentation_tooltip: "Fold indentation-based structures in JSON/YAML files"
+    snippets: "Snippets"
+    snippets_hint: "Type a trigger word followed by space/tab to expand"
+    enable_snippets: "Enable Snippet Expansion"
+    snippets_tooltip: "Expand trigger words into predefined text. Built-in snippets: ;date, ;time, ;datetime, ;now"
+    builtin_snippets: "Built-in Snippets:"
+  preview:
+    title: "Preview"
+    sync_scroll: "Sync Scroll"
+    show_line_numbers_in_code: "Show Line Numbers in Code Blocks"
+    default_view: "Default View Mode"
+  files:
+    title: "Files"
+    recent_files_limit: "Recent Files Limit"
+    confirm_delete: "Confirm Before Deleting"
+    enable_auto_save: "Enable Auto-Save by Default"
+    auto_save_tooltip: "New documents will have auto-save enabled. Uses temp files to prevent data loss."
+    auto_save_delay: "Auto-save delay:"
+    seconds: "%{count} seconds"
+    recent_files: "Recent Files"
+    remember_files: "Remember %{count} files"
+    clear_recent: "Clear Recent Files"
+    clear_recent_tooltip: "Remove all files from the recent files list"
+    files_count: "(%{count} files)"
+  appearance:
+    title: "Appearance"
+    show_toolbar: "Show Toolbar"
+    show_status_bar: "Show Status Bar"
+    window_title_style: "Window Title Style"
+    language: "Language"
+    language_hint: "Select the display language for the user interface"
+  shortcuts_section:
+    title: "Keyboard Shortcuts"
+  keyboard:
+    title: "Keyboard"
+    search_hint: "Filter shortcuts..."
+    reset_all: "Reset All Shortcuts"
+    reset_all_tooltip: "Reset all keyboard shortcuts to their default bindings"
+    reset_default: "Reset to default"
+    press_key: "Press key for"
+    waiting: "Waiting for key..."
+    cancel: "Cancel"
+    apply: "Apply"
+    conflict_with: "Conflicts with"
+    click_to_change: "Click to change shortcut"
+
+# Find and Replace panel
+find:
+  placeholder: "Find..."
+  replace_placeholder: "Replace..."
+  match_case: "Match Case"
+  match_case_short: "Aa"
+  whole_word: "Whole Word"
+  use_regex: "Use Regex"
+  find_next: "Find Next"
+  find_previous: "Find Previous"
+  replace: "Replace"
+  replace_all: "Replace All"
+  no_results: "No results found"
+  results_count: "%{count} result(s)"
+
+# Outline panel
+outline:
+  title: "Outline"
+  panel_title: "Document"
+  statistics: "Statistics"
+  tab_outline: "Outline"
+  tab_statistics: "Stats"
+  no_headings: "No headings found"
+  add_headings_hint: "Add headings using # syntax"
+  close_tooltip: "Close outline (Ctrl+Shift+O)"
+  summary: "%{headings} headings • ~%{minutes} min read"
+  parse_error: "⚠ Parse Error"
+  item_tooltip: "%{title}\nLine %{line} • Click to navigate"
+
+# Document statistics
+stats:
+  no_data: "No statistics available"
+  text_stats: "Text"
+  words: "Words"
+  characters: "Characters"
+  characters_no_spaces: "Chars (no spaces)"
+  lines: "Lines"
+  paragraphs: "Paragraphs"
+  structure: "Structure"
+  headings_total: "Headings"
+  list_items: "List items"
+  horizontal_rules: "Horizontal rules"
+  media_links: "Media & Links"
+  links: "Links"
+  images: "Images"
+  code_diagrams: "Code & Diagrams"
+  code_blocks: "Code blocks"
+  mermaid_diagrams: "Mermaid diagrams"
+  tables: "Tables"
+  blockquotes: "Blockquotes"
+
+# File tree / Sidebar
+sidebar:
+  files: "Files"
+  open_folder: "Open Folder"
+  no_folder: "No folder open"
+  collapse_all: "Collapse All"
+  expand_all: "Expand All"
+  refresh: "Refresh"
+
+# Quick switcher
+quick_switcher:
+  placeholder: "Search files..."
+  no_results: "No matching files"
+  recent_tooltip: "Recently opened"
+  keyboard_hints: "↑↓ Navigate  ⏎ Open  Esc Close"
+
+# Search in files
+search:
+  title: "Search in Files"
+  label: "Search:"
+  placeholder: "Enter search text..."
+  more_matches: "    ... more matches not shown"
+  keyboard_hints: "Press Enter to search • Click result to open • Esc to close"
+
+# About dialog
+about:
+  title: "About / Help"
+  tab:
+    about: "About"
+    shortcuts: "Shortcuts"
+  version: "Version %{version}"
+  description: "A fast, lightweight text editor for Markdown, JSON, and more."
+  close_hint: "Press F1 or Escape to close"
+  # Links section
+  links: "Links"
+  github_label: "GitHub:"
+  view_on_github: "View on GitHub"
+  github_tooltip: "Open repository in browser"
+  report_issue_label: "Report Issue:"
+  submit_bug: "Submit a bug report"
+  issue_tooltip: "Open issue tracker in browser"
+  # Built with section
+  built_with: "Built With"
+  lib:
+    egui: "Immediate mode GUI framework"
+    comrak: "GitHub-flavored Markdown parser"
+    syntect: "Syntax highlighting"
+    serde: "Serialization framework"
+    notify: "File system watcher"
+  # License section
+  license: "License"
+  license_type: "MIT License"
+  copyright: "© 2026 Ferrite Contributors"
+
+# Keyboard shortcuts
+shortcuts:
+  title: "Keyboard Shortcuts"
+  expand_hint: "Click a category to expand/collapse"
+  # Categories
+  category:
+    file: "File"
+    edit: "Edit"
+    view: "View"
+    formatting: "Formatting"
+    workspace: "Workspace"
+    navigation: "Navigation"
+  # File shortcuts
+  file:
+    new: "New File"
+    open: "Open File"
+    save: "Save"
+    save_as: "Save As"
+    close_tab: "Close Tab"
+  # Edit shortcuts
+  edit:
+    undo: "Undo"
+    redo: "Redo"
+    find: "Find"
+    find_replace: "Find & Replace"
+    select_all: "Select All"
+    copy: "Copy"
+    cut: "Cut"
+    paste: "Paste"
+  # View shortcuts
+  view:
+    toggle_view: "Toggle Raw/Rendered"
+    toggle_outline: "Toggle Outline"
+    zoom_in: "Zoom In"
+    zoom_out: "Zoom Out"
+    reset_zoom: "Reset Zoom"
+    settings: "Settings"
+    about: "About / Help"
+  # Formatting shortcuts
+  format:
+    bold: "Bold"
+    italic: "Italic"
+    underline: "Underline"
+    link: "Insert Link"
+    code: "Inline Code"
+  # Workspace shortcuts
+  workspace:
+    quick_switcher: "Quick File Switcher"
+    search_files: "Search in Files"
+    toggle_tree: "Toggle File Tree"
+  # Navigation shortcuts
+  nav:
+    next_tab: "Next Tab"
+    prev_tab: "Previous Tab"
+    go_to_line: "Go to Line"
+    find_next: "Find Next"
+    find_prev: "Find Previous"
+
+# Error messages
+error:
+  file_not_found: "File not found: %{path}"
+  file_read_error: "Could not read file: %{path}"
+  file_write_error: "Could not save file: %{path}"
+  permission_denied: "Permission denied: %{path}"
+  invalid_encoding: "Invalid file encoding"
+  parse_error: "Failed to parse file: %{reason}"
+  unknown: "An unknown error occurred"
+
+# Notifications / Toasts
+notification:
+  file_saved: "File saved successfully"
+  file_exported: "File exported successfully"
+  copied_to_clipboard: "Copied to clipboard"
+  settings_saved: "Settings saved"
+
+# Tree viewer (JSON/YAML/TOML)
+tree_viewer:
+  collapse_all: "Collapse All"
+  expand_all: "Expand All"
+  copy_value: "Copy Value"
+  copy_path: "Copy Path"
+
+# Git integration
+git:
+  modified: "Modified"
+  added: "Added"
+  deleted: "Deleted"
+  renamed: "Renamed"
+  untracked: "Untracked"
+  staged: "Staged"
+  branch: "Branch"
+  no_repo: "No Git repository"
+
+# Accessibility
+a11y:
+  close_button: "Close"
+  menu_button: "Menu"
+  minimize_button: "Minimize"
+  maximize_button: "Maximize"
+  restore_button: "Restore"
