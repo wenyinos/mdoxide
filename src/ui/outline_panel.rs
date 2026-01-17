@@ -147,6 +147,7 @@ impl OutlinePanel {
     }
 
     /// Set the active tab.
+    #[allow(dead_code)] // Public API for programmatic tab switching
     pub fn set_active_tab(&mut self, tab: OutlinePanelTab) {
         self.active_tab = tab;
     }

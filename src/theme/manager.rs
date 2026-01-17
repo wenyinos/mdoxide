@@ -136,14 +136,16 @@ impl ThemeManager {
     ///
     /// For System theme, this checks the current system preference and updates
     /// accordingly.
+    ///
+    /// Note: Does not modify animation_time - this is set once at app startup
+    /// to 0.0 for instant animations, which also helps reduce CPU usage.
     pub fn apply(&mut self, ctx: &Context) {
         let visuals = self.get_or_create_visuals(ctx);
         ctx.set_visuals(visuals);
         
-        // Set fast/snappy animations (default is ~83ms, we use 16ms for snappy feel)
-        let mut style = (*ctx.style()).clone();
-        style.animation_time = 0.016; // ~1 frame at 60fps - very snappy
-        ctx.set_style(style);
+        // Note: We intentionally don't modify animation_time here.
+        // Animation time is set to 0.0 at app startup for instant animations,
+        // which also helps with CPU optimization (no animation repaints needed).
         
         self.needs_apply = false;
         debug!("Applied theme: {:?}", self.current_theme);

@@ -98,6 +98,9 @@ view_mode:
   raw: "源代码"
   rendered: "渲染"
   split: "分栏"
+  raw_desc: "纯 Markdown 文本编辑"
+  rendered_desc: "所见即所得渲染编辑"
+  split_desc: "源代码编辑器 + 渲染预览并排显示"
 
 # Status bar
 status:
@@ -184,6 +187,8 @@ settings:
     title: "编辑器"
     font_family: "字体"
     font_size: "字体尺寸"
+    font_inter_desc: "现代、简洁的比例字体"
+    font_jetbrains_desc: "代码等宽字体"
     custom_font: "自定义字体"
     custom_font_desc: "从已安装的系统字体中选择"
     select_system_font: "选中字体："
@@ -191,6 +196,16 @@ settings:
     font_not_found: "⚠ 系统中未找到该字体"
     cjk_preference: "中日韩地区偏好"
     cjk_preference_hint: "选择哪个中日韩字体优先用于区域字形变体"
+    cjk_auto: "自动（系统区域设置）"
+    cjk_auto_desc: "根据系统区域设置确定中日韩字体优先级"
+    cjk_korean: "韩语（한국어）"
+    cjk_korean_desc: "优先使用韩语字形变体"
+    cjk_simplified_chinese: "简体中文（简体中文）"
+    cjk_simplified_chinese_desc: "优先使用简体中文字形变体"
+    cjk_traditional_chinese: "繁体中文（繁體中文）"
+    cjk_traditional_chinese_desc: "优先使用繁体中文字形变体"
+    cjk_japanese: "日语（日本語）"
+    cjk_japanese_desc: "优先使用日语字形变体"
     line_height: "行高"
     tab_size: "制表符长度"
     tab_size_value: "%{count} 个空格"
@@ -244,6 +259,10 @@ settings:
     enable_snippets: "启用代码片段扩展"
     snippets_tooltip: "将触发词扩展为预定义文本。内置代码片段：;date、;time、;datetime、;now"
     builtin_snippets: "内置代码片段："
+    snippet_date: ";date → 年-月-日"
+    snippet_time: ";time → 时:分"
+    snippet_datetime: ";datetime → 日期+时间"
+    snippet_now: ";now → ISO 8601 格式"
     # CJK Paragraph Indentation
     paragraph_indent: "CJK 段落缩进"
     paragraph_indent_hint: "CJK 排版规范的首行缩进"
@@ -265,6 +284,7 @@ settings:
     title: "文件"
     recent_files_limit: "最近文件数"
     confirm_delete: "删除前请确认"
+    restore_session_tooltip: "启用时，启动时恢复之前打开的标签页。禁用时，以单个空白标签页启动。会话数据始终保存。"
     enable_auto_save: "默认启用自动保存"
     auto_save_tooltip: "新建文档将启用自动保存功能。使用临时文件以防止数据丢失。"
     auto_save_delay: "自动保存间隔："
@@ -413,14 +433,77 @@ shortcuts:
     formatting: "格式化"
     workspace: "工作区"
     navigation: "导航"
-  # File shortcuts
+    search: "搜索"
+    folding: "折叠"
+    other: "其他"
+  # Command names (used in keyboard settings panel)
+  commands:
+    # File operations
+    save: "保存"
+    save_as: "另存为"
+    open: "打开文件"
+    new: "新建文件"
+    new_tab: "新建标签页"
+    close_tab: "关闭标签页"
+    # Navigation
+    next_tab: "下一个标签页"
+    prev_tab: "上一个标签页"
+    go_to_line: "跳转到行"
+    quick_open: "快速打开"
+    # View
+    toggle_view_mode: "切换视图模式"
+    cycle_theme: "切换主题"
+    toggle_zen_mode: "切换无干扰模式"
+    toggle_fullscreen: "切换全屏"
+    toggle_outline: "切换大纲"
+    toggle_file_tree: "切换文件树"
+    toggle_pipeline: "切换管道"
+    # Edit
+    undo: "撤销"
+    redo: "重做"
+    duplicate_line: "复制行"
+    move_line_up: "上移行"
+    move_line_down: "下移行"
+    select_next_occurrence: "选择下一个匹配项"
+    # Search
+    find: "查找"
+    find_replace: "查找与替换"
+    find_next: "查找下一处"
+    find_prev: "查找上一处"
+    search_in_files: "在文件中搜索"
+    # Formatting
+    bold: "粗体"
+    italic: "斜体"
+    inline_code: "行内代码"
+    code_block: "代码块"
+    link: "链接"
+    image: "图片"
+    blockquote: "引用"
+    bullet_list: "项目符号列表"
+    numbered_list: "编号列表"
+    heading_1: "一级标题"
+    heading_2: "二级标题"
+    heading_3: "三级标题"
+    heading_4: "四级标题"
+    heading_5: "五级标题"
+    heading_6: "六级标题"
+    # Folding
+    fold_all: "全部折叠"
+    unfold_all: "全部展开"
+    toggle_fold: "切换折叠"
+    # Other
+    open_settings: "打开设置"
+    open_about: "关于/帮助"
+    export_html: "导出 HTML"
+    insert_toc: "插入目录"
+  # File shortcuts (for help panel)
   file:
     new: "新文件"
     open: "打开文件"
     save: "保存"
     save_as: "另存为"
     close_tab: "关闭标签页"
-  # Edit shortcuts
+  # Edit shortcuts (for help panel)
   edit:
     undo: "撤销"
     redo: "重做"
@@ -430,7 +513,7 @@ shortcuts:
     copy: "复制"
     cut: "剪切"
     paste: "粘贴"
-  # View shortcuts
+  # View shortcuts (for help panel)
   view:
     toggle_view: "切换原始/渲染状态"
     toggle_outline: "切换大纲"
@@ -439,19 +522,19 @@ shortcuts:
     reset_zoom: "重置缩放"
     settings: "设置"
     about: "关于/帮助"
-  # Formatting shortcuts
+  # Formatting shortcuts (for help panel)
   format:
     bold: "粗体"
     italic: "斜体"
     underline: "下划线"
     link: "插入链接"
     code: "插入代码"
-  # Workspace shortcuts
+  # Workspace shortcuts (for help panel)
   workspace:
     quick_switcher: "快速文件切换器"
     search_files: "在文件中搜索"
     toggle_tree: "切换文件树"
-  # Navigation shortcuts
+  # Navigation shortcuts (for help panel)
   nav:
     next_tab: "下一个标签页"
     prev_tab: "上一个标签页"

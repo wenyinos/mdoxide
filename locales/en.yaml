@@ -98,6 +98,9 @@ view_mode:
   raw: "Raw"
   rendered: "Rendered"
   split: "Split"
+  raw_desc: "Plain markdown text editing"
+  rendered_desc: "WYSIWYG rendered editing"
+  split_desc: "Raw editor + rendered preview side by side"
 
 # Status bar
 status:
@@ -184,6 +187,8 @@ settings:
     title: "Editor"
     font_family: "Font"
     font_size: "Font Size"
+    font_inter_desc: "Modern, clean proportional font"
+    font_jetbrains_desc: "Monospace font for code"
     custom_font: "Custom System Font"
     custom_font_desc: "Select from installed system fonts"
     select_system_font: "Select Font:"
@@ -191,6 +196,16 @@ settings:
     font_not_found: "⚠ Font not found on system"
     cjk_preference: "CJK Regional Preference"
     cjk_preference_hint: "Choose which CJK font takes priority for regional glyph variants"
+    cjk_auto: "Auto (System Locale)"
+    cjk_auto_desc: "Use system locale to determine CJK font priority"
+    cjk_korean: "Korean (한국어)"
+    cjk_korean_desc: "Prioritize Korean glyph variants"
+    cjk_simplified_chinese: "Simplified Chinese (简体中文)"
+    cjk_simplified_chinese_desc: "Prioritize Simplified Chinese glyph variants"
+    cjk_traditional_chinese: "Traditional Chinese (繁體中文)"
+    cjk_traditional_chinese_desc: "Prioritize Traditional Chinese glyph variants"
+    cjk_japanese: "Japanese (日本語)"
+    cjk_japanese_desc: "Prioritize Japanese glyph variants"
     line_height: "Line Height"
     tab_size: "Tab Size"
     tab_size_value: "%{count} spaces"
@@ -244,6 +259,10 @@ settings:
     enable_snippets: "Enable Snippet Expansion"
     snippets_tooltip: "Expand trigger words into predefined text. Built-in snippets: ;date, ;time, ;datetime, ;now"
     builtin_snippets: "Built-in Snippets:"
+    snippet_date: ";date → YYYY-MM-DD"
+    snippet_time: ";time → HH:MM"
+    snippet_datetime: ";datetime → Date+time"
+    snippet_now: ";now → ISO 8601"
     # CJK Paragraph Indentation
     paragraph_indent: "Paragraph Indentation"
     paragraph_indent_hint: "First-line indentation for CJK typography conventions"
@@ -265,6 +284,7 @@ settings:
     title: "Files"
     recent_files_limit: "Recent Files Limit"
     confirm_delete: "Confirm Before Deleting"
+    restore_session_tooltip: "When enabled, restores previously open tabs on startup. When disabled, starts with a single empty tab. Session data is always saved."
     enable_auto_save: "Enable Auto-Save by Default"
     auto_save_tooltip: "New documents will have auto-save enabled. Uses temp files to prevent data loss."
     auto_save_delay: "Auto-save delay:"
@@ -413,14 +433,77 @@ shortcuts:
     formatting: "Formatting"
     workspace: "Workspace"
     navigation: "Navigation"
-  # File shortcuts
+    search: "Search"
+    folding: "Folding"
+    other: "Other"
+  # Command names (used in keyboard settings panel)
+  commands:
+    # File operations
+    save: "Save"
+    save_as: "Save As"
+    open: "Open File"
+    new: "New File"
+    new_tab: "New Tab"
+    close_tab: "Close Tab"
+    # Navigation
+    next_tab: "Next Tab"
+    prev_tab: "Previous Tab"
+    go_to_line: "Go to Line"
+    quick_open: "Quick Open"
+    # View
+    toggle_view_mode: "Toggle View Mode"
+    cycle_theme: "Cycle Theme"
+    toggle_zen_mode: "Toggle Zen Mode"
+    toggle_fullscreen: "Toggle Fullscreen"
+    toggle_outline: "Toggle Outline"
+    toggle_file_tree: "Toggle File Tree"
+    toggle_pipeline: "Toggle Pipeline"
+    # Edit
+    undo: "Undo"
+    redo: "Redo"
+    duplicate_line: "Duplicate Line"
+    move_line_up: "Move Line Up"
+    move_line_down: "Move Line Down"
+    select_next_occurrence: "Select Next Occurrence"
+    # Search
+    find: "Find"
+    find_replace: "Find & Replace"
+    find_next: "Find Next"
+    find_prev: "Find Previous"
+    search_in_files: "Search in Files"
+    # Formatting
+    bold: "Bold"
+    italic: "Italic"
+    inline_code: "Inline Code"
+    code_block: "Code Block"
+    link: "Link"
+    image: "Image"
+    blockquote: "Blockquote"
+    bullet_list: "Bullet List"
+    numbered_list: "Numbered List"
+    heading_1: "Heading 1"
+    heading_2: "Heading 2"
+    heading_3: "Heading 3"
+    heading_4: "Heading 4"
+    heading_5: "Heading 5"
+    heading_6: "Heading 6"
+    # Folding
+    fold_all: "Fold All"
+    unfold_all: "Unfold All"
+    toggle_fold: "Toggle Fold"
+    # Other
+    open_settings: "Open Settings"
+    open_about: "About / Help"
+    export_html: "Export HTML"
+    insert_toc: "Insert Table of Contents"
+  # File shortcuts (for help panel)
   file:
     new: "New File"
     open: "Open File"
     save: "Save"
     save_as: "Save As"
     close_tab: "Close Tab"
-  # Edit shortcuts
+  # Edit shortcuts (for help panel)
   edit:
     undo: "Undo"
     redo: "Redo"
@@ -430,7 +513,7 @@ shortcuts:
     copy: "Copy"
     cut: "Cut"
     paste: "Paste"
-  # View shortcuts
+  # View shortcuts (for help panel)
   view:
     toggle_view: "Toggle Raw/Rendered"
     toggle_outline: "Toggle Outline"
@@ -439,19 +522,19 @@ shortcuts:
     reset_zoom: "Reset Zoom"
     settings: "Settings"
     about: "About / Help"
-  # Formatting shortcuts
+  # Formatting shortcuts (for help panel)
   format:
     bold: "Bold"
     italic: "Italic"
     underline: "Underline"
     link: "Insert Link"
     code: "Inline Code"
-  # Workspace shortcuts
+  # Workspace shortcuts (for help panel)
   workspace:
     quick_switcher: "Quick File Switcher"
     search_files: "Search in Files"
     toggle_tree: "Toggle File Tree"
-  # Navigation shortcuts
+  # Navigation shortcuts (for help panel)
   nav:
     next_tab: "Next Tab"
     prev_tab: "Previous Tab"

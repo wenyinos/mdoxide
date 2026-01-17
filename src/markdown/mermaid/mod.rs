@@ -3,6 +3,11 @@
 //! This module provides native rendering of MermaidJS diagrams without external
 //! dependencies. Diagrams are parsed and rendered directly using egui primitives.
 //!
+// Note: Many structs/fields in this module are defined for future diagram types
+// or represent parsed data that isn't fully utilized yet. Suppressing dead_code
+// warnings at the module level since this is actively evolving diagram code.
+#![allow(dead_code)]
+//!
 //! # Supported Diagram Types
 //!
 //! - **Flowchart** (TD, TB, LR, RL, BT) - Nodes and edges with various shapes
@@ -69,11 +74,10 @@ use std::sync::Mutex;
 pub use cache::{CacheKey, CacheStats, MermaidCacheManager};
 
 // Re-export frontmatter types
-pub use frontmatter::{MermaidConfig, MermaidFrontmatter};
 use frontmatter::parse_frontmatter;
 
 // Re-export text measurement utilities
-pub use text::{EguiTextMeasurer, TextMeasurer};
+pub use text::EguiTextMeasurer;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Diagram Cache
@@ -117,7 +121,7 @@ pub fn get_cache_stats() -> Option<CacheStats> {
 // Re-export flowchart types and functions
 pub use flowchart::{
     layout_flowchart, parse_flowchart, render_flowchart, 
-    FlowchartColors, FlowDirection, NodeShape,
+    FlowchartColors,
 };
 
 // Internal imports for render_mermaid_diagram function
@@ -133,10 +137,8 @@ use timeline::{parse_timeline, render_timeline};
 use journey::{parse_user_journey, render_user_journey};
 
 // Re-export types used in tests
-pub(crate) use flowchart::{parse_direction, parse_edge_line_full, parse_node_from_text};
 
 // Re-export text measurer for tests
-pub use text::EstimatedTextMeasurer;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
@@ -378,6 +380,11 @@ fn render_diagram_title(ui: &mut Ui, title: &str, dark_mode: bool, font_size: f3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::markdown::mermaid::flowchart::{
+        parse_direction, parse_edge_line_full, parse_node_from_text,
+        FlowDirection, NodeShape,
+    };
+    use crate::markdown::mermaid::text::{EstimatedTextMeasurer, TextMeasurer};
 
     #[test]
     fn test_parse_simple_flowchart() {

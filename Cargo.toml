@@ -1,6 +1,6 @@
 [package]
 name = "ferrite"
-version = "0.2.5"
+version = "0.2.5-hotfix.1"
 edition = "2021"
 description = "A fast, lightweight text editor for Markdown, JSON, and more"
 repository = "https://github.com/OlaProeis/Ferrite"
@@ -10,9 +10,13 @@ keywords = ["markdown", "editor", "text-editor", "egui"]
 categories = ["text-editors", "gui"]
 
 [features]
-default = ["bundle-icon"]
+default = ["bundle-icon", "high-perf-alloc"]
 # Bundle application icon in the binary (requires assets/icons/icon_256.png to exist)
 bundle-icon = []
+# Use high-performance memory allocators (mimalloc on Windows, jemalloc on Unix)
+# This reduces heap fragmentation and memory usage, especially for long-running sessions.
+# Disable with: cargo build --no-default-features --features bundle-icon
+high-perf-alloc = ["mimalloc", "tikv-jemallocator"]
 
 [dependencies]
 egui = "0.28"
@@ -62,6 +66,19 @@ slug = "0.1"
 # Date/time formatting for snippets
 chrono = "0.4"
 
+# Character encoding detection and conversion
+encoding_rs = "0.8"
+chardetng = "0.1"
+
+# High-performance memory allocators (platform-specific)
+# mimalloc for Windows: faster allocation, reduced fragmentation
+# jemalloc for Unix: mature, well-tested, reduces memory usage
+[target.'cfg(windows)'.dependencies]
+mimalloc = { version = "0.1", default-features = false, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+tikv-jemallocator = { version = "0.6", optional = true }
+
 [dev-dependencies]
 tempfile = "3"
 
@@ -69,13 +86,16 @@ tempfile = "3"
 # Windows icon embedding
 embed-resource = "2.4"
 
-# Release build optimizations for smaller, faster binaries
+# Release build optimizations
+# Note: We avoid aggressive size optimization and symbol stripping to reduce
+# false positive detections by antivirus software (particularly Windows Defender's
+# ML-based heuristics). See README.md "Antivirus False Positives" section.
 [profile.release]
-lto = "fat"           # Link-time optimization across all crates
+lto = "thin"          # Link-time optimization (thin is faster, less aggressive)
 codegen-units = 1     # Single codegen unit for better optimization
 panic = "abort"       # No unwinding, smaller binary
-strip = "symbols"     # Remove debug symbols
-opt-level = "z"       # Optimize for size (use "3" for speed)
+opt-level = 3         # Optimize for speed (not size - "z" can trigger AV heuristics)
+# strip = "symbols"   # DISABLED: Stripping symbols can trigger AV false positives
 
 # Development profile with some optimizations for faster testing
 [profile.dev.package."*"]

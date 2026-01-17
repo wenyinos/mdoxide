@@ -51,12 +51,12 @@ mod widgets;
 
 // Only export what's actually used by the app
 pub use csv_viewer::{
-    delimiter_display_name, delimiter_symbol, detect_delimiter, get_tabular_file_type, CsvViewer,
-    CsvViewerState, DelimiterInfo, TabularFileType, DELIMITERS,
+    delimiter_display_name, delimiter_symbol, get_tabular_file_type, CsvViewer,
+    CsvViewerState, DELIMITERS,
 };
-pub use editor::{EditorMode, MarkdownEditor};
+pub use editor::{cleanup_rendered_editor_memory, EditorMode, MarkdownEditor};
 pub use formatting::{
     apply_raw_format, detect_raw_formatting_state, FormattingState, MarkdownFormatCommand,
 };
-pub use toc::{insert_or_update_toc, TocOptions, TocResult, TOC_END, TOC_START};
+pub use toc::{insert_or_update_toc, TocOptions};
 pub use tree_viewer::{get_structured_file_type, TreeViewer, TreeViewerState};

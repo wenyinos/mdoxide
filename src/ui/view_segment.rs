@@ -2,6 +2,10 @@
 //!
 //! This module implements a modern segmented control widget for switching
 //! between view modes (Raw, Split, Rendered) in the title bar.
+//!
+//! Note: This is an alternative view control design that isn't currently
+//! integrated into the main UI. Kept for potential future use.
+#![allow(dead_code)]
 
 use crate::config::ViewMode;
 use crate::state::FileType;

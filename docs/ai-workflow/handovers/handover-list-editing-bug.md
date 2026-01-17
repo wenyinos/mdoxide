@@ -57,11 +57,11 @@ struct FormattedItemEditState {
 ## Test Files
 
 - `test-formatted-list.md` - Comprehensive test with list items AND paragraphs
-- `docs/technical/error-handling.md` - Real file with formatted content
+- `docs/technical/config/error-handling.md` - Real file with formatted content
 
 ## Documentation
 
-- `docs/technical/click-to-edit-formatting.md` - Full technical documentation
+- `docs/technical/markdown/click-to-edit-formatting.md` - Full technical documentation
 
 ## Testing
 

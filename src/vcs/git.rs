@@ -41,6 +41,7 @@ pub enum GitFileStatus {
 
 impl GitFileStatus {
     /// Get a short label for the status (for badge display).
+    #[allow(dead_code)] // Public API, icon() is used instead
     pub fn label(&self) -> &'static str {
         match self {
             Self::Clean => "",
@@ -225,6 +226,7 @@ impl GitService {
     }
 
     /// Get the repository root path.
+    #[allow(dead_code)] // Public API for accessing repo root
     pub fn repo_root(&self) -> Option<&Path> {
         self.repo_root.as_deref()
     }
@@ -318,6 +320,7 @@ impl GitService {
     ///
     /// The path should be absolute. Returns GitFileStatus::Clean if the file
     /// is tracked and unmodified, or if the path is outside the repository.
+    #[allow(dead_code)] // Public API, get_all_statuses used for batch lookup
     pub fn file_status(&mut self, path: &Path) -> GitFileStatus {
         // Ensure cache is up to date
         self.update_status_cache();
@@ -361,6 +364,7 @@ impl GitService {
     ///
     /// Returns the "worst" status of any file within the directory:
     /// Conflict > StagedModified > Modified > Staged > Untracked > Deleted > Clean
+    #[allow(dead_code)] // Public API for directory status aggregation
     pub fn directory_status(&mut self, dir_path: &Path) -> GitFileStatus {
         // Ensure cache is up to date
         self.update_status_cache();
@@ -392,6 +396,7 @@ impl GitService {
     }
 
     /// Compare two statuses and return the "worse" one for aggregation.
+    #[allow(dead_code)] // Helper for directory_status
     fn worse_status(a: GitFileStatus, b: GitFileStatus) -> GitFileStatus {
         use GitFileStatus::*;
 

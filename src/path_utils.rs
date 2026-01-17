@@ -69,6 +69,7 @@ pub fn normalize_path(path: PathBuf) -> PathBuf {
 /// Normalize a path reference, returning an owned PathBuf.
 ///
 /// This is useful when you have a path reference and need a normalized owned path.
+#[allow(dead_code)] // Public API for path normalization
 pub fn normalize_path_ref(path: &Path) -> PathBuf {
     normalize_path(path.to_path_buf())
 }
@@ -132,6 +133,7 @@ fn normalize_windows_path(path: PathBuf) -> PathBuf {
 ///     // path is fully resolved and normalized (no \\?\ prefix)
 /// }
 /// ```
+#[allow(dead_code)] // Public API for path canonicalization
 pub fn canonicalize_and_normalize(path: &Path) -> Option<PathBuf> {
     path.canonicalize().ok().map(normalize_path)
 }
@@ -148,6 +150,7 @@ pub fn canonicalize_and_normalize(path: &Path) -> Option<PathBuf> {
 /// // Even if path doesn't exist, returns a usable path
 /// let path = canonicalize_or_normalize(&some_path);
 /// ```
+#[allow(dead_code)] // Public API for path canonicalization
 pub fn canonicalize_or_normalize(path: &Path) -> PathBuf {
     match path.canonicalize() {
         Ok(canonical) => normalize_path(canonical),

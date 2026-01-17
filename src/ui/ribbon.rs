@@ -22,7 +22,11 @@ const RIBBON_HEIGHT_COLLAPSED: f32 = 28.0;
 const ICON_BUTTON_SIZE: Vec2 = Vec2::new(32.0, 28.0);
 
 /// Actions that can be triggered from the ribbon.
+///
+/// Some variants are defined for keyboard shortcut compatibility but are not
+/// directly triggered from the ribbon UI. These are marked with comments.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)] // Some variants reserved for keyboard shortcuts
 pub enum RibbonAction {
     // File operations
     /// Create a new file/tab

@@ -27,7 +27,7 @@ The v0.2.0 implementation is **solid and well-architected**. All major features 
 
 ### 1. Light Mode Contrast (Task 70) ✅
 
-**Files:** `src/theme/mod.rs`, `docs/technical/light-mode-contrast.md`
+**Files:** `src/theme/mod.rs`, `docs/technical/ui/light-mode-contrast.md`
 
 **Status:** Excellent
 
@@ -212,7 +212,7 @@ if tab.should_auto_save(delay_ms) {
 - [x] JSON/YAML indentation folding works
 - [x] Nested folds tracked
 
-**Note:** The partial implementation (indicators only, no text hiding) is clearly documented in `docs/technical/code-folding.md`.
+**Note:** The partial implementation (indicators only, no text hiding) is clearly documented in `docs/technical/editor/code-folding.md`.
 
 ---
 

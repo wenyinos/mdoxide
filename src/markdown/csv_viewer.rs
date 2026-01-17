@@ -100,6 +100,7 @@ pub struct DelimiterInfo {
 
 impl DelimiterInfo {
     /// Get display name for the delimiter.
+    #[allow(dead_code)] // Public API for delimiter info display
     pub fn display_name(&self) -> &'static str {
         delimiter_display_name(self.delimiter)
     }
@@ -414,6 +415,7 @@ impl std::fmt::Display for CsvParseError {
 }
 
 /// Parse CSV/TSV content into structured data using the file type's default delimiter.
+#[allow(dead_code)] // Public API wrapper for parse_csv_with_delimiter
 pub fn parse_csv(content: &str, file_type: TabularFileType) -> Result<CsvData, CsvParseError> {
     parse_csv_with_delimiter(content, file_type.delimiter())
 }
@@ -511,11 +513,13 @@ pub struct CsvViewerState {
 }
 
 impl CsvViewerState {
+    #[allow(dead_code)] // Public API for state initialization
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Clear cached data (call when content changes).
+    #[allow(dead_code)] // Public API for cache management
     pub fn invalidate_cache(&mut self) {
         self.cached_data = None;
         self.content_hash = 0;
@@ -569,6 +573,7 @@ impl CsvViewerState {
     }
 
     /// Toggle the header override.
+    #[allow(dead_code)] // Public API for header management
     pub fn toggle_header(&mut self) {
         let current = self.has_headers();
         self.header_override = Some(!current);
@@ -590,6 +595,7 @@ impl CsvViewerState {
     }
 
     /// Get the detected header status (before any override).
+    #[allow(dead_code)] // Public API for header detection
     pub fn detected_has_header(&self) -> Option<bool> {
         self.detected_has_header
     }
@@ -669,7 +675,6 @@ pub struct CsvViewerColors {
     pub cell_text: Color32,
     pub row_even_bg: Color32,
     pub row_odd_bg: Color32,
-    pub border: Color32,
     pub truncated_indicator: Color32,
     pub error: Color32,
     /// Rainbow column colors for visual column differentiation
@@ -686,7 +691,6 @@ impl CsvViewerColors {
             cell_text: Color32::from_rgb(220, 220, 220),
             row_even_bg: Color32::from_rgb(30, 30, 35),
             row_odd_bg: Color32::from_rgb(40, 40, 45),
-            border: Color32::from_rgb(70, 70, 80),
             truncated_indicator: Color32::from_rgb(150, 150, 150),
             error: Color32::from_rgb(255, 100, 100),
             column_colors: generate_rainbow_colors(true),
@@ -701,7 +705,6 @@ impl CsvViewerColors {
             cell_text: Color32::from_rgb(40, 40, 40),
             row_even_bg: Color32::from_rgb(255, 255, 255),
             row_odd_bg: Color32::from_rgb(245, 245, 250),
-            border: Color32::from_rgb(200, 200, 210),
             truncated_indicator: Color32::from_rgb(120, 120, 120),
             error: Color32::from_rgb(200, 50, 50),
             column_colors: generate_rainbow_colors(false),
@@ -750,10 +753,6 @@ pub struct CsvViewerOutput {
     pub toggle_raw_requested: bool,
     /// Current scroll offset
     pub scroll_offset: f32,
-    /// The delimiter used for parsing
-    pub delimiter: u8,
-    /// Whether the delimiter was auto-detected (vs manually set)
-    pub delimiter_auto_detected: bool,
     /// Whether headers are displayed (considers override)
     pub has_headers: bool,
     /// Whether headers were auto-detected (vs manually set)
@@ -800,7 +799,7 @@ impl<'a> CsvViewer<'a> {
             .with_rainbow(self.rainbow_columns);
 
         // Determine the delimiter to use
-        let (delimiter, auto_detected) = if let Some(override_delim) = self.state.delimiter_override {
+        let (delimiter, _auto_detected) = if let Some(override_delim) = self.state.delimiter_override {
             // Use manual override
             (override_delim, false)
         } else if let Some(detected) = self.state.detected_delimiter {
@@ -828,8 +827,6 @@ impl<'a> CsvViewer<'a> {
         let mut output = CsvViewerOutput {
             toggle_raw_requested: false,
             scroll_offset: 0.0,
-            delimiter,
-            delimiter_auto_detected: auto_detected,
             has_headers,
             headers_auto_detected,
         };
@@ -963,7 +960,7 @@ impl<'a> CsvViewer<'a> {
         }
 
         // Blend factor for rainbow column colors (0.35 = 35% column color, 65% base)
-        const COLUMN_COLOR_BLEND: f32 = 0.35;
+        const _COLUMN_COLOR_BLEND: f32 = 0.35;
 
         // Calculate total content height for virtual scrolling
         let header_height = if header_row.is_some() { row_height + 1.0 } else { 0.0 }; // +1 for separator
@@ -1133,6 +1130,7 @@ fn truncate_cell(s: &str, max_chars: usize) -> String {
 }
 
 /// Check if a file path is a tabular file (CSV or TSV).
+#[allow(dead_code)] // Public API for file type detection
 pub fn is_tabular_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())

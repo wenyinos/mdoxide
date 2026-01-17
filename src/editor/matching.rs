@@ -41,6 +41,7 @@ pub enum DelimiterKind {
 
 impl DelimiterKind {
     /// Get the opening character(s) for this delimiter kind.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn opening_chars(&self) -> &'static str {
         match self {
             DelimiterKind::Paren => "(",
@@ -53,6 +54,7 @@ impl DelimiterKind {
     }
 
     /// Get the closing character(s) for this delimiter kind.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn closing_chars(&self) -> &'static str {
         match self {
             DelimiterKind::Paren => ")",
@@ -76,6 +78,7 @@ impl DelimiterKind {
     }
 
     /// Check if this is a markdown emphasis type.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn is_emphasis(&self) -> bool {
         matches!(
             self,
@@ -109,16 +112,19 @@ impl DelimiterToken {
     }
 
     /// Get the byte range of this token.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn range(&self) -> (usize, usize) {
         (self.start, self.end)
     }
 
     /// Get the length of this token in bytes.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn len(&self) -> usize {
         self.end - self.start
     }
 
     /// Check if this token is empty.
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -139,11 +145,13 @@ pub struct MatchingPair {
 
 impl MatchingPair {
     /// Get the source range (where the cursor is).
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn source_range(&self) -> (usize, usize) {
         self.source.range()
     }
 
     /// Get the target range (the matching delimiter).
+    #[allow(dead_code)] // Part of public API for delimiter matching
     pub fn target_range(&self) -> (usize, usize) {
         self.target.range()
     }

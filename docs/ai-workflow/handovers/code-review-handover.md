@@ -31,7 +31,7 @@ For each feature:
 
 ### 1. Rendered Mode List Editing (Tasks 64-69)
 
-**Documentation:** `docs/technical/list-editing-fixes.md` (if exists)
+**Documentation:** `docs/technical/markdown/list-editing-fixes.md` (if exists)
 
 **Files to Review:**
 - `src/markdown/editor.rs` - List editing logic
@@ -48,7 +48,7 @@ For each feature:
 
 ### 2. Light Mode Contrast (Task 70)
 
-**Documentation:** `docs/technical/light-mode-contrast.md`
+**Documentation:** `docs/technical/ui/light-mode-contrast.md`
 
 **Files to Review:**
 - `src/theme/mod.rs` - ThemeColors struct
@@ -81,7 +81,7 @@ For each feature:
 
 ### 4. Session Persistence (Task 73)
 
-**Documentation:** `docs/technical/session-persistence.md`
+**Documentation:** `docs/technical/files/session-persistence.md`
 
 **Files to Review:**
 - `src/config/session.rs` - Session state serialization
@@ -99,7 +99,7 @@ For each feature:
 
 ### 5. Git Integration (Task 74)
 
-**Documentation:** `docs/technical/git-integration.md`
+**Documentation:** `docs/technical/files/git-integration.md`
 
 **Files to Review:**
 - `src/vcs/git.rs` - GitService implementation
@@ -116,7 +116,7 @@ For each feature:
 
 ### 6. Zen Mode (Task 75)
 
-**Documentation:** `docs/technical/zen-mode.md`
+**Documentation:** `docs/technical/ui/zen-mode.md`
 
 **Files to Review:**
 - `src/app.rs` - Zen mode layout logic
@@ -134,7 +134,7 @@ For each feature:
 
 ### 7. Search-in-Files Navigation (Task 76)
 
-**Documentation:** `docs/technical/search-highlight.md`
+**Documentation:** `docs/technical/editor/search-highlight.md`
 
 **Files to Review:**
 - `src/state.rs` - TransientHighlight struct
@@ -151,7 +151,7 @@ For each feature:
 
 ### 8. Auto-Save (Task 77)
 
-**Documentation:** `docs/technical/auto-save.md`
+**Documentation:** `docs/technical/files/auto-save.md`
 
 **Files to Review:**
 - `src/config/settings.rs` - auto_save_enabled_default, auto_save_delay_ms
@@ -169,7 +169,7 @@ For each feature:
 
 ### 9. Code Folding (Task 78)
 
-**Documentation:** `docs/technical/code-folding.md`
+**Documentation:** `docs/technical/editor/code-folding.md`
 
 **Files to Review:**
 - `src/editor/folding.rs` - FoldRegion, FoldState
@@ -187,7 +187,7 @@ For each feature:
 
 ### 10. Split View (Task 79)
 
-**Documentation:** `docs/technical/split-view.md`
+**Documentation:** `docs/technical/ui/split-view.md`
 
 **Files to Review:**
 - `src/app.rs` - Split view layout
@@ -205,7 +205,7 @@ For each feature:
 
 ### 11. Live Pipeline (Task 80)
 
-**Documentation:** `docs/technical/live-pipeline.md`
+**Documentation:** `docs/technical/viewers/live-pipeline.md`
 
 **Files to Review:**
 - `src/ui/pipeline.rs` - PipelinePanel, TabPipelineState
@@ -223,7 +223,7 @@ For each feature:
 
 ### 12. Search Panel Viewport (Task 81)
 
-**Documentation:** `docs/technical/search-panel-viewport.md`
+**Documentation:** `docs/technical/ui/search-panel-viewport.md`
 
 **Files to Review:**
 - `src/ui/search.rs` or equivalent - Search panel bounds
@@ -253,7 +253,7 @@ For each feature:
 
 ### 14. MermaidJS Rendering (Task 83)
 
-**Documentation:** `docs/technical/mermaid-diagrams.md`
+**Documentation:** `docs/technical/mermaid/mermaid-diagrams.md`
 
 **Files to Review:**
 - `src/markdown/mermaid.rs` - All diagram parsers and renderers (~4000 lines)
@@ -284,7 +284,7 @@ For each feature:
 
 ### 15. Editor Minimap (Task 84)
 
-**Documentation:** `docs/technical/minimap.md`
+**Documentation:** `docs/technical/editor/minimap.md`
 
 **Files to Review:**
 - `src/editor/minimap.rs` - Minimap widget (~560 lines)
@@ -304,7 +304,7 @@ For each feature:
 
 ### 16. Bracket Matching (Task 85)
 
-**Documentation:** `docs/technical/bracket-matching.md`
+**Documentation:** `docs/technical/editor/bracket-matching.md`
 
 **Files to Review:**
 - `src/editor/matching.rs` - DelimiterMatcher

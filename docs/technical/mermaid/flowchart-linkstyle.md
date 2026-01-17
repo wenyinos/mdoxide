@@ -74,4 +74,4 @@ For chained edges like `A --> B --> C`, this creates edges 0 (A→B) and 1 (B→
 
 - `src/markdown/mermaid/flowchart.rs` - Main implementation
 - `test_md/test_flowcharts.md` - Test cases
-- `docs/technical/mermaid-classdef-styling.md` - Similar node styling pattern
+- `docs/technical/mermaid/mermaid-classdef-styling.md` - Similar node styling pattern

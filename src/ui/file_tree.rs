@@ -172,8 +172,10 @@ impl FileTreePanel {
                             .truncate(),
                     );
 
-                    // Close button (right-aligned)
+                    // Close button (right-aligned with padding from resize handle)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Add spacing to move button away from panel edge/resize handle
+                        ui.add_space(8.0);
                         if ui
                             .add(egui::Button::new("×").frame(false))
                             .on_hover_text("Close Workspace")

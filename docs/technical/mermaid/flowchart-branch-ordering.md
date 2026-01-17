@@ -51,8 +51,8 @@ The position of a node in its predecessors' outgoing edge list is determined by 
 ## Related Files
 
 - `src/markdown/mermaid/flowchart.rs` - Layout algorithm implementation
-- `docs/technical/flowchart-layout-algorithm.md` - Sugiyama algorithm details
-- `docs/technical/flowchart-direction.md` - Direction handling (TD, LR, etc.)
+- `docs/technical/mermaid/flowchart-layout-algorithm.md` - Sugiyama algorithm details
+- `docs/technical/mermaid/flowchart-direction.md` - Direction handling (TD, LR, etc.)
 
 ## Testing
 

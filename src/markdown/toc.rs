@@ -66,6 +66,7 @@ impl Default for TocOptions {
 
 impl TocOptions {
     /// Create options that include all heading levels (H1-H6).
+    #[allow(dead_code)] // Public API for TOC generation options
     pub fn all_levels() -> Self {
         Self {
             max_level: 6,
@@ -74,12 +75,14 @@ impl TocOptions {
     }
 
     /// Set the maximum heading depth to include.
+    #[allow(dead_code)] // Builder pattern for TOC options
     pub fn with_max_level(mut self, level: u8) -> Self {
         self.max_level = level.clamp(1, 6);
         self
     }
 
     /// Set the minimum heading level to include.
+    #[allow(dead_code)] // Builder pattern for TOC options
     pub fn with_min_level(mut self, level: u8) -> Self {
         self.min_level = level.clamp(1, 6);
         self
@@ -295,6 +298,7 @@ pub fn insert_or_update_toc(text: &str, cursor: usize, options: &TocOptions) -> 
 ///
 /// # Returns
 /// The modified text with TOC removed, or the original text if no TOC found.
+#[allow(dead_code)] // Public API for TOC removal
 pub fn remove_toc(text: &str) -> String {
     if let Some((start, end)) = find_toc_block(text) {
         // Also remove surrounding empty lines if present

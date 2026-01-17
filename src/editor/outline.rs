@@ -32,6 +32,7 @@ pub enum ContentType {
 
 impl ContentType {
     /// Get a short label for display (e.g., "H1", "CODE", "TABLE")
+    #[allow(dead_code)] // Public API for outline display customization
     pub fn label(&self) -> &'static str {
         match self {
             ContentType::Heading(1) => "H1",

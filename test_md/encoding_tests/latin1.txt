@@ -1,0 +1,13 @@
+# ISO-8859-1 (Latin-1) Test File
+
+This file is encoded in ISO-8859-1.
+
+## Special Characters
+- German: Müller, Größe, Übung
+- French: café, résumé, naïve
+- Spanish: señor, niño, año
+- Copyright: ©
+- Currency: £ ¥
+
+Note: ISO-8859-1 does NOT include the Euro sign.
+Latin-1 is a subset of Windows-1252.

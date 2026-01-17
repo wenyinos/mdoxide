@@ -8,6 +8,114 @@ use crate::fonts;
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Localized Display Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get localized font description
+fn font_description(font: &EditorFont) -> String {
+    match font {
+        EditorFont::Inter => t!("settings.editor.font_inter_desc").to_string(),
+        EditorFont::JetBrainsMono => t!("settings.editor.font_jetbrains_desc").to_string(),
+        EditorFont::Custom(_) => t!("settings.editor.custom_font_desc").to_string(),
+    }
+}
+
+/// Get localized CJK preference display name
+fn cjk_display_name(pref: &CjkFontPreference) -> String {
+    match pref {
+        CjkFontPreference::Auto => t!("settings.editor.cjk_auto").to_string(),
+        CjkFontPreference::Korean => t!("settings.editor.cjk_korean").to_string(),
+        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese").to_string(),
+        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese").to_string(),
+        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese").to_string(),
+    }
+}
+
+/// Get localized CJK preference description
+fn cjk_description(pref: &CjkFontPreference) -> String {
+    match pref {
+        CjkFontPreference::Auto => t!("settings.editor.cjk_auto_desc").to_string(),
+        CjkFontPreference::Korean => t!("settings.editor.cjk_korean_desc").to_string(),
+        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese_desc").to_string(),
+        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese_desc").to_string(),
+        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese_desc").to_string(),
+    }
+}
+
+/// Get localized view mode description
+fn view_mode_description(mode: &ViewMode) -> String {
+    match mode {
+        ViewMode::Raw => t!("view_mode.raw_desc").to_string(),
+        ViewMode::Rendered => t!("view_mode.rendered_desc").to_string(),
+        ViewMode::Split => t!("view_mode.split_desc").to_string(),
+    }
+}
+
+/// Get localized shortcut command name
+fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
+    match cmd {
+        // File operations
+        ShortcutCommand::Save => t!("shortcuts.commands.save").to_string(),
+        ShortcutCommand::SaveAs => t!("shortcuts.commands.save_as").to_string(),
+        ShortcutCommand::Open => t!("shortcuts.commands.open").to_string(),
+        ShortcutCommand::New => t!("shortcuts.commands.new").to_string(),
+        ShortcutCommand::NewTab => t!("shortcuts.commands.new_tab").to_string(),
+        ShortcutCommand::CloseTab => t!("shortcuts.commands.close_tab").to_string(),
+        // Navigation
+        ShortcutCommand::NextTab => t!("shortcuts.commands.next_tab").to_string(),
+        ShortcutCommand::PrevTab => t!("shortcuts.commands.prev_tab").to_string(),
+        ShortcutCommand::GoToLine => t!("shortcuts.commands.go_to_line").to_string(),
+        ShortcutCommand::QuickOpen => t!("shortcuts.commands.quick_open").to_string(),
+        // View
+        ShortcutCommand::ToggleViewMode => t!("shortcuts.commands.toggle_view_mode").to_string(),
+        ShortcutCommand::CycleTheme => t!("shortcuts.commands.cycle_theme").to_string(),
+        ShortcutCommand::ToggleZenMode => t!("shortcuts.commands.toggle_zen_mode").to_string(),
+        ShortcutCommand::ToggleFullscreen => t!("shortcuts.commands.toggle_fullscreen").to_string(),
+        ShortcutCommand::ToggleOutline => t!("shortcuts.commands.toggle_outline").to_string(),
+        ShortcutCommand::ToggleFileTree => t!("shortcuts.commands.toggle_file_tree").to_string(),
+        ShortcutCommand::TogglePipeline => t!("shortcuts.commands.toggle_pipeline").to_string(),
+        // Edit
+        ShortcutCommand::Undo => t!("shortcuts.commands.undo").to_string(),
+        ShortcutCommand::Redo => t!("shortcuts.commands.redo").to_string(),
+        ShortcutCommand::DuplicateLine => t!("shortcuts.commands.duplicate_line").to_string(),
+        ShortcutCommand::MoveLineUp => t!("shortcuts.commands.move_line_up").to_string(),
+        ShortcutCommand::MoveLineDown => t!("shortcuts.commands.move_line_down").to_string(),
+        ShortcutCommand::SelectNextOccurrence => t!("shortcuts.commands.select_next_occurrence").to_string(),
+        // Search
+        ShortcutCommand::Find => t!("shortcuts.commands.find").to_string(),
+        ShortcutCommand::FindReplace => t!("shortcuts.commands.find_replace").to_string(),
+        ShortcutCommand::FindNext => t!("shortcuts.commands.find_next").to_string(),
+        ShortcutCommand::FindPrev => t!("shortcuts.commands.find_prev").to_string(),
+        ShortcutCommand::SearchInFiles => t!("shortcuts.commands.search_in_files").to_string(),
+        // Formatting
+        ShortcutCommand::FormatBold => t!("shortcuts.commands.bold").to_string(),
+        ShortcutCommand::FormatItalic => t!("shortcuts.commands.italic").to_string(),
+        ShortcutCommand::FormatInlineCode => t!("shortcuts.commands.inline_code").to_string(),
+        ShortcutCommand::FormatCodeBlock => t!("shortcuts.commands.code_block").to_string(),
+        ShortcutCommand::FormatLink => t!("shortcuts.commands.link").to_string(),
+        ShortcutCommand::FormatImage => t!("shortcuts.commands.image").to_string(),
+        ShortcutCommand::FormatBlockquote => t!("shortcuts.commands.blockquote").to_string(),
+        ShortcutCommand::FormatBulletList => t!("shortcuts.commands.bullet_list").to_string(),
+        ShortcutCommand::FormatNumberedList => t!("shortcuts.commands.numbered_list").to_string(),
+        ShortcutCommand::FormatHeading1 => t!("shortcuts.commands.heading_1").to_string(),
+        ShortcutCommand::FormatHeading2 => t!("shortcuts.commands.heading_2").to_string(),
+        ShortcutCommand::FormatHeading3 => t!("shortcuts.commands.heading_3").to_string(),
+        ShortcutCommand::FormatHeading4 => t!("shortcuts.commands.heading_4").to_string(),
+        ShortcutCommand::FormatHeading5 => t!("shortcuts.commands.heading_5").to_string(),
+        ShortcutCommand::FormatHeading6 => t!("shortcuts.commands.heading_6").to_string(),
+        // Folding
+        ShortcutCommand::FoldAll => t!("shortcuts.commands.fold_all").to_string(),
+        ShortcutCommand::UnfoldAll => t!("shortcuts.commands.unfold_all").to_string(),
+        ShortcutCommand::ToggleFoldAtCursor => t!("shortcuts.commands.toggle_fold").to_string(),
+        // Other
+        ShortcutCommand::OpenSettings => t!("shortcuts.commands.open_settings").to_string(),
+        ShortcutCommand::OpenAbout => t!("shortcuts.commands.open_about").to_string(),
+        ShortcutCommand::ExportHtml => t!("shortcuts.commands.export_html").to_string(),
+        ShortcutCommand::InsertToc => t!("shortcuts.commands.insert_toc").to_string(),
+    }
+}
+
 /// Settings panel sections for navigation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsSection {
@@ -306,7 +414,7 @@ impl SettingsPanel {
                 {
                     changed = true;
                 }
-                ui.label(RichText::new(font.description()).weak().small());
+                ui.label(RichText::new(font_description(font)).weak().small());
             });
         }
 
@@ -387,10 +495,10 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         egui::ComboBox::from_id_source("cjk_preference_combo")
-            .selected_text(settings.cjk_font_preference.display_name())
+            .selected_text(cjk_display_name(&settings.cjk_font_preference))
             .show_ui(ui, |ui| {
                 for pref in CjkFontPreference::all() {
-                    let label = format!("{} - {}", pref.display_name(), pref.description());
+                    let label = format!("{} - {}", cjk_display_name(pref), cjk_description(pref));
                     if ui
                         .selectable_value(&mut settings.cjk_font_preference, *pref, label)
                         .changed()
@@ -464,7 +572,7 @@ impl SettingsPanel {
                 {
                     changed = true;
                 }
-                ui.label(RichText::new(view_mode.description()).weak().small());
+                ui.label(RichText::new(view_mode_description(view_mode)).weak().small());
             });
         }
 
@@ -788,14 +896,14 @@ impl SettingsPanel {
                 ui.label(RichText::new(t!("settings.editor.builtin_snippets")).small());
                 // Two-column snippet display
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(";date → YYYY-MM-DD").code().small());
+                    ui.label(RichText::new(t!("settings.editor.snippet_date")).code().small());
                     ui.add_space(16.0);
-                    ui.label(RichText::new(";time → HH:MM").code().small());
+                    ui.label(RichText::new(t!("settings.editor.snippet_time")).code().small());
                 });
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(";datetime → Date+time").code().small());
+                    ui.label(RichText::new(t!("settings.editor.snippet_datetime")).code().small());
                     ui.add_space(16.0);
-                    ui.label(RichText::new(";now → ISO 8601").code().small());
+                    ui.label(RichText::new(t!("settings.editor.snippet_now")).code().small());
                 });
             });
         }
@@ -865,6 +973,19 @@ impl SettingsPanel {
         let mut changed = false;
 
         ui.heading(t!("settings.files.title"));
+        ui.add_space(8.0);
+
+        // Session restore toggle
+        if ui
+            .checkbox(&mut settings.restore_session, t!("settings.general.restore_session"))
+            .on_hover_text(t!("settings.files.restore_session_tooltip"))
+            .changed()
+        {
+            changed = true;
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
         ui.add_space(8.0);
 
         // Auto-save toggle (default for new documents)
@@ -1004,7 +1125,7 @@ impl SettingsPanel {
         if let Some((cmd, msg)) = &self.conflict_warning {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("⚠").color(Color32::YELLOW));
-                ui.label(RichText::new(format!("{}: {}", cmd.display_name(), msg)).color(Color32::YELLOW));
+                ui.label(RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg)).color(Color32::YELLOW));
             });
             ui.add_space(4.0);
         }
@@ -1014,7 +1135,7 @@ impl SettingsPanel {
         let mut apply_capture: Option<(ShortcutCommand, KeyBinding)> = None;
 
         if let Some(capture) = &self.key_capture {
-            let cmd_name = capture.command.display_name();
+            let cmd_name = shortcut_command_name(&capture.command);
             let current_mods = capture.modifiers.display_string();
             let current_key = capture.key.map(|k| k.display_string()).unwrap_or("");
             let has_key = capture.key.is_some();
@@ -1064,7 +1185,7 @@ impl SettingsPanel {
             if let Some(conflict_cmd) = settings.keyboard_shortcuts.find_conflict(&binding, Some(cmd)) {
                 self.conflict_warning = Some((
                     cmd,
-                    format!("{} \"{}\"", t!("settings.keyboard.conflict_with"), conflict_cmd.display_name()),
+                    format!("{} \"{}\"", t!("settings.keyboard.conflict_with"), shortcut_command_name(&conflict_cmd)),
                 ));
             } else {
                 settings.keyboard_shortcuts.set(cmd, binding);
@@ -1144,7 +1265,7 @@ impl SettingsPanel {
                             if filter_lower.is_empty() {
                                 return true;
                             }
-                            cmd.display_name().to_lowercase().contains(&filter_lower)
+                            shortcut_command_name(cmd).to_lowercase().contains(&filter_lower)
                                 || category.to_lowercase().contains(&filter_lower)
                         })
                         .collect();
@@ -1165,10 +1286,11 @@ impl SettingsPanel {
 
                         ui.horizontal(|ui| {
                             // Command name
+                            let cmd_name = shortcut_command_name(cmd);
                             let name_text = if is_custom {
-                                RichText::new(cmd.display_name()).italics()
+                                RichText::new(&cmd_name).italics()
                             } else {
-                                RichText::new(cmd.display_name())
+                                RichText::new(&cmd_name)
                             };
                             ui.label(name_text);
 

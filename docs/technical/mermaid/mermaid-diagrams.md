@@ -301,5 +301,5 @@ Mermaid Source → Parser → AST → Layout Engine → egui Renderer
 | `src/markdown/widgets.rs` | MermaidDiagramType, MermaidBlockData, MermaidBlock widget |
 | `src/markdown/editor.rs` | render_mermaid_block(), detect mermaid in code blocks |
 | `src/markdown/mod.rs` | Added mermaid module export |
-| `docs/technical/mermaid-diagrams.md` | This documentation |
+| `docs/technical/mermaid/mermaid-diagrams.md` | This documentation |
 | `docs/example-mermaid.md` | Example file with various diagram types |

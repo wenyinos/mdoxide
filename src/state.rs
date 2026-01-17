@@ -1049,6 +1049,15 @@ pub struct Tab {
     pub split_ratio: f32,
     /// Live Pipeline state for this tab (JSON/YAML command piping)
     pub pipeline_state: TabPipelineState,
+    /// Detected encoding when the file was opened (e.g., "UTF-8", "WINDOWS-1252")
+    /// None for new/unsaved documents that were created in-app
+    pub detected_encoding: Option<&'static str>,
+    /// Original file bytes for re-decoding when user changes encoding
+    /// Empty for new documents created in-app
+    pub original_bytes: Vec<u8>,
+    /// Currently selected encoding label (used for save operations)
+    /// Defaults to "utf-8" for new documents
+    pub current_encoding: &'static str,
 }
 
 impl Tab {
@@ -1088,6 +1097,9 @@ impl Tab {
             fold_state: FoldState::new(),
             split_ratio: 0.5, // Default to 50/50 split
             pipeline_state: TabPipelineState::default(),
+            detected_encoding: None, // New documents have no detected encoding
+            original_bytes: Vec::new(), // No original bytes for new docs
+            current_encoding: "utf-8", // Default to UTF-8 for new documents
         }
     }
 
@@ -1142,6 +1154,75 @@ impl Tab {
             fold_state: FoldState::new(),
             split_ratio: 0.5, // Default to 50/50 split
             pipeline_state: TabPipelineState::default(),
+            detected_encoding: Some("utf-8"), // Will be overridden by with_file_bytes
+            original_bytes: Vec::new(), // Will be set by with_file_bytes
+            current_encoding: "utf-8", // Will be overridden by with_file_bytes
+        }
+    }
+
+    /// Create a tab with content loaded from file bytes with automatic encoding detection.
+    ///
+    /// Uses chardetng for encoding detection and encoding_rs for decoding.
+    /// The original bytes are stored for re-decoding if user changes encoding.
+    pub fn with_file_bytes(id: usize, path: PathBuf, bytes: Vec<u8>) -> Self {
+        use chardetng::EncodingDetector;
+
+        let file_type = FileType::from_path(&path);
+
+        // Detect encoding using chardetng
+        let mut detector = EncodingDetector::new();
+        detector.feed(&bytes, true);
+        let detected = detector.guess(None, true);
+        let encoding_label = detected.name();
+
+        // Check for BOM first - encoding_rs handles this
+        let (content, actual_encoding, _had_errors) = if let Some((bom_encoding, bom_len)) =
+            encoding_rs::Encoding::for_bom(&bytes)
+        {
+            // BOM detected, use that encoding and skip BOM bytes
+            // Use decode_without_bom_handling since we already handled the BOM
+            let (decoded, had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+            (decoded.into_owned(), bom_encoding.name(), had_errors)
+        } else {
+            // No BOM, use detected encoding
+            let (decoded, _, had_errors) = detected.decode(&bytes);
+            (decoded.into_owned(), encoding_label, had_errors)
+        };
+
+        Self {
+            id,
+            path: Some(path),
+            content: content.clone(),
+            original_content: content,
+            cursors: MultiCursor::new(),
+            cursor_position: (0, 0),
+            selection: None,
+            scroll_offset: 0.0,
+            content_height: 0.0,
+            viewport_height: 0.0,
+            pending_scroll_offset: None,
+            pending_cursor_restore: None,
+            pending_scroll_ratio: None,
+            rendered_line_mappings: Vec::new(),
+            raw_line_height: 20.0,
+            pending_scroll_to_line: None,
+            view_mode: ViewMode::Raw,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            max_undo_size: 100,
+            content_version: 0,
+            file_type,
+            needs_focus: true,
+            transient_highlight: TransientHighlight::new(),
+            auto_save_enabled: false,
+            last_edit_time: None,
+            last_auto_save_content_hash: None,
+            fold_state: FoldState::new(),
+            split_ratio: 0.5,
+            pipeline_state: TabPipelineState::default(),
+            detected_encoding: Some(actual_encoding),
+            original_bytes: bytes,
+            current_encoding: actual_encoding,
         }
     }
 
@@ -1161,6 +1242,27 @@ impl Tab {
         default_view_mode: ViewMode,
     ) -> Self {
         let mut tab = Self::with_file(id, path, content);
+        tab.auto_save_enabled = auto_save_default;
+        tab.view_mode = default_view_mode;
+        tab
+    }
+
+    /// Create a tab from file bytes with encoding detection and settings.
+    ///
+    /// # Arguments
+    /// * `id` - Unique tab identifier
+    /// * `path` - File path
+    /// * `bytes` - Raw file bytes for encoding detection
+    /// * `auto_save_default` - Whether auto-save is enabled by default
+    /// * `default_view_mode` - Default view mode for new tabs (Raw, Rendered, or Split)
+    pub fn with_file_bytes_and_settings(
+        id: usize,
+        path: PathBuf,
+        bytes: Vec<u8>,
+        auto_save_default: bool,
+        default_view_mode: ViewMode,
+    ) -> Self {
+        let mut tab = Self::with_file_bytes(id, path, bytes);
         tab.auto_save_enabled = auto_save_default;
         tab.view_mode = default_view_mode;
         tab
@@ -1210,6 +1312,9 @@ impl Tab {
             fold_state: FoldState::new(),
             split_ratio: info.split_ratio, // Restore saved split ratio
             pipeline_state: TabPipelineState::default(),
+            detected_encoding: Some("utf-8"), // Restored tabs default to UTF-8
+            original_bytes: Vec::new(), // Bytes are reloaded if needed
+            current_encoding: "utf-8", // Default encoding for restored tabs
         }
     }
 
@@ -1220,9 +1325,124 @@ impl Tab {
         tab
     }
 
+    /// Create a tab from session info using raw file bytes with encoding detection.
+    ///
+    /// This combines tab info restoration (view mode, split ratio) with
+    /// automatic encoding detection from the file bytes.
+    pub fn from_tab_info_with_bytes(id: usize, info: &TabInfo, bytes: Vec<u8>, auto_save_default: bool) -> Self {
+        use chardetng::EncodingDetector;
+
+        let file_type = info
+            .path
+            .as_ref()
+            .map(|p| FileType::from_path(p))
+            .unwrap_or(FileType::Markdown);
+
+        // Detect encoding
+        let mut detector = EncodingDetector::new();
+        detector.feed(&bytes, true);
+        let detected = detector.guess(None, true);
+
+        // Check for BOM first
+        let (content, actual_encoding) = if let Some((bom_encoding, bom_len)) =
+            encoding_rs::Encoding::for_bom(&bytes)
+        {
+            // Use decode_without_bom_handling since we already handled the BOM
+            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+            (decoded.into_owned(), bom_encoding.name())
+        } else {
+            let (decoded, _, _) = detected.decode(&bytes);
+            (decoded.into_owned(), detected.name())
+        };
+
+        // Convert legacy cursor position to char index
+        let cursor_char_idx = line_col_to_char_index(&content, info.cursor_position.0, info.cursor_position.1);
+
+        Self {
+            id,
+            path: info.path.clone(),
+            content: content.clone(),
+            original_content: content,
+            cursors: MultiCursor::single(cursor_char_idx),
+            cursor_position: info.cursor_position,
+            selection: None,
+            scroll_offset: info.scroll_offset,
+            content_height: 0.0,
+            viewport_height: 0.0,
+            pending_scroll_offset: None,
+            pending_cursor_restore: None,
+            pending_scroll_ratio: None,
+            rendered_line_mappings: Vec::new(),
+            raw_line_height: 20.0,
+            pending_scroll_to_line: None,
+            view_mode: info.view_mode,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            max_undo_size: 100,
+            content_version: 0,
+            file_type,
+            needs_focus: false,
+            transient_highlight: TransientHighlight::new(),
+            auto_save_enabled: auto_save_default,
+            last_edit_time: None,
+            last_auto_save_content_hash: None,
+            fold_state: FoldState::new(),
+            split_ratio: info.split_ratio,
+            pipeline_state: TabPipelineState::default(),
+            detected_encoding: Some(actual_encoding),
+            original_bytes: bytes,
+            current_encoding: actual_encoding,
+        }
+    }
+
     /// Check if the tab has unsaved changes.
     pub fn is_modified(&self) -> bool {
         self.content != self.original_content
+    }
+
+    /// Check if this is a new/untitled file (not yet saved to disk).
+    ///
+    /// Returns `true` if the tab has no associated file path, meaning it was
+    /// created in the app and has never been saved. This is distinct from
+    /// files that were loaded from disk (even if they're empty).
+    pub fn is_new_file(&self) -> bool {
+        self.path.is_none()
+    }
+
+    /// Check if this is an unmodified empty untitled file.
+    ///
+    /// Returns `true` if:
+    /// - The tab is a new file (no path, never saved)
+    /// - The content matches the initial empty state
+    ///
+    /// These files can be closed without prompting to save since there's
+    /// nothing meaningful to preserve.
+    pub fn is_empty_untitled(&self) -> bool {
+        self.is_new_file() && self.content.is_empty() && self.original_content.is_empty()
+    }
+
+    /// Determine if we should prompt to save before closing this tab.
+    ///
+    /// The logic is:
+    /// - If the file is modified (content differs from original), prompt to save
+    /// - EXCEPTION: Skip prompt for empty untitled files (nothing to save)
+    ///
+    /// This allows new tabs that haven't been touched to be closed silently,
+    /// while still protecting any typed content from accidental loss.
+    pub fn should_prompt_to_save(&self) -> bool {
+        // Don't prompt for unmodified files
+        if !self.is_modified() {
+            return false;
+        }
+
+        // Don't prompt for empty untitled files (nothing meaningful to save)
+        // This handles the case where content was typed and then deleted
+        if self.is_new_file() && self.content.is_empty() {
+            return false;
+        }
+
+        // All other modified files should prompt
+        true
     }
 
     /// Get the display title for this tab.
@@ -1248,6 +1468,90 @@ impl Tab {
         // Clear auto-save tracking since content is now saved
         self.last_auto_save_content_hash = None;
         self.last_edit_time = None;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Encoding Methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// List of common encodings for the UI picker.
+    pub const COMMON_ENCODINGS: &'static [&'static str] = &[
+        "utf-8",
+        "windows-1252",
+        "iso-8859-1",
+        "shift_jis",
+        "euc-jp",
+        "gbk",
+        "euc-kr",
+        "iso-8859-15",
+        "utf-16le",
+        "utf-16be",
+    ];
+
+    /// Get the display name for the current encoding (uppercase for UI).
+    pub fn encoding_display_name(&self) -> String {
+        self.current_encoding.to_uppercase()
+    }
+
+    /// Change the encoding and re-decode content from original bytes.
+    ///
+    /// Returns `Ok(())` if successful, or `Err` with a message if the encoding
+    /// is invalid or the bytes cannot be decoded with the new encoding.
+    ///
+    /// Note: This only works if we have original_bytes stored (i.e., file was opened,
+    /// not created new). For new documents, this just changes the save encoding.
+    pub fn set_encoding(&mut self, new_encoding: &'static str) -> Result<(), String> {
+        // Get the encoding from the label
+        let encoding = encoding_rs::Encoding::for_label(new_encoding.as_bytes())
+            .ok_or_else(|| format!("Unknown encoding: {}", new_encoding))?;
+
+        // If we have original bytes, re-decode the content
+        if !self.original_bytes.is_empty() {
+            let (decoded, _actual_encoding, had_errors) = encoding.decode(&self.original_bytes);
+
+            if had_errors {
+                // Still update, but warn about errors
+                log::warn!(
+                    "Decoding with {} had errors - some characters may be replaced",
+                    new_encoding
+                );
+            }
+
+            // Update content (preserve cursor position as best we can)
+            let old_len = self.content.len();
+            self.content = decoded.into_owned();
+            self.original_content = self.content.clone();
+
+            // If content length changed significantly, reset cursor
+            if (self.content.len() as isize - old_len as isize).abs() > 100 {
+                self.cursors = MultiCursor::new();
+                self.cursor_position = (0, 0);
+            }
+        }
+
+        // Update the encoding label for future saves
+        self.current_encoding = new_encoding;
+        self.detected_encoding = Some(new_encoding);
+
+        log::info!("Changed encoding to: {}", new_encoding);
+        Ok(())
+    }
+
+    /// Encode the current content to bytes using the selected encoding.
+    ///
+    /// Returns the encoded bytes. If the encoding doesn't support certain characters,
+    /// they may be replaced with fallback characters.
+    pub fn encode_content(&self) -> Vec<u8> {
+        let encoding = encoding_rs::Encoding::for_label(self.current_encoding.as_bytes())
+            .unwrap_or(encoding_rs::UTF_8);
+
+        let (encoded, _actual_encoding, _had_errors) = encoding.encode(&self.content);
+        encoded.into_owned()
+    }
+
+    /// Check if the current encoding is UTF-8.
+    pub fn is_utf8(&self) -> bool {
+        self.current_encoding.eq_ignore_ascii_case("utf-8")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1951,6 +2255,24 @@ pub enum PendingAction {
 /// state.new_tab();
 /// state.active_tab_mut().set_content("# Hello".to_string());
 /// ```
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session Content Resolution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Result of resolving tab content from various sources.
+/// Contains the content and optional encoding information for files loaded from disk.
+enum ResolvedContent {
+    /// Content recovered from crash recovery (already UTF-8)
+    Recovered(String),
+    /// Content loaded from disk with encoding detection
+    FromDisk {
+        content: String,
+        original_bytes: Vec<u8>,
+        encoding: &'static str,
+    },
+}
+
 #[derive(Debug)]
 pub struct AppState {
     /// All open tabs
@@ -2023,7 +2345,16 @@ impl AppState {
     /// This attempts to restore tabs from `settings.last_open_tabs`.
     /// Files that no longer exist are skipped with a warning.
     /// Unsaved tabs (no path) are not restored.
+    ///
+    /// If `settings.restore_session` is false, this method returns early
+    /// without restoring any tabs (caller will create an empty tab).
     fn restore_session_tabs(&mut self) {
+        // Check if session restore is enabled
+        if !self.settings.restore_session {
+            debug!("Session restore disabled in settings, skipping tab restoration");
+            return;
+        }
+
         let tab_infos: Vec<TabInfo> = self.settings.last_open_tabs.clone();
         let saved_active_index = self.settings.active_tab_index;
 
@@ -2034,15 +2365,23 @@ impl AppState {
 
         info!("Restoring {} tab(s) from previous session", tab_infos.len());
 
+        let auto_save_default = self.settings.auto_save_enabled_default;
+        
         for tab_info in &tab_infos {
             if let Some(path) = &tab_info.path {
-                // Try to read the file
-                match std::fs::read_to_string(path) {
-                    Ok(content) => {
-                        let tab = Tab::from_tab_info(self.next_tab_id, tab_info, content);
+                // Try to read the file as bytes for encoding detection
+                match std::fs::read(path) {
+                    Ok(bytes) => {
+                        let tab = Tab::from_tab_info_with_bytes(
+                            self.next_tab_id, 
+                            tab_info, 
+                            bytes,
+                            auto_save_default,
+                        );
+                        let encoding = tab.current_encoding;
                         self.next_tab_id += 1;
                         self.tabs.push(tab);
-                        debug!("Restored tab: {}", path.display());
+                        debug!("Restored tab: {} (encoding: {})", path.display(), encoding);
                     }
                     Err(e) => {
                         warn!(
@@ -2187,30 +2526,32 @@ impl AppState {
             return Ok(index);
         }
 
-        // Read file content
-        let content = std::fs::read_to_string(&path)?;
+        // Read file as bytes for encoding detection
+        let bytes = std::fs::read(&path)?;
 
-        // Create new tab with settings-based defaults
+        // Create new tab with settings-based defaults and encoding detection
         let auto_save_default = self.settings.auto_save_enabled_default;
         let default_view_mode = self.settings.default_view_mode;
-        let tab = Tab::with_file_and_settings(
+        let tab = Tab::with_file_bytes_and_settings(
             self.next_tab_id,
             path.clone(),
-            content,
+            bytes,
             auto_save_default,
             default_view_mode,
         );
+        
+        let detected_encoding = tab.current_encoding;
         self.next_tab_id += 1;
         self.tabs.push(tab);
         let new_index = self.tabs.len() - 1;
 
         if focus {
             self.active_tab_index = new_index;
-            info!("Opened file: {} (with focus, auto-save: {}, view_mode: {:?})", 
-                path.display(), auto_save_default, default_view_mode);
+            info!("Opened file: {} (encoding: {}, auto-save: {}, view_mode: {:?})", 
+                path.display(), detected_encoding, auto_save_default, default_view_mode);
         } else {
-            info!("Opened file: {} (in background, auto-save: {}, view_mode: {:?})", 
-                path.display(), auto_save_default, default_view_mode);
+            info!("Opened file: {} (encoding: {}, in background, auto-save: {}, view_mode: {:?})", 
+                path.display(), detected_encoding, auto_save_default, default_view_mode);
         }
 
         // Update recent files and save immediately for persistence
@@ -2245,9 +2586,15 @@ impl AppState {
     ///
     /// Returns `true` if the tab was closed, `false` if it has unsaved changes
     /// (use `force_close_tab` to close anyway).
+    ///
+    /// # Save Prompt Logic
+    ///
+    /// A save prompt is shown when the tab has modifications that should be saved.
+    /// However, empty untitled files (new tabs with no content) are closed silently
+    /// since there's nothing meaningful to preserve.
     pub fn close_tab(&mut self, index: usize) -> bool {
         if let Some(tab) = self.tabs.get(index) {
-            if tab.is_modified() {
+            if tab.should_prompt_to_save() {
                 // Set up confirmation dialog
                 self.ui.show_confirm_dialog = true;
                 self.ui.confirm_dialog_message =
@@ -2291,9 +2638,12 @@ impl AppState {
         self.close_tab(self.active_tab_index)
     }
 
-    /// Check if any tabs have unsaved changes.
+    /// Check if any tabs have unsaved changes that warrant a save prompt.
+    ///
+    /// This uses `should_prompt_to_save()` for each tab, which means empty
+    /// untitled files are not considered as having unsaved changes.
     pub fn has_unsaved_changes(&self) -> bool {
-        self.tabs.iter().any(|t| t.is_modified())
+        self.tabs.iter().any(|t| t.should_prompt_to_save())
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2303,6 +2653,7 @@ impl AppState {
     /// Save the active tab to its file path.
     ///
     /// Returns an error if the tab has no path (use `save_as` instead).
+    /// Uses the tab's current encoding for output.
     pub fn save_active_tab(&mut self) -> Result<(), crate::error::Error> {
         let tab = self
             .active_tab_mut()
@@ -2312,28 +2663,43 @@ impl AppState {
             crate::error::Error::Application("No file path set. Use 'Save As' instead.".to_string())
         })?;
 
-        std::fs::write(&path, &tab.content).map_err(|e| crate::error::Error::FileWrite {
+        // Encode content using the tab's current encoding
+        let encoded_bytes = tab.encode_content();
+        let encoding = tab.current_encoding;
+
+        std::fs::write(&path, &encoded_bytes).map_err(|e| crate::error::Error::FileWrite {
             path: path.clone(),
             source: e,
         })?;
 
+        // Update original_bytes to match what we saved
+        tab.original_bytes = encoded_bytes;
         tab.mark_saved();
-        info!("Saved file: {}", path.display());
+        info!("Saved file: {} (encoding: {})", path.display(), encoding);
         Ok(())
     }
 
     /// Save the active tab to a new path.
+    ///
+    /// Uses the tab's current encoding for output. For "Save As" operations,
+    /// the encoding is preserved from the original file or defaults to UTF-8.
     pub fn save_active_tab_as(&mut self, path: PathBuf) -> Result<(), crate::error::Error> {
         let tab = self
             .active_tab_mut()
             .ok_or_else(|| crate::error::Error::Application("No active tab".to_string()))?;
 
-        std::fs::write(&path, &tab.content).map_err(|e| crate::error::Error::FileWrite {
+        // Encode content using the tab's current encoding
+        let encoded_bytes = tab.encode_content();
+        let encoding = tab.current_encoding;
+
+        std::fs::write(&path, &encoded_bytes).map_err(|e| crate::error::Error::FileWrite {
             path: path.clone(),
             source: e,
         })?;
 
         tab.path = Some(path.clone());
+        // Update original_bytes to match what we saved
+        tab.original_bytes = encoded_bytes;
         tab.mark_saved();
 
         // Update recent files and save immediately for persistence
@@ -2342,7 +2708,7 @@ impl AppState {
         // Save immediately to survive app crashes/force-kills
         self.save_settings_if_dirty();
 
-        info!("Saved file as: {}", path.display());
+        info!("Saved file as: {} (encoding: {})", path.display(), encoding);
         Ok(())
     }
 
@@ -2660,15 +3026,69 @@ impl AppState {
 
         for session_tab in &session.tabs {
             // Try to load content from various sources
-            let content = self.resolve_tab_content(session_tab, result);
+            let resolved = self.resolve_tab_content(session_tab, result);
 
-            if let Some(content) = content {
-                let mut tab = if let Some(path) = &session_tab.path {
-                    Tab::with_file(self.next_tab_id, path.clone(), content.clone())
-                } else {
-                    let mut tab = Tab::new(self.next_tab_id);
-                    tab.content = content.clone();
-                    tab
+            if let Some(resolved) = resolved {
+                let mut tab = match resolved {
+                    ResolvedContent::Recovered(content) => {
+                        // Recovery content is UTF-8
+                        if let Some(path) = &session_tab.path {
+                            let mut t = Tab::with_file(self.next_tab_id, path.clone(), content.clone());
+                            // Set encoding to UTF-8 for recovered content
+                            t.detected_encoding = Some("utf-8");
+                            t.current_encoding = "utf-8";
+                            t
+                        } else {
+                            let mut t = Tab::new(self.next_tab_id);
+                            t.content = content.clone();
+                            t
+                        }
+                    }
+                    ResolvedContent::FromDisk { content, original_bytes, encoding } => {
+                        if let Some(path) = &session_tab.path {
+                            let file_type = FileType::from_path(path);
+                            let t = Tab {
+                                id: self.next_tab_id,
+                                path: Some(path.clone()),
+                                content: content.clone(),
+                                original_content: content,
+                                cursors: MultiCursor::new(),
+                                cursor_position: (0, 0),
+                                selection: None,
+                                scroll_offset: 0.0,
+                                content_height: 0.0,
+                                viewport_height: 0.0,
+                                pending_scroll_offset: None,
+                                pending_cursor_restore: None,
+                                pending_scroll_ratio: None,
+                                rendered_line_mappings: Vec::new(),
+                                raw_line_height: 20.0,
+                                pending_scroll_to_line: None,
+                                view_mode: ViewMode::Raw,
+                                undo_stack: Vec::new(),
+                                redo_stack: Vec::new(),
+                                max_undo_size: 100,
+                                content_version: 0,
+                                file_type,
+                                needs_focus: false,
+                                transient_highlight: TransientHighlight::new(),
+                                auto_save_enabled: false,
+                                last_edit_time: None,
+                                last_auto_save_content_hash: None,
+                                fold_state: FoldState::new(),
+                                split_ratio: 0.5,
+                                pipeline_state: TabPipelineState::default(),
+                                detected_encoding: Some(encoding),
+                                original_bytes,
+                                current_encoding: encoding,
+                            };
+                            t
+                        } else {
+                            let mut t = Tab::new(self.next_tab_id);
+                            t.content = content.clone();
+                            t
+                        }
+                    }
                 };
 
                 self.next_tab_id += 1;
@@ -2804,23 +3224,49 @@ impl AppState {
         &self,
         session_tab: &crate::config::SessionTabState,
         result: &crate::config::SessionRestoreResult,
-    ) -> Option<String> {
+    ) -> Option<ResolvedContent> {
+        use chardetng::EncodingDetector;
+
         // First, check if we have recovery content
         if let Some(recovered) = result.recovered_content.get(&session_tab.tab_id) {
             debug!(
                 "Using recovered content for tab {} ({})",
                 session_tab.tab_id, session_tab.display_title
             );
-            return Some(recovered.clone());
+            return Some(ResolvedContent::Recovered(recovered.clone()));
         }
 
-        // Next, try to load from disk
+        // Next, try to load from disk with encoding detection
         if let Some(path) = &session_tab.path {
             if path.exists() {
-                match std::fs::read_to_string(path) {
-                    Ok(content) => {
-                        debug!("Loaded content from disk for tab {}", session_tab.tab_id);
-                        return Some(content);
+                match std::fs::read(path) {
+                    Ok(bytes) => {
+                        // Detect encoding
+                        let mut detector = EncodingDetector::new();
+                        detector.feed(&bytes, true);
+                        let detected = detector.guess(None, true);
+
+                        // Check for BOM first
+                        let (content, encoding) = if let Some((bom_encoding, bom_len)) =
+                            encoding_rs::Encoding::for_bom(&bytes)
+                        {
+                            // Use decode_without_bom_handling since we already handled the BOM
+                            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+                            (decoded.into_owned(), bom_encoding.name())
+                        } else {
+                            let (decoded, _, _) = detected.decode(&bytes);
+                            (decoded.into_owned(), detected.name())
+                        };
+
+                        debug!(
+                            "Loaded content from disk for tab {} (encoding: {})",
+                            session_tab.tab_id, encoding
+                        );
+                        return Some(ResolvedContent::FromDisk {
+                            content,
+                            original_bytes: bytes,
+                            encoding,
+                        });
                     }
                     Err(e) => {
                         warn!(
@@ -3170,6 +3616,89 @@ mod tests {
 
         tab.mark_saved();
         assert!(!tab.is_modified());
+    }
+
+    #[test]
+    fn test_tab_is_new_file() {
+        // New tab has no path - is a new file
+        let tab = Tab::new(0);
+        assert!(tab.is_new_file());
+
+        // Tab with file is not new
+        let tab_with_file = Tab::with_file(1, PathBuf::from("test.md"), "content".to_string());
+        assert!(!tab_with_file.is_new_file());
+
+        // Setting path changes new file status
+        let mut tab2 = Tab::new(2);
+        assert!(tab2.is_new_file());
+        tab2.set_path(PathBuf::from("saved.md"));
+        assert!(!tab2.is_new_file());
+    }
+
+    #[test]
+    fn test_tab_is_empty_untitled() {
+        // New empty tab is empty untitled
+        let tab = Tab::new(0);
+        assert!(tab.is_empty_untitled());
+
+        // New tab with content is not empty untitled
+        let mut tab_with_content = Tab::new(1);
+        tab_with_content.set_content("hello".to_string());
+        assert!(!tab_with_content.is_empty_untitled());
+
+        // Existing empty file is not empty untitled (it has a path)
+        let existing_empty = Tab::with_file(2, PathBuf::from("empty.md"), String::new());
+        assert!(!existing_empty.is_empty_untitled());
+
+        // Content typed then deleted returns to empty untitled
+        let mut tab_typed_deleted = Tab::new(3);
+        tab_typed_deleted.set_content("hello".to_string());
+        assert!(!tab_typed_deleted.is_empty_untitled());
+        tab_typed_deleted.set_content(String::new());
+        assert!(tab_typed_deleted.is_empty_untitled());
+    }
+
+    #[test]
+    fn test_tab_should_prompt_to_save() {
+        // Case 1: New file unmodified - NO prompt
+        let new_unmodified = Tab::new(0);
+        assert!(!new_unmodified.should_prompt_to_save());
+
+        // Case 2: New file with content - prompt
+        let mut new_with_content = Tab::new(1);
+        new_with_content.set_content("hello".to_string());
+        assert!(new_with_content.should_prompt_to_save());
+
+        // Case 3: New file typed and deleted - NO prompt (back to empty)
+        let mut new_typed_deleted = Tab::new(2);
+        new_typed_deleted.set_content("hello".to_string());
+        new_typed_deleted.set_content(String::new());
+        assert!(!new_typed_deleted.should_prompt_to_save());
+
+        // Case 4: Saved file unmodified - NO prompt
+        let saved_unmodified = Tab::with_file(3, PathBuf::from("test.md"), "content".to_string());
+        assert!(!saved_unmodified.should_prompt_to_save());
+
+        // Case 5: Saved file modified - prompt
+        let mut saved_modified = Tab::with_file(4, PathBuf::from("test.md"), "content".to_string());
+        saved_modified.set_content("modified content".to_string());
+        assert!(saved_modified.should_prompt_to_save());
+
+        // Case 6: Existing empty file (loaded from disk) unmodified - NO prompt
+        let existing_empty = Tab::with_file(5, PathBuf::from("empty.md"), String::new());
+        assert!(!existing_empty.should_prompt_to_save());
+
+        // Case 7: Existing empty file modified - prompt
+        let mut existing_empty_modified =
+            Tab::with_file(6, PathBuf::from("empty.md"), String::new());
+        existing_empty_modified.set_content("now has content".to_string());
+        assert!(existing_empty_modified.should_prompt_to_save());
+
+        // Case 8: Saved file, content deleted entirely - prompt (modified)
+        let mut saved_then_cleared =
+            Tab::with_file(7, PathBuf::from("content.md"), "original".to_string());
+        saved_then_cleared.set_content(String::new());
+        assert!(saved_then_cleared.should_prompt_to_save());
     }
 
     #[test]
@@ -3549,6 +4078,104 @@ mod tests {
         assert!(!state.request_exit());
         assert!(state.ui.show_confirm_dialog);
         assert_eq!(state.ui.pending_action, Some(PendingAction::Exit));
+    }
+
+    #[test]
+    fn test_appstate_close_new_unmodified_tab_no_prompt() {
+        let mut state = AppState::with_settings(Settings::default());
+        // Initial tab is a new unmodified tab
+        assert_eq!(state.tab_count(), 1);
+
+        // Create another tab so we can test closing the first
+        state.new_tab();
+        assert_eq!(state.tab_count(), 2);
+
+        // Close the first tab (new, unmodified) - should close without prompt
+        let closed = state.close_tab(0);
+        assert!(closed, "New unmodified tab should close without prompt");
+        assert_eq!(state.tab_count(), 1);
+        assert!(!state.ui.show_confirm_dialog);
+    }
+
+    #[test]
+    fn test_appstate_close_new_modified_tab_prompts() {
+        let mut state = AppState::with_settings(Settings::default());
+
+        // Modify the initial tab
+        if let Some(tab) = state.active_tab_mut() {
+            tab.set_content("user typed something".to_string());
+        }
+
+        // Create another tab so closing doesn't auto-create a new one
+        state.new_tab();
+        assert_eq!(state.tab_count(), 2);
+
+        // Try to close the modified tab - should prompt
+        let closed = state.close_tab(0);
+        assert!(!closed, "Modified tab should show prompt, not close");
+        assert!(state.ui.show_confirm_dialog);
+        assert_eq!(state.ui.pending_action, Some(PendingAction::CloseTab(0)));
+    }
+
+    #[test]
+    fn test_appstate_close_empty_typed_deleted_tab_no_prompt() {
+        let mut state = AppState::with_settings(Settings::default());
+
+        // Type something then delete it
+        if let Some(tab) = state.active_tab_mut() {
+            tab.set_content("temporary content".to_string());
+            tab.set_content(String::new()); // Delete all content
+        }
+
+        // Create another tab
+        state.new_tab();
+        assert_eq!(state.tab_count(), 2);
+
+        // Close the first tab - should close without prompt (back to empty untitled)
+        let closed = state.close_tab(0);
+        assert!(closed, "Empty untitled tab should close without prompt");
+        assert!(!state.ui.show_confirm_dialog);
+    }
+
+    #[test]
+    fn test_appstate_quit_with_mixed_tabs() {
+        let mut state = AppState::with_settings(Settings::default());
+
+        // Tab 0: new unmodified (initial)
+        // Tab 1: new with content (should trigger prompt)
+        state.new_tab();
+        if let Some(tab) = state.active_tab_mut() {
+            tab.set_content("modified content".to_string());
+        }
+
+        // Tab 2: new unmodified
+        state.new_tab();
+
+        assert_eq!(state.tab_count(), 3);
+
+        // has_unsaved_changes should be true because tab 1 has content
+        assert!(state.has_unsaved_changes());
+
+        // Quit should show prompt
+        assert!(!state.request_exit());
+        assert!(state.ui.show_confirm_dialog);
+    }
+
+    #[test]
+    fn test_appstate_quit_with_only_empty_untitled_tabs() {
+        let mut state = AppState::with_settings(Settings::default());
+
+        // Create multiple empty untitled tabs
+        state.new_tab();
+        state.new_tab();
+        assert_eq!(state.tab_count(), 3);
+
+        // None of them should be considered as having unsaved changes
+        assert!(!state.has_unsaved_changes());
+
+        // Quit should proceed without prompt
+        assert!(state.request_exit());
+        assert!(!state.ui.show_confirm_dialog);
     }
 
     #[test]

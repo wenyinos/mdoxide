@@ -377,6 +377,7 @@ impl Default for PanelConstraints {
 
 /// Result of constraining a panel to viewport bounds.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields are informational for debugging
 pub struct ConstrainedPanel {
     /// The constrained position (top-left corner).
     pub pos: Pos2,

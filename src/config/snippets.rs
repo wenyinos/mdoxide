@@ -49,6 +49,7 @@ impl Default for SnippetConfig {
 
 impl SnippetConfig {
     /// Create a new empty snippet configuration.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn new() -> Self {
         Self::default()
     }
@@ -91,6 +92,7 @@ impl SnippetConfig {
     }
 
     /// Add or update a user-defined snippet.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn set_snippet(&mut self, trigger: String, expansion: String) {
         self.snippets.insert(trigger, expansion);
     }
@@ -98,21 +100,25 @@ impl SnippetConfig {
     /// Remove a user-defined snippet.
     ///
     /// Returns the removed expansion if it existed.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn remove_snippet(&mut self, trigger: &str) -> Option<String> {
         self.snippets.remove(trigger)
     }
 
     /// Check if a trigger is a built-in snippet.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn is_builtin(trigger: &str) -> bool {
         matches!(trigger, ";date" | ";time" | ";datetime" | ";now")
     }
 
     /// Get all built-in snippet triggers.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn builtin_triggers() -> &'static [&'static str] {
         &[";date", ";time", ";datetime", ";now"]
     }
 
     /// Get descriptions for built-in snippets.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn builtin_description(trigger: &str) -> Option<&'static str> {
         match trigger {
             ";date" => Some("Current date (YYYY-MM-DD)"),
@@ -218,6 +224,7 @@ impl SnippetManager {
     /// Save snippet configuration to disk.
     ///
     /// Creates the config directory if it doesn't exist.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn save(&mut self) -> Result<(), String> {
         // Ensure config directory exists
         if let Some(parent) = self.config_path.parent() {
@@ -249,6 +256,7 @@ impl SnippetManager {
     /// Check if the config file has been modified externally and reload if needed.
     ///
     /// Returns `true` if the config was reloaded.
+    #[allow(dead_code)] // Public API for hot-reload feature
     pub fn check_and_reload(&mut self) -> bool {
         if !self.config_path.exists() {
             return false;
@@ -283,21 +291,25 @@ impl SnippetManager {
     }
 
     /// Add or update a custom snippet.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn set_snippet(&mut self, trigger: String, expansion: String) {
         self.config.set_snippet(trigger, expansion);
     }
 
     /// Remove a custom snippet.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn remove_snippet(&mut self, trigger: &str) -> Option<String> {
         self.config.remove_snippet(trigger)
     }
 
     /// Get an iterator over custom snippets.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn custom_snippets(&self) -> impl Iterator<Item = (&String, &String)> {
         self.config.snippets.iter()
     }
 
     /// Get the number of custom snippets.
+    #[allow(dead_code)] // Public API for future settings UI
     pub fn custom_snippet_count(&self) -> usize {
         self.config.snippets.len()
     }

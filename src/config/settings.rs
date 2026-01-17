@@ -717,22 +717,17 @@ pub enum Language {
     #[default]
     #[serde(rename = "en")]
     English,
-    // Future languages can be added here:
-    // #[serde(rename = "zh-CN")]
-    // ChineseSimplified,
-    // #[serde(rename = "zh-TW")]
-    // ChineseTraditional,
-    // #[serde(rename = "ja")]
-    // Japanese,
-    // #[serde(rename = "ko")]
-    // Korean,
+    /// Simplified Chinese (简体中文)
+    #[serde(rename = "zh-Hans")]
+    ChineseSimplified,
 }
 
 impl Language {
-    /// Get the locale code for rust-i18n (e.g., "en", "zh-CN").
+    /// Get the locale code for rust-i18n (e.g., "en", "zh_Hans").
     pub fn locale_code(&self) -> &'static str {
         match self {
             Language::English => "en",
+            Language::ChineseSimplified => "zh_Hans",
         }
     }
 
@@ -740,12 +735,16 @@ impl Language {
     pub fn native_name(&self) -> &'static str {
         match self {
             Language::English => "English",
+            Language::ChineseSimplified => "简体中文",
         }
     }
 
     /// Get all available languages.
     pub fn all() -> &'static [Language] {
-        &[Language::English]
+        &[
+            Language::English,
+            Language::ChineseSimplified,
+        ]
     }
 
     /// Try to match a system locale code to an available language.
@@ -762,6 +761,7 @@ impl Language {
     /// ```ignore
     /// assert_eq!(Language::from_locale_code("en-US"), Some(Language::English));
     /// assert_eq!(Language::from_locale_code("en"), Some(Language::English));
+    /// assert_eq!(Language::from_locale_code("zh-CN"), Some(Language::ChineseSimplified));
     /// assert_eq!(Language::from_locale_code("unknown"), None);
     /// ```
     pub fn from_locale_code(locale: &str) -> Option<Language> {
@@ -772,15 +772,9 @@ impl Language {
         let primary_lang = normalized.split('-').next().unwrap_or(&normalized);
 
         // Match against available languages
-        // Currently only English is available, but this structure supports future additions:
-        // - "zh-CN", "zh-TW", "zh" → ChineseSimplified (when available)
-        // - "ja" → Japanese (when available)
-        // - "ko" → Korean (when available)
         match primary_lang {
             "en" => Some(Language::English),
-            // Future: "zh" => Some(Language::ChineseSimplified),
-            // Future: "ja" => Some(Language::Japanese),
-            // Future: "ko" => Some(Language::Korean),
+            "zh" => Some(Language::ChineseSimplified),
             _ => None,
         }
     }
@@ -1523,6 +1517,13 @@ pub struct Settings {
     // ─────────────────────────────────────────────────────────────────────────
     // Session & History
     // ─────────────────────────────────────────────────────────────────────────
+    /// Whether to restore the previous session on startup.
+    /// When true, restores previously open tabs from the last session.
+    /// When false, starts with a single empty tab.
+    /// Session data is always saved regardless of this setting, so toggling
+    /// it back on will restore the previous session.
+    pub restore_session: bool,
+
     /// Recently opened files (most recent first)
     pub recent_files: Vec<PathBuf>,
 
@@ -1765,6 +1766,7 @@ impl Default for Settings {
             auto_save_delay_ms: 15000, // 15 seconds default
 
             // Session & History
+            restore_session: true, // Restore previous session by default
             recent_files: Vec::new(),
             max_recent_files: 20,
             last_open_tabs: Vec::new(),
@@ -2931,13 +2933,19 @@ mod tests {
         assert_eq!(Language::from_locale_code("xx-YY"), None);
         assert_eq!(Language::from_locale_code(""), None);
 
-        // Currently unsupported locales (future expansion)
-        // These will return None until those languages are added
-        assert_eq!(Language::from_locale_code("zh-CN"), None);
-        assert_eq!(Language::from_locale_code("ja"), None);
+        // Currently unsupported locales
         assert_eq!(Language::from_locale_code("ko"), None);
         assert_eq!(Language::from_locale_code("fr"), None);
+        assert_eq!(Language::from_locale_code("ja"), None);
         assert_eq!(Language::from_locale_code("de"), None);
+    }
+
+    #[test]
+    fn test_language_from_locale_code_supported_languages() {
+        // Chinese Simplified
+        assert_eq!(Language::from_locale_code("zh-CN"), Some(Language::ChineseSimplified));
+        assert_eq!(Language::from_locale_code("zh_Hans"), Some(Language::ChineseSimplified));
+        assert_eq!(Language::from_locale_code("zh"), Some(Language::ChineseSimplified));
     }
 
     #[test]

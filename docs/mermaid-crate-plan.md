@@ -292,7 +292,7 @@ serde = ["dep:serde"]             # Serialize/deserialize AST
 ## Related Documents
 
 - [Modular Refactor Plan](./refactor.md) - Ferrite's feature-flag architecture
-- [Custom Editor Plan](./technical/custom-editor-widget-plan.md) - v0.3.0 editor work
+- [Custom Editor Plan](./technical/planning/custom-editor-widget-plan.md) - v0.3.0 editor work
 
 ---
 

@@ -175,6 +175,7 @@ pub struct DocumentStats {
 
 impl DocumentStats {
     /// Create empty document statistics.
+    #[allow(dead_code)] // Public API for stats initialization
     pub fn new() -> Self {
         Self::default()
     }
@@ -410,6 +411,7 @@ impl DocumentStats {
     }
 
     /// Get the total heading count.
+    #[allow(dead_code)] // Public API for document statistics
     pub fn total_headings(&self) -> usize {
         self.heading_count
     }

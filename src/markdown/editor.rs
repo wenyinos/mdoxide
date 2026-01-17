@@ -56,7 +56,7 @@ use crate::markdown::parser::{
 };
 use crate::markdown::widgets::{
     CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
-    RenderedLinkState, RenderedLinkWidget, TableData, WidgetColors,
+    RenderedLinkState, RenderedLinkWidget, TableData, TableEditState, WidgetColors,
 };
 use eframe::egui::{
     self, Color32, FontId, Key, Response, RichText, ScrollArea, TextEdit, Ui, Vec2,
@@ -793,7 +793,10 @@ impl<'a> MarkdownEditor<'a> {
                 });
 
                 // Return a response from the scroll area content
-                ui.allocate_response(Vec2::ZERO, egui::Sense::hover())
+                // Note: Using focusable_noninteractive() instead of hover() to prevent
+                // continuous repaints when mouse moves over the content area.
+                // This is important for CPU optimization on Intel Macs (Issue: 100% CPU in Rendered mode)
+                ui.allocate_response(Vec2::ZERO, egui::Sense::focusable_noninteractive())
             })
             .inner
         });
@@ -1433,11 +1436,15 @@ fn render_paragraph_with_structural_keys(
         let widget_id = formatted_para_id.with("text_edit");
 
         ui.horizontal(|ui| {
-            // Base indent + list indent + CJK paragraph indent
-            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+            // Base indent + list indent (CJK indent handled differently per mode)
+            ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if para_edit_state.editing {
-                // EDIT MODE: Show TextEdit with raw markdown
+                // EDIT MODE: Add CJK indent (applies to all lines - egui TextEdit limitation)
+                if cjk_indent > 0.0 {
+                    ui.add_space(cjk_indent);
+                }
+                // Show TextEdit with raw markdown
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -1446,11 +1453,22 @@ fn render_paragraph_with_structural_keys(
                     .desired_width(ui.available_width())
                     .desired_rows(1);
 
-                let response = ui.add(text_edit);
+                // Use show() to get TextEditOutput for cursor manipulation
+                let mut output = text_edit.show(ui);
+                let response = output.response.clone();
 
                 if para_edit_state.needs_focus {
                     response.request_focus();
                     para_edit_state.needs_focus = false;
+
+                    // Apply pending cursor position if set
+                    if let Some(cursor_pos) = para_edit_state.pending_cursor_pos.take() {
+                        let ccursor = egui::text::CCursor::new(cursor_pos);
+                        let cursor_range = egui::text::CCursorRange::one(ccursor);
+                        output.state.cursor.set_char_range(Some(cursor_range));
+                        output.state.store(ui.ctx(), widget_id);
+                        debug!("[PARA_DEBUG] Set cursor position to {} for paragraph", cursor_pos);
+                    }
                 }
 
                 let enter_pressed = response.has_focus()
@@ -1500,6 +1518,11 @@ fn render_paragraph_with_structural_keys(
                 // DISPLAY MODE: Show formatted text, click to edit
                 let display_response = ui
                     .horizontal_wrapped(|ui| {
+                        // CJK first-line indent: Add spacer at start of horizontal_wrapped
+                        // This only affects the first line - wrapped content starts flush left
+                        if cjk_indent > 0.0 {
+                            ui.add_space(cjk_indent);
+                        }
                         let style = TextStyle::new();
                         for child in &node.children {
                             render_inline_node(
@@ -1527,9 +1550,31 @@ fn render_paragraph_with_structural_keys(
                     para_edit_state.needs_focus = true;
                     para_edit_state.edit_text =
                         extract_paragraph_content(source, node.start_line, node.end_line);
+
+                    // Calculate cursor position from click location using Galley for accuracy
+                    // This maps screen position to character index in displayed text
+                    let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                        let displayed_text = node.text_content();
+                        let displayed_idx = compute_displayed_cursor_index(
+                            ui,
+                            &displayed_text,
+                            click_pos,
+                            display_response.rect,
+                            font_size,
+                            editor_font,
+                            &para_edit_state.edit_text,
+                        );
+                        // Map displayed position to raw position (accounting for formatting markers)
+                        let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
+                        Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
+                    } else {
+                        None
+                    };
+                    para_edit_state.pending_cursor_pos = cursor_pos;
+
                     debug!(
-                        "Entering edit mode for formatted paragraph at line {}",
-                        node.start_line
+                        "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
+                        node.start_line, cursor_pos
                     );
 
                     ui.memory_mut(|mem| {
@@ -1587,7 +1632,13 @@ fn render_blockquote_with_structural_keys(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
     ui.horizontal(|ui| {
+        // Base indent first
+        ui.add_space(BASE_INDENT);
+        
         let (rect, _) =
             ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
         ui.painter().rect_filled(rect, 0.0, colors.quote_border);
@@ -1847,12 +1898,23 @@ fn render_list_item_with_structural_keys(
                         .desired_width(ui.available_width())
                         .margin(egui::vec2(0.0, 2.0));
 
-                    let response = ui.add(text_edit);
+                    // Use show() to get TextEditOutput for cursor manipulation
+                    let mut output = text_edit.show(ui);
+                    let response = output.response.clone();
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
                         response.request_focus();
                         item_edit_state.needs_focus = false;
+
+                        // Apply pending cursor position if set
+                        if let Some(cursor_pos) = item_edit_state.pending_cursor_pos.take() {
+                            let ccursor = egui::text::CCursor::new(cursor_pos);
+                            let cursor_range = egui::text::CCursorRange::one(ccursor);
+                            output.state.cursor.set_char_range(Some(cursor_range));
+                            output.state.store(ui.ctx(), widget_id);
+                            debug!("[LIST_DEBUG] Set cursor position to {} for list item (sk)", cursor_pos);
+                        }
                     }
 
                     // Check for exit conditions
@@ -1945,10 +2007,33 @@ fn render_list_item_with_structural_keys(
                         item_edit_state.edit_text =
                             extract_list_item_content(source, para.start_line);
 
+                        // Calculate cursor position from click location
+                        // Use the DISPLAYED text to calculate position, then use directly in raw text
+                        // (don't scale - scaling makes position drift worse)
+                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                            let rect = display_response.rect;
+                            let raw_len = item_edit_state.edit_text.len();
+                            // Get the displayed text (without formatting markers like **)
+                            let displayed_text = para.text_content();
+                            let displayed_len = displayed_text.len();
+                            if displayed_len > 0 && rect.width() > 0.0 {
+                                let relative_x = ((click_pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+                                // Map to displayed character position and use directly
+                                // Don't scale to raw - that makes the drift worse
+                                let char_pos = (relative_x * displayed_len as f32).round() as usize;
+                                Some(char_pos.min(raw_len))
+                            } else {
+                                Some(0)
+                            }
+                        } else {
+                            None
+                        };
+                        item_edit_state.pending_cursor_pos = cursor_pos;
+
                         // DEBUG: Log edit mode entry
                         debug!(
-                            "[LIST_DEBUG] EDIT MODE ENTERED (sk): ID uses para.start_line={}, item_index={}, content='{}'",
-                            para.start_line, item_index, item_edit_state.edit_text
+                            "[LIST_DEBUG] EDIT MODE ENTERED (sk): para.start_line={}, item_index={}, content='{}', cursor_pos={:?}",
+                            para.start_line, item_index, item_edit_state.edit_text, cursor_pos
                         );
 
                         // Store the new state
@@ -2075,12 +2160,13 @@ fn render_paragraph(
 
         let widget_id = formatted_para_id.with("text_edit");
 
-        ui.horizontal(|ui| {
-            // Base indent + list indent + CJK paragraph indent
-            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+        if para_edit_state.editing {
+            // EDIT MODE: Use horizontal layout with TextEdit
+            ui.horizontal(|ui| {
+                // Base indent + list indent + CJK indent (all lines - egui limitation)
+                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
 
-            if para_edit_state.editing {
-                // EDIT MODE: Show TextEdit with raw markdown
+                // Show TextEdit with raw markdown
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -2089,12 +2175,23 @@ fn render_paragraph(
                     .desired_width(ui.available_width())
                     .desired_rows(1);
 
-                let response = ui.add(text_edit);
+                // Use show() to get TextEditOutput for cursor manipulation
+                let mut output = text_edit.show(ui);
+                let response = output.response.clone();
 
                 // Request focus if needed
                 if para_edit_state.needs_focus {
                     response.request_focus();
                     para_edit_state.needs_focus = false;
+
+                    // Apply pending cursor position if set
+                    if let Some(cursor_pos) = para_edit_state.pending_cursor_pos.take() {
+                        let ccursor = egui::text::CCursor::new(cursor_pos);
+                        let cursor_range = egui::text::CCursorRange::one(ccursor);
+                        output.state.cursor.set_char_range(Some(cursor_range));
+                        output.state.store(ui.ctx(), widget_id);
+                        debug!("[PARA_DEBUG] Set cursor position to {} for paragraph (2)", cursor_pos);
+                    }
                 }
 
                 // Check for exit conditions
@@ -2142,10 +2239,24 @@ fn render_paragraph(
                     mem.data
                         .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
                 });
-            } else {
-                // DISPLAY MODE: Show formatted text, click to edit
-                let display_response = ui
-                    .horizontal_wrapped(|ui| {
+            });
+        } else {
+            // DISPLAY MODE: Use horizontal_wrapped for proper text wrapping
+            // Apply base indent first, then use horizontal_wrapped for content
+            let base_indent = 4.0 + indent_level as f32 * 20.0;
+            
+            // Add base left indent using vertical layout with horizontal for indent
+            let display_response = ui.horizontal(|ui| {
+                // Add consistent left indent (same as headers and simple paragraphs)
+                ui.add_space(base_indent);
+                
+                // Use scope to limit horizontal_wrapped to remaining width
+                ui.scope(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        // CJK first-line indent: spacer at start (first line only)
+                        if cjk_indent > 0.0 {
+                            ui.add_space(cjk_indent);
+                        }
                         let style = TextStyle::new();
                         for child in &node.children {
                             render_inline_node(
@@ -2160,37 +2271,59 @@ fn render_paragraph(
                             );
                         }
                     })
-                    .response;
+                }).response
+            }).inner;
 
-                // Make the display area interactive
-                let sense_response = ui.interact(
-                    display_response.rect,
-                    formatted_para_id.with("click_sense"),
-                    egui::Sense::click(),
+            // Make the display area interactive
+            let sense_response = ui.interact(
+                display_response.rect,
+                formatted_para_id.with("click_sense"),
+                egui::Sense::click(),
+            );
+
+            if sense_response.clicked() {
+                // Enter edit mode
+                para_edit_state.editing = true;
+                para_edit_state.needs_focus = true;
+                para_edit_state.edit_text =
+                    extract_paragraph_content(source, node.start_line, node.end_line);
+
+                // Calculate cursor position from click location using Galley for accuracy
+                // This maps screen position to character index in displayed text
+                let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                    let displayed_text = node.text_content();
+                    let displayed_idx = compute_displayed_cursor_index(
+                        ui,
+                        &displayed_text,
+                        click_pos,
+                        display_response.rect,
+                        font_size,
+                        editor_font,
+                        &para_edit_state.edit_text,
+                    );
+                    // Map displayed position to raw position (accounting for formatting markers)
+                    let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
+                    Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
+                } else {
+                    None
+                };
+                para_edit_state.pending_cursor_pos = cursor_pos;
+
+                debug!(
+                    "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
+                    node.start_line, cursor_pos
                 );
 
-                if sense_response.clicked() {
-                    // Enter edit mode
-                    para_edit_state.editing = true;
-                    para_edit_state.needs_focus = true;
-                    para_edit_state.edit_text =
-                        extract_paragraph_content(source, node.start_line, node.end_line);
-                    debug!(
-                        "Entering edit mode for formatted paragraph at line {}",
-                        node.start_line
-                    );
-
-                    ui.memory_mut(|mem| {
-                        mem.data
-                            .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                    });
-                }
-
-                if sense_response.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                }
+                ui.memory_mut(|mem| {
+                    mem.data
+                        .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
+                });
             }
-        });
+
+            if sense_response.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+            }
+        }
     } else {
         // Simple text-only paragraph - use editable text directly
         let text = node.text_content();
@@ -2310,6 +2443,168 @@ impl TextStyle {
         }
         styled
     }
+}
+
+/// Compute the character index in displayed text from a click position using egui's Galley.
+///
+/// This function uses proper font metrics via Galley layout to accurately map a screen
+/// click position to a character index in the displayed text (text without formatting markers).
+///
+/// # Arguments
+/// * `ui` - The egui UI context
+/// * `displayed_text` - The text as shown to the user (without `**`, `*`, etc. markers)
+/// * `click_pos` - The screen position of the click
+/// * `text_rect` - The rectangle containing the rendered text
+/// * `font_size` - The font size used for rendering
+/// * `editor_font` - The font family used for rendering
+///
+/// # Returns
+/// The character index in `displayed_text` where the click occurred (0 to displayed_text.len())
+fn compute_displayed_cursor_index(
+    ui: &Ui,
+    displayed_text: &str,
+    click_pos: egui::Pos2,
+    text_rect: egui::Rect,
+    font_size: f32,
+    editor_font: &EditorFont,
+    raw_text: &str,
+) -> usize {
+    if displayed_text.is_empty() {
+        return 0;
+    }
+
+    // Check if the raw text starts with bold markers - if so, use bold font for measurement
+    // This improves accuracy since formatted content (especially list items) often starts bold
+    let starts_with_bold = raw_text.starts_with("**") || raw_text.starts_with("__");
+    let font_family = fonts::get_styled_font_family(starts_with_bold, false, editor_font);
+    let font_id = FontId::new(font_size, font_family);
+
+    // Create a Galley for measuring the displayed text
+    // IMPORTANT: Use layout() with wrap_width to handle text wrapping correctly
+    // If we use layout_no_wrap(), clicks on wrapped lines will map to wrong positions
+    let galley = ui.fonts(|f| {
+        f.layout(
+            displayed_text.to_owned(),
+            font_id,
+            Color32::PLACEHOLDER, // Color doesn't affect measurement
+            text_rect.width(),    // Use actual rendered width for proper wrapping
+        )
+    });
+
+    // Compute local click position relative to text_rect's top-left as Vec2
+    let local_pos = egui::Vec2::new(
+        click_pos.x - text_rect.min.x,
+        click_pos.y - text_rect.min.y,
+    );
+
+    // Use cursor_from_pos to get the exact character index
+    let cursor = galley.cursor_from_pos(local_pos);
+    let displayed_idx = cursor.ccursor.index;
+
+    // Clamp to valid range (cursor_from_pos should already do this, but be safe)
+    displayed_idx.min(displayed_text.chars().count())
+}
+
+/// Maps a cursor position in displayed text (without formatting markers) to the
+/// corresponding position in raw markdown text (with formatting markers).
+///
+/// # Arguments
+/// * `displayed_idx` - The cursor position in displayed text (character index)
+/// * `raw_text` - The raw markdown text containing formatting markers like `**`, `*`, etc.
+///
+/// # Returns
+/// The corresponding cursor position in raw text (character index)
+///
+/// # Algorithm
+/// Walks through raw text, skipping formatting markers while counting displayed characters.
+/// When the displayed character count reaches the target, returns the raw position.
+///
+/// Handles these markdown formatting markers:
+/// - Bold: `**` or `__`
+/// - Italic: `*` or `_` (single, not part of bold)
+/// - Code: backticks
+/// - Strikethrough: `~~`
+/// - Links: `[text](url)` - skips `[`, `](url)` but includes `text`
+fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
+    let chars: Vec<char> = raw_text.chars().collect();
+    let mut raw_pos = 0;
+    let mut displayed_pos = 0;
+
+    while raw_pos < chars.len() {
+        // Look at remaining characters from current position
+        let remaining: String = chars[raw_pos..].iter().collect();
+
+        // Check for double-character markers first (order matters)
+        // Skip these BEFORE checking if we've reached target position
+        if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~") {
+            raw_pos += 2;
+            continue;
+        }
+
+        // Check for link structure: [text](url) or [text](url "title")
+        if chars[raw_pos] == '[' {
+            // Skip opening bracket, the text inside will be counted as displayed
+            raw_pos += 1;
+            continue;
+        }
+
+        // Check for link URL part: ](url) or ](url "title")
+        if remaining.starts_with("](") {
+            // Skip ]( and everything until closing )
+            raw_pos += 2; // skip "]("
+            let mut paren_depth = 1;
+            while raw_pos < chars.len() && paren_depth > 0 {
+                if chars[raw_pos] == '(' {
+                    paren_depth += 1;
+                } else if chars[raw_pos] == ')' {
+                    paren_depth -= 1;
+                }
+                raw_pos += 1;
+            }
+            continue;
+        }
+
+        // Check for single-character markers
+        // Note: Must check after ** and __ to avoid false positives
+        if chars[raw_pos] == '`' {
+            raw_pos += 1;
+            continue;
+        }
+
+        // Check for italic markers (* or _) that are NOT part of bold
+        // Only skip if it looks like a formatting marker (not standalone punctuation)
+        if (chars[raw_pos] == '*' || chars[raw_pos] == '_') && !remaining.starts_with("**") && !remaining.starts_with("__") {
+            // Check context: is this likely a formatting marker?
+            // A marker is usually at word boundaries or paired
+            let prev_is_space = raw_pos == 0 || chars[raw_pos - 1].is_whitespace();
+            let next_is_space = raw_pos + 1 >= chars.len() || chars[raw_pos + 1].is_whitespace();
+            let next_is_same = raw_pos + 1 < chars.len() && chars[raw_pos + 1] == chars[raw_pos];
+
+            // Skip if it looks like a formatting marker (at boundary or paired)
+            if prev_is_space || next_is_space || !next_is_same {
+                // Check if there's a matching closing marker ahead
+                let marker = chars[raw_pos];
+                let has_closing = chars[raw_pos + 1..].iter().any(|&c| c == marker);
+                if has_closing {
+                    raw_pos += 1;
+                    continue;
+                }
+            }
+        }
+
+        // NOW check if we've reached the target displayed position
+        // This must be AFTER skipping all formatting markers
+        if displayed_pos >= displayed_idx {
+            return raw_pos;
+        }
+
+        // Regular content character - advance both positions
+        raw_pos += 1;
+        displayed_pos += 1;
+    }
+
+    // Return final position (may be at end of raw text)
+    raw_pos
 }
 
 /// Render inline content (text, links, bold, italic, etc.) with proper formatting.
@@ -2481,6 +2776,9 @@ fn render_code_block(
     literal: &str,
     node: &MarkdownNode,
 ) {
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
     // Check if this is a mermaid diagram block
     // Mermaid blocks get special rendering with diagram type detection
     if language.eq_ignore_ascii_case("mermaid") {
@@ -2522,13 +2820,24 @@ fn render_code_block(
         code_data = CodeBlockData::new(literal, language);
     }
 
-    // Create and show the editable code block widget
-    let output = EditableCodeBlock::new(&mut code_data)
-        .font_size(font_size)
-        .dark_mode(dark_mode)
-        .colors(widget_colors)
-        .id(code_block_id)
-        .show(ui);
+    // Add left indent and show code block widget
+    // Note: We use ui.indent() instead of ui.horizontal() because horizontal layouts
+    // don't give child widgets the full available width, causing rendering issues.
+    let output = ui.indent(code_block_id.with("indent"), |ui| {
+        // Override indent amount (default is 18.0 which is too much)
+        let saved_indent = ui.spacing().indent;
+        ui.spacing_mut().indent = BASE_INDENT;
+        
+        let result = EditableCodeBlock::new(&mut code_data)
+            .font_size(font_size)
+            .dark_mode(dark_mode)
+            .colors(widget_colors)
+            .id(code_block_id)
+            .show(ui);
+            
+        ui.spacing_mut().indent = saved_indent;
+        result
+    }).inner;
 
     // Update stored data
     ui.memory_mut(|mem| {
@@ -2584,6 +2893,9 @@ fn render_mermaid_block(
     literal: &str,
     node: &MarkdownNode,
 ) {
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
     // Determine if we're in dark mode based on the background color
     let dark_mode = colors.background.r() < 128;
 
@@ -2614,13 +2926,24 @@ fn render_mermaid_block(
         mermaid_data = MermaidBlockData::new(literal);
     }
 
-    // Create and show the mermaid block widget
-    let output = MermaidBlock::new(&mut mermaid_data)
-        .font_size(font_size)
-        .dark_mode(dark_mode)
-        .colors(widget_colors)
-        .id(mermaid_block_id)
-        .show(ui);
+    // Add left indent and show mermaid block widget
+    // Note: We use ui.indent() instead of ui.horizontal() because horizontal layouts
+    // don't give child widgets the full available width, causing rendering issues.
+    let output = ui.indent(mermaid_block_id.with("indent"), |ui| {
+        // Override indent amount (default is 18.0 which is too much)
+        let saved_indent = ui.spacing().indent;
+        ui.spacing_mut().indent = BASE_INDENT;
+        
+        let result = MermaidBlock::new(&mut mermaid_data)
+            .font_size(font_size)
+            .dark_mode(dark_mode)
+            .colors(widget_colors)
+            .id(mermaid_block_id)
+            .show(ui);
+            
+        ui.spacing_mut().indent = saved_indent;
+        result
+    }).inner;
 
     // Update stored data
     ui.memory_mut(|mem| {
@@ -2649,7 +2972,13 @@ fn render_blockquote(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
     ui.horizontal(|ui| {
+        // Base indent first
+        ui.add_space(BASE_INDENT);
+        
         // Quote border
         let (rect, _) =
             ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
@@ -2740,6 +3069,8 @@ struct FormattedItemEditState {
     edit_text: String,
     /// Flag to request focus on the next frame
     needs_focus: bool,
+    /// Pending cursor position to set after entering edit mode (character index)
+    pending_cursor_pos: Option<usize>,
 }
 
 /// Extract the raw content text from a source line (removes list marker prefix).
@@ -2809,26 +3140,9 @@ fn render_list_item(
         .iter()
         .find(|c| matches!(c.node_type, MarkdownNodeType::Paragraph));
 
-    // DEBUG: Log the structure of this list item to diagnose rendering issues
-    debug!(
-        "[LIST_ITEM_DEBUG] Rendering item at line {}: node_type={:?}, is_task={}, para_node={}, children_count={}, children_types={:?}",
-        node.start_line,
-        std::mem::discriminant(&node.node_type),
-        is_task,
-        para_node.is_some(),
-        node.children.len(),
-        node.children.iter().map(|c| format!("{:?}", std::mem::discriminant(&c.node_type))).collect::<Vec<_>>()
-    );
-    if let Some(para) = para_node {
-        debug!(
-            "[LIST_ITEM_DEBUG] Para at line {}-{}: children_count={}, text_content='{}', children_types={:?}",
-            para.start_line,
-            para.end_line,
-            para.children.len(),
-            para.text_content().chars().take(50).collect::<String>(),
-            para.children.iter().map(|c| format!("{:?}", std::mem::discriminant(&c.node_type))).collect::<Vec<_>>()
-        );
-    }
+    // Note: Verbose per-frame debug logging removed to fix CPU usage issues on Intel Macs.
+    // The original [LIST_ITEM_DEBUG] statements were causing ~50,000 log lines per 22 seconds.
+    // See docs/technical/intel-mac-cpu-issue-analysis.md for details.
 
     // Collect nested lists to render separately
     let nested_lists: Vec<&MarkdownNode> = node
@@ -2893,13 +3207,6 @@ fn render_list_item(
         None
     };
 
-    // DEBUG: Log which rendering path will be taken
-    debug!(
-        "[LIST_ITEM_DEBUG] Rendering decision at line {}: has_inline_formatting={}, simple_text_node_id={}",
-        node.start_line,
-        has_inline_formatting,
-        simple_text_node_id.is_some()
-    );
 
     // Base indentation to align with content area + nested indent
     let base_indent = 16.0; // Align with other content
@@ -2944,13 +3251,7 @@ fn render_list_item(
 
         // Render item content
         if has_inline_formatting {
-            debug!("[LIST_ITEM_DEBUG] Taking inline formatting path at line {}", node.start_line);
             if let Some(para) = para_node {
-                debug!(
-                    "[LIST_ITEM_DEBUG] Rendering formatted content: para.children.len()={}, rendering {} children",
-                    para.children.len(),
-                    para.children.len()
-                );
                 // Create unique ID using para.start_line (matches content extraction) 
                 // AND item_number for additional uniqueness guarantee
                 // FIX: Previously used node.start_line which could differ from para.start_line
@@ -2979,12 +3280,23 @@ fn render_list_item(
                         .desired_width(ui.available_width())
                         .margin(egui::vec2(0.0, 2.0));
 
-                    let response = ui.add(text_edit);
+                    // Use show() to get TextEditOutput for cursor manipulation
+                    let mut output = text_edit.show(ui);
+                    let response = output.response.clone();
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
                         response.request_focus();
                         item_edit_state.needs_focus = false;
+
+                        // Apply pending cursor position if set
+                        if let Some(cursor_pos) = item_edit_state.pending_cursor_pos.take() {
+                            let ccursor = egui::text::CCursor::new(cursor_pos);
+                            let cursor_range = egui::text::CCursorRange::one(ccursor);
+                            output.state.cursor.set_char_range(Some(cursor_range));
+                            output.state.store(ui.ctx(), widget_id);
+                            debug!("[LIST_DEBUG] Set cursor position to {} for list item", cursor_pos);
+                        }
                     }
 
                     // Check for exit conditions:
@@ -3047,11 +3359,32 @@ fn render_list_item(
                         // Get raw markdown content from source
                         item_edit_state.edit_text = extract_list_item_content(source, para.start_line);
 
+                        // Calculate cursor position from click location using Galley for accuracy
+                        // This maps screen position to character index in displayed text
+                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                            let displayed_text = para.text_content();
+                            let displayed_idx = compute_displayed_cursor_index(
+                                ui,
+                                &displayed_text,
+                                click_pos,
+                                display_response.rect,
+                                font_size,
+                                editor_font,
+                                &item_edit_state.edit_text,
+                            );
+                            // Map displayed position to raw position (accounting for formatting markers)
+                            let raw_idx = map_displayed_to_raw(displayed_idx, &item_edit_state.edit_text);
+                            Some(raw_idx.min(item_edit_state.edit_text.chars().count()))
+                        } else {
+                            None
+                        };
+                        item_edit_state.pending_cursor_pos = cursor_pos;
+
                         // DEBUG: Log the edit state being set
                         debug!(
                             "[LIST_DEBUG] EDIT MODE ENTERED: formatted_item_id uses node.start_line={}, \
-                             extracting content from para.start_line={}, content='{}'",
-                            node.start_line, para.start_line, item_edit_state.edit_text
+                             extracting content from para.start_line={}, content='{}', cursor_pos={:?}",
+                            node.start_line, para.start_line, item_edit_state.edit_text, cursor_pos
                         );
 
                         // Store the new state
@@ -3067,7 +3400,6 @@ fn render_list_item(
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
-            debug!("[LIST_ITEM_DEBUG] Taking simple text path at line {}", node.start_line);
             // Simple text - editable
             // Use egui memory to store the edit buffer so it persists across frames
             let edit_buffer_id = ui.id().with("list_item_edit_buffer").with(start_line);
@@ -3139,8 +3471,7 @@ fn render_list_item(
             // CRITICAL: Neither inline formatting path nor simple text path was taken
             // This means no content will be rendered for this list item!
             warn!(
-                "[LIST_ITEM_DEBUG] ⚠️ NO CONTENT RENDERED for list item at line {}! \
-                 has_inline_formatting={}, simple_text_node_id={}, para_node={}, is_task={}",
+                "No content rendered for list item at line {}: has_inline_formatting={}, simple_text_node_id={}, para_node={}, is_task={}",
                 node.start_line,
                 has_inline_formatting,
                 simple_text_node_id.is_some(),
@@ -3151,7 +3482,8 @@ fn render_list_item(
             let fallback_text = node.text_content();
             if !fallback_text.is_empty() {
                 warn!(
-                    "[LIST_ITEM_DEBUG] Attempting fallback render with text: '{}'",
+                    "Attempting fallback render for list item at line {} with text: '{}'",
+                    node.start_line,
                     fallback_text.chars().take(50).collect::<String>()
                 );
                 ui.label(
@@ -3195,11 +3527,17 @@ fn render_list_item(
 
 /// Render a thematic break (horizontal rule).
 fn render_thematic_break(ui: &mut Ui, colors: &EditorColors) {
-    ui.add_space(4.0);
-    let (rect, _) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, colors.hr);
-    ui.add_space(4.0);
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
+    ui.add_space(4.0); // Vertical spacing above
+    ui.horizontal(|ui| {
+        ui.add_space(BASE_INDENT); // Horizontal indent
+        let (rect, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 0.0, colors.hr);
+    });
+    ui.add_space(4.0); // Vertical spacing below
 }
 
 /// Render a table as an editable widget.
@@ -3211,6 +3549,9 @@ fn render_table(
     colors: &EditorColors,
     font_size: f32,
 ) {
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
     // Create a unique ID for this table based on its position
     let table_id = ui.id().with("table").with(node.start_line);
 
@@ -3230,14 +3571,18 @@ fn render_table(
             .clone()
     });
 
-    // Create and show the editable table widget
-    let output = EditableTable::new(&mut table_data)
-        .font_size(font_size)
-        .colors(widget_colors)
-        .with_controls(true)
-        .with_alignment_controls(true)
-        .id(table_id)
-        .show(ui);
+    // Wrap table in horizontal layout with base indent to align with other content
+    let output = ui.horizontal(|ui| {
+        ui.add_space(BASE_INDENT);
+        
+        EditableTable::new(&mut table_data)
+            .font_size(font_size)
+            .colors(widget_colors)
+            .with_controls(true)
+            .with_alignment_controls(true)
+            .id(table_id)
+            .show(ui)
+    }).inner;
 
     // Update stored data if changed
     if output.changed {
@@ -3296,27 +3641,34 @@ fn update_table_in_source(
 
 /// Render front matter (YAML/TOML header).
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
-    egui::Frame::none()
-        .fill(colors.code_bg)
-        .inner_margin(8.0)
-        .rounding(4.0)
-        .show(ui, |ui| {
-            ui.label(
-                RichText::new("Front Matter")
-                    .color(colors.quote_text)
-                    .font(FontId::monospace(font_size * 0.8))
-                    .italics(),
-            );
-            ui.add(
-                TextEdit::multiline(&mut content.to_string())
-                    .code_editor()
-                    .font(FontId::monospace(font_size * 0.9))
-                    .text_color(colors.code_text)
-                    .frame(false)
-                    .desired_width(f32::INFINITY)
-                    .interactive(false), // Front matter editing disabled for now
-            );
-        });
+    // Base left indent to align with paragraphs and headers
+    const BASE_INDENT: f32 = 4.0;
+    
+    ui.horizontal(|ui| {
+        ui.add_space(BASE_INDENT);
+        
+        egui::Frame::none()
+            .fill(colors.code_bg)
+            .inner_margin(8.0)
+            .rounding(4.0)
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new("Front Matter")
+                        .color(colors.quote_text)
+                        .font(FontId::monospace(font_size * 0.8))
+                        .italics(),
+                );
+                ui.add(
+                    TextEdit::multiline(&mut content.to_string())
+                        .code_editor()
+                        .font(FontId::monospace(font_size * 0.9))
+                        .text_color(colors.code_text)
+                        .frame(false)
+                        .desired_width(f32::INFINITY)
+                        .interactive(false), // Front matter editing disabled for now
+                );
+            });
+    });
 }
 
 /// Render a link as an editable widget with hover menu.
@@ -3747,6 +4099,56 @@ fn line_to_char_index(text: &str, target_line: usize) -> usize {
     text.len()
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Memory Cleanup
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Clean up temporary data stored in egui's memory for the rendered markdown editor.
+///
+/// This function removes all temp data entries for types used by the rendered editor's
+/// interactive widgets (headings, paragraphs, lists, code blocks, tables, etc.). These
+/// entries are keyed by UI hierarchy IDs combined with line numbers, and can accumulate
+/// when switching between tabs or editing documents with varying numbers of elements.
+///
+/// Call this function when a tab is closed to free memory that would otherwise persist
+/// until the application exits.
+///
+/// # Types Cleaned
+/// - `FormattedItemEditState` - Click-to-edit state for paragraphs and list items
+/// - `CodeBlockData` - Code block content and edit state
+/// - `MermaidBlockData` - Mermaid diagram source and render state
+/// - `TableData` - Table cell contents and structure
+/// - `TableEditState` - Table cell focus and navigation state
+/// - `RenderedLinkState` - Link edit popup state
+///
+/// # Note
+/// This performs a blanket cleanup of ALL entries for these types. When multiple tabs
+/// are open, this will also clear temp data for the remaining tabs. This is acceptable
+/// because:
+/// 1. These are temporary edit buffers - content is preserved in the document source
+/// 2. The data is lazily recreated when widgets are rendered
+/// 3. At most one tab is typically being actively edited
+///
+/// # Example
+/// ```ignore
+/// // In tab close handler:
+/// self.state.close_tab(index);
+/// cleanup_rendered_editor_memory(ctx);
+/// ```
+pub fn cleanup_rendered_editor_memory(ctx: &egui::Context) {
+    ctx.memory_mut(|mem| {
+        // Clean up rendered editor widget temp data
+        mem.data.remove_by_type::<FormattedItemEditState>();
+        mem.data.remove_by_type::<CodeBlockData>();
+        mem.data.remove_by_type::<MermaidBlockData>();
+        mem.data.remove_by_type::<TableData>();
+        mem.data.remove_by_type::<TableEditState>();
+        mem.data.remove_by_type::<RenderedLinkState>();
+    });
+
+    log::debug!("Cleaned up rendered editor temporary memory");
+}
+
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Tests
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3913,7 +4315,7 @@ mod tests {
     fn test_text_style_apply_no_style() {
         let style = TextStyle::new();
         let text = RichText::new("test");
-        let _styled = style.apply(text, 14.0, EditorFont::Inter);
+        let _styled = style.apply(text, 14.0, &EditorFont::Inter);
         // Just verify it doesn't panic; visual styling tested via egui
     }
 
@@ -3921,7 +4323,7 @@ mod tests {
     fn test_text_style_apply_with_styles() {
         let style = TextStyle::new().with_bold().with_italic();
         let text = RichText::new("test");
-        let _styled = style.apply(text, 14.0, EditorFont::Inter);
+        let _styled = style.apply(text, 14.0, &EditorFont::Inter);
         // Just verify it doesn't panic; visual styling tested via egui
     }
 

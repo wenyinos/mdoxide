@@ -1,95 +1,117 @@
-# Session Handover - Ferrite v0.2.5
+# Handover: Build Warnings Cleanup
 
 ## Rules
-
 - Never auto-update this file - only update when explicitly requested
 - Complete entire task before requesting next instruction
 - Run `cargo build` / `cargo check` after changes to verify code compiles
 - Follow existing code patterns and conventions
 - Update task status via Task Master when starting (`in-progress`) and completing (`done`)
-- Use Context7 MCP tool to fetch library documentation when needed (e.g., egui)
-- Document by feature (e.g., `config-persistence.md`), not by task (e.g., `task-35.md`)
+- Use Context7 MCP tool to fetch library documentation when needed
+- Document by feature (e.g., `session-restore-settings.md`), not by task
 - Update `docs/index.md` when adding new documentation
-
-## Environment
-
-- **Project:** Ferrite
-- **Path:** G:\DEV\markDownNotepad
-- **GitHub:** https://github.com/OlaProeis/Ferrite
-- **Version:** Working on v0.2.5
-- **Tech Stack:** Rust, egui 0.28, eframe 0.28, comrak 0.22, pulldown-cmark 0.11, clap 4, rust-i18n 3, git2 0.19, csv 1.3, palette 0.7, chrono 0.4
+- **Use MCP tools** for Task Master operations, not CLI
+- **Avoid `git diff`** - causes disconnections
 
 ---
 
-## Current Task: Add custom font selection
+## Current Task
 
-| Field | Value |
-|-------|-------|
-| **ID** | 39 |
-| **Title** | Add custom font selection |
-| **Status** | `pending` |
-| **Priority** | Medium |
-| **Dependencies** | 3 |
-| **Issue** | [#15](https://github.com/OlaProeis/Ferrite/issues/15) |
+**Build Warnings Cleanup - Pre-Release Code Review**
+
+- **Status**: pending
+- **Priority**: medium
+- **Goal**: Review and resolve all 61 compiler warnings before release
 
 ### Description
+The codebase has accumulated 61 compiler warnings (unused imports, dead code, unused fields, etc.). Before release, we need to review each warning and either:
+1. **Remove** truly dead code that was planned but never implemented
+2. **Use** code that was implemented but the calling code is missing
+3. **Suppress** warnings for intentionally unused code with `#[allow(dead_code)]` + comment explaining why
 
-Allow users to select preferred font for editor and UI, important for CJK regional glyph preferences.
+### Warning Categories (from `cargo check`)
 
-### Implementation Notes
+#### 1. Unused Imports (10 warnings)
+Files: `mermaid/mod.rs`, `markdown/mod.rs`, `ui/mod.rs`
+- Review if these exports are needed for public API or can be removed
 
-1. **Settings UI for font selection**
-   - Add section in Settings panel for font configuration
-   - Separate options for: editor font, UI font, monospace font
-   - List available system fonts using `font-kit` crate
+#### 2. Dead Code - Never Constructed/Used (51 warnings)
+**High Priority - Likely removable:**
+- `src/app.rs`: `KeyboardAction` variants (Undo, Redo, MoveLineUp, MoveLineDown)
+- `src/app.rs`: `get_opening_bracket`, `scroll_to_line` methods
+- `src/config/snippets.rs`: Multiple `SnippetConfig` and `SnippetManager` methods
+- `src/editor/matching.rs`: `DelimiterKind`, `DelimiterToken`, `MatchingPair` methods
+- `src/editor/outline.rs`: `ContentType::label`
+- `src/editor/stats.rs`: `DocumentStats::new`, `total_headings`
+- `src/markdown/csv_viewer.rs`: Multiple functions and fields
+- `src/markdown/toc.rs`: `TocOptions` methods, `remove_toc`
+- `src/path_utils.rs`: `normalize_path_ref`, `canonicalize_*` functions
+- `src/ui/outline_panel.rs`: `set_active_tab`
+- `src/ui/ribbon.rs`: Multiple `RibbonAction` variants
+- `src/ui/view_segment.rs`: Constants and `ViewModeSegment`
+- `src/vcs/git.rs`: Multiple `GitService` methods
 
-2. **CJK regional glyph support**
-   - Important for users needing specific regional variants
-   - Simplified Chinese vs Traditional Chinese vs Japanese vs Korean glyphs
-   - Font selection affects which glyph variants are rendered
+**Mermaid diagram code (may be WIP):**
+- `src/markdown/mermaid/*.rs`: Multiple structs and fields
 
-3. **Apply changes immediately**
-   - Font changes should apply without restart
-   - Store selections in `config.json`
+### Review Process
 
-### Key Files
+For each warning:
+1. **Search for usages** - Is it called anywhere? Was calling code removed?
+2. **Check git history** - Was it recently added? Part of incomplete feature?
+3. **Decide action**:
+   - If truly unused and not part of public API → **Remove**
+   - If part of incomplete feature to keep → **Add `#[allow(dead_code)]` with TODO comment**
+   - If should be used but isn't → **Investigate and fix**
 
-| File | Purpose |
-|------|---------|
-| `src/fonts.rs` | Font loading and `EditorFont` enum |
-| `src/ui/settings.rs` | Settings panel UI |
-| `src/config/settings.rs` | Settings struct with font preferences |
-| `src/app.rs` | Font application at runtime |
+### Implementation Strategy
 
-### Relevant Dependencies
-
-- `font-kit` - System font enumeration and loading
-- `egui::FontDefinitions` - egui font configuration
+1. Start with `src/app.rs` - highest impact file
+2. Move to utility modules (`path_utils.rs`, `editor/*.rs`)
+3. Handle `mermaid/` carefully - may be WIP diagrams
+4. Clean up `csv_viewer.rs` - has many unused items
+5. Finish with UI modules
 
 ### Test Strategy
 
-- Test font picker shows system fonts
-- Test changing editor font applies to editor
-- Test CJK fonts render correct regional glyphs
-- Test persistence across restart
+1. After each file cleanup, run `cargo check` - ensure no new errors
+2. Run `cargo test` periodically to ensure no regressions
+3. Final `cargo build --release` should have zero or minimal warnings
 
 ---
 
-## Recently Completed (v0.2.5)
+## Key Files (by warning count)
 
-- Task 38: Windows borderless window fixes (top edge resize, fullscreen toggle)
-- Task 37: macOS Intel CPU optimization (idle repaint scheduling)
-- Task 36: Fix line width in rendered/split view (centering behavior, pane boundaries)
-- Task 35: Fix config.json persistence (window state dirty flag)
-- Task 34: CJK paragraph indentation (done)
-- Task 28: Zen mode centering in rendered/split views (done)
-- Task 27: Table editing - data sync fixed
-- Task 26: Quick switcher mouse support (done)
-- Task 25: Keyboard shortcut customization (done)
+| File | Warnings | Notes |
+|------|----------|-------|
+| `src/markdown/mermaid/*.rs` | ~15 | Diagram rendering - may be WIP |
+| `src/markdown/csv_viewer.rs` | ~8 | CSV viewer features |
+| `src/config/snippets.rs` | ~10 | Snippet expansion system |
+| `src/app.rs` | ~5 | Main app, keyboard actions |
+| `src/editor/matching.rs` | ~6 | Bracket matching |
+| `src/ui/*.rs` | ~8 | UI components |
+| `src/vcs/git.rs` | ~5 | Git integration |
+| `src/path_utils.rs` | ~3 | Path utilities |
 
-## Deferred
+---
 
-- Task 29, 30: Mermaid toolbar/help (→ v0.3.0)
-- Task 31: Chinese translation (waiting for contributor)
-- Task 32: Mermaid code cleanup (→ v0.2.6)
-- Task 33: Weblate setup (manual task for maintainer)
+## Environment
+- **Project**: Ferrite (Markdown editor)
+- **Language**: Rust
+- **GUI Framework**: egui
+- **Version**: 0.2.6
+
+---
+
+## Quick Start
+```bash
+# Check all warnings
+cargo check 2>&1 | grep "warning:"
+
+# Build and run
+cargo run
+
+# Run tests
+cargo test
+```
+
+Or use MCP tools: `get_task`, `set_task_status`, `next_task`

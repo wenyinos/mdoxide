@@ -1,0 +1,14 @@
+# Windows-1252 Test File
+
+This file is encoded in Windows-1252 (CP1252).
+
+## Special Characters
+- German: Müller, Größe, Übung
+- French: café, résumé, naïve
+- Spanish: señor, niño, año
+- Copyright: © ® ™
+- Currency: € £ ¥
+- Quotes: "curly" 'quotes'
+- Dash: — (em dash)
+
+Windows-1252 is common in legacy Windows applications.

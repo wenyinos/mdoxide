@@ -510,7 +510,7 @@ unicode-math-class = "0.1"  # TeX atom classification
 ## Related Documents
 
 - [Mermaid Crate Plan](./mermaid-crate-plan.md) - Similar rendering architecture
-- [Custom Editor Plan](./technical/custom-editor-widget-plan.md) - Enables WYSIWYG math
+- [Custom Editor Plan](./technical/planning/custom-editor-widget-plan.md) - Enables WYSIWYG math
 - [Modular Refactor Plan](./refactor.md) - Feature flag architecture
 
 ---

@@ -116,4 +116,4 @@ Unit tests in `src/config/settings.rs`:
 - **Settings persistence**: Recent files saved/loaded from config, with immediate save on file open
 - **Tab management**: Opens in new tabs, reuses existing tabs for same file
 - **Toast messages**: Feedback for background opens
-- **Atomic writes**: Config file writes use temp-file-rename pattern (see `docs/technical/config-persistence.md`)
+- **Atomic writes**: Config file writes use temp-file-rename pattern (see `docs/technical/config/config-persistence.md`)

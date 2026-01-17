@@ -137,4 +137,4 @@ flowchart TD
 |------|---------|
 | `src/markdown/mermaid/flowchart.rs` | Node parsing and rendering |
 | `test_md/test_flowcharts.md` | Test cases including asymmetric shapes |
-| `docs/technical/flowchart-layout-algorithm.md` | Overall layout system |
+| `docs/technical/mermaid/flowchart-layout-algorithm.md` | Overall layout system |

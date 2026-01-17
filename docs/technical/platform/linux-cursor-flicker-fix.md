@@ -102,7 +102,55 @@ if state.last_cursor != Some(desired_cursor) {
 
 2. **Title bar height assumption**: The 35px exclusion height is hardcoded based on the current title bar design (28px height + 5px padding + margin). If title bar height changes, this constant should be updated.
 
+## v0.2.6 Update: Drag Area Exclusion Fix
+
+A second issue was discovered where **window control buttons (close, maximize, minimize) could not be clicked on Linux**. This was caused by the title bar drag-to-move response consuming clicks before they reached the overlapping buttons.
+
+### Root Cause (v0.2.6)
+
+In `src/app.rs`, the title bar layout allocated the **entire remaining space** as a draggable area, then rendered buttons on top:
+
+```rust
+// Before: Drag rect covered entire remaining space (including buttons)
+let drag_rect = ui.available_rect_before_wrap();
+let drag_response = ui.allocate_rect(drag_rect, egui::Sense::click_and_drag());
+// ... buttons rendered AFTER in right_to_left layout, overlapping drag area
+```
+
+On Linux (especially Wayland/X11), the drag response could consume clicks before they reached the overlapping button widgets.
+
+### Solution (v0.2.6)
+
+Explicitly exclude the button area from the drag rect:
+
+```rust
+// After: Drag rect excludes the 320px button area on the right
+const WINDOW_BUTTON_AREA_WIDTH: f32 = 320.0;
+
+let available = ui.available_rect_before_wrap();
+let drag_width = (available.width() - WINDOW_BUTTON_AREA_WIDTH).max(0.0);
+let drag_rect = egui::Rect::from_min_size(
+    available.min,
+    egui::vec2(drag_width, available.height()),
+);
+let drag_response = ui.allocate_rect(drag_rect, egui::Sense::click_and_drag());
+```
+
+### Button Area Calculation
+
+The 320px width accounts for:
+- Window controls: Close(46) + Max(46) + Min(46) + Fullscreen(46) = 184px
+- Title bar buttons: Settings(28) + Zen(28) + ViewMode(~32) = 88px
+- Spacing between elements: ~48px
+
+### Files Modified (v0.2.6)
+
+- `src/app.rs`: Lines 1198-1214
+  - Added `WINDOW_BUTTON_AREA_WIDTH` constant
+  - Modified drag rect calculation to exclude button area
+
 ## Related Issues
 
-- Original behavior caused cursor flicker on Linux Mint and similar distributions
-- No GitHub issue was filed for this bug (discovered during development)
+- Original cursor flicker behavior caused issues on Linux Mint and similar distributions
+- v0.2.6 close button click issue reported on Linux (Wayland/X11)
+- No GitHub issues were filed for these bugs (discovered during development)

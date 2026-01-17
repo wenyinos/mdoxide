@@ -1,0 +1,16 @@
+# UTF-16 LE Test File
+
+This file is encoded in UTF-16 Little Endian with BOM.
+
+## Features
+- Full Unicode support
+- Common on Windows systems
+- BOM: FF FE (at start of file)
+
+
+## Mixed Scripts
+- English: Hello World
+- Japanese: こんにちは
+- Chinese: 你好
+- Korean: 안녕하세요
+- Emoji: 🌍 🌎 🌏

@@ -160,8 +160,17 @@ impl Workspace {
     }
 
     /// Refresh the file tree from disk.
+    ///
+    /// Preserves the expanded/collapsed state of directories through the refresh.
     pub fn refresh_file_tree(&mut self) {
+        // Preserve expanded state before refresh
+        let expanded_paths = self.file_tree.get_expanded_paths();
+
+        // Rescan the directory
         self.file_tree = file_tree::scan_directory(&self.root_path, &self.hidden_patterns);
+
+        // Restore expanded state
+        self.file_tree.restore_expanded_paths(&expanded_paths);
     }
 
     /// Add a file to the recent files list.
