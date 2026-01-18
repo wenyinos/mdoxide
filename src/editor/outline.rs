@@ -351,7 +351,18 @@ impl DocumentOutline {
 /// A `DocumentOutline` containing all extracted items.
 pub fn extract_outline(text: &str) -> DocumentOutline {
     let mut items = Vec::new();
-    let mut char_offset = 0;
+    
+    // Build a map of line number (0-indexed) to character offset
+    // This is more accurate than reconstructing offsets from lines() iteration
+    let line_offsets: Vec<usize> = {
+        let mut offsets = vec![0]; // Line 0 starts at char 0
+        for (i, ch) in text.chars().enumerate() {
+            if ch == '\n' {
+                offsets.push(i + 1); // Next line starts after the \n
+            }
+        }
+        offsets
+    };
 
     // State tracking
     let mut in_code_block = false;
@@ -368,6 +379,9 @@ pub fn extract_outline(text: &str) -> DocumentOutline {
     for (line_idx, line) in text.lines().enumerate() {
         let line_num = line_idx + 1; // 1-indexed
         let trimmed = line.trim();
+        
+        // Get the character offset for this line from our pre-built map
+        let char_offset = line_offsets.get(line_idx).copied().unwrap_or(0);
 
         // Handle code block boundaries
         if trimmed.starts_with("```") {
@@ -479,9 +493,8 @@ pub fn extract_outline(text: &str) -> DocumentOutline {
             }
         }
 
-        // Track CHARACTER offset (not byte offset!) including newline
-        // Use chars().count() instead of len() to correctly handle UTF-8
-        char_offset += line.chars().count() + 1;
+        // Note: char_offset is now looked up from line_offsets map at loop start,
+        // so no manual tracking needed here.
     }
 
     // Finalize any remaining content blocks at end of document

@@ -5376,6 +5376,9 @@ impl FerriteApp {
         // CSV/TSV files DO support split mode (raw text + table view)
         let skip_split_mode = file_type.is_structured();
 
+        // Track if we need to set App-level pending_scroll_to_line for Raw mode
+        let mut raw_mode_scroll_to_line: Option<usize> = None;
+
         if let Some(tab) = self.state.active_tab_mut() {
             let old_mode = tab.view_mode;
             let current_scroll = tab.scroll_offset;
@@ -5430,7 +5433,7 @@ impl FerriteApp {
                                 1
                             };
                             
-                            // Store for line-based lookup after render
+                            // Store for line-based lookup after render (Rendered mode uses tab field)
                             tab.pending_scroll_to_line = Some(topmost_line);
                             debug!(
                                 "Sync scroll Raw→Rendered: scroll={} / line_height={:.1} → line {}",
@@ -5444,13 +5447,13 @@ impl FerriteApp {
                                 current_scroll,
                                 content_height,
                             ) {
-                                // Calculate target scroll in Raw mode
-                                let line_height = tab.raw_line_height.max(20.0);
-                                let target_scroll = (source_line.saturating_sub(1) as f32) * line_height;
-                                tab.pending_scroll_offset = Some(target_scroll);
+                                // Raw mode EditorWidget uses App-level pending_scroll_to_line
+                                // (not tab field), so we store it for setting after borrow ends.
+                                // source_line is 1-indexed from the mapping.
+                                raw_mode_scroll_to_line = Some(source_line);
                                 debug!(
-                                    "Sync scroll Rendered→Raw: scroll={} → line {} → raw_offset={:.1}",
-                                    current_scroll, source_line, target_scroll
+                                    "Sync scroll Rendered→Raw: scroll={} → line {} (will use App-level pending_scroll_to_line)",
+                                    current_scroll, source_line
                                 );
                             } else {
                                 // Fallback to percentage if no mappings
@@ -5473,6 +5476,12 @@ impl FerriteApp {
 
             // Mark settings dirty to save per-tab view mode on exit
             self.state.mark_settings_dirty();
+        }
+
+        // Set App-level pending_scroll_to_line AFTER releasing mutable borrow.
+        // This is used by Raw mode EditorWidget which reads from self.pending_scroll_to_line.
+        if let Some(line) = raw_mode_scroll_to_line {
+            self.pending_scroll_to_line = Some(line);
         }
     }
     
@@ -6377,88 +6386,49 @@ impl FerriteApp {
     /// 2. Applying transient highlight to make the heading visible
     /// 3. Positioning the cursor at the heading
     fn navigate_to_heading(&mut self, nav: HeadingNavRequest) {
-        // First, find the heading range without holding mutable borrow
-        // Note: content.find() returns BYTE offsets, we need to convert to CHAR offsets
+        // Find the line range using the line number from OutlineItem
+        // This is the most reliable approach since line numbers are always correct
         let found_range = if let Some(tab) = self.state.active_tab() {
             let content = &tab.content;
             
-            // Try to find the heading by text if available
-            if let (Some(title), Some(level)) = (&nav.title, nav.level) {
-                // Build the markdown heading pattern: "# Title" or "## Title" etc.
-                let hashes = "#".repeat(level as usize);
-                let pattern = format!("{} {}", hashes, title);
+            // Find the byte range for the target line (nav.line is 1-indexed)
+            Self::find_line_byte_range(content, nav.line)
+        } else {
+            None
+        };
+
+        // Apply navigation and calculate target line (1-indexed for scroll)
+        let target_line_1indexed = if let Some(tab) = self.state.active_tab_mut() {
+            if let Some((char_start, char_end)) = found_range {
+                // Set transient highlight for the heading line (expects char offsets)
+                tab.set_transient_highlight(char_start, char_end);
                 
-                // Search for exact pattern first - find() returns byte offset
-                if let Some(byte_start) = content.find(&pattern) {
-                    let byte_end = byte_start + pattern.len();
-                    // Convert byte offsets to character offsets for egui
-                    let char_start = Self::byte_to_char_offset(content, byte_start);
-                    let char_end = Self::byte_to_char_offset(content, byte_end);
-                    Some((char_start, char_end))
-                } else {
-                    // Try case-insensitive search around the expected line
-                    // This already returns character offsets
-                    Self::find_heading_near_line(content, title, level, nav.line)
-                }
-            } else if let Some(char_offset) = nav.char_offset {
-                // nav.char_offset is already a character offset from OutlineItem
-                // Find end of line starting from this position
-                let mut char_count = 0;
-                let mut line_end_char = char_offset;
-                for (i, ch) in content.chars().enumerate() {
-                    if i >= char_offset {
-                        if ch == '\n' {
-                            line_end_char = i;
-                            break;
-                        }
-                        char_count += 1;
-                    }
-                    if i > char_offset + 200 {
-                        // Safety limit
-                        line_end_char = i;
-                        break;
-                    }
-                }
-                if char_count > 0 {
-                    line_end_char = char_offset + char_count;
-                }
-                // If we didn't find newline, use end of content
-                if line_end_char == char_offset {
-                    line_end_char = content.chars().count();
-                }
-                Some((char_offset, line_end_char))
+                // Calculate line and column from character offset (0-indexed)
+                let (target_line, _) = Self::offset_to_line_col(&tab.content, char_start);
+                tab.cursor_position = (target_line, 0);
+                
+                let line_1indexed = target_line + 1;
+                debug!(
+                    "Navigated to heading at char offset {}-{}, line {}",
+                    char_start, char_end, line_1indexed
+                );
+                Some(line_1indexed)
             } else {
-                None
+                // Fall back to basic line navigation using nav.line (already 1-indexed)
+                tab.cursor_position = (nav.line.saturating_sub(1), 0);
+                debug!("Navigated to heading via fallback, line {}", nav.line);
+                Some(nav.line)
             }
         } else {
             None
         };
 
-        // Now apply navigation with mutable borrow
-        if let Some(tab) = self.state.active_tab_mut() {
-            if let Some((char_start, char_end)) = found_range {
-                // Set transient highlight for the heading line (expects char offsets)
-                tab.set_transient_highlight(char_start, char_end);
-                
-                // Calculate line and column from character offset
-                let (target_line, _) = Self::offset_to_line_col(&tab.content, char_start);
-                tab.cursor_position = (target_line, 0);
-                
-                // Calculate scroll offset to center the heading
-                let line_height = tab.raw_line_height.max(1.0);
-                let viewport_height = tab.viewport_height;
-                let target_scroll = (target_line as f32 * line_height) - (viewport_height / 3.0);
-                tab.pending_scroll_offset = Some(target_scroll.max(0.0));
-                
-                debug!(
-                    "Navigated to heading at char offset {}-{}, line {}",
-                    char_start, char_end, target_line + 1
-                );
-            } else {
-                // Fall back to basic line navigation
-                self.pending_scroll_to_line = Some(nav.line);
-                tab.cursor_position = (nav.line.saturating_sub(1), 0);
-            }
+        // Set pending scroll AFTER releasing the mutable borrow.
+        // Use App-level pending_scroll_to_line so EditorWidget calculates
+        // scroll offset with fresh line height from ui.fonts().
+        // This is more accurate than using potentially stale raw_line_height.
+        if let Some(line) = target_line_1indexed {
+            self.pending_scroll_to_line = Some(line);
         }
     }
 
@@ -6505,6 +6475,56 @@ impl FerriteApp {
                 break;
             }
         }
+        None
+    }
+
+    /// Find the BYTE range (start, end) for a specific line number.
+    /// 
+    /// # Arguments
+    /// * `content` - The text content
+    /// * `line_num` - The line number (1-indexed)
+    /// 
+    /// # Returns
+    /// The byte offset range (start, end) for that line, or None if line doesn't exist.
+    /// Note: Returns BYTE offsets because set_transient_highlight expects bytes.
+    fn find_line_byte_range(content: &str, line_num: usize) -> Option<(usize, usize)> {
+        if line_num == 0 {
+            return None;
+        }
+        
+        let target_idx = line_num - 1; // Convert to 0-indexed
+        
+        // Simple approach: find the byte position by scanning the actual bytes
+        let bytes = content.as_bytes();
+        let mut line_start = 0;
+        let mut current_line = 0;
+        
+        for (i, &byte) in bytes.iter().enumerate() {
+            if current_line == target_idx {
+                // Found the start of our target line, now find its end
+                let mut line_end = i;
+                for j in i..bytes.len() {
+                    if bytes[j] == b'\n' {
+                        // Don't include \r if present
+                        line_end = if j > 0 && bytes[j - 1] == b'\r' { j - 1 } else { j };
+                        break;
+                    }
+                    line_end = j + 1;
+                }
+                return Some((i, line_end));
+            }
+            
+            if byte == b'\n' {
+                current_line += 1;
+                line_start = i + 1;
+            }
+        }
+        
+        // Handle last line (no trailing newline)
+        if current_line == target_idx {
+            return Some((line_start, bytes.len()));
+        }
+        
         None
     }
 

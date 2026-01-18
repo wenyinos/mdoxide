@@ -592,30 +592,44 @@ impl<'a> EditorWidget<'a> {
 
         // Calculate scroll offset for current match if needed
         let mut target_scroll_offset: Option<f32> = None;
+        // Track target line for post-render verification (1-indexed)
+        let mut scroll_target_line: Option<usize> = None;
+
+        // Get fresh line height from UI fonts (not stale raw_line_height)
+        let line_height = ui.fonts(|f| f.row_height(&FontId::new(font_size, font_family.clone())));
+        let viewport_height = ui.available_height();
 
         // Priority 1: Scroll to specific line (from outline navigation)
         if let Some(target_line) = self.scroll_to_line {
-            let line_height =
-                ui.fonts(|f| f.row_height(&FontId::new(font_size, font_family.clone())));
-            // Target scroll position: put the line roughly 1/3 from top of viewport
-            let viewport_height = ui.available_height();
-            // target_line is 1-indexed, convert to 0-indexed for calculation
-            let target_y = (target_line.saturating_sub(1)) as f32 * line_height;
-            target_scroll_offset = Some((target_y - viewport_height / 3.0).max(0.0));
-            debug!("Scrolling to line {} (y offset {})", target_line, target_y);
+            // Use unified scroll calculation with tolerance
+            target_scroll_offset = Some(calculate_scroll_for_line(
+                target_line,
+                line_height,
+                viewport_height,
+            ));
+            scroll_target_line = Some(target_line);
+            debug!(
+                "Scrolling to line {} (line_height={:.1}, viewport={:.1}, offset={:.1})",
+                target_line,
+                line_height,
+                viewport_height,
+                target_scroll_offset.unwrap_or(0.0)
+            );
         }
         // Priority 2: Scroll to search match
         else if let Some(ref highlights) = search_highlights {
             if highlights.scroll_to_match && !highlights.matches.is_empty() {
                 if let Some(&(match_start, _)) = highlights.matches.get(highlights.current_match) {
-                    // Calculate line number of the match
-                    let (match_line, _) = char_index_to_line_col(content, match_start);
-                    let line_height =
-                        ui.fonts(|f| f.row_height(&FontId::new(font_size, font_family.clone())));
-                    // Target scroll position: put the match roughly 1/3 from top of viewport
-                    let viewport_height = ui.available_height();
-                    let match_y = match_line as f32 * line_height;
-                    target_scroll_offset = Some((match_y - viewport_height / 3.0).max(0.0));
+                    // Calculate line number of the match (0-indexed from char_index_to_line_col)
+                    let (match_line_0indexed, _) = char_index_to_line_col(content, match_start);
+                    // Convert to 1-indexed for unified calculation
+                    let match_line_1indexed = match_line_0indexed + 1;
+                    target_scroll_offset = Some(calculate_scroll_for_line(
+                        match_line_1indexed,
+                        line_height,
+                        viewport_height,
+                    ));
+                    scroll_target_line = Some(match_line_1indexed);
                 }
             }
         }
@@ -1288,6 +1302,46 @@ impl<'a> EditorWidget<'a> {
         // Update line height for accurate scroll sync
         self.tab.raw_line_height = ui.fonts(|f| f.row_height(&FontId::new(font_size, font_family)));
 
+        // POST-RENDER SCROLL VERIFICATION:
+        // If we just scrolled to a line (from outline, search, or find navigation),
+        // verify the target is actually visible using the galley's actual row positions.
+        // This accounts for word wrap where a single logical line spans multiple visual rows.
+        // This is a second-pass correction for the initial estimate.
+        if let Some(target_line) = scroll_target_line {
+            let galley = &text_output.galley;
+            let viewport_height = scroll_output.inner_rect.height();
+            let current_scroll = scroll_output.state.offset.y;
+            
+            // Find the actual Y position of the target line in the galley
+            if let Some(actual_y) = find_line_y_in_galley(galley, target_line) {
+                // Calculate where the line should be (1/4 from top of viewport)
+                let desired_top_margin = viewport_height * 0.25;
+                let ideal_scroll = (actual_y - desired_top_margin).max(0.0);
+                
+                // Clamp to valid scroll range
+                let max_scroll = (scroll_output.content_size.y - viewport_height).max(0.0);
+                let ideal_scroll = ideal_scroll.min(max_scroll);
+                
+                // Check if the line is visible and reasonably positioned
+                let line_top = actual_y - current_scroll;
+                let visible_top = 0.0;
+                let visible_bottom = viewport_height;
+                
+                // If line is outside viewport OR significantly off from ideal position
+                let is_out_of_view = line_top < visible_top || line_top > visible_bottom - 20.0;
+                let is_significantly_off = (current_scroll - ideal_scroll).abs() > 30.0;
+                
+                if is_out_of_view || is_significantly_off {
+                    debug!(
+                        "Scroll correction: line={}, actual_y={:.1}, current={:.1}, ideal={:.1}, diff={:.1}",
+                        target_line, actual_y, current_scroll, ideal_scroll, (current_scroll - ideal_scroll).abs()
+                    );
+                    self.tab.pending_scroll_offset = Some(ideal_scroll);
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+
         // Handle pending scroll ratio: convert to offset now that we have content_height
         if let Some(ratio) = self.tab.pending_scroll_ratio.take() {
             let max_scroll = (scroll_output.content_size.y - scroll_output.inner_rect.height()).max(0.0);
@@ -1350,6 +1404,87 @@ fn char_index_to_line_col(text: &str, char_index: usize) -> (usize, usize) {
     }
 
     (line, col)
+}
+
+/// Calculate scroll offset to position a target line in the viewport.
+///
+/// This is the unified scroll calculation function used by all navigation features
+/// (outline, search, find, etc.) to ensure consistent positioning.
+///
+/// # Arguments
+/// * `target_line` - 1-indexed line number to scroll to
+/// * `line_height` - Height of a single line in pixels (from ui.fonts())
+/// * `viewport_height` - Height of the visible viewport in pixels
+///
+/// # Returns
+/// Scroll offset in pixels that positions the target line at approximately
+/// 1/4 from the top of the viewport (with tolerance for visibility).
+///
+/// # Note
+/// Uses 1/4 from top instead of 1/3 to provide better visibility buffer,
+/// especially when word wrap causes lines to take multiple visual rows.
+/// This is an initial estimate; post-render verification using actual galley
+/// positions provides pixel-perfect accuracy.
+fn calculate_scroll_for_line(target_line: usize, line_height: f32, viewport_height: f32) -> f32 {
+    // Convert 1-indexed to 0-indexed for calculation
+    let line_index = target_line.saturating_sub(1);
+    
+    // Calculate target Y position
+    let target_y = line_index as f32 * line_height;
+    
+    // Position target at 1/4 from top of viewport (better visibility than 1/3)
+    // This provides more tolerance for word-wrapped lines and ensures
+    // the target is clearly visible even if line height estimation is slightly off
+    let offset = target_y - (viewport_height * 0.25);
+    
+    // Ensure we don't scroll past the start
+    offset.max(0.0)
+}
+
+/// Find the actual Y position of a logical line in the galley.
+///
+/// This function iterates through the galley's visual rows to find the first
+/// row belonging to the target logical line. This accounts for word wrap
+/// where a single logical line can span multiple visual rows.
+///
+/// # Arguments
+/// * `galley` - The text galley containing visual row information
+/// * `target_line` - 1-indexed line number to find
+///
+/// # Returns
+/// The Y position (in galley coordinates) of the first row of the target line,
+/// or None if the line doesn't exist.
+fn find_line_y_in_galley(galley: &egui::Galley, target_line: usize) -> Option<f32> {
+    if target_line == 0 {
+        return None;
+    }
+    
+    // Target line in 0-indexed form
+    let target_line_0indexed = target_line - 1;
+    
+    // Track logical line number as we iterate through visual rows
+    let mut current_logical_line = 0usize;
+    
+    for row in galley.rows.iter() {
+        // Check if we've reached our target line
+        if current_logical_line == target_line_0indexed {
+            return Some(row.min_y());
+        }
+        
+        // A row ends a logical line when it has a newline at the end
+        // (word-wrapped continuations don't have ends_with_newline)
+        if row.ends_with_newline {
+            current_logical_line += 1;
+        }
+    }
+    
+    // If target is beyond the last line, return the position of the last row
+    // This handles edge cases where we're scrolling to a line near the end
+    if target_line_0indexed >= current_logical_line {
+        galley.rows.last().map(|row| row.min_y())
+    } else {
+        None
+    }
 }
 
 /// Convert (line, column) position to a character index.

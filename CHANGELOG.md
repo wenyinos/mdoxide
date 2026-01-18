@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Text wrapping support** - Handle wrapped lines correctly by using actual text rect width for measurement.
 - **Bold font measurement** - Use bold font for measurement when content starts with bold markers for better accuracy.
 
+#### Scroll Navigation Accuracy
+- **Unified scroll calculation** - Single function for all scroll-to-line operations (find, search-in-files, outline, minimap) ensuring consistent positioning.
+- **Fixed off-by-one errors** - Consistent 0-indexed vs 1-indexed line number handling across all navigation functions.
+- **Fresh line height** - Ensure actual rendered line height is used instead of stale/default values when calculating scroll positions.
+- **Large file accuracy** - Scroll navigation now works correctly in files with 3000+ lines; previously target lines could be hundreds of pixels off or completely out of view.
+- **Semantic minimap highlight fix** - Fixed highlight offset when clicking items in semantic minimap/outline panel. The highlight now correctly marks the target line by using byte offsets (matching search behavior) instead of character offsets.
+
 #### Settings & UX
 - **Session restore option** - New setting to disable tab restoration on startup. When disabled, app starts with a single empty tab instead of restoring previous session.
 

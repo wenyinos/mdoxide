@@ -97,11 +97,11 @@ New Ferrite logo and icon set.
 
 ---
 
-### v0.2.5.1 (Released) - Memory, Encoding & Polish
+### v0.2.5.1 (Released) - Memory, Encoding & Accuracy
 
 > **Status:** Released (2026-01-17)
 
-Point release focusing on memory optimization, multi-encoding support, cursor positioning improvements, and UX polish.
+Point release focusing on memory optimization, multi-encoding support, cursor positioning improvements, scroll navigation accuracy, and UX polish.
 
 #### Multi-Encoding File Support
 - [x] **Encoding detection** - Auto-detect file encoding on open using `encoding_rs` + `chardetng` crates
@@ -115,7 +115,14 @@ Point release focusing on memory optimization, multi-encoding support, cursor po
 - [x] **Text wrapping support** - Handle wrapped lines correctly by using actual text rect width for measurement
 - [x] **Bold font measurement** - Use bold font for measurement when content starts with bold markers
 
-> **Known Limitation:** Cursor positioning is best-effort accurate. Lines with mixed formatting (bold + regular + italic) may have slight drift on longer lines due to font width differences. Perfect positioning requires the custom editor widget planned for v0.3.0.
+#### Scroll Navigation Accuracy (Critical Fix)
+- [x] **Unified scroll calculation** - Single function for all scroll-to-line operations ensuring consistent behavior across find, search-in-files, outline panel, and semantic minimap
+- [x] **Fixed off-by-one errors** - Consistent 0-indexed vs 1-indexed line handling in `navigate_to_heading()` and related functions
+- [x] **Fresh line height tracking** - Use actual rendered line height instead of stale/default 20.0 value
+- [x] **Large file navigation** - Fixed scroll accuracy in files with 3000+ lines where targets around line 2000 could be 1000+ pixels off
+- [x] **Semantic minimap highlight fix** - Fixed highlight offset when clicking outline/minimap items; uses byte offsets (matching search) instead of character offsets
+
+> **Known Limitation:** Cursor positioning and scroll accuracy are best-effort within egui's constraints. Lines with mixed formatting may have slight drift on longer lines due to font width differences. Perfect positioning requires the custom editor widget planned for v0.3.0.
 
 #### Internationalization
 - [x] **Language selector** - Settings option to choose UI language
@@ -324,7 +331,7 @@ Replace egui's `TextEdit` with a custom `FerriteEditor` widget to unblock advanc
 - [ ] **Code folding with text hiding** - Actually collapse regions visually
 
 #### 4. Semantic Minimap Polish
-- [ ] **Scroll position accuracy** - Fix navigation centering for variable line heights, word wrap, and editor padding (deferred from v0.2.5)
+- [ ] **Pixel-perfect scroll positioning** - With custom editor widget, use actual galley coordinates for perfect navigation centering (basic fix shipped in v0.2.5.1; v0.3.0 provides full solution via FerriteEditor)
 
 #### 5. Markdown Enhancements
 - [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with auto-completion

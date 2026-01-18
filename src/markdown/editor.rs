@@ -661,17 +661,21 @@ impl<'a> MarkdownEditor<'a> {
         // debug!("[LIST_DEBUG] Document has {} top-level nodes", doc.root.children.len());
 
         // Calculate scroll offset for outline navigation if needed
+        // Uses same calculation as Raw mode for consistency:
+        // - 1-indexed line input, converted to 0-indexed
+        // - Position at 1/4 from top (better visibility than 1/3)
         let target_scroll_offset: Option<f32> = if let Some(target_line) = self.scroll_to_line {
             let font_id = FontId::new(
                 self.font_size,
                 fonts::get_styled_font_family(false, false, &self.font_family),
             );
             let line_height = ui.fonts(|f| f.row_height(&font_id));
-            // Target scroll position: put the line roughly 1/3 from top of viewport
             let viewport_height = ui.available_height();
-            // target_line is 1-indexed, convert to 0-indexed for calculation
-            let target_y = (target_line.saturating_sub(1)) as f32 * line_height;
-            Some((target_y - viewport_height / 3.0).max(0.0))
+            // Convert 1-indexed to 0-indexed for calculation
+            let line_index = target_line.saturating_sub(1);
+            let target_y = line_index as f32 * line_height;
+            // Position at 1/4 from top for better visibility tolerance
+            Some((target_y - viewport_height * 0.25).max(0.0))
         } else {
             None
         };
