@@ -584,3 +584,236 @@ a11y:
   minimize_button: ""
   maximize_button: ""
   restore_button: ""
+
+# Recovery and session dialogs
+recovery:
+  auto_save:
+    title: ""
+    backup_found: ""
+    restore_question: ""
+    restore: ""
+    discard: ""
+  session:
+    title: ""
+    crash_detected: ""
+    restore_question: ""
+    restore: ""
+    start_fresh: ""
+  untitled: ""
+
+# Common buttons and actions
+common:
+  save: ""
+  cancel: ""
+  ok: ""
+  yes: ""
+  no: ""
+  close: ""
+  apply: ""
+  reset: ""
+  delete: ""
+  edit: ""
+  done: ""
+  copy: ""
+  paste: ""
+  cut: ""
+  add: ""
+  remove: ""
+  clear: ""
+  refresh: ""
+  loading: ""
+  error: ""
+  warning: ""
+  info: ""
+  success: ""
+
+# Code blocks and widgets
+widgets:
+  code_block:
+    copy: ""
+    copy_tooltip: ""
+    copied: ""
+    edit: ""
+    done: ""
+    language: ""
+    no_language: ""
+  table:
+    add_row: ""
+    delete_row: ""
+    add_column: ""
+    delete_column: ""
+    align_left: ""
+    align_center: ""
+    align_right: ""
+    edit: ""
+    done: ""
+  link:
+    edit: ""
+    open: ""
+    copy: ""
+    remove: ""
+  image:
+    alt_text: ""
+    title: ""
+    edit: ""
+
+# CSV Viewer
+csv:
+  title: ""
+  has_headers: ""
+  delimiter: ""
+  delimiter_comma: ""
+  delimiter_tab: ""
+  delimiter_semicolon: ""
+  delimiter_pipe: ""
+  delimiter_auto: ""
+  rainbow_columns: ""
+  row_count: ""
+  column_count: ""
+  loading: ""
+  error: ""
+
+# Pipeline panel
+pipeline:
+  title: ""
+  command_placeholder: ""
+  run: ""
+  clear: ""
+  recent: ""
+  output: ""
+  error: ""
+  no_output: ""
+  running: ""
+
+# Encoding
+encoding:
+  label: ""
+  utf8: ""
+  utf8_bom: ""
+  utf16_le: ""
+  utf16_be: ""
+  ascii: ""
+  latin1: ""
+  windows1252: ""
+  shift_jis: ""
+  euc_jp: ""
+  euc_kr: ""
+  gbk: ""
+  gb2312: ""
+  big5: ""
+  unknown: ""
+  change: ""
+  reload_with: ""
+
+# Tab context menu
+tab:
+  close: ""
+  close_others: ""
+  close_all: ""
+  close_saved: ""
+  close_to_right: ""
+  copy_path: ""
+  copy_filename: ""
+  reveal_in_explorer: ""
+  reveal_in_finder: ""
+  reveal_in_file_manager: ""
+  pin: ""
+  unpin: ""
+  duplicate: ""
+  auto_save_enabled: ""
+  auto_save_disabled: ""
+
+# Mermaid diagrams
+mermaid:
+  error: ""
+  unsupported: ""
+  parsing_error: ""
+  rendering_error: ""
+  types:
+    flowchart: ""
+    sequence: ""
+    class: ""
+    state: ""
+    er: ""
+    gantt: ""
+    pie: ""
+    mindmap: ""
+    timeline: ""
+    journey: ""
+    git: ""
+
+# Table of Contents
+toc:
+  title: ""
+  generate: ""
+  update: ""
+  insert: ""
+  no_headings: ""
+  generated: ""
+  updated: ""
+
+# Formatting toolbar tooltips
+format_toolbar:
+  bold: ""
+  italic: ""
+  strikethrough: ""
+  code: ""
+  link: ""
+  image: ""
+  heading: ""
+  bullet_list: ""
+  numbered_list: ""
+  task_list: ""
+  blockquote: ""
+  code_block: ""
+  horizontal_rule: ""
+  table: ""
+
+# Workspace
+workspace:
+  open_folder: ""
+  close_folder: ""
+  no_folder_open: ""
+  open_folder_hint: ""
+  new_file: ""
+  new_folder: ""
+  rename: ""
+  delete: ""
+  refresh: ""
+  collapse_all: ""
+  expand_all: ""
+  copy_path: ""
+  copy_relative_path: ""
+
+# Zen mode
+zen:
+  enter: ""
+  exit: ""
+  tooltip: ""
+
+# Log levels (for settings)
+log_level:
+  trace: ""
+  debug: ""
+  info: ""
+  warn: ""
+  error: ""
+
+# Drag and drop
+drag_drop:
+  drop_here: ""
+  drop_image: ""
+  processing: ""
+  image_saved: ""
+
+# Export
+export:
+  html:
+    title: ""
+    success: ""
+    include_styles: ""
+    dark_theme: ""
+    light_theme: ""
+  clipboard:
+    success: ""
+    failed: ""
