@@ -211,11 +211,11 @@ Additional mermaid fixes and enhancements:
 - [ ] **Bug fixes** - Address rendering issues discovered during v0.2.5 testing
 
 #### Bug Fixes & Polish
-- [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs
-- [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons
-- [ ] **Workspace resize handle flicker** - Mouse hover near resize handle causes flickering; apply same fix used for right scrollbar
+- [x] **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no selection would cut everything. Filter out `Event::Cut` when nothing is selected.
+- [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs **Deferred**
+- [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons **Deferred**
 - [ ] **Window controls redesign** - Redesign minimize/maximize/close icons for a more polished look
-- [ ] **JSON rendered view Zen mode centering** - JSON tree viewer not centering content when Zen mode is active
+- [ ] **JSON rendered view Zen mode centering** - JSON tree viewer not centering content when Zen mode is active also applies to CSV mode
 - [ ] **TOC navigation stability** - Investigate and fix crashes/accuracy issues when jumping via outline in large files
 - [ ] **Light theme settings contrast** - Some settings panel options don't switch to dark foreground colors in light theme
 - [ ] **Blockquote/code block overflow** - Add horizontal scrolling for long content in blockquotes and code blocks that exceeds container width

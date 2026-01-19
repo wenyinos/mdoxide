@@ -1,4 +1,4 @@
-# Handover: Build Warnings Cleanup
+# Handover: Scroll & Navigation Accuracy Fixes
 
 ## Rules
 - Never auto-update this file - only update when explicitly requested
@@ -7,7 +7,7 @@
 - Follow existing code patterns and conventions
 - Update task status via Task Master when starting (`in-progress`) and completing (`done`)
 - Use Context7 MCP tool to fetch library documentation when needed
-- Document by feature (e.g., `session-restore-settings.md`), not by task
+- Document by feature (e.g., `scroll-accuracy.md`), not by task
 - Update `docs/index.md` when adding new documentation
 - **Use MCP tools** for Task Master operations, not CLI
 - **Avoid `git diff`** - causes disconnections
@@ -16,81 +16,121 @@
 
 ## Current Task
 
-**Build Warnings Cleanup - Pre-Release Code Review**
+**Scroll & Navigation Accuracy Fixes - Critical Hotfix for v0.2.5.1**
 
 - **Status**: pending
-- **Priority**: medium
-- **Goal**: Review and resolve all 61 compiler warnings before release
+- **Priority**: high
+- **Goal**: Fix scroll positioning accuracy issues in find, search-in-files, semantic minimap, and outline navigation
 
-### Description
-The codebase has accumulated 61 compiler warnings (unused imports, dead code, unused fields, etc.). Before release, we need to review each warning and either:
-1. **Remove** truly dead code that was planned but never implemented
-2. **Use** code that was implemented but the calling code is missing
-3. **Suppress** warnings for intentionally unused code with `#[allow(dead_code)]` + comment explaining why
+### Problem Description
 
-### Warning Categories (from `cargo check`)
+In large files (3000+ lines), when jumping to search results or clicking in semantic minimap/outline:
+1. **Scroll position is off** - Target line is not centered in viewport, sometimes out of view entirely
+2. **Highlight is correct** - The text is highlighted at the right position, but scroll puts it in wrong place
+3. **Cumulative error** - Error magnifies in large files (at line 2000, can be 1000+ pixels off)
 
-#### 1. Unused Imports (10 warnings)
-Files: `mermaid/mod.rs`, `markdown/mod.rs`, `ui/mod.rs`
-- Review if these exports are needed for public API or can be removed
+### Root Causes Identified
 
-#### 2. Dead Code - Never Constructed/Used (51 warnings)
-**High Priority - Likely removable:**
-- `src/app.rs`: `KeyboardAction` variants (Undo, Redo, MoveLineUp, MoveLineDown)
-- `src/app.rs`: `get_opening_bracket`, `scroll_to_line` methods
-- `src/config/snippets.rs`: Multiple `SnippetConfig` and `SnippetManager` methods
-- `src/editor/matching.rs`: `DelimiterKind`, `DelimiterToken`, `MatchingPair` methods
-- `src/editor/outline.rs`: `ContentType::label`
-- `src/editor/stats.rs`: `DocumentStats::new`, `total_headings`
-- `src/markdown/csv_viewer.rs`: Multiple functions and fields
-- `src/markdown/toc.rs`: `TocOptions` methods, `remove_toc`
-- `src/path_utils.rs`: `normalize_path_ref`, `canonicalize_*` functions
-- `src/ui/outline_panel.rs`: `set_active_tab`
-- `src/ui/ribbon.rs`: Multiple `RibbonAction` variants
-- `src/ui/view_segment.rs`: Constants and `ViewModeSegment`
-- `src/vcs/git.rs`: Multiple `GitService` methods
+1. **Off-by-one inconsistencies** - Different functions use 0-indexed vs 1-indexed line numbers inconsistently
+2. **Stale `raw_line_height`** - Uses default 20.0 or outdated value instead of actual line height
+3. **Multiple scroll calculation methods** - 3 different approaches used across codebase
+4. **No unified scroll function** - Each feature implements its own scroll logic
 
-**Mermaid diagram code (may be WIP):**
-- `src/markdown/mermaid/*.rs`: Multiple structs and fields
+### Implementation Plan
 
-### Review Process
+#### Phase 1: Unify Scroll Calculations (Primary Fix)
 
-For each warning:
-1. **Search for usages** - Is it called anywhere? Was calling code removed?
-2. **Check git history** - Was it recently added? Part of incomplete feature?
-3. **Decide action**:
-   - If truly unused and not part of public API → **Remove**
-   - If part of incomplete feature to keep → **Add `#[allow(dead_code)]` with TODO comment**
-   - If should be used but isn't → **Investigate and fix**
+**Create unified scroll function in `src/app.rs`:**
 
-### Implementation Strategy
+```rust
+/// Calculate accurate scroll offset to center a target line in viewport.
+/// Uses actual galley positioning when available, falls back to line_height calculation.
+fn calculate_scroll_for_target_line(
+    target_line: usize,  // 1-indexed
+    line_height: f32,
+    viewport_height: f32,
+) -> f32 {
+    // Convert to 0-indexed for calculation
+    let line_index = target_line.saturating_sub(1);
+    let target_y = line_index as f32 * line_height;
+    // Position target at 1/3 from top (better visibility than center)
+    (target_y - viewport_height / 3.0).max(0.0)
+}
+```
 
-1. Start with `src/app.rs` - highest impact file
-2. Move to utility modules (`path_utils.rs`, `editor/*.rs`)
-3. Handle `mermaid/` carefully - may be WIP diagrams
-4. Clean up `csv_viewer.rs` - has many unused items
-5. Finish with UI modules
+#### Phase 2: Fix Individual Locations
+
+**File: `src/app.rs`**
+
+1. **`navigate_to_heading()` (~line 6450)** - Fix off-by-one error:
+   ```rust
+   // BEFORE (bug):
+   let target_scroll = (target_line as f32 * line_height) - (viewport_height / 3.0);
+   
+   // AFTER (fixed):
+   let target_scroll = calculate_scroll_for_target_line(target_line + 1, line_height, viewport_height);
+   // OR: Use (target_line as f32 - 1.0) since target_line is 0-indexed here
+   ```
+
+2. **`handle_search_navigation()` (~line 3990)** - Use unified function
+
+**File: `src/editor/widget.rs`**
+
+3. **`scroll_to_line` handling (~line 597)** - Already correct (uses `saturating_sub(1)`)
+
+4. **Search highlight scrolling (~line 608)** - Verify consistency
+
+**File: `src/markdown/editor.rs`**
+
+5. **`scroll_to_line` in rendered mode (~line 664)** - Ensure matches raw mode calculation
+
+#### Phase 3: Ensure Fresh Line Height
+
+**In `navigate_to_heading()` and similar:**
+- Check if `raw_line_height` is still default (20.0) 
+- If so, use a sensible fallback based on font_size setting
+- Consider: `line_height = settings.font_size * 1.4` as reasonable estimate
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/app.rs` | Add unified scroll function, fix `navigate_to_heading()`, fix search navigation |
+| `src/editor/widget.rs` | Verify scroll calculations are consistent |
+| `src/markdown/editor.rs` | Ensure rendered mode scroll matches raw mode |
 
 ### Test Strategy
 
-1. After each file cleanup, run `cargo check` - ensure no new errors
-2. Run `cargo test` periodically to ensure no regressions
-3. Final `cargo build --release` should have zero or minimal warnings
+1. **Large file test** - Create/use a markdown file with 3000+ lines
+2. **Test find function** - Search for text at lines 100, 1000, 2000, 2500
+3. **Test outline panel** - Click headings at various positions
+4. **Test semantic minimap** - Click items throughout document
+5. **Test search-in-files** - Navigate to results in large file
+
+**Success criteria:** Target line should be visible and roughly centered (within ~50px of intended position).
+
+### Specific Bug Locations
+
+| Location | Line | Issue |
+|----------|------|-------|
+| `navigate_to_heading()` | app.rs:6450 | Uses `target_line` directly without -1 adjustment |
+| `navigate_to_heading()` | app.rs:6448 | Uses potentially stale `raw_line_height` |
+| Minimap output | minimap.rs:803 | Outputs `item.line` which is 1-indexed |
+| Outline output | outline_panel.rs:381 | Outputs `item.line` which is 1-indexed |
 
 ---
 
-## Key Files (by warning count)
+## Key Files Reference
 
-| File | Warnings | Notes |
-|------|----------|-------|
-| `src/markdown/mermaid/*.rs` | ~15 | Diagram rendering - may be WIP |
-| `src/markdown/csv_viewer.rs` | ~8 | CSV viewer features |
-| `src/config/snippets.rs` | ~10 | Snippet expansion system |
-| `src/app.rs` | ~5 | Main app, keyboard actions |
-| `src/editor/matching.rs` | ~6 | Bracket matching |
-| `src/ui/*.rs` | ~8 | UI components |
-| `src/vcs/git.rs` | ~5 | Git integration |
-| `src/path_utils.rs` | ~3 | Path utilities |
+| File | Purpose |
+|------|---------|
+| `src/app.rs` | Main app, `navigate_to_heading()`, search navigation |
+| `src/editor/widget.rs` | EditorWidget, scroll handling, highlight rendering |
+| `src/editor/minimap.rs` | SemanticMinimap click handling |
+| `src/editor/outline.rs` | OutlineItem extraction, char_offset calculation |
+| `src/ui/outline_panel.rs` | Outline panel click handling |
+| `src/markdown/editor.rs` | Rendered mode editor, scroll handling |
+| `src/state.rs` | Tab state including `raw_line_height`, `viewport_height` |
 
 ---
 
@@ -98,20 +138,31 @@ For each warning:
 - **Project**: Ferrite (Markdown editor)
 - **Language**: Rust
 - **GUI Framework**: egui
-- **Version**: 0.2.6
+- **Version**: 0.2.5.1 (hotfix)
 
 ---
 
 ## Quick Start
 ```bash
-# Check all warnings
-cargo check 2>&1 | grep "warning:"
-
 # Build and run
 cargo run
+
+# Test with large file
+cargo run -- test_md/large_test_file.md
 
 # Run tests
 cargo test
 ```
 
 Or use MCP tools: `get_task`, `set_task_status`, `next_task`
+
+---
+
+## Related Documentation
+- [Search Highlight](docs/technical/editor/search-highlight.md)
+- [Semantic Minimap](docs/technical/editor/semantic-minimap.md)
+- [Galley Cursor Positioning](docs/technical/editor/galley-cursor-positioning.md)
+- [Find and Replace](docs/technical/editor/find-replace.md)
+
+## Known Limitation
+Pixel-perfect accuracy is blocked by egui's architecture. The custom editor widget planned for v0.3.0 will fully resolve this. This hotfix aims for ~80% improvement in scroll accuracy.

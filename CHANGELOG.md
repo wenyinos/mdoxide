@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no text selection would cut the entire document. Now correctly does nothing when nothing is selected.
+
 ## [0.2.5.1] - 2026-01-17
 
 ### Added

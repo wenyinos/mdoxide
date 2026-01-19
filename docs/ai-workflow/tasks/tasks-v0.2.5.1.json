@@ -1,0 +1,224 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Extend FormattedItemEditState with pending_cursor_pos field",
+        "description": "Add a field to store the computed raw text cursor position when clicking in display mode.",
+        "details": "In src/markdown/editor.rs, add `pending_cursor_pos: Option<usize>` to the FormattedItemEditState struct. This will hold the raw text index computed from the display click position. Initialize as None in the struct's default or new method.",
+        "testStrategy": "Verify struct compiles and can be instantiated with pending_cursor_pos set to Some(5) and None values. Check serialization/deserialization if applicable.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T19:35:35.005Z"
+      },
+      {
+        "id": "2",
+        "title": "Implement displayed text extraction function",
+        "description": "Create a function to generate the displayed (rendered) text from raw markdown by stripping formatting markers.",
+        "details": "Write a utility function `fn get_displayed_text(raw_text: &str) -> String` that parses the raw markdown and returns text without markers like **, *, `, [](). Use simple regex or manual parsing for inline formats: bold(**), italic(*), code(`), links([text](url)). Skip block-level parsing since single-line focus.",
+        "testStrategy": "Unit tests: Input `- **bold** *italic* `code` [link](url)` → Output `- bold italic code link`. Test edge cases: empty string, plain text, malformed markers.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T19:35:50.287Z"
+      },
+      {
+        "id": "3",
+        "title": "Implement click-to-displayed-index mapping using egui Galley",
+        "description": "On mouse click in display mode, use egui's Galley to map screen click position to character index in displayed text.",
+        "details": "In render_paragraph_sk() and render_list_item() click handlers: Capture click_pos in screen coordinates relative to text_rect. Create galley: `let galley = ui.painter().layout_no_wrap(&displayed_text, font_id, color);`. Compute `let cursor = galley.cursor_from_pos(click_pos - text_rect.min); let displayed_idx = cursor.ccursor.index;`. Store displayed_idx temporarily.",
+        "testStrategy": "Mock egui context, test galley creation doesn't panic, verify cursor_from_pos returns index 0- len(displayed_text) for various positions. Integration test in UI.",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T19:42:15.634Z"
+      },
+      {
+        "id": "4",
+        "title": "Build raw-to-displayed position mapping and compute raw cursor position",
+        "description": "Create bidirectional mapping between raw and displayed text positions to convert displayed index to raw index.",
+        "details": "Implement `fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str, displayed_text: &str) -> usize`. Walk parallel: track raw_pos and displayed_pos, skip raw formatting markers (e.g., ** pairs, * pairs, ` pairs, [text](url) structures). When displayed_pos >= displayed_idx, return current raw_pos. Handle links by skipping entire [text](url) in raw.",
+        "testStrategy": "Unit tests with table examples: e.g., raw `*h**e**re*` displayed `here`, displayed_idx=2 → raw_idx=8 (position of 'r'). Test all formats: bold, italic, code, links. Verify monotonic increasing mapping.",
+        "priority": "high",
+        "dependencies": [
+          "2"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T19:47:57.007Z"
+      },
+      {
+        "id": "5",
+        "title": "Integrate cursor mapping into edit mode entry and update render functions",
+        "description": "Connect all pieces: on click store pending_cursor_pos, apply it when entering edit mode in both render_paragraph_sk and render_list_item.",
+        "details": "In both render_paragraph_sk() (2 locations) and render_list_item() (2 locations) in src/markdown/editor.rs: On click, compute displayed_text, displayed_idx (task3), raw_idx = map_displayed_to_raw(displayed_idx, raw, displayed_text) (task4), set state.pending_cursor_pos = Some(raw_idx). On edit mode enter: use existing TextEdit cursor setting code, passing pending_cursor_pos, then reset to None. Ensure works in rendered and split view modes.",
+        "testStrategy": "Manual UI tests with PRD test cases: create file with `- This is **bold** text`, `- Click *here* to edit`, etc. Click various positions (start/mid/end of formats), verify cursor within 1-2 chars in edit mode. Test long lines (>100 chars). Performance: measure galley creation time <1ms.",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "3",
+          "4"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T10:22:04.972Z"
+      },
+      {
+        "id": "6",
+        "title": "Fix memory leak in viewer states by cleaning up HashMap entries on tab close",
+        "description": "Implement cleanup of tree_viewer_states, csv_viewer_states, and sync_scroll_states HashMap entries when tabs are closed in the tab close handler in src/app.rs.",
+        "details": "In src/app.rs, locate the tab close handler (likely in the main app update loop or TabManager::close_tab method). For the tab being closed, extract its unique identifier (tab_id: likely UUID or usize index). Then explicitly remove entries from all three global state HashMaps: `tree_viewer_states.remove(&tab_id);`, `csv_viewer_states.remove(&tab_id);`, `sync_scroll_states.remove(&tab_id);`. Ensure these HashMaps are mutable references (likely stored in app state: `self.tree_viewer_states.remove(...)`). Call `.shrink_to_fit()` or `.shrink_to(0)` after removal if memory pressure is high, but test performance impact first since Rust HashMap may not immediately release memory to OS[1][5]. Verify tab_id matches exactly the keys used when states were inserted (consistency check). Handle case where entry doesn't exist (HashMap::remove returns Option). Consider adding logging: `info!(\"Cleaned viewer states for tab {}\", tab_id);`. If using Arc<Mutex<HashMap>> or RwLock, ensure proper locking scope.",
+        "testStrategy": "Unit test: Mock HashMap with sample tab_ids, insert test data (Vec<u8> or structs simulating viewer state), call cleanup function, assert entry removed (hashmap.get(&tab_id) == None) and keys len decreased. Memory test: Use heaptrack/Valgrind or cargo-asm to verify no allocations persist post-cleanup[1][4]. Integration test: Open multiple tabs with tree/csv viewers, enable sync scroll, close tabs one-by-one, monitor RSS via `ps` or `htop` - confirm memory drops proportionally (no growth over 10+ open/close cycles). Manual test: Load large tree/csv files (1MB+), open 20 tabs, close all, verify app memory returns to baseline (<100MB). Test edge: Close non-existent tab_id (no panic), rapid open/close (100 tabs/sec).",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T11:25:37.887Z"
+      },
+      {
+        "id": "7",
+        "title": "Add custom memory allocator with mimalloc (Windows) and jemalloc (Linux/macOS)",
+        "description": "Integrate platform-specific high-performance memory allocators into Cargo.toml and configure them as the global allocator in main.rs to reduce heap fragmentation and memory usage.",
+        "details": "1. Update Cargo.toml with platform-specific dependencies:\n   - For Windows: `[dependencies] mimalloc = { version = \"0.1\", default-features = false }`\n   - For Linux/macOS: `[dependencies] jemallocator = \"0.5\"`\n   2. In src/main.rs, add conditional global allocator attribute before main() function:\n   ```rust\n   #[cfg(target_os = \"windows\")]\n   #[global_allocator]\n   static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;\n\n   #[cfg(all(unix, not(target_os = \"macos\")))]\n   #[global_allocator]\n   static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;\n\n   #[cfg(target_os = \"macos\")]\n   #[global_allocator]\n   static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;\n   ```\n   3. Ensure no conflicts with existing allocators or FFI code. Add cargo-feature flags if needed for optional enabling: `[features] default = [\"high-perf-alloc\"]` and gate dependencies behind it. 4. Verify build succeeds on all target platforms (cross-compilation if needed). Consider musl targets separately with mimalloc due to performance issues with default musl allocator.",
+        "testStrategy": "1. Build and run on Windows: verify mimalloc active (`cargo run --target x86_64-pc-windows-msvc`), check no allocator conflicts. 2. Build and run on Linux/macOS: verify jemalloc active (`ldd target/debug/app | grep jemalloc` or `jemalloc stats print`). 3. Performance benchmarks: Use `cargo criterion` or `hyperfine` to measure allocation-heavy operations (tab creation/close from Task 6, markdown rendering from Tasks 2-5) before/after - target 10-20% RSS reduction and faster allocation times. 4. Memory leak verification: Run Task 6 tests with heaptrack/Valgrind, confirm no regressions. 5. Cross-platform CI: Add GitHub Actions matrix for windows-latest, ubuntu-latest, macos-latest with memory usage assertions.",
+        "status": "done",
+        "dependencies": [
+          "6"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T16:06:34.299Z"
+      },
+      {
+        "id": "8",
+        "title": "Implement CJK font lazy loading with OnceCell",
+        "description": "Implement on-demand loading of CJK fonts using OnceCell/lazy_static when CJK characters are detected in text, avoiding 50-100MB startup load for non-CJK users.",
+        "details": "1. In **src/fonts.rs**, create `static CJK_FONT: OnceCell<FontData> = OnceCell::new();` (or `lazy_static!` if preferred). Define CJK ranges as const arrays: `const CJK_RANGES: &[(u32,u32)] = &[(0x4E00,0x9FFF), (0x3040,0x309F), (0x30A0,0x30FF), (0xAC00,0xD7AF)];`. 2. Implement `fn needs_cjk(text: &str) -> bool`: iterate chars, check `c as u32` against ranges using binary search or simple range checks. 3. Implement `fn get_cjk_font() -> &'static FontData`: `CJK_FONT.get_or_init(|| load_cjk_font_from_bytes(include_bytes!(\"path/to/cjk-font.ttf\")))`. Use existing font loading API. 4. In text rendering functions (render_paragraph_sk, render_list_item in src/markdown/editor.rs): before galley creation, check `if needs_cjk(&displayed_text) { cjk_font_id = get_cjk_font().font_id(); } else { cjk_font_id = default_font_id(); }`. Pass appropriate FontId to egui layout. 5. Update font selection logic to fallback to CJK font only when needed. Ensure thread-safe init with OnceCell. Handle font metrics consistency between default/CJK fonts.",
+        "testStrategy": "1. **Unit tests** for `needs_cjk()`: Test CJK chars (U+4E00 '一', U+3040 'が', U+AC00 '가') return true; ASCII/Latin return false; edge cases (U+9FFF, U+309F, U+D7AF). 2. **Integration tests**: Mock font loading, verify `get_cjk_font()` called only once per app run, subsequent calls return same instance. 3. **UI tests**: Create markdown with/without CJK: `- Hello world` (no load), `- 你好世界` (loads CJK). Monitor memory: startup <10MB without CJK, ~60MB after first CJK render. Use `cargo test` + manual profiling. 4. **Performance**: Time galley creation with/without CJK, ensure <5ms delta. Test in edit/display modes using existing cursor mapping.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T15:52:42.978Z"
+      },
+      {
+        "id": "9",
+        "title": "Reduce undo history memory with size-based limits",
+        "description": "Lower default max_undo_size from 100 to 50 and implement file size-based undo limits (20 entries for >1MB files, 10 for >5MB) to significantly reduce memory usage from full text snapshots.",
+        "details": "1. In the undo manager struct (likely in src/editor/undo.rs or src/app.rs), change the default `max_undo_size: usize = 50;` from 100. 2. Add `fn get_max_undo_size(file_path: &Path) -> usize`: read file size via `std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0)`, then return: if size > 5MB (5_000_000) → 10, else if >1MB (1_000_000) → 20, else 50. 3. Modify undo push logic: before `history.past.push(current_snapshot)`, call `let limit = get_max_undo_size(&active_file_path); if history.past.len() >= limit { history.past.remove(0); }` (using VecDeque or Vec::remove(0) with occasional shrink). 4. Update `history.undo()` and `history.redo()` to respect dynamic limits. 5. Store `active_file_path` in editor state or pass via context. 6. Add logging: `info!(\"Undo limit set to {} for file {} ({} bytes)\", limit, file_path.display(), size);`. Ensure thread-safe if multi-threaded (use RwLock if needed). Consider using `VecDeque` for O(1) pop_front.",
+        "testStrategy": "1. **Unit tests**: Mock file metadata returning 500KB→assert limit=50, 2MB→20, 6MB→10. Test push beyond limit: create Vec with 60 dummy snapshots (each ~10KB String), push 5x, assert len=50 and first 10 dropped. 2. **Integration tests**: Open 1.5MB file, make 30 edits, verify undo stack ≤20 entries via debug print or exposed API. Open 500KB file, verify ≤50. 3. **Memory tests**: Use `cargo bloat` or heaptrack before/after: assert ~50% memory reduction for 2MB file with 100→20 limit (measure Vec<String> allocations). 4. **UI tests**: Edit large file, undo 25 steps, verify can't undo beyond limit, no panic/crash.",
+        "status": "deferred",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T16:14:30.069Z"
+      },
+      {
+        "id": "10",
+        "title": "Implement egui temporary data cleanup on tab close",
+        "description": "Clean up stale SyntaxHighlightCache and other per-tab temporary data stored in egui's ui.memory when tabs are closed, using ui.memory_mut() in the tab close handler to remove entries matching the closed tab's Id prefix.",
+        "details": "1. **Identify per-tab data in egui memory**: Locate SyntaxHighlightCache (likely from egui_commonmark or syntect integration) and other temp data (e.g. galley caches, layout jobs, TextEdit states) stored with tab-specific Ids. Common patterns: `Id::new(\"syntax_cache\").with(\"tab_\" + tab_id.to_string())` or `tab_id_prefix + \"_highlight_cache\"`. 2. **In src/app.rs tab close handler** (same location as Task 6 cleanup): Get `tab_id` or `tab_prefix` (e.g. `format!(\"tab_{}\", tab_id)`). Access `ui.memory_mut()` and iterate/remove matching entries: ```rust let memory = ui.memory_mut(|m| m.clone()); for (id, _) in memory.data.iter() { if let Some(id_str) = id.as_str() { if id_str.starts_with(&tab_prefix) { ui.memory_mut(|m| m.data.remove(id)); } } } ``` 3. **Target specific caches**: Explicitly clear `SyntaxHighlightCache` if accessible via `ui.data_mut(|d| d.remove::<SyntaxHighlightCache>(tab_id))`. Handle egui_commonmark caches if used (CommonMarkCache per-tab instances). 4. **Edge cases**: Handle partial prefixes, nested Ids (`tab_123_paragraph_5`), concurrent closes. Use `ui.ctx().memory_mut()` if in different context. 5. **Verify no panics**: Test with empty memory, non-existent prefixes.",
+        "testStrategy": "1. **Unit tests**: Mock `egui::Memory` with sample tab data (`insert Id::new(\"tab_123_highlight\"), insert Id::new(\"tab_123_galley_0\"))`), call cleanup with prefix `\"tab_123\"`, assert only matching entries removed, unrelated data (`\"tab_456_foo\"`, `\"global_cache\"`) preserved. 2. **Integration tests**: Open 2 tabs with syntax-highlighted code blocks (using egui_commonmark/syntect), verify memory usage ~2x baseline. Close one tab, assert memory drops ~50%, second tab highlighting unchanged. 3. **Memory leak test**: Use heaptrack/Valgrind on tab open/close cycle (10 tabs × 3 opens/closes), verify no persistent allocations post-cleanup. 4. **UI tests**: Syntax highlighting in remaining tabs works post-close, no panics on rapid tab close/open. Monitor `ui.memory().data.len()` before/after.",
+        "status": "done",
+        "dependencies": [
+          "6"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T16:50:18.043Z"
+      },
+      {
+        "id": "11",
+        "title": "Fix workspace close button alignment",
+        "description": "Adjust the workspace panel close X button position 5-10px to the left to prevent overlap with resize handles and improve visual alignment.",
+        "details": "1. **Locate workspace panel UI code**: Search for workspace panel rendering in src/app.rs or src/workspace.rs (likely in a SidePanel::left('workspace') or similar, with `ui.horizontal(|ui| { ... Button::new(\"✕\").clicked() ... })`). 2. **Identify close button**: Find the close button (typically `Button::new(\"×\").fill([16.0,16.0]).clicked()` or `ui.close_button()`). 3. **Adjust position**: Wrap button in `ui.horizontal(|ui| { ui.add_space(5.0); // or 8.0 ui.add(close_button); })` OR use `ui.with_layout(Layout::right_to_left(Align::TOP), |ui| { ui.add_space(8.0); if ui.button(\"✕\").clicked() { close_workspace(); } })`. 4. **Prevent resize handle overlap**: Ensure button rect doesn't intersect resize area by checking `ui.min_rect()` vs panel edge, add `min_size([20.0,20.0])` if needed. 5. **Visual verification**: Button should appear 5-10px from right edge, clear of resize drag zone. Alternative: Use `egui_alignments` crate if available (`Button::new(\"✕\").right(ui)`).",
+        "testStrategy": "1. **Visual inspection**: Run app, open workspace panel, verify X button positioned 5-10px from right edge (measure with screenshot tools), no overlap with resize handle (drag test: resize should work without button interference). 2. **Interaction test**: Click close button multiple times, confirm workspace closes reliably, no phantom clicks on resize area. 3. **Resize test**: Drag resize handle left/right with button visible, ensure smooth resizing without button capture. 4. **Unit test** (if layout extractable): Mock Ui, measure button `response.rect.right()` vs `ui.available_rect_before_wrap().right()`, assert difference in 5.0..=10.0 range.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T21:06:37.549Z"
+      },
+      {
+        "id": "12",
+        "title": "Fix new file dirty flag to skip save prompt for unmodified untitled files",
+        "description": "Modify the file close/quit save prompt logic to check if the file is untitled AND content matches the initial empty state before prompting the user to save.",
+        "details": "1. **Locate save prompt logic**: Find the close tab/quit app handler in `src/app.rs` (likely in `CentralPanel` tab handling or `app.update()` quit detection: `if ui.button('Quit').clicked() || ctx.input(|i| i.key_pressed(Key::Escape))`). Search for existing dirty check like `if tab.is_dirty()` or `if content != original_content`. 2. **Identify new/untitled file detection**: Check tab struct for `is_new: bool`, `path: Option<PathBuf>`, or name check `tab.name == \"Untitled\"` or `tab.name.starts_with('Untitled')`. Define initial empty state as `\"\".to_string()` or `String::new()`. 3. **Update dirty check condition**: Before `ui.label('Save changes to Untitled before closing?')`, add:\n```rust\nlet is_truly_dirty = !tab.is_new_file() && (tab.content != tab.original_content || tab.dirty_flag);\nif is_truly_dirty {\n    // show save dialog\n} else {\n    // close without prompt\n}\n```\nWhere `is_new_file()` returns `tab.name == \"Untitled\" && tab.path.is_none()`. 4. **Ensure content tracking**: Verify `tab.content` and `tab.original_content` properly initialized: on new tab creation `original_content = \"\".to_string()`, and `dirty_flag = false`. Update `dirty_flag` only on actual edits in `TextEdit::singleline(&mut tab.content).changed(&mut tab.dirty_flag)`. 5. **Edge cases**: Handle tabs renamed from 'Untitled' (reset `is_new_file()` flag), tabs loaded with empty content from disk, multi-tab close-all scenarios.",
+        "testStrategy": "1. **New file unmodified test**: Create new 'Untitled' tab, close without typing → verify **no** save prompt, tab closes cleanly. 2. **New file modified test**: Create new tab, type 'hello' → attempt close → verify save prompt appears with correct filename 'Untitled'. 3. **Saved file test**: Create new tab, save as 'test.txt', close → verify **no** prompt (distinguishes from untitled). 4. **Empty loaded file test**: Open existing empty file → close → verify **prompt** appears (not treated as new). 5. **Quit app test**: Open 2 new tabs (one modified, one clean), quit app → verify prompt only for modified tab, clean new tab closes silently. 6. **Rename test**: New tab → rename to 'foo.txt' → close unmodified → verify **prompt** (no longer 'new'). 7. **Integration**: Open 5 new tabs, modify 2, close all → verify prompts only for modified tabs.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T21:16:06.093Z"
+      },
+      {
+        "id": "13",
+        "title": "Fix CJK first-line indentation to apply only to paragraph first line",
+        "description": "Modify CJK paragraph indentation logic to apply text-indent only to the first line of each paragraph in the rendered view, rather than all lines.",
+        "details": "1. **Locate CJK indentation logic**: Search for current text-indent application in render_paragraph_sk() or equivalent rendering function (likely in src/render.rs or src/app.rs CentralPanel text rendering). Look for patterns like `text_style.visual_transform().indent` or `if is_cjk_paragraph { galley = layout_with_indent(text, 2.0 * em_size) }` applied to full paragraph text[1][2]. 2. **Identify paragraph boundaries**: Use needs_cjk() from Task 8 to detect CJK content. Split paragraph text by double newlines (`\\n\\n`) or paragraph markers to isolate first line: `let lines: Vec<&str> = paragraph.split('\\n\\n').collect(); let first_line = lines[0].split('\\n').next().unwrap_or(paragraph);`. 3. **Apply first-line-only indent**: Create galley for first line with indent: `let mut first_galley = ui.painter().layout_no_wrap(first_line, cjk_font_id, color); first_galley.galley_rect.min.x += 2.0 * font_size; // 2em CJK indent`. Render subsequent lines without indent using standard layout. 4. **Handle wrapping edge cases**: For wrapped first line, ensure indent applies only to first visual line (use galley.row_heights or cursor_from_pos logic from Task 3). 5. **CJK font integration**: Use get_cjk_font() from Task 8: `let font_id = if needs_cjk(first_line) { cjk_font_id } else { default_font_id };`. 6. **Preserve edit buffer**: Ensure source text remains unchanged (indent is render-only), no modifications to undo stack or TextEdit state.",
+        "testStrategy": "1. **Unit tests**: Test `needs_cjk()` integration with sample CJK paragraph ('第一段落文本...'), verify first line gets 2em indent (measure galley.rect.min.x), subsequent lines have 0 indent. Test mixed CJK/Latin: 'Hello 第一行 Second line' → only first line indented if CJK detected. 2. **Visual regression**: Create test file with 3 CJK paragraphs (each 3+ lines), render screenshot before/after, verify **only first line of each paragraph** indented ~2em (measure pixel distance), other lines flush left. 3. **Click mapping preservation**: Use Task 3 galley cursor_from_pos on indented first line, verify click positions correctly map to character indices despite indent offset. 4. **Performance**: Time render_paragraph_sk() with 100-line CJK doc before/after, ensure <5% slowdown. 5. **Edge cases**: Single-line CJK paragraph (should indent), empty first line, all-whitespace paragraph, mixed font paragraphs.",
+        "status": "done",
+        "dependencies": [
+          "8"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T18:46:44.246Z"
+      },
+      {
+        "id": "14",
+        "title": "Add session restore settings option",
+        "description": "Implement a restore_session boolean setting (default true) in app settings and add a toggle in the settings UI. When disabled, start the app with an empty tab instead of restoring the previous session.",
+        "details": "1. **Add setting to app state**: In src/app.rs or src/settings.rs, add `restore_session: bool` to the Settings struct with `#[serde(default = \"true\")]` for persistence. Update load/save logic: `settings.restore_session = settings_file.get(\"restore_session\").unwrap_or(true);` and `settings_file.insert(\"restore_session\", settings.restore_session);`. 2. **Modify app startup logic**: Locate session restore code (likely in `App::new()` or `CentralPanel` init: search for `if let Some(saved_session) = load_session() { tabs = saved_session.tabs; }`). Wrap in `if self.settings.restore_session { restore_session(); } else { self.tabs.clear(); self.tabs.push(new_empty_tab()); }`. Ensure `new_empty_tab()` creates standard untitled tab like Task 12 logic. 3. **Add UI toggle**: In settings panel (search for `SidePanel::right(\"settings\")` or `if ui.button(\"Settings\").clicked() { settings_open = true; }`), add `ui.checkbox(&mut self.settings.restore_session, \"Restore previous session on startup\");`. Use `ui.separator()` for grouping under 'General' or 'Startup' section. Style with `ui.label(\"When disabled, starts with empty tab.\");`. 4. **Session persistence**: Ensure session save (on quit/close) uses similar path logic: `if self.settings.restore_session { save_session(&self.tabs); }`. Handle edge cases: first-run (no session file), corrupted session (fallback to empty), quit without save (no restore). 5. **File location**: Use consistent path like `~/.config/appname/session.json` matching existing settings file.",
+        "testStrategy": "1. **Default behavior**: Fresh install → verify app starts with restored tabs if session exists, settings file shows `restore_session: true`. 2. **Toggle off**: Settings → disable toggle → restart app → verify **single empty 'Untitled' tab** (no previous tabs restored), content empty, no dirty flag (per Task 12). 3. **Toggle on**: Re-enable → restart → verify previous tabs restored correctly (tab count, names, content). 4. **Persistence**: Disable → edit file manually to `false` → restart → stays disabled; set `true` → persists. 5. **Edge cases**: Delete session file → toggle on → starts empty; corrupted JSON → graceful fallback to empty tab (log warning). 6. **Integration**: Combine with Task 12: new empty tab on disable should close cleanly without save prompt.",
+        "status": "done",
+        "dependencies": [
+          "12"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T21:20:43.155Z"
+      },
+      {
+        "id": "15",
+        "title": "Fix Linux close button blocked by hit-testing or overlay",
+        "description": "Investigate and resolve Linux-specific issue where the window close X button cannot be clicked due to hit-testing failures, overlay interference, or custom title bar rendering problems. Ensure the close button area receives proper click events without invisible elements blocking interaction.",
+        "details": "1. **Identify close button implementation**: Locate window-level close button code in src/main.rs or src/app.rs (search for `Window::new().title_bar(false)` or custom title bar with `egui::TopBottomPanel::top(\"title_bar\")` containing `Button::new(\"✕\").clicked()` to trigger app quit). Check for Linux-specific rendering: `#[cfg(target_os = \"linux\")]` blocks[5]. 2. **Debug hit-testing**: Add temporary debug overlay in title bar area: `let rect = close_button.rect; ui.painter().rect_filled(rect, 2.0, Color32::RED);` to visualize actual button bounds. Test clicks on Linux (Wayland/X11), verify if clicks register via `ctx.input(|i| i.pointer.button_clicked())` or if consumed by parent frame/drag handler. 3. **Check custom title bar overlaps**: If using custom title bar (common egui template pattern), ensure close button positioned at `ui.allocate_rect(Rect::from_min_size(pos, [24.0,24.0]), Sense::click())` with `min_size` explicitly set. Fix drag interference: wrap title bar drag in `if rect.contains(click_pos) && !close_button_rect.contains(click_pos) { ctx.set_drag_delta(...) }`[5]. 4. **Linux-specific compositor issues**: Test on X11 (`WAYLAND_DISPLAY=\"\" cargo run`) vs Wayland (`cargo run`). Check for transparent overlays or egui memory state interfering with button Ids (`Id::new(\"window_close\")`). Ensure button uses `sense: Sense::click()` not `Sense::drag()`. 5. **Validate Z-order**: Use `ui.painter().rect_stroke(close_rect, 2.0, Stroke::new(3.0, Color32::GREEN))` to confirm rendering order. If blocked by workspace panel (Task 11), adjust panel margins: `SidePanel::left(\"workspace\").resizable(false).show(ctx, |ui| ...)` with explicit spacing.",
+        "testStrategy": "1. **Linux platform verification**: Build/run on Linux (Ubuntu/Fedora, X11+Wayland): `cargo run --target x86_64-unknown-linux-gnu`. Single-click close button → app exits immediately (no multi-click needed). 2. **Hit-test visualization**: Enable debug rects (red/green strokes), verify close button rect visible/clickable, no overlap with drag areas (drag title bar excluding button zone works). 3. **Cross-compositor test**: Wayland (`echo $WAYLAND_DISPLAY`): close works; X11 (`unset WAYLAND_DISPLAY cargo run`): close works. 4. **Interaction regression**: Open workspace panel (post-Task 11), verify panel close X works independently; title bar close unaffected. 5. **Edge cases**: Maximized window, multiple monitors, alt-tab switch → close button responsive. Measure click response <100ms via debug print timestamps.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T16:13:37.472Z"
+      },
+      {
+        "id": "16",
+        "title": "Add multi-encoding file support with detection and UI controls",
+        "description": "Implement automatic encoding detection and conversion for non-UTF-8 files using encoding_rs and chardetng crates, store encoding per tab, display in status bar with click-to-change option, and preserve original encoding on save.",
+        "details": "1. **Add dependencies**: Update Cargo.toml: `encoding_rs = '0.8'`, `chardetng = '3.0'` (or latest stable). Run `cargo update`. 2. **Modify Tab struct**: In src/app.rs or src/tab.rs, add fields: `detected_encoding: Option<String>`, `original_bytes: Vec<u8>`, `current_encoding_label: &'static str` (default 'utf-8'). Use `#[serde(skip_serializing_if = \"Option::is_none\")]` for persistence. 3. **Implement file loading**: Replace current `std::fs::read_to_string()` with byte-based loading: `let bytes = std::fs::read(&path)?;`. Detect encoding: `let detector = chardetng::detect(&bytes); let encoding = detector.as_encoding().unwrap_or(encoding_rs::UTF_8);`. Decode: `let text = encoding.decode(&bytes).0;`. Store `tab.original_bytes = bytes; tab.detected_encoding = Some(encoding.name().to_string()); tab.current_encoding_label = encoding.name();`. 4. **Re-decode on encoding change**: Add method `fn set_encoding(&mut self, new_label: &'static str) -> Result<(), String> { let encoding = encoding_rs::Encoding::for_label(new_label.as_bytes()).unwrap_or(encoding_rs::UTF_8); self.text = encoding.decode(&self.original_bytes).0; self.current_encoding_label = new_label; Ok(()) }`. 5. **Status bar UI**: In status bar rendering (likely `TopBottomPanel::bottom('status')` or tab footer), add: `ui.horizontal(|ui| { ui.label(format!('{}', tab.current_encoding_label.to_uppercase())); if ui.button('🔄').on_hover_text('Change encoding').clicked() { ui.menu_button('Encoding', |ui| { if ui.button('UTF-8').clicked() { tab.set_encoding('utf-8'); } if ui.button('windows-1252').clicked() { tab.set_encoding('windows-1252'); } if ui.button('shift_jis').clicked() { tab.set_encoding('shift_jis'); } // Add Latin1, ISO-8859-1, etc. }); } });`. 6. **Save with original/preserved encoding**: In save logic: `let encoder = encoding_rs::Encoding::for_label(tab.current_encoding_label.as_bytes()).unwrap(); let encoded = encoder.encode(&tab.text).unwrap(); std::fs::write(&tab.path, encoded)?;`. 7. **Handle BOM**: During detection, strip BOM if present: use `encoding_rs::BOM_SNIFFER.decode(&bytes[..std::cmp::min(3, bytes.len())])` to detect UTF-8/16 BOM and adjust bytes accordingly before chardetng.",
+        "testStrategy": "1. **Unit tests**: Create test file 'latin1.txt' with bytes [72,101,108,108,242] ('Helló' in ISO-8859-1), verify detection returns 'iso-8859-1', decode shows 'Helló', re-encode saves correct bytes. Test Shift-JIS: 'テスト.txt' bytes, verify 'shift_jis' detection and round-trip. 2. **Manual tests**: Save file as Windows-1252 with 'café', open in Ferrite → status shows 'WINDOWS-1252', content correct, click change → switch to UTF-8 → verify text unchanged but re-save uses UTF-8 bytes. 3. **Edge cases**: Empty file → defaults UTF-8, no crash. Pure ASCII file → detects UTF-8. Mixed encodings → chardetng confidence >0.8. 4. **UI verification**: Status bar shows encoding, click opens menu with common encodings (UTF-8, Latin1, Windows-1252, Shift-JIS), changing encoding updates text display immediately. 5. **Save round-trip**: Open non-UTF8 → modify → save → hex editor verify output bytes match selected encoding. 6. **Regression**: Existing UTF-8 files unchanged behavior.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-17T16:27:06.647Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-01-17T21:20:43.155Z",
+      "taskCount": 16,
+      "completedCount": 15,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

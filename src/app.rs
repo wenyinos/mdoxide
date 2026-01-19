@@ -4638,6 +4638,29 @@ impl FerriteApp {
         }
     }
 
+    /// Filter out Event::Cut when nothing is selected to prevent egui bug.
+    ///
+    /// egui's TextEdit has a bug where Ctrl+X with no selection cuts the entire
+    /// document. This happens because eframe generates Event::Cut events which
+    /// TextEdit processes. We filter out these events when there's no selection.
+    fn filter_cut_event_if_no_selection(&mut self, ctx: &egui::Context) {
+        // Check if there's a selection in the active tab
+        let has_selection = self.state.active_tab()
+            .map(|tab| tab.cursors.primary().is_selection())
+            .unwrap_or(false);
+        
+        // If no selection, filter out Event::Cut to prevent egui from cutting everything
+        if !has_selection {
+            ctx.input_mut(|i| {
+                let had_cut = i.events.iter().any(|e| matches!(e, egui::Event::Cut));
+                i.events.retain(|e| !matches!(e, egui::Event::Cut));
+                if had_cut {
+                    debug!("Event::Cut filtered out - no selection");
+                }
+            });
+        }
+    }
+
     /// Consume Alt+Arrow keys BEFORE render to prevent TextEdit from processing them.
     /// This must be called before the editor widget is rendered.
     /// Returns the direction to move (-1 for up, 1 for down) if a move was requested.
@@ -7289,6 +7312,10 @@ impl eframe::App for FerriteApp {
         // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
         // built-in undo from processing them. Must happen before render_ui().
         self.consume_undo_redo_keys(ctx);
+        
+        // IMPORTANT: Filter out Event::Cut when nothing is selected to prevent egui bug
+        // where Ctrl+X cuts the entire document instead of doing nothing.
+        self.filter_cut_event_if_no_selection(ctx);
         
         // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
         // from processing the arrow keys and moving the cursor before we can handle the move.
