@@ -34,8 +34,8 @@ view_mode:
 
 # Status bar
 status:
-  untitled: ""
-  no_file: ""
+  untitled: "未命名"
+  no_file: "无文件打开"
 
 # File dialogs
 dialog:
@@ -201,17 +201,17 @@ find:
   replace: "替换"
   replace_all: "替换所有"
   no_results: "未找到结果"
-  title: ""
-  title_replace: ""
-  title_find: ""
-  close_tooltip: ""
-  hide_replace: ""
-  show_replace: ""
-  prev_tooltip: ""
-  next_tooltip: ""
-  replace_tooltip: ""
-  replace_all_tooltip: ""
-  keyboard_hints: ""
+  title: "查找与替换"
+  title_replace: "查找与替换"
+  title_find: "查找"
+  close_tooltip: "关闭 (Escape)"
+  hide_replace: "隐藏替换 (Ctrl+H)"
+  show_replace: "显示替换 (Ctrl+H)"
+  prev_tooltip: "上一个 (Shift+F3)"
+  next_tooltip: "下一个 (F3 或 Enter)"
+  replace_tooltip: "替换当前匹配"
+  replace_all_tooltip: "替换所有匹配"
+  keyboard_hints: "Enter/F3: 下一个 • Shift+F3: 上一个 • Esc: 关闭"
 
 # Outline panel
 outline:
@@ -420,17 +420,17 @@ shortcuts:
 
 # Notifications / Toasts
 notification:
-  restored_auto_save: ""
-  auto_save_discarded: ""
-  session_restored: ""
+  restored_auto_save: "已从自动保存恢复"
+  auto_save_discarded: "自动保存已丢弃"
+  session_restored: "会话已恢复"
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
   collapse_all: "全部收起"
   expand_all: "全部展开"
   copy_path: "复制路径"
-  show_raw: ""
-  parse_error: ""
+  show_raw: "显示原始"
+  parse_error: "⚠ 解析错误："
 
 # Git integration
 git:
@@ -438,11 +438,11 @@ git:
   deleted: "已删除"
   renamed: "重命名"
   untracked: "未追踪"
-  staged: "阶段"
-  tracked: ""
-  staged_modified: ""
-  ignored: ""
-  conflict: ""
+  staged: "已暂存"
+  tracked: "已追踪"
+  staged_modified: "已暂存但有修改"
+  ignored: "已忽略"
+  conflict: "冲突"
 
 # Accessibility
 a11y:
@@ -452,88 +452,88 @@ a11y:
 # Recovery and session dialogs
 recovery:
   auto_save:
-    title: ""
-    backup_found: ""
-    restore_question: ""
-    restore: ""
-    discard: ""
+    title: "自动保存恢复"
+    backup_found: "已找到该文件的自动保存备份。"
+    restore_question: "您想恢复自动保存的内容吗？"
+    restore: "恢复"
+    discard: "丢弃"
   session:
-    title: ""
-    crash_detected: ""
-    restore_question: ""
-    restore: ""
-    start_fresh: ""
-    restore_tooltip: ""
-    start_fresh_tooltip: ""
-  untitled: ""
+    title: "恢复会话"
+    crash_detected: "Ferrite 检测到您之前的会话未正确关闭。"
+    restore_question: "您想恢复之前的会话吗？"
+    restore: "恢复会话"
+    start_fresh: "重新开始"
+    restore_tooltip: "恢复上一会话的所有标签页"
+    start_fresh_tooltip: "丢弃上一会话并启动空编辑器"
+  untitled: "未命名文档"
 
 # Common buttons and actions
 common:
-  ok: ""
-  copy: ""
-  error: ""
-  dismiss: ""
+  ok: "确定"
+  copy: "复制"
+  error: "错误"
+  dismiss: "关闭"
 
 # Code blocks and widgets
 widgets:
   code_block:
-    copy_tooltip: ""
-    finish_tooltip: ""
-    edit_tooltip: ""
+    copy_tooltip: "复制到剪贴板"
+    finish_tooltip: "完成编辑"
+    edit_tooltip: "编辑代码"
   table:
-    add_row: ""
-    add_column: ""
-    align_left: ""
-    align_center: ""
-    align_right: ""
-    delete_column_label: ""
-    align_label: ""
-    align_none: ""
+    add_row: "+ 行"
+    add_column: "+ 列"
+    align_left: "左对齐"
+    align_center: "居中对齐"
+    align_right: "右对齐"
+    delete_column_label: "删除列："
+    align_label: "对齐："
+    align_none: "无对齐"
   link:
-    edit: ""
-    open: ""
-    copy: ""
-    text_label: ""
-    url_label: ""
-    copy_tooltip: ""
+    edit: "编辑链接"
+    open: "🔗 打开"
+    copy: "📋 复制"
+    text_label: "文本："
+    url_label: "网址："
+    copy_tooltip: "复制链接到剪贴板"
 
 # CSV Viewer
 csv:
-  delimiter_auto: ""
-  error: ""
-  select_delimiter: ""
-  header_row: ""
-  has_headers_yes: ""
-  has_headers_no: ""
-  show_raw: ""
+  delimiter_auto: "自动检测"
+  error: "CSV 解析失败"
+  select_delimiter: "选择分隔符"
+  header_row: "标题行"
+  has_headers_yes: "✓ 首行为标题"
+  has_headers_no: "✗ 无标题行"
+  show_raw: "显示原始"
 
 # Pipeline panel
 pipeline:
-  title: ""
-  command_placeholder: ""
-  run: ""
-  recent: ""
-  no_output: ""
-  running: ""
-  truncated: ""
-  close_tooltip: ""
-  cancel_tooltip: ""
-  run_tooltip: ""
-  stdout: ""
-  stderr: ""
-  hint: ""
-  no_output_success: ""
+  title: "⚡ 实时管道"
+  command_placeholder: "jq '.items[]' 或 yq '.data' ..."
+  run: "▶ 运行"
+  recent: "最近命令"
+  no_output: "(无输出)"
+  running: "执行中..."
+  truncated: "(已截断)"
+  close_tooltip: "关闭管道面板"
+  cancel_tooltip: "取消执行"
+  run_tooltip: "执行命令 (Enter)"
+  stdout: "标准输出"
+  stderr: "标准错误"
+  hint: "在上方输入命令以通过管道处理文档。\n示例：\n• jq '.'           - 格式化 JSON\n• jq '.items[]'    - 提取数组项\n• yq '.data'       - 提取 YAML 字段\n• grep 'pattern'   - 搜索模式"
+  no_output_success: "(命令无输出)"
 
 # Encoding
 
 # Tab context menu
 tab:
-  reveal_in_explorer: ""
+  reveal_in_explorer: "在资源管理器中显示"
 
 # Mermaid diagrams
 mermaid:
-  badge: ""
-  empty: ""
+  badge: "mermaid"
+  empty: "(空图表)"
 
 # Table of Contents
 
@@ -541,18 +541,18 @@ mermaid:
 
 # Workspace
 workspace:
-  close_folder: ""
-  new_file: ""
-  new_folder: ""
-  rename: ""
-  delete: ""
-  refresh: ""
-  recent_folders: ""
+  close_folder: "关闭文件夹"
+  new_file: "新建文件"
+  new_folder: "新建文件夹"
+  rename: "重命名"
+  delete: "删除"
+  refresh: "刷新"
+  recent_folders: "📁 最近文件夹"
 
 # Zen mode
 zen:
-  enter: ""
-  exit: ""
+  enter: "进入专注模式"
+  exit: "退出专注模式"
 
 # Log levels (for settings)
 
@@ -562,22 +562,22 @@ zen:
 
 # Tooltips
 tooltip:
-  fullscreen_exit: ""
-  fullscreen_enter: ""
-  settings: ""
-  recent_items: ""
-  about_help: ""
-  git_branch: ""
-  new_tab: ""
+  fullscreen_exit: "退出全屏 (F10 或 Esc)"
+  fullscreen_enter: "全屏 (F10)"
+  settings: "设置 (Ctrl+,)"
+  recent_items: "点击查看最近文件和文件夹\nShift+点击在后台打开"
+  about_help: "关于/帮助 (F1)"
+  git_branch: "当前 Git 分支"
+  new_tab: "新标签页"
 
 # Ribbon toolbar additions
 ribbon:
-  format_document: ""
-  validate_syntax: ""
-  pipeline: ""
-  hide_info_panel: ""
-  show_info_panel: ""
-  toggle_outline: ""
-  copy_html_tooltip: ""
-  export_pdf: ""
-  coming_soon: ""
+  format_document: "格式化文档（美化打印）"
+  validate_syntax: "验证语法"
+  pipeline: "实时管道..."
+  hide_info_panel: "隐藏信息面板"
+  show_info_panel: "显示信息面板"
+  toggle_outline: "切换大纲"
+  copy_html_tooltip: "复制渲染的 HTML 到剪贴板"
+  export_pdf: "📄 导出为 PDF"
+  coming_soon: "即将推出"
