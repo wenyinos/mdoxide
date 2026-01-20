@@ -50,7 +50,7 @@ jobs:
             ""
             "For a traditional Windows installation, use the .msi installer instead."
             ""
-            "Website: https://ferrite.ink"
+            "Website: https://getferrite.dev"
           ) -join "`r`n"
           Set-Content -Path release\README.txt -Value $readme -NoNewline
           Compress-Archive -Path release\* -DestinationPath ferrite-portable-windows-x64.zip
@@ -59,7 +59,7 @@ jobs:
         run: cargo install cargo-wix
 
       - name: Build MSI installer
-        run: cargo wix --no-build --nocapture
+        run: cargo wix --nocapture
 
       - name: Copy MSI to workspace root
         run: copy target\wix\*.msi .\ferrite-windows-x64.msi
