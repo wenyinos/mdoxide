@@ -74,25 +74,16 @@
         </Directory>
         
         <Feature
-            Id='Binaries'
-            Title='Application'
-            Description='Installs Ferrite text editor.'
+            Id='Complete'
+            Title='Ferrite'
+            Description='Installs Ferrite text editor with Start Menu shortcut.'
             Level='1'
             ConfigurableDirectory='APPLICATIONFOLDER'
             AllowAdvertise='no'
-            Display='expand'
             Absent='disallow'>
             
             <ComponentRef Id='ferrite.exe'/>
-            
-            <Feature
-                Id='StartMenu'
-                Title='Start Menu Shortcut'
-                Description='Add a shortcut to the Start Menu.'
-                Level='1'
-                Absent='allow'>
-                <ComponentRef Id='ApplicationShortcut'/>
-            </Feature>
+            <ComponentRef Id='ApplicationShortcut'/>
         </Feature>
         
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
