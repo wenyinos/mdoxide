@@ -158,9 +158,112 @@ The file had structural issues with duplicate YAML sections appended at the bott
 
 ---
 
-## Status: All locale files are now in sync
+---
 
-All four locale files (`en.yaml`, `de.yaml`, `ja.yaml`, `zh_Hans.yaml`) now have:
+## New Files Added After Git Pull (2026-01-20)
+
+### et.yaml (Estonian)
+
+- **Keys removed (orphaned):** ~65 keys from old structure
+- **Keys added (missing):** 0 (file restructured to canonical 388 keys)
+- **Existing translations preserved:** 0 (file had no translations, all empty strings)
+
+**Orphaned keys removed (partial list):**
+- `app.tagline`
+- `menu.file.new`, `menu.file.close`, `menu.file.close_all`, `menu.file.clear_recent`, `menu.file.quit`
+- `menu.edit.*` (undo, redo, cut, copy, paste, select_all, find, find_replace, go_to_line, etc.)
+- `menu.view.*`, `menu.help.*` (entire sections)
+- `toolbar.*` (entire section)
+- `view_mode.raw`, `view_mode.rendered`, `view_mode.split` (labels without _desc)
+- `status.line`, `status.column`, `status.words`, `status.characters`, `status.modified`, `status.saved`, `status.encoding`, `status.language`
+- `dialog.open.*`, `dialog.save.*`, `dialog.export.*`
+- `sidebar.*`, `error.*`, `encoding.*`, `toc.*`, `format_toolbar.*`, `log_level.*`, `drag_drop.*`, `export.*`
+- And ~40 more orphaned keys from old structure
+
+**Status:** Restructured successfully. All 388 canonical keys present with proper ordering.
+
+---
+
+### nb_NO.yaml (Norwegian Bokmål)
+
+- **Keys removed (orphaned):** ~65 keys from old structure
+- **Keys added (missing):** 0 (file restructured to canonical 388 keys)
+- **Existing translations preserved:** 27
+
+**Norwegian translations preserved:**
+- `menu.file.label`: "Fil"
+- `menu.file.open`: "Åpne…"
+- `menu.file.save`: "Lagre"
+- `menu.file.save_as`: "Lagre som…"
+- `menu.file.recent`: "Nylige filer"
+- `menu.file.export`: "Eksporter"
+- `menu.file.export_html`: "Eksporter til HTML..."
+- `menu.file.export_clipboard`: "Kopier som HTML"
+- `menu.edit.label`: "Rediger"
+- `menu.format.label`: "Format"
+- `menu.tools.label`: "Verktøy"
+- `view_mode.raw_desc`: "Ren Markdown-tekstredigering"
+- `view_mode.rendered_desc`: "WYSIWYG-gjengitt redigering"
+- `view_mode.split_desc`: "Råredigering + gjengitt forhåndsvisning side ved side"
+- `dialog.unsaved_changes.title`: "Ulagrede endringer"
+- `dialog.unsaved_changes.save`: "Lagre"
+- `dialog.unsaved_changes.dont_save`: "Ikke lagre"
+- `dialog.confirm.cancel`: "Avbryt"
+- `dialog.confirm.close`: "Lukk"
+- `dialog.file.new_file`: "Ny fil"
+- `dialog.file.new_folder`: "Ny mappe"
+- `dialog.file.enter_file_name`: "Skriv inn filnavn:"
+- `dialog.file.enter_folder_name`: "Skriv inn mappenavn:"
+- `dialog.file.hint_file`: "filnavn.md"
+- `dialog.file.hint_folder`: "mappe-navn"
+- `dialog.file.create`: "Opprett"
+- `dialog.file.rename`: "Gi nytt navn"
+
+**Orphaned keys removed (same categories as et.yaml)**
+
+**Status:** Restructured successfully. All 388 canonical keys present with proper ordering. 27 Norwegian translations preserved.
+
+---
+
+## Language Enum Registration Status
+
+The `Language` enum in `src/config/settings.rs` currently only includes:
+- `English` (en)
+- `ChineseSimplified` (zh_Hans)
+
+**Languages missing from enum (need to be added):**
+- `German` (de) - de.yaml exists
+- `Japanese` (ja) - ja.yaml exists
+- `Estonian` (et) - et.yaml exists
+- `NorwegianBokmal` (nb_NO) - nb_NO.yaml exists
+
+To add these languages, update `src/config/settings.rs`:
+
+```rust
+pub enum Language {
+    #[default]
+    #[serde(rename = "en")]
+    English,
+    #[serde(rename = "de")]
+    German,
+    #[serde(rename = "ja")]
+    Japanese,
+    #[serde(rename = "zh-Hans")]
+    ChineseSimplified,
+    #[serde(rename = "et")]
+    Estonian,
+    #[serde(rename = "nb-NO")]
+    NorwegianBokmal,
+}
+```
+
+And update the `locale_code()`, `native_name()`, and `all()` implementations accordingly.
+
+---
+
+## Status: All locale files including new additions are now in sync
+
+All six locale files (`en.yaml`, `de.yaml`, `ja.yaml`, `zh_Hans.yaml`, `et.yaml`, `nb_NO.yaml`) now have:
 - Identical key structure (388 keys)
 - Same key ordering
 - Valid YAML syntax (no duplicate sections)

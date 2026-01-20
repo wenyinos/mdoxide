@@ -157,9 +157,36 @@ Fixed 100% CPU usage on Intel Macs in Rendered mode:
 
 ---
 
-### v0.2.6 (In Progress) - Performance & Large Files
+### v0.2.5-hotfix2 (In Progress) - Editor Shortcuts, macOS & I18n
 
 > **Status:** In Progress
+
+Point release with new keyboard shortcuts, macOS improvements, and internationalization cleanup.
+
+#### New Features
+- [x] **Delete Line shortcut** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Cmd/Ctrl+D deletes current line (configurable in settings) - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- [x] **Move Line Up/Down** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Alt+Up/Down swaps current line with adjacent line - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- [x] **macOS file type associations** ([#30](https://github.com/OlaProeis/Ferrite/pull/30)) - Ferrite appears in Finder's "Open With" menu for .md, .json, .yaml, .toml, .txt files - thanks [@abcd-ca](https://github.com/abcd-ca)!
+
+> **Note:** Opening files via "Open With" or dragging onto app icon not yet supported due to [winit#1751](https://github.com/rust-windowing/winit/issues/1751). Workaround: use `open -a Ferrite file.md` or File > Open.
+
+#### Bug Fixes
+- [x] **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no selection would cut everything. Filter out `Event::Cut` when nothing is selected.
+- [x] **Split mode cursor position** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Line operations now work correctly in Split view; rendered pane no longer overwrites cursor position - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- [x] **macOS modifier tooltips** ([#28](https://github.com/OlaProeis/Ferrite/pull/28), [#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Tooltips now show "Cmd+E" on macOS instead of hardcoded "Ctrl+E" - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- [x] **Semantic minimap highlight accuracy** - Use byte offsets matching search behavior for correct highlight positioning
+
+#### Internationalization
+- [x] **I18n audit & cleanup** - Comprehensive audit of hardcoded strings, replacement with translation keys
+- [x] **Orphaned key removal** - Removed ~200 unused translation keys from locale files
+- [x] **Locale file sync** - All locale files now have consistent structure matching en.yaml
+- [x] **New language support** - Added Estonian and Norwegian Bokmål via Weblate community translations
+
+---
+
+### v0.2.6 (Planned) - Performance & Large Files
+
+> **Status:** Planned
 
 v0.2.6 focuses on **CPU optimization**, **large file performance** (handling 80MB+ CSV files), code signing, and new features.
 
@@ -211,7 +238,6 @@ Additional mermaid fixes and enhancements:
 - [ ] **Bug fixes** - Address rendering issues discovered during v0.2.5 testing
 
 #### Bug Fixes & Polish
-- [x] **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no selection would cut everything. Filter out `Event::Cut` when nothing is selected.
 - [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync between Raw/Rendered views on Intel Macs **Deferred**
 - [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style instead of Windows-style icons **Deferred**
 - [ ] **Window controls redesign** - Redesign minimize/maximize/close icons for a more polished look

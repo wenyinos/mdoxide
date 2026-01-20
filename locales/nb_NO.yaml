@@ -1,141 +1,51 @@
-# Ferrite - English (Base Language)
+# Ferrite - Norwegian Bokmål (Norsk bokmål)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
   name: "Ferrite"
-  tagline: "En rask og smidig tekstbehandler for Markdown"
 
 # Menu bar items
 menu:
   file:
     label: "Fil"
-    new: "Ny"
     open: "Åpne…"
     save: "Lagre"
     save_as: "Lagre som…"
-    close: "Lukk"
-    close_all: "Lukk alle"
     recent: "Nylige filer"
-    clear_recent: "Tøm nylige"
     export: "Eksporter"
     export_html: "Eksporter til HTML..."
     export_clipboard: "Kopier som HTML"
-    quit: "Avslutt"
   edit:
     label: "Rediger"
-    undo: "Angre"
-    redo: "Gjør om"
-    cut: "Klipp"
-    copy: "Kopier"
-    paste: "Lim inn"
-    select_all: "Merk alt"
-    find: "Søk..."
-    find_replace: "Søk & Erstatt..."
-    go_to_line: "Gå til linje..."
-    duplicate_line: "Dupliser linje"
-    move_line_up: "Flytt linje opp"
-    move_line_down: "Flytt linje ned"
-  view:
-    label: "Visning"
-    raw: "Rå"
-    rendered: "Gjengitt"
-    split: "Delt"
-    zen: "Zen-modus"
-    toggle_sidebar: "Vis/skjul sidepanel"
-    toggle_outline: "Vis/skjul sidepanel"
-    toggle_minimap: "Vis/skjul minikart"
-    zoom_in: "Zoom inn"
-    zoom_out: "Zoom ut"
-    reset_zoom: "Tilbakestill Zoom"
   format:
     label: "Format"
-    bold: "Fet"
-    italic: "Kursiv"
-    strikethrough: "Gjennomstreking"
-    code: "Innebygd kode"
-    heading: "Overskrift"
-    link: "Sett inn link"
-    image: "Sett inn bilde"
-    bullet_list: "Punktliste"
-    numbered_list: "Nummerert liste"
-    task_list: "Oppgaveliste"
-    blockquote: "Sitatblokk"
-    horizontal_rule: "Horisontal linje"
-    code_block: "Kodeblokk"
-    table: "Sett inn tabell"
   tools:
     label: "Verktøy"
-    settings: "Innstillinger..."
-    keyboard_shortcuts: "Tastatursnarveier..."
-  help:
-    label: "Hjelp"
-    about: "Om Ferrite"
-    documentation: "Dokumentasjon"
-    report_issue: "Rapporter feil"
-    check_updates: "Se etter oppdateringer"
 
 # Toolbar buttons
-toolbar:
-  new_file: "Ny fil"
-  open_file: "Åpne fil"
-  save_file: "Lagre fil"
-  undo: "Angre"
-  redo: "Gjør om"
-  bold: "Fet"
-  italic: "Kursiv"
-  heading: "Overskrift"
-  link: "Lenke"
-  code: "Kode"
-  list: "Liste"
-  quote: "Sitat"
-  table: "Tabell"
-  image: "Bilde"
 
 # View mode labels
 view_mode:
-  raw: "Rå"
-  rendered: "Gjengitt"
-  split: "Delt"
   raw_desc: "Ren Markdown-tekstredigering"
   rendered_desc: "WYSIWYG-gjengitt redigering"
   split_desc: "Råredigering + gjengitt forhåndsvisning side ved side"
 
 # Status bar
 status:
-  line: "Linje"
-  column: "Kolonne"
-  words: "ord"
-  characters: "tegn"
-  modified: "Endret"
-  saved: "Lagret"
-  encoding: "UTF-8"
-  language: "Språk"
+  untitled: ""
+  no_file: ""
 
 # File dialogs
 dialog:
-  open:
-    title: "Åpne fil"
-  save:
-    title: "Lagre fil"
-  save_as:
-    title: "Lagre som"
-  export:
-    title: "Eksporter"
   unsaved_changes:
     title: "Ulagrede endringer"
-    message: "Vil du lagre endringer i \"%{filename}\"?"
     save: "Lagre"
     dont_save: "Ikke lagre"
-    cancel: "Avbryt"
   confirm:
-    title: "Bekreft"
-    ok: "OK"
     cancel: "Avbryt"
     close: "Lukk"
-    yes: "Ja"
-    no: "Nei"
   # File operation dialogs
   file:
     new_file: "Ny fil"
@@ -144,23 +54,23 @@ dialog:
     enter_folder_name: "Skriv inn mappenavn:"
     hint_file: "filnavn.md"
     hint_folder: "mappe-navn"
-    location: "Lokasjon: %{path}"
     create: "Opprett"
     rename: "Gi nytt navn"
     enter_new_name: ""
     exists_error: ""
     confirm_delete: ""
-    delete_confirm: ""
     delete_folder_warning: ""
     delete: ""
     file: ""
     folder: ""
+    location: ""
+    delete_confirm: ""
   # Go to Line dialog
   go_to_line:
     title: ""
     enter_line: ""
-    range: ""
     go: ""
+    range: ""
 
 # Settings panel
 settings:
@@ -174,14 +84,10 @@ settings:
     medium: ""
     large: ""
   general:
-    title: ""
     theme: ""
     theme_dark: ""
     theme_light: ""
     theme_system: ""
-    language: ""
-    auto_save: ""
-    auto_save_interval: ""
     restore_session: ""
   editor:
     title: ""
@@ -206,9 +112,7 @@ settings:
     cjk_traditional_chinese_desc: ""
     cjk_japanese: ""
     cjk_japanese_desc: ""
-    line_height: ""
     tab_size: ""
-    tab_size_value: ""
     spaces: ""
     word_wrap: ""
     word_wrap_tooltip: ""
@@ -217,35 +121,28 @@ settings:
     show_minimap: ""
     minimap_tooltip: ""
     minimap_mode: ""
-    minimap_mode_hint: ""
     minimap_mode_auto: ""
     minimap_mode_auto_desc: ""
     minimap_mode_semantic: ""
     minimap_mode_semantic_desc: ""
     minimap_mode_pixel: ""
     minimap_mode_pixel_desc: ""
-    highlight_current_line: ""
     highlight_brackets: ""
     brackets_tooltip: ""
-    auto_indent: ""
     auto_close_brackets: ""
     auto_close_tooltip: ""
-    auto_close_quotes: ""
     syntax_highlighting: ""
     syntax_tooltip: ""
     sync_scroll_tooltip: ""
     use_spaces: ""
     use_spaces_tooltip: ""
     max_line_width: ""
-    max_line_width_hint: ""
     custom_width: ""
-    width_pixels: ""
     code_folding: ""
     enable_folding: ""
     folding_tooltip: ""
     show_fold_indicators: ""
     fold_indicators_tooltip: ""
-    fold_types: ""
     fold_headings: ""
     fold_headings_tooltip: ""
     fold_code_blocks: ""
@@ -255,7 +152,6 @@ settings:
     fold_indentation: ""
     fold_indentation_tooltip: ""
     snippets: ""
-    snippets_hint: ""
     enable_snippets: ""
     snippets_tooltip: ""
     builtin_snippets: ""
@@ -266,43 +162,27 @@ settings:
     # CJK Paragraph Indentation
     paragraph_indent: ""
     paragraph_indent_hint: ""
-    paragraph_indent_off: ""
-    paragraph_indent_chinese: ""
-    paragraph_indent_japanese: ""
     paragraph_indent_custom: ""
-    paragraph_indent_custom_value: ""
-    paragraph_indent_off_desc: ""
-    paragraph_indent_chinese_desc: ""
-    paragraph_indent_japanese_desc: ""
     paragraph_indent_custom_desc: ""
   preview:
-    title: ""
     sync_scroll: ""
-    show_line_numbers_in_code: ""
     default_view: ""
   files:
     title: ""
-    recent_files_limit: ""
-    confirm_delete: ""
     restore_session_tooltip: ""
     enable_auto_save: ""
     auto_save_tooltip: ""
     auto_save_delay: ""
-    seconds: ""
     recent_files: ""
-    remember_files: ""
     clear_recent: ""
     clear_recent_tooltip: ""
+    seconds: ""
+    remember_files: ""
     files_count: ""
   appearance:
     title: ""
-    show_toolbar: ""
-    show_status_bar: ""
-    window_title_style: ""
     language: ""
     language_hint: ""
-  shortcuts_section:
-    title: ""
   keyboard:
     title: ""
     search_hint: ""
@@ -324,16 +204,23 @@ find:
   match_case_short: ""
   whole_word: ""
   use_regex: ""
-  find_next: ""
-  find_previous: ""
   replace: ""
   replace_all: ""
   no_results: ""
-  results_count: ""
+  title: ""
+  title_replace: ""
+  title_find: ""
+  close_tooltip: ""
+  hide_replace: ""
+  show_replace: ""
+  prev_tooltip: ""
+  next_tooltip: ""
+  replace_tooltip: ""
+  replace_all_tooltip: ""
+  keyboard_hints: ""
 
 # Outline panel
 outline:
-  title: ""
   panel_title: ""
   statistics: ""
   tab_outline: ""
@@ -341,9 +228,7 @@ outline:
   no_headings: ""
   add_headings_hint: ""
   close_tooltip: ""
-  summary: ""
   parse_error: ""
-  item_tooltip: ""
 
 # Document statistics
 stats:
@@ -368,13 +253,6 @@ stats:
   blockquotes: ""
 
 # File tree / Sidebar
-sidebar:
-  files: ""
-  open_folder: ""
-  no_folder: ""
-  collapse_all: ""
-  expand_all: ""
-  refresh: ""
 
 # Quick switcher
 quick_switcher:
@@ -397,7 +275,6 @@ about:
   tab:
     about: ""
     shortcuts: ""
-  version: ""
   description: ""
   close_hint: ""
   # Links section
@@ -420,6 +297,7 @@ about:
   license: ""
   license_type: ""
   copyright: ""
+  version: ""
 
 # Keyboard shortcuts
 shortcuts:
@@ -433,9 +311,6 @@ shortcuts:
     formatting: ""
     workspace: ""
     navigation: ""
-    search: ""
-    folding: ""
-    other: ""
   # Command names (used in keyboard settings panel)
   commands:
     # File operations
@@ -549,47 +424,38 @@ shortcuts:
     find_prev: ""
 
 # Error messages
-error:
-  file_not_found: ""
-  file_read_error: ""
-  file_write_error: ""
-  permission_denied: ""
-  invalid_encoding: ""
-  parse_error: ""
-  unknown: ""
 
 # Notifications / Toasts
 notification:
-  file_saved: ""
-  file_exported: ""
-  copied_to_clipboard: ""
-  settings_saved: ""
+  restored_auto_save: ""
+  auto_save_discarded: ""
+  session_restored: ""
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
   collapse_all: ""
   expand_all: ""
-  copy_value: ""
   copy_path: ""
+  show_raw: ""
+  parse_error: ""
+  large_file_warning: ""
 
 # Git integration
 git:
   modified: ""
-  added: ""
   deleted: ""
   renamed: ""
   untracked: ""
   staged: ""
-  branch: ""
-  no_repo: ""
+  tracked: ""
+  staged_modified: ""
+  ignored: ""
+  conflict: ""
 
 # Accessibility
 a11y:
   close_button: ""
-  menu_button: ""
   minimize_button: ""
-  maximize_button: ""
-  restore_button: ""
 
 # Recovery and session dialogs
 recovery:
@@ -599,227 +465,137 @@ recovery:
     restore_question: ""
     restore: ""
     discard: ""
+    time_label: ""
   session:
     title: ""
     crash_detected: ""
     restore_question: ""
     restore: ""
     start_fresh: ""
+    restore_tooltip: ""
+    start_fresh_tooltip: ""
   untitled: ""
 
 # Common buttons and actions
 common:
-  save: ""
-  cancel: ""
   ok: ""
-  yes: ""
-  no: ""
-  close: ""
-  apply: ""
-  reset: ""
-  delete: ""
-  edit: ""
-  done: ""
   copy: ""
-  paste: ""
-  cut: ""
-  add: ""
-  remove: ""
-  clear: ""
-  refresh: ""
-  loading: ""
   error: ""
-  warning: ""
-  info: ""
-  success: ""
+  dismiss: ""
 
 # Code blocks and widgets
 widgets:
   code_block:
-    copy: ""
     copy_tooltip: ""
-    copied: ""
-    edit: ""
-    done: ""
-    language: ""
-    no_language: ""
+    finish_tooltip: ""
+    edit_tooltip: ""
   table:
     add_row: ""
-    delete_row: ""
     add_column: ""
-    delete_column: ""
     align_left: ""
     align_center: ""
     align_right: ""
-    edit: ""
-    done: ""
+    delete_column_label: ""
+    delete_column: ""
+    align_label: ""
+    align_none: ""
   link:
     edit: ""
     open: ""
     copy: ""
-    remove: ""
-  image:
-    alt_text: ""
-    title: ""
-    edit: ""
+    text_label: ""
+    url_label: ""
+    copy_tooltip: ""
 
 # CSV Viewer
 csv:
-  title: ""
-  has_headers: ""
-  delimiter: ""
-  delimiter_comma: ""
-  delimiter_tab: ""
-  delimiter_semicolon: ""
-  delimiter_pipe: ""
   delimiter_auto: ""
-  rainbow_columns: ""
-  row_count: ""
-  column_count: ""
-  loading: ""
   error: ""
+  select_delimiter: ""
+  header_row: ""
+  has_headers_yes: ""
+  has_headers_no: ""
+  show_raw: ""
+  large_file_warning: ""
 
 # Pipeline panel
 pipeline:
   title: ""
   command_placeholder: ""
   run: ""
-  clear: ""
   recent: ""
-  output: ""
-  error: ""
   no_output: ""
   running: ""
+  truncated: ""
+  close_tooltip: ""
+  cancel_tooltip: ""
+  run_tooltip: ""
+  stdout: ""
+  stderr: ""
+  hint: ""
+  no_output_success: ""
 
 # Encoding
-encoding:
-  label: ""
-  utf8: ""
-  utf8_bom: ""
-  utf16_le: ""
-  utf16_be: ""
-  ascii: ""
-  latin1: ""
-  windows1252: ""
-  shift_jis: ""
-  euc_jp: ""
-  euc_kr: ""
-  gbk: ""
-  gb2312: ""
-  big5: ""
-  unknown: ""
-  change: ""
-  reload_with: ""
 
 # Tab context menu
 tab:
-  close: ""
-  close_others: ""
-  close_all: ""
-  close_saved: ""
-  close_to_right: ""
-  copy_path: ""
-  copy_filename: ""
   reveal_in_explorer: ""
-  reveal_in_finder: ""
-  reveal_in_file_manager: ""
-  pin: ""
-  unpin: ""
-  duplicate: ""
-  auto_save_enabled: ""
-  auto_save_disabled: ""
 
 # Mermaid diagrams
 mermaid:
-  error: ""
-  unsupported: ""
-  parsing_error: ""
+  badge: ""
+  empty: ""
   rendering_error: ""
-  types:
-    flowchart: ""
-    sequence: ""
-    class: ""
-    state: ""
-    er: ""
-    gantt: ""
-    pie: ""
-    mindmap: ""
-    timeline: ""
-    journey: ""
-    git: ""
 
 # Table of Contents
-toc:
-  title: ""
-  generate: ""
-  update: ""
-  insert: ""
-  no_headings: ""
-  generated: ""
-  updated: ""
 
 # Formatting toolbar tooltips
-format_toolbar:
-  bold: ""
-  italic: ""
-  strikethrough: ""
-  code: ""
-  link: ""
-  image: ""
-  heading: ""
-  bullet_list: ""
-  numbered_list: ""
-  task_list: ""
-  blockquote: ""
-  code_block: ""
-  horizontal_rule: ""
-  table: ""
 
 # Workspace
 workspace:
-  open_folder: ""
   close_folder: ""
-  no_folder_open: ""
-  open_folder_hint: ""
   new_file: ""
   new_folder: ""
   rename: ""
   delete: ""
   refresh: ""
-  collapse_all: ""
-  expand_all: ""
-  copy_path: ""
-  copy_relative_path: ""
+  recent_folders: ""
 
 # Zen mode
 zen:
   enter: ""
   exit: ""
-  tooltip: ""
 
 # Log levels (for settings)
-log_level:
-  trace: ""
-  debug: ""
-  info: ""
-  warn: ""
-  error: ""
 
 # Drag and drop
-drag_drop:
-  drop_here: ""
-  drop_image: ""
-  processing: ""
-  image_saved: ""
 
-# Export
-export:
-  html:
-    title: ""
-    success: ""
-    include_styles: ""
-    dark_theme: ""
-    light_theme: ""
-  clipboard:
-    success: ""
-    failed: ""
+# Time relative strings
+time:
+  seconds_ago: ""
+  minutes_ago: ""
+  hours_ago: ""
+  days_ago: ""
+
+# Tooltips
+tooltip:
+  fullscreen_exit: ""
+  fullscreen_enter: ""
+  settings: ""
+  recent_items: ""
+  about_help: ""
+  git_branch: ""
+  new_tab: ""
+
+# Ribbon toolbar additions
+ribbon:
+  format_document: ""
+  validate_syntax: ""
+  pipeline: ""
+  hide_info_panel: ""
+  show_info_panel: ""
+  toggle_outline: ""
+  copy_html_tooltip: ""
+  export_pdf: ""
+  coming_soon: ""
+  heading_level: ""

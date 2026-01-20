@@ -63,11 +63,14 @@ dialog:
     delete: ""
     file: ""
     folder: ""
+    location: ""
+    delete_confirm: ""
   # Go to Line dialog
   go_to_line:
     title: ""
     enter_line: ""
     go: ""
+    range: ""
 
 # Settings panel
 settings:
@@ -173,6 +176,9 @@ settings:
     recent_files: ""
     clear_recent: ""
     clear_recent_tooltip: ""
+    seconds: ""
+    remember_files: ""
+    files_count: ""
   appearance:
     title: ""
     language: ""
@@ -291,6 +297,7 @@ about:
   license: ""
   license_type: ""
   copyright: ""
+  version: ""
 
 # Keyboard shortcuts
 shortcuts:
@@ -431,6 +438,7 @@ tree_viewer:
   copy_path: ""
   show_raw: ""
   parse_error: ""
+  large_file_warning: ""
 
 # Git integration
 git:
@@ -457,6 +465,7 @@ recovery:
     restore_question: ""
     restore: ""
     discard: ""
+    time_label: ""
   session:
     title: ""
     crash_detected: ""
@@ -487,6 +496,7 @@ widgets:
     align_center: ""
     align_right: ""
     delete_column_label: ""
+    delete_column: ""
     align_label: ""
     align_none: ""
   link:
@@ -506,6 +516,7 @@ csv:
   has_headers_yes: ""
   has_headers_no: ""
   show_raw: ""
+  large_file_warning: ""
 
 # Pipeline panel
 pipeline:
@@ -534,6 +545,7 @@ tab:
 mermaid:
   badge: ""
   empty: ""
+  rendering_error: ""
 
 # Table of Contents
 
@@ -559,6 +571,11 @@ zen:
 # Drag and drop
 
 # Time relative strings
+time:
+  seconds_ago: ""
+  minutes_ago: ""
+  hours_ago: ""
+  days_ago: ""
 
 # Tooltips
 tooltip:
@@ -581,3 +598,4 @@ ribbon:
   copy_html_tooltip: ""
   export_pdf: ""
   coming_soon: ""
+  heading_level: ""

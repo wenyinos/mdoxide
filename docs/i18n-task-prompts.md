@@ -329,3 +329,103 @@ Also check the locale_code() and display_name() implementations.
 - The new files may have translations we want to keep, just with wrong structure
 - Be careful not to lose any actual translation work
 - After syncing, the new files should have identical key structure to en.yaml
+
+---
+
+## Prompt 6: Final Verification (Run Last)
+
+Use this prompt after completing all other prompts to verify the i18n changes are correct.
+
+Copy everything below the line for Chat 6:
+
+---
+
+### Task: Verify and Test I18n Changes
+
+We've completed a major i18n cleanup. Before pushing, verify everything is correct.
+
+#### Step 1: Verify build compiles
+
+Run `cargo check` to ensure no compilation errors. If there are errors related to missing translation keys, document them.
+
+#### Step 2: Spot-check translation key usage
+
+Pick 5-10 random t!() calls from different files and verify:
+1. The key exists in locales/en.yaml
+2. The English value makes sense for the context
+3. The key path follows naming conventions (category.subcategory.key)
+
+Example files to check:
+- src/ui/ribbon.rs
+- src/ui/dialogs.rs
+- src/ui/settings.rs
+- src/app.rs
+
+#### Step 3: Verify locale file consistency
+
+For each locale file, confirm:
+1. All files have the same number of keys (use wc -l or similar)
+2. Key structure matches en.yaml (spot-check a few sections)
+3. No orphaned keys remain (compare against docs/i18n-used-keys.txt)
+
+Quick check command idea:
+```
+# Count keys in each file (approximate)
+grep -c ": " locales/*.yaml
+```
+
+#### Step 4: Test the app briefly
+
+If possible, run `cargo run` and:
+1. Switch language in Settings > Appearance > Language
+2. Verify UI text changes appropriately
+3. Check a few dialogs/panels have translated text (or empty for untranslated)
+4. Look for any obvious missing text or broken UI
+
+#### Step 5: Generate verification report
+
+Save to docs/i18n-verification-report.md:
+
+```
+# I18n Verification Report
+
+Generated: [date]
+
+## Build Status
+- [ ] cargo check passes
+- [ ] No missing key errors
+
+## Locale File Consistency
+| File | Key Count | Matches en.yaml? |
+|------|-----------|------------------|
+| en.yaml | X | (source) |
+| de.yaml | X | Yes/No |
+| ja.yaml | X | Yes/No |
+| zh_Hans.yaml | X | Yes/No |
+| nb_NO.yaml | X | Yes/No |
+| et.yaml | X | Yes/No |
+
+## Spot Checks
+| File | Key | Status |
+|------|-----|--------|
+| ribbon.rs | menu.file.save_as | OK |
+| ... | ... | ... |
+
+## Runtime Test (if performed)
+- [ ] Language switching works
+- [ ] UI text updates correctly
+- [ ] No obvious missing text
+
+## Issues Found
+(list any problems discovered)
+
+## Conclusion
+[ ] Ready to push
+[ ] Needs fixes (see issues above)
+```
+
+#### Important
+
+- This is a read-only verification, don't make changes unless critical issues found
+- Document any problems for follow-up
+- If major issues found, do NOT push until resolved
