@@ -7,9 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+*No unreleased changes.*
+
+## [0.2.5.2] - 2026-01-20
+
+### Added
+
+#### New Features
+- **Delete Line shortcut** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Cmd/Ctrl+D deletes current line (configurable in settings) - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- **Move Line Up/Down** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Alt+Up/Down swaps current line with adjacent line - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- **macOS file type associations** ([#30](https://github.com/OlaProeis/Ferrite/pull/30)) - Ferrite appears in Finder's "Open With" menu for .md, .json, .yaml, .toml, .txt files - thanks [@abcd-ca](https://github.com/abcd-ca)!
+
+#### Internationalization
+- **I18n audit & cleanup** - Comprehensive audit of hardcoded strings, replacement with translation keys
+- **Orphaned key removal** - Removed ~200 unused translation keys from locale files
+- **Locale file sync** - All locale files now have consistent structure matching en.yaml
+- **New language support** - Added Estonian and Norwegian Bokmål via Weblate community translations
+
 ### Fixed
 
+#### Bug Fixes
 - **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no text selection would cut the entire document. Now correctly does nothing when nothing is selected.
+- **Linux window drag stuck mouse** - Fixed critical bug where dragging the custom title bar on Linux caused the mouse to get "stuck" in drag mode. Root cause: egui's widget-level drag tracking desynchronized with the window manager after `ViewportCommand::StartDrag`. Fix bypasses egui's drag state machine entirely, using raw input detection (`primary_pressed()`) for immediate, reliable window drag initiation.
+- **Split mode cursor position** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Line operations now work correctly in Split view; rendered pane no longer overwrites cursor position - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- **macOS modifier tooltips** ([#28](https://github.com/OlaProeis/Ferrite/pull/28), [#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Tooltips now show "Cmd+E" on macOS instead of hardcoded "Ctrl+E" - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- **Semantic minimap highlight accuracy** - Use byte offsets matching search behavior for correct highlight positioning
+
+> **Note:** Opening files via "Open With" or dragging onto app icon not yet supported on macOS due to [winit#1751](https://github.com/rust-windowing/winit/issues/1751). Workaround: use `open -a Ferrite file.md` or File > Open.
 
 ## [0.2.5.1] - 2026-01-17
 
@@ -380,6 +404,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.2.5.2** - Delete Line shortcut, Move Line Up/Down, macOS file associations, Linux window drag fix, I18n cleanup, new language support
 - **0.2.5.1** - Multi-encoding support, memory optimization (250MB → 60-80MB), CPU optimization (10% → <1% idle), cursor positioning improvements, Intel Mac CPU fix, bug fixes
 - **0.2.5** - Mermaid refactor, CSV viewer, semantic minimap, i18n, CJK indentation, custom fonts, snippets, TOC generation, drag-drop images, document statistics, main menu redesign, split view editing, bug fixes
 - **0.2.3** - Editor productivity release (Go to Line, Duplicate Line, Move Line, Auto-close, Smart Paste, Line Width)
@@ -388,6 +413,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
+[0.2.5.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.1...v0.2.5-hotfix.2
 [0.2.5.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5...v0.2.5-hotfix.1
 [0.2.5]: https://github.com/OlaProeis/Ferrite/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.2...v0.2.3

@@ -15,7 +15,7 @@
 
 A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built with Rust and egui for a native, responsive experience.
 
-> ⚠️ **Platform Note:** Ferrite has been primarily developed and tested on **Windows**. While it should work on Linux and macOS, these platforms have not been extensively tested. If you encounter issues, please [report them](https://github.com/OlaProeis/Ferrite/issues).
+> ⚠️ **Platform Note:** Ferrite is developed and tested on **Windows** and **Linux**. macOS support is experimental. If you encounter issues, please [report them](https://github.com/OlaProeis/Ferrite/issues).
 
 <details>
 <summary><strong>🛡️ Antivirus False Positives</strong></summary>
@@ -84,9 +84,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.5.1 Released:** Multi-encoding file support, **major memory optimization** (250MB → 60-80MB idle), **CPU optimization** (10% → <1% idle), improved cursor positioning, and more. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.5.2 Released:** Delete Line shortcut (Ctrl+D), Move Line Up/Down (Alt+↑/↓), **Linux window drag fix**, macOS file associations, I18n cleanup with Estonian & Norwegian Bokmål support. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 📦 **v0.2.5 Highlights:** Native CSV/TSV viewer with rainbow columns, Mermaid diagram improvements (YAML frontmatter, classDef styling, subgraphs), semantic minimap, i18n with Weblate, split view dual editing, drag & drop images, TOC generation, snippets, and custom fonts.
+> 📦 **v0.2.5.1 Highlights:** Multi-encoding file support, major memory optimization (250MB → 60-80MB idle), CPU optimization (10% → <1% idle), improved cursor positioning, and Intel Mac CPU fix.
 
 ## Features
 

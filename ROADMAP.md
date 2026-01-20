@@ -157,21 +157,22 @@ Fixed 100% CPU usage on Intel Macs in Rendered mode:
 
 ---
 
-### v0.2.5-hotfix2 (In Progress) - Editor Shortcuts, macOS & I18n
+### v0.2.5.2 (Released) - Editor Shortcuts, macOS, Linux & I18n
 
-> **Status:** In Progress
+> **Status:** Released (2026-01-20)
 
-Point release with new keyboard shortcuts, macOS improvements, and internationalization cleanup.
+Point release with new keyboard shortcuts, macOS improvements, Linux bug fixes, and internationalization cleanup.
 
 #### New Features
 - [x] **Delete Line shortcut** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Cmd/Ctrl+D deletes current line (configurable in settings) - thanks [@abcd-ca](https://github.com/abcd-ca)!
-- [x] **Move Line Up/Down** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Alt+Up/Down swaps current line with adjacent line - thanks [@abcd-ca](https://github.com/abcd-ca)!
+- [x] **Move Line Up/Down** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Alt+Up/Down swaps current line with adjacent lines also in split view - thanks [@abcd-ca](https://github.com/abcd-ca)!
 - [x] **macOS file type associations** ([#30](https://github.com/OlaProeis/Ferrite/pull/30)) - Ferrite appears in Finder's "Open With" menu for .md, .json, .yaml, .toml, .txt files - thanks [@abcd-ca](https://github.com/abcd-ca)!
 
 > **Note:** Opening files via "Open With" or dragging onto app icon not yet supported due to [winit#1751](https://github.com/rust-windowing/winit/issues/1751). Workaround: use `open -a Ferrite file.md` or File > Open.
 
 #### Bug Fixes
 - [x] **Ctrl+X cutting entire document** - Fixed egui bug where Ctrl+X with no selection would cut everything. Filter out `Event::Cut` when nothing is selected.
+- [x] **Linux window drag stuck mouse** - Fixed critical bug where dragging the custom title bar on Linux caused the mouse to get "stuck" in drag mode. Bypassed egui's drag state machine using raw input detection for reliable window drag initiation.
 - [x] **Split mode cursor position** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Line operations now work correctly in Split view; rendered pane no longer overwrites cursor position - thanks [@abcd-ca](https://github.com/abcd-ca)!
 - [x] **macOS modifier tooltips** ([#28](https://github.com/OlaProeis/Ferrite/pull/28), [#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Tooltips now show "Cmd+E" on macOS instead of hardcoded "Ctrl+E" - thanks [@abcd-ca](https://github.com/abcd-ca)!
 - [x] **Semantic minimap highlight accuracy** - Use byte offsets matching search behavior for correct highlight positioning
@@ -533,7 +534,17 @@ Extract `FerriteEditor` as a standalone, framework-agnostic text editing library
 
 ## Completed ✅
 
-### v0.2.5.1 (Current Release) - Memory, Encoding & Polish
+### v0.2.5.2 (Current Release) - Editor Shortcuts, macOS, Linux & I18n
+
+See [CHANGELOG.md](CHANGELOG.md) for full release notes. Key highlights:
+- **Delete Line shortcut** - Cmd/Ctrl+D deletes current line
+- **Move Line Up/Down** - Alt+↑/↓ swaps lines
+- **macOS file type associations** - Ferrite appears in Finder's "Open With"
+- **Linux window drag fix** - Fixed stuck mouse when dragging custom title bar
+- **I18n cleanup** - Comprehensive audit, ~200 orphaned keys removed
+- **New languages** - Estonian and Norwegian Bokmål
+
+### v0.2.5.1 - Memory, Encoding & Polish
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes. Key highlights:
 - **Multi-encoding file support** - Auto-detect and preserve encodings (Latin-1, Shift-JIS, Windows-1252, etc.)

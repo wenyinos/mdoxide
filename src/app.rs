@@ -1289,20 +1289,52 @@ impl FerriteApp {
                         available.min,
                         egui::vec2(drag_width, available.height()),
                     );
-                    let drag_response = ui.allocate_rect(drag_rect, egui::Sense::click_and_drag());
+                    
+                    // IMPORTANT: We use Sense::hover() and handle drag detection manually via
+                    // raw input state. This is necessary because:
+                    //
+                    // 1. When StartDrag is sent, the window manager takes over the drag operation
+                    // 2. egui doesn't receive the mouse release event (WM handles it)
+                    // 3. egui's widget interaction state gets confused, thinking the widget
+                    //    is still being interacted with
+                    // 4. On the next click, drag_started() doesn't fire because egui thinks
+                    //    we're continuing an existing interaction
+                    //
+                    // By using raw input state (primary_pressed), we bypass egui's widget-level
+                    // tracking entirely and get reliable drag detection every time.
+                    let drag_response = ui.allocate_rect(drag_rect, egui::Sense::hover());
+                    
+                    // Get raw pointer state - this is always accurate regardless of widget state
+                    let (primary_pressed, double_clicked, pointer_pos) = ctx.input(|i| (
+                        i.pointer.primary_pressed(),
+                        i.pointer.button_double_clicked(egui::PointerButton::Primary),
+                        i.pointer.interact_pos(),
+                    ));
+                    
+                    // Check if pointer is in the drag area
+                    let pointer_in_drag_area = pointer_pos
+                        .map(|pos| drag_rect.contains(pos))
+                        .unwrap_or(false);
 
                     // Handle double-click to maximize/restore
-                    if drag_response.double_clicked() {
+                    if double_clicked && pointer_in_drag_area {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
 
                     // Handle drag to move window (but not if we're in a resize zone)
-                    // The resize handling runs before UI rendering and sets the resize state
+                    //
+                    // We use primary_pressed() which is only true on the FRAME the button
+                    // is pressed down. This ensures StartDrag is sent exactly once per click,
+                    // preventing the "mouse stuck" bug on Linux.
                     let is_in_resize = self.window_resize_state.current_direction().is_some()
                         || self.window_resize_state.is_resizing();
-                    if drag_response.dragged() && !is_in_resize {
+                    
+                    if primary_pressed && pointer_in_drag_area && !is_in_resize {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
+                    
+                    // Still use the response for hover effects if needed
+                    let _ = drag_response;
 
                     // Window control buttons (right-to-left)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
