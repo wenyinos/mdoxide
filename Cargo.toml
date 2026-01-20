@@ -142,6 +142,44 @@ assets = [
 ]
 
 # ============================================================================
+# Linux .rpm package configuration (cargo-generate-rpm)
+# Build with: cargo generate-rpm
+# ============================================================================
+[package.metadata.generate-rpm]
+name = "ferrite-editor"
+license = "MIT"
+summary = "A fast, lightweight text editor for Markdown, JSON, and more"
+url = "https://github.com/OlaProeis/Ferrite"
+assets = [
+    # Binary
+    { source = "target/release/ferrite", dest = "/usr/bin/ferrite", mode = "755" },
+    # Desktop entry
+    { source = "assets/icons/linux/ferrite.desktop", dest = "/usr/share/applications/ferrite.desktop", mode = "644" },
+    # Icons at various sizes
+    { source = "assets/icons/icon_16.png", dest = "/usr/share/icons/hicolor/16x16/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_32.png", dest = "/usr/share/icons/hicolor/32x32/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_48.png", dest = "/usr/share/icons/hicolor/48x48/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_64.png", dest = "/usr/share/icons/hicolor/64x64/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_128.png", dest = "/usr/share/icons/hicolor/128x128/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_256.png", dest = "/usr/share/icons/hicolor/256x256/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_512.png", dest = "/usr/share/icons/hicolor/512x512/apps/ferrite.png", mode = "644" },
+    # Documentation
+    { source = "README.md", dest = "/usr/share/doc/ferrite-editor/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/doc/ferrite-editor/LICENSE", mode = "644", doc = true },
+]
+
+# ============================================================================
+# Windows .msi installer configuration (cargo-wix)
+# Build with: cargo wix
+# ============================================================================
+[package.metadata.wix]
+name = "Ferrite"
+manufacturer = "OlaProeis"
+product-icon = "assets/icons/windows/app.ico"
+license = false
+eula = false
+
+# ============================================================================
 # macOS .app bundle configuration (cargo-bundle)
 # Build with: cargo bundle --release
 # ============================================================================

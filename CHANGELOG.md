@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Move Line Up/Down** ([#29](https://github.com/OlaProeis/Ferrite/pull/29)) - Alt+Up/Down swaps current line with adjacent line - thanks [@abcd-ca](https://github.com/abcd-ca)!
 - **macOS file type associations** ([#30](https://github.com/OlaProeis/Ferrite/pull/30)) - Ferrite appears in Finder's "Open With" menu for .md, .json, .yaml, .toml, .txt files - thanks [@abcd-ca](https://github.com/abcd-ca)!
 
+#### Installation & Distribution
+- **Windows portable build** - True portable mode (`ferrite-portable-windows-x64.zip`) with `portable` folder for self-contained operation. All settings stored next to executable - perfect for USB drives.
+- **Windows MSI installer** - Proper Windows installer (`ferrite-windows-x64.msi`) with Start Menu shortcut, application icon, and clean uninstall support via Windows Settings. Built with WiX Toolset.
+- **Linux RPM package** - Native package (`ferrite-editor.x86_64.rpm`) for Fedora, RHEL, CentOS, Rocky Linux, and other RPM-based distributions. Includes desktop entry and icon integration.
+
 #### Internationalization
 - **I18n audit & cleanup** - Comprehensive audit of hardcoded strings, replacement with translation keys
 - **Orphaned key removal** - Removed ~200 unused translation keys from locale files

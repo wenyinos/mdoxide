@@ -1,0 +1,113 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  Ferrite MSI Installer
+  Built with WiX Toolset via cargo-wix
+  
+  To build: cargo wix
+  To customize: edit this file and run cargo wix again
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+    
+    <Product
+        Id='*'
+        Name='Ferrite'
+        UpgradeCode='F3BB1E73-ED17-4000-A000-000000000001'
+        Manufacturer='OlaProeis'
+        Language='1033'
+        Codepage='1252'
+        Version='!(bind.FileVersion.ferrite.exe)'>
+        
+        <Package
+            Id='*'
+            Keywords='Installer'
+            Description='Ferrite - A fast, lightweight text editor for Markdown, JSON, and more'
+            Manufacturer='OlaProeis'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252'/>
+        
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+        
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='Ferrite Installation'/>
+        
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='ProgramFiles64Folder' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='Ferrite'>
+                    <Component Id='ferrite.exe' Guid='*'>
+                        <File
+                            Id='ferrite.exe'
+                            Name='ferrite.exe'
+                            DiskId='1'
+                            Source='target\release\ferrite.exe'
+                            KeyPath='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+            
+            <!-- Start Menu Shortcuts -->
+            <Directory Id='ProgramMenuFolder' Name='Programs'>
+                <Directory Id='ApplicationProgramsFolder' Name='Ferrite'>
+                    <Component Id='ApplicationShortcut' Guid='*'>
+                        <Shortcut
+                            Id='ApplicationStartMenuShortcut'
+                            Name='Ferrite'
+                            Description='A fast, lightweight text editor'
+                            Target='[#ferrite.exe]'
+                            WorkingDirectory='APPLICATIONFOLDER'
+                            Icon='ProductICO'/>
+                        <RemoveFolder Id='CleanUpShortCut' Directory='ApplicationProgramsFolder' On='uninstall'/>
+                        <RegistryValue
+                            Root='HKCU'
+                            Key='Software\OlaProeis\Ferrite'
+                            Name='installed'
+                            Type='integer'
+                            Value='1'
+                            KeyPath='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+        
+        <Feature
+            Id='Binaries'
+            Title='Application'
+            Description='Installs Ferrite text editor.'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            
+            <ComponentRef Id='ferrite.exe'/>
+            
+            <Feature
+                Id='StartMenu'
+                Title='Start Menu Shortcut'
+                Description='Add a shortcut to the Start Menu.'
+                Level='1'
+                Absent='allow'>
+                <ComponentRef Id='ApplicationShortcut'/>
+            </Feature>
+        </Feature>
+        
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        
+        <Icon Id='ProductICO' SourceFile='assets\icons\windows\app.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
+        <Property Id='ARPHELPLINK' Value='https://github.com/OlaProeis/Ferrite'/>
+        
+        <UI>
+            <UIRef Id='WixUI_InstallDir'/>
+            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='InstallDirDlg' Order='2'>1</Publish>
+            <Publish Dialog='InstallDirDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='2'>1</Publish>
+        </UI>
+        
+        <Property Id='WIXUI_INSTALLDIR' Value='APPLICATIONFOLDER'/>
+        
+    </Product>
+</Wix>

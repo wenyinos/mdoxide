@@ -155,15 +155,34 @@ Native rendering of 11 diagram types directly in the preview:
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/OlaProeis/Ferrite/releases).
 
-| Platform | Download |
-|----------|----------|
-| Windows  | `ferrite-windows-x64.zip` |
-| Linux | `ferrite-editor_amd64.deb` (recommended) or `ferrite-linux-x64.tar.gz` |
-| macOS (Apple Silicon) | `ferrite-macos-arm64.tar.gz` |
-| macOS (Intel) | `ferrite-macos-x64.tar.gz` |
+| Platform | Download | Notes |
+|----------|----------|-------|
+| **Windows** | `ferrite-windows-x64.msi` | Recommended - full installer with Start Menu |
+| Windows | `ferrite-windows-x64.zip` | Portable - just extract and run |
+| **Linux (Debian/Ubuntu)** | `ferrite-editor_amd64.deb` | For Debian, Ubuntu, Mint, Pop!_OS |
+| **Linux (Fedora/RHEL)** | `ferrite-editor.x86_64.rpm` | For Fedora, RHEL, CentOS, Rocky |
+| Linux | `ferrite-linux-x64.tar.gz` | Universal - works on any distro |
+| **macOS (Apple Silicon)** | `ferrite-macos-arm64.tar.gz` | For M1/M2/M3 Macs |
+| **macOS (Intel)** | `ferrite-macos-x64.tar.gz` | For Intel Macs |
 
 <details>
-<summary><strong>Linux Installation Instructions</strong></summary>
+<summary><strong>Windows Installation</strong></summary>
+
+#### MSI Installer (Recommended)
+
+Download `ferrite-windows-x64.msi` and run it. This will:
+- Install Ferrite to `C:\Program Files\Ferrite`
+- Add Start Menu shortcut with icon
+- Enable easy uninstall via Windows Settings
+
+#### Portable (ZIP)
+
+Download `ferrite-windows-x64.zip`, extract anywhere, and run `ferrite.exe`.
+
+</details>
+
+<details>
+<summary><strong>Linux Installation</strong></summary>
 
 #### Debian/Ubuntu/Mint (.deb)
 
@@ -175,7 +194,17 @@ sudo apt install ./ferrite-editor_amd64.deb
 sudo dpkg -i ferrite-editor_amd64.deb
 ```
 
-This will:
+#### Fedora/RHEL/CentOS (.rpm)
+
+```bash
+# Download the .rpm file, then install with:
+sudo dnf install ./ferrite-editor.x86_64.rpm
+
+# Or using rpm:
+sudo rpm -i ferrite-editor.x86_64.rpm
+```
+
+Both .deb and .rpm packages will:
 - Install Ferrite to `/usr/bin/ferrite`
 - Add desktop entry (appears in your app menu)
 - Register file associations for `.md`, `.json`, `.yaml`, `.toml` files
