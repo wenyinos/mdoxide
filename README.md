@@ -84,7 +84,7 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.5.2 Released:** Delete Line shortcut (Ctrl+D), Move Line Up/Down (Alt+↑/↓), **Linux window drag fix**, macOS file associations, I18n cleanup with Estonian & Norwegian Bokmål support. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.5.2 Released:** **Windows portable build**, Delete Line (Ctrl+D), Move Line Up/Down (Alt+↑/↓), **Linux window drag fix**, macOS file associations, MSI installer, RPM package, I18n cleanup. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 > 📦 **v0.2.5.1 Highlights:** Multi-encoding file support, major memory optimization (250MB → 60-80MB idle), CPU optimization (10% → <1% idle), improved cursor positioning, and Intel Mac CPU fix.
 
@@ -158,7 +158,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | Platform | Download | Notes |
 |----------|----------|-------|
 | **Windows** | `ferrite-windows-x64.msi` | Recommended - full installer with Start Menu |
-| Windows | `ferrite-windows-x64.zip` | Portable - just extract and run |
+| Windows | `ferrite-portable-windows-x64.zip` | Portable - extract anywhere, run from USB |
 | **Linux (Debian/Ubuntu)** | `ferrite-editor_amd64.deb` | For Debian, Ubuntu, Mint, Pop!_OS |
 | **Linux (Fedora/RHEL)** | `ferrite-editor.x86_64.rpm` | For Fedora, RHEL, CentOS, Rocky |
 | Linux | `ferrite-linux-x64.tar.gz` | Universal - works on any distro |
@@ -174,10 +174,16 @@ Download `ferrite-windows-x64.msi` and run it. This will:
 - Install Ferrite to `C:\Program Files\Ferrite`
 - Add Start Menu shortcut with icon
 - Enable easy uninstall via Windows Settings
+- Store settings in `%APPDATA%\ferrite\`
 
 #### Portable (ZIP)
 
-Download `ferrite-windows-x64.zip`, extract anywhere, and run `ferrite.exe`.
+Download `ferrite-portable-windows-x64.zip` and extract anywhere. The zip includes:
+- `ferrite.exe` - the application
+- `portable/` - folder for all your settings
+- `README.txt` - quick start guide
+
+**True portable mode:** All configuration, sessions, and data are stored in the `portable` folder next to the executable. Nothing is written to `%APPDATA%` or the Windows registry. Perfect for USB drives or trying Ferrite without installation.
 
 </details>
 
@@ -408,8 +414,11 @@ Access settings via `Ctrl+,` or the gear icon. Configure appearance, editor beha
 Settings are stored in platform-specific locations:
 
 - **Windows:** `%APPDATA%\ferrite\`
+- **Windows Portable:** `portable\` folder next to `ferrite.exe`
 - **Linux:** `~/.config/ferrite/`
 - **macOS:** `~/Library/Application Support/ferrite/`
+
+**Portable Mode (Windows):** If a `portable` folder exists next to the executable, Ferrite automatically uses it for all configuration instead of `%APPDATA%`. This makes Ferrite fully self-contained - perfect for USB drives.
 
 Workspace settings are stored in `.ferrite/` within the workspace folder.
 

@@ -23,13 +23,50 @@ const CONFIG_FILE_NAME: &str = "config.json";
 /// Backup configuration file name (used during atomic writes)
 const CONFIG_BACKUP_NAME: &str = "config.json.bak";
 
+/// Portable mode folder name (when present next to exe, enables portable mode)
+const PORTABLE_DIR_NAME: &str = "portable";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Portable Mode Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Check if we're running in portable mode.
+///
+/// Portable mode is enabled when a `portable` folder exists next to the executable.
+/// In portable mode, all configuration and data is stored in that folder instead
+/// of the system's AppData/config directory.
+///
+/// This allows Ferrite to run from a USB drive or portable installation without
+/// modifying the host system.
+fn get_portable_dir() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|exe| {
+        let portable_dir = exe.parent()?.join(PORTABLE_DIR_NAME);
+        if portable_dir.exists() && portable_dir.is_dir() {
+            debug!("Portable mode detected: {}", portable_dir.display());
+            Some(portable_dir)
+        } else {
+            None
+        }
+    })
+}
+
+/// Returns true if the application is running in portable mode.
+///
+/// Portable mode is enabled when a `portable` folder exists next to the executable.
+pub fn is_portable_mode() -> bool {
+    get_portable_dir().is_some()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform-Specific Directory Resolution
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Get the platform-specific configuration directory for the application.
+/// Get the configuration directory for the application.
 ///
-/// Returns the appropriate directory based on the operating system:
+/// In **portable mode** (when a `portable` folder exists next to the executable):
+/// - Returns the `portable` folder path
+///
+/// In **standard mode**, returns the platform-specific directory:
 /// - **Windows**: `%APPDATA%\ferrite\` (e.g., `C:\Users\<User>\AppData\Roaming\ferrite\`)
 /// - **macOS**: `~/Library/Application Support/ferrite/`
 /// - **Linux**: `~/.config/ferrite/`
@@ -37,7 +74,7 @@ const CONFIG_BACKUP_NAME: &str = "config.json.bak";
 /// # Errors
 ///
 /// Returns `Error::ConfigDirNotFound` if the config directory cannot be determined
-/// (e.g., if the HOME environment variable is not set).
+/// (e.g., if the HOME environment variable is not set and not in portable mode).
 ///
 /// # Examples
 ///
@@ -46,6 +83,12 @@ const CONFIG_BACKUP_NAME: &str = "config.json.bak";
 /// println!("Config directory: {}", config_dir.display());
 /// ```
 pub fn get_config_dir() -> Result<PathBuf> {
+    // Check for portable mode first
+    if let Some(portable_dir) = get_portable_dir() {
+        return Ok(portable_dir);
+    }
+
+    // Fall back to system config directory
     dirs::config_dir()
         .map(|base| base.join(APP_NAME))
         .ok_or(Error::ConfigDirNotFound)

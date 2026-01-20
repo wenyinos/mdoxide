@@ -409,7 +409,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+<<<<<<< HEAD
 - **0.2.5.2** - Delete Line shortcut, Move Line Up/Down, macOS file associations, Linux window drag fix, I18n cleanup, new language support
+=======
+- **0.2.5.2** - Windows portable build with true portable mode (config stored next to exe)
+>>>>>>> 024bfa1 (feat: Add Windows portable build with true portable mode)
 - **0.2.5.1** - Multi-encoding support, memory optimization (250MB → 60-80MB), CPU optimization (10% → <1% idle), cursor positioning improvements, Intel Mac CPU fix, bug fixes
 - **0.2.5** - Mermaid refactor, CSV viewer, semantic minimap, i18n, CJK indentation, custom fonts, snippets, TOC generation, drag-drop images, document statistics, main menu redesign, split view editing, bug fixes
 - **0.2.3** - Editor productivity release (Go to Line, Duplicate Line, Move Line, Auto-close, Smart Paste, Line Width)

@@ -26,11 +26,34 @@ jobs:
       - name: Build release
         run: cargo build --release
 
-      - name: Create release archive
+      - name: Create portable release archive
+        shell: pwsh
         run: |
           mkdir release
           copy target\release\ferrite.exe release\
-          Compress-Archive -Path release\* -DestinationPath ferrite-windows-x64.zip
+          mkdir release\portable
+          $readme = @(
+            "Ferrite - Portable Edition"
+            "==========================="
+            ""
+            "This is the portable version of Ferrite. All your settings,"
+            "sessions, and data will be stored in the 'portable' folder"
+            "next to ferrite.exe."
+            ""
+            "To use:"
+            "1. Extract this folder anywhere (USB drive, local folder, etc.)"
+            "2. Run ferrite.exe"
+            "3. Your configuration will be saved in the 'portable' subfolder"
+            ""
+            "This version does not modify your system - perfect for USB drives"
+            "or trying Ferrite without installation."
+            ""
+            "For a traditional Windows installation, use the .msi installer instead."
+            ""
+            "Website: https://ferrite.ink"
+          ) -join "`r`n"
+          Set-Content -Path release\README.txt -Value $readme -NoNewline
+          Compress-Archive -Path release\* -DestinationPath ferrite-portable-windows-x64.zip
 
       - name: Install cargo-wix
         run: cargo install cargo-wix
@@ -41,11 +64,11 @@ jobs:
       - name: Copy MSI to workspace root
         run: copy target\wix\*.msi .\ferrite-windows-x64.msi
 
-      - name: Upload zip artifact
+      - name: Upload portable zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ferrite-windows-x64
-          path: ferrite-windows-x64.zip
+          name: ferrite-portable-windows-x64
+          path: ferrite-portable-windows-x64.zip
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
@@ -188,10 +211,10 @@ jobs:
       contents: write
     
     steps:
-      - name: Download Windows zip artifact
+      - name: Download Windows portable zip artifact
         uses: actions/download-artifact@v4
         with:
-          name: ferrite-windows-x64
+          name: ferrite-portable-windows-x64
 
       - name: Download Windows MSI artifact
         uses: actions/download-artifact@v4
@@ -231,7 +254,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           files: |
-            ferrite-windows-x64.zip
+            ferrite-portable-windows-x64.zip
             ferrite-windows-x64.msi
             ferrite-linux-x64.tar.gz
             ferrite-editor_amd64.deb

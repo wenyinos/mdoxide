@@ -166,14 +166,15 @@ impl SnippetManager {
 
     /// Get the path to the snippets configuration file.
     ///
-    /// Uses platform-specific config directory:
+    /// Uses the centralized config directory (supports portable mode):
+    /// - Portable: `<exe_dir>/portable/snippets.json`
     /// - Linux: `~/.config/ferrite/snippets.json`
     /// - macOS: `~/Library/Application Support/ferrite/snippets.json`
     /// - Windows: `%APPDATA%\ferrite\snippets.json`
     pub fn config_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("ferrite")
+        use crate::config::persistence::get_config_dir;
+        get_config_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
             .join("snippets.json")
     }
 
