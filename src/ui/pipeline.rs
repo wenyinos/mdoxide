@@ -8,6 +8,7 @@
 #![allow(dead_code)]
 
 use eframe::egui::{self, Color32, Key, RichText, ScrollArea, TextEdit, Ui};
+use rust_i18n::t;
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -687,7 +688,7 @@ impl PipelinePanel {
                 // Header row: Title, Status, Close button
                 // ─────────────────────────────────────────────────────────
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("⚡ Live Pipeline").strong().color(text_color));
+                    ui.label(RichText::new(t!("pipeline.title").to_string()).strong().color(text_color));
                     ui.separator();
 
                     // Status indicator
@@ -721,7 +722,7 @@ impl PipelinePanel {
                         );
                         if *truncated {
                             ui.label(
-                                RichText::new("(truncated)")
+                                RichText::new(t!("pipeline.truncated").to_string())
                                     .small()
                                     .color(Color32::from_rgb(249, 115, 22)),
                             );
@@ -732,7 +733,7 @@ impl PipelinePanel {
                         // Close button
                         if ui
                             .button(RichText::new("✕").color(secondary_text))
-                            .on_hover_text("Close pipeline panel")
+                            .on_hover_text(t!("pipeline.close_tooltip").to_string())
                             .clicked()
                         {
                             output.closed = true;
@@ -743,7 +744,7 @@ impl PipelinePanel {
                         if self.is_running() {
                             if ui
                                 .button(RichText::new("⏹").color(error_color))
-                                .on_hover_text("Cancel execution")
+                                .on_hover_text(t!("pipeline.cancel_tooltip").to_string())
                                 .clicked()
                             {
                                 self.cancel();
@@ -767,7 +768,7 @@ impl PipelinePanel {
                         TextEdit::singleline(&mut tab_state.command)
                             .id(egui::Id::new("pipeline_command_input"))
                             .font(egui::TextStyle::Monospace)
-                            .hint_text("jq '.items[]' or yq '.data' ..."),
+                            .hint_text(t!("pipeline.command_placeholder").to_string()),
                     );
 
                     // Track focus state
@@ -790,7 +791,7 @@ impl PipelinePanel {
                     }
 
                     // History dropdown button
-                    let history_btn = ui.button("📜").on_hover_text("Recent commands");
+                    let history_btn = ui.button("📜").on_hover_text(t!("pipeline.recent").to_string());
                     if history_btn.clicked() {
                         self.show_history_dropdown = !self.show_history_dropdown;
                     }
@@ -798,8 +799,8 @@ impl PipelinePanel {
                     // Run button
                     let run_enabled = !tab_state.command.trim().is_empty() && !self.is_running();
                     if ui
-                        .add_enabled(run_enabled, egui::Button::new("▶ Run"))
-                        .on_hover_text("Execute command (Enter)")
+                        .add_enabled(run_enabled, egui::Button::new(t!("pipeline.run").to_string()))
+                        .on_hover_text(t!("pipeline.run_tooltip").to_string())
                         .clicked()
                     {
                         self.execute(&tab_state.command, content, working_dir.clone());
@@ -870,7 +871,7 @@ impl PipelinePanel {
                                 ui.set_width(half_width);
                                 ui.set_height(output_height);
                                 ui.label(
-                                    RichText::new("stdout")
+                                    RichText::new(t!("pipeline.stdout").to_string())
                                         .small()
                                         .color(secondary_text),
                                 );
@@ -879,7 +880,7 @@ impl PipelinePanel {
                                     .show(ui, |ui| {
                                         if tab_state.stdout.is_empty() {
                                             ui.label(
-                                                RichText::new("(no output)")
+                                                RichText::new(t!("pipeline.no_output").to_string())
                                                     .italics()
                                                     .color(secondary_text),
                                             );
@@ -908,7 +909,7 @@ impl PipelinePanel {
                             .show(ui, |ui| {
                                 ui.set_width(half_width);
                                 ui.set_height(output_height);
-                                ui.label(RichText::new("stderr").small().color(error_color));
+                                ui.label(RichText::new(t!("pipeline.stderr").to_string()).small().color(error_color));
                                 ScrollArea::vertical()
                                     .id_source("stderr_scroll")
                                     .show(ui, |ui| {
@@ -942,14 +943,7 @@ impl PipelinePanel {
                                         match &tab_state.status {
                                             PipelineStatus::Idle => {
                                                 ui.label(
-                                                    RichText::new(
-                                                        "Enter a command above to pipe your document through it.\n\
-                                                        Examples:\n\
-                                                        • jq '.'           - Format JSON\n\
-                                                        • jq '.items[]'    - Extract array items\n\
-                                                        • yq '.data'       - Extract YAML field\n\
-                                                        • grep 'pattern'   - Search for pattern"
-                                                    )
+                                                    RichText::new(t!("pipeline.hint").to_string())
                                                     .italics()
                                                     .color(secondary_text),
                                                 );
@@ -958,7 +952,7 @@ impl PipelinePanel {
                                                 ui.horizontal(|ui| {
                                                     ui.spinner();
                                                     ui.label(
-                                                        RichText::new("Executing...")
+                                                        RichText::new(t!("pipeline.running").to_string())
                                                             .color(secondary_text),
                                                     );
                                                 });
@@ -967,20 +961,20 @@ impl PipelinePanel {
                                                 if *exit_code == 0 =>
                                             {
                                                 ui.label(
-                                                    RichText::new("(command produced no output)")
+                                                    RichText::new(t!("pipeline.no_output_success").to_string())
                                                         .italics()
                                                         .color(secondary_text),
                                                 );
                                             }
                                             PipelineStatus::Error { message } => {
                                                 ui.label(
-                                                    RichText::new(format!("Error: {}", message))
+                                                    RichText::new(format!("{}: {}", t!("common.error"), message))
                                                         .color(error_color),
                                                 );
                                             }
                                             _ => {
                                                 ui.label(
-                                                    RichText::new("(no output)")
+                                                    RichText::new(t!("pipeline.no_output").to_string())
                                                         .italics()
                                                         .color(secondary_text),
                                                 );

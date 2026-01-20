@@ -21,6 +21,7 @@
 
 use eframe::egui::{self, Color32, RichText, ScrollArea, TextEdit, Ui, Vec2};
 use log::warn;
+use rust_i18n::t;
 use std::collections::HashMap;
 
 use crate::string_utils::safe_slice_to;
@@ -645,15 +646,12 @@ impl<'a> TreeViewer<'a> {
             ui.horizontal(|ui| {
                 ui.colored_label(
                     colors.error,
-                    format!(
-                        "⚠ Large file ({:.1} MB). Tree view may be slow.",
-                        content_size as f64 / 1_000_000.0
-                    ),
+                    t!("tree_viewer.large_file_warning", size = format!("{:.1}", content_size as f64 / 1_000_000.0)).to_string(),
                 );
-                if ui.button("Dismiss").clicked() {
+                if ui.button(t!("common.dismiss").to_string()).clicked() {
                     self.state.large_file_warning_dismissed = true;
                 }
-                if ui.button("Show Raw").clicked() {
+                if ui.button(t!("tree_viewer.show_raw").to_string()).clicked() {
                     self.state.show_raw = true;
                 }
             });
@@ -666,10 +664,10 @@ impl<'a> TreeViewer<'a> {
             ui.separator();
 
             if !self.state.show_raw {
-                if ui.button("▼ Expand All").clicked() {
+                if ui.button(t!("tree_viewer.expand_all").to_string()).clicked() {
                     self.state.expand_all();
                 }
-                if ui.button("▶ Collapse All").clicked() {
+                if ui.button(t!("tree_viewer.collapse_all").to_string()).clicked() {
                     // Need to parse to collapse
                     if let Ok(tree) = parse_structured_content(self.content, self.file_type) {
                         self.state.collapse_all(&tree);
@@ -719,7 +717,7 @@ impl<'a> TreeViewer<'a> {
 
     fn show_parse_error(&self, ui: &mut Ui, error: &ParseError, colors: &TreeViewerColors) {
         ui.horizontal(|ui| {
-            ui.colored_label(colors.error, "⚠ Parse Error:");
+            ui.colored_label(colors.error, t!("tree_viewer.parse_error").to_string());
             ui.colored_label(colors.error, &error.message);
         });
         ui.separator();
@@ -985,7 +983,7 @@ impl<'a> TreeViewer<'a> {
         }
 
         ui.menu_button("⋯", |ui| {
-            if ui.button("📋 Copy Path").clicked() {
+            if ui.button(t!("tree_viewer.copy_path").to_string()).clicked() {
                 let json_path = self.path_to_jsonpath(path);
                 ui.output_mut(|o| o.copied_text = json_path);
                 self.state.copied_path = Some(path.to_string());

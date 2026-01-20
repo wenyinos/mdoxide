@@ -41,6 +41,7 @@ use crate::ui::{
 };
 use eframe::egui;
 use log::{debug, info, trace, warn};
+use rust_i18n::t;
 use std::collections::HashMap;
 
 /// Get the display name for the primary modifier key.
@@ -1017,19 +1018,19 @@ impl FerriteApp {
         let mut should_restore = false;
         let mut should_discard = false;
 
-        egui::Window::new("🔄 Auto-Save Recovery")
+        egui::Window::new(format!("🔄 {}", t!("recovery.auto_save.title")))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.add_space(8.0);
-                ui.label("An auto-saved backup was found for this file.");
+                ui.label(t!("recovery.auto_save.backup_found").to_string());
                 ui.add_space(4.0);
 
                 if let Some(path) = &recovery_info.path {
                     ui.label(format!("File: {}", path.display()));
                 } else {
-                    ui.label("Untitled document");
+                    ui.label(t!("recovery.untitled").to_string());
                 }
 
                 // Format timestamp
@@ -1038,26 +1039,26 @@ impl FerriteApp {
                 if let Ok(elapsed) = std::time::SystemTime::now().duration_since(saved_time) {
                     let secs = elapsed.as_secs();
                     let time_str = if secs < 60 {
-                        format!("{} seconds ago", secs)
+                        t!("time.seconds_ago", count = secs).to_string()
                     } else if secs < 3600 {
-                        format!("{} minutes ago", secs / 60)
+                        t!("time.minutes_ago", count = secs / 60).to_string()
                     } else if secs < 86400 {
-                        format!("{} hours ago", secs / 3600)
+                        t!("time.hours_ago", count = secs / 3600).to_string()
                     } else {
-                        format!("{} days ago", secs / 86400)
+                        t!("time.days_ago", count = secs / 86400).to_string()
                     };
-                    ui.label(format!("Auto-saved: {}", time_str));
+                    ui.label(t!("recovery.auto_save.time_label", time = time_str).to_string());
                 }
 
                 ui.add_space(12.0);
-                ui.label("Would you like to restore the auto-saved content?");
+                ui.label(t!("recovery.auto_save.restore_question").to_string());
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("✅ Restore").clicked() {
+                    if ui.button(format!("✅ {}", t!("recovery.auto_save.restore"))).clicked() {
                         should_restore = true;
                     }
-                    if ui.button("🗑 Discard").clicked() {
+                    if ui.button(format!("🗑 {}", t!("recovery.auto_save.discard"))).clicked() {
                         should_discard = true;
                     }
                 });
@@ -1069,7 +1070,7 @@ impl FerriteApp {
                 if tab.id == recovery_info.tab_id {
                     tab.set_content(recovery_info.recovered_content);
                     let time = self.get_app_time();
-                    self.state.show_toast("Restored from auto-save".to_string(), time, 3.0);
+                    self.state.show_toast(t!("notification.restored_auto_save").to_string(), time, 3.0);
                     info!("Restored auto-save content for tab {}", recovery_info.tab_id);
                 }
             }
@@ -1079,7 +1080,7 @@ impl FerriteApp {
             // Delete the auto-save file
             delete_auto_save(recovery_info.tab_id, recovery_info.path.as_ref());
             let time = self.get_app_time();
-            self.state.show_toast("Auto-save discarded".to_string(), time, 2.0);
+            self.state.show_toast(t!("notification.auto_save_discarded").to_string(), time, 2.0);
             info!("Discarded auto-save for tab {}", recovery_info.tab_id);
         } else {
             // Dialog still open, put recovery info back
@@ -1112,7 +1113,7 @@ impl FerriteApp {
         let mut restore = false;
         let mut discard = false;
 
-        egui::Window::new("🔄 Recover Previous Session?")
+        egui::Window::new(format!("🔄 {}?", t!("recovery.session.title")))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -1122,29 +1123,26 @@ impl FerriteApp {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 8.0;
 
-                    ui.label("Ferrite detected that your previous session was not closed properly.");
+                    ui.label(t!("recovery.session.crash_detected").to_string());
                     ui.add_space(4.0);
 
                     if num_unsaved > 0 {
                         ui.colored_label(
                             egui::Color32::from_rgb(255, 180, 0),
-                            format!(
-                                "⚠ {} tab(s) had unsaved changes that may be recoverable.",
-                                num_unsaved
-                            ),
+                            t!("recovery.session.tabs_unsaved", count = num_unsaved).to_string(),
                         );
                     }
 
                     ui.add_space(8.0);
 
-                    ui.label("Would you like to restore your previous session?");
+                    ui.label(t!("recovery.session.restore_question").to_string());
 
                     ui.add_space(12.0);
 
                     ui.horizontal(|ui| {
                         if ui
-                            .button("✓ Restore Session")
-                            .on_hover_text("Restore all tabs from the previous session")
+                            .button(format!("✓ {}", t!("recovery.session.restore")))
+                            .on_hover_text(t!("recovery.session.restore_tooltip").to_string())
                             .clicked()
                         {
                             restore = true;
@@ -1153,8 +1151,8 @@ impl FerriteApp {
                         ui.add_space(8.0);
 
                         if ui
-                            .button("✗ Start Fresh")
-                            .on_hover_text("Discard the previous session and start with an empty editor")
+                            .button(format!("✗ {}", t!("recovery.session.start_fresh")))
+                            .on_hover_text(t!("recovery.session.start_fresh_tooltip").to_string())
                             .clicked()
                         {
                             discard = true;
@@ -1170,7 +1168,7 @@ impl FerriteApp {
                 if self.state.restore_from_session_result(&result) {
                     info!("Session restored from crash recovery");
                     let current_time = self.get_app_time();
-                    self.state.show_toast("Session restored", current_time, 3.0);
+                    self.state.show_toast(t!("notification.session_restored").to_string(), current_time, 3.0);
                     // Restore CSV delimiter overrides
                     if let Some(session) = session {
                         self.restore_csv_delimiters(&session);
@@ -1332,7 +1330,7 @@ impl FerriteApp {
                         if close_btn.clicked() && self.state.request_exit() {
                             self.should_exit = true;
                         }
-                        close_btn.on_hover_text("Close");
+                        close_btn.on_hover_text(t!("a11y.close_button").to_string());
 
                         // Maximize/Restore button
                         let max_icon = if is_maximized { "❐" } else { "□" };
@@ -1374,7 +1372,7 @@ impl FerriteApp {
                         if min_btn.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
-                        min_btn.on_hover_text("Minimize");
+                        min_btn.on_hover_text(t!("a11y.minimize_button").to_string());
 
                         // Fullscreen button - draw expand arrows icon
                         let is_fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
@@ -1408,8 +1406,8 @@ impl FerriteApp {
                         if fullscreen_btn.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen));
                         }
-                        let fs_tooltip = if is_fullscreen { "Exit Fullscreen (F10 or Esc)" } else { "Fullscreen (F10)" };
-                        fullscreen_btn.on_hover_text(fs_tooltip);
+                        let fs_tooltip = if is_fullscreen { t!("tooltip.fullscreen_exit") } else { t!("tooltip.fullscreen_enter") };
+                        fullscreen_btn.on_hover_text(fs_tooltip.to_string());
 
                         ui.add_space(8.0);
 
@@ -1419,7 +1417,7 @@ impl FerriteApp {
                         // ═══════════════════════════════════════════════════════════════
 
                         // Settings button
-                        if TitleBarButton::show(ui, "⚙", "Settings (Ctrl+,)", false, is_dark).clicked() {
+                        if TitleBarButton::show(ui, "⚙", &t!("tooltip.settings").to_string(), false, is_dark).clicked() {
                             title_bar_open_settings = true;
                         }
 
@@ -1428,11 +1426,11 @@ impl FerriteApp {
                         // Zen Mode toggle - use simple "Z" icon for cross-platform compatibility
                         let zen_icon = if zen_mode_active { "Z" } else { "Z" };
                         let zen_tooltip = if zen_mode_active {
-                            "Exit Zen Mode (F11)"
+                            t!("zen.exit")
                         } else {
-                            "Enter Zen Mode (F11)"
+                            t!("zen.enter")
                         };
-                        if TitleBarButton::show(ui, zen_icon, zen_tooltip, zen_mode_active, is_dark).clicked() {
+                        if TitleBarButton::show(ui, zen_icon, &format!("{} (F11)", zen_tooltip), zen_mode_active, is_dark).clicked() {
                             title_bar_toggle_zen = true;
                         }
 
@@ -1443,9 +1441,9 @@ impl FerriteApp {
                             // Show current mode icon and cycle on click
                             let mod_key = modifier_symbol();
                             let (mode_icon, mode_tooltip) = match current_view_mode {
-                                ViewMode::Raw => ("R", format!("Raw mode - Click to switch to Split ({}+E)", mod_key)),
-                                ViewMode::Split => ("S", format!("Split mode - Click to switch to Rendered ({}+E)", mod_key)),
-                                ViewMode::Rendered => ("V", format!("Rendered mode - Click to switch to Raw ({}+E)", mod_key)),
+                                ViewMode::Raw => ("R", t!("tooltip.view_mode.raw", modifier = mod_key).to_string()),
+                                ViewMode::Split => ("S", t!("tooltip.view_mode.split", modifier = mod_key).to_string()),
+                                ViewMode::Rendered => ("V", t!("tooltip.view_mode.rendered", modifier = mod_key).to_string()),
                             };
                             
                             if TitleBarButton::show(ui, mode_icon, &mode_tooltip, false, is_dark).clicked() {
@@ -1616,9 +1614,9 @@ impl FerriteApp {
                     tab.path
                         .as_ref()
                         .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| "Untitled".to_string())
+                        .unwrap_or_else(|| t!("status.untitled").to_string())
                 } else {
-                    "No file open".to_string()
+                    t!("status.no_file").to_string()
                 };
 
                 // Make the file path a clickable button that opens the recent items popup
@@ -1638,7 +1636,7 @@ impl FerriteApp {
                 );
 
                 if has_recent_items {
-                    button_response.clone().on_hover_text("Click for recent files & folders\nShift+Click to open in background");
+                    button_response.clone().on_hover_text(t!("tooltip.recent_items").to_string());
                 }
 
                 // Toggle popup on click
@@ -1697,7 +1695,7 @@ impl FerriteApp {
                                     ui.set_min_width(300.0);
                                     
                                     // Recent Files section
-                                    ui.label(egui::RichText::new("📄 Recent Files").strong());
+                                    ui.label(egui::RichText::new(t!("menu.file.recent").to_string()).strong());
                                     ui.separator();
                                     
                                     for path in &recent_files {
@@ -1735,7 +1733,7 @@ impl FerriteApp {
                                     ui.add_space(8.0);
                                     
                                     // Recent Folders section
-                                    ui.label(egui::RichText::new("📁 Recent Folders").strong());
+                                    ui.label(egui::RichText::new(t!("workspace.recent_folders").to_string()).strong());
                                     ui.separator();
                                     
                                     for path in &recent_folders {
@@ -1915,7 +1913,7 @@ impl FerriteApp {
                     // Help button (rightmost in right-to-left layout)
                     if ui
                         .button("?")
-                        .on_hover_text("About / Help (F1)")
+                        .on_hover_text(t!("tooltip.about_help").to_string())
                         .clicked()
                     {
                         self.state.toggle_about();
@@ -1936,7 +1934,7 @@ impl FerriteApp {
                             egui::RichText::new(format!("⎇ {}", branch))
                                 .color(branch_color)
                                 .size(12.0)
-                        ).on_hover_text("Current Git branch");
+                        ).on_hover_text(t!("tooltip.git_branch").to_string());
                     }
 
                     if let Some(tab) = self.state.active_tab() {
@@ -1991,12 +1989,12 @@ impl FerriteApp {
                                 // Delimiter picker popup
                                 egui::popup_below_widget(ui, popup_id, &button_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
                                     ui.set_min_width(120.0);
-                                    ui.label(egui::RichText::new("Select Delimiter").strong());
+                                    ui.label(egui::RichText::new(t!("csv.select_delimiter").to_string()).strong());
                                     ui.separator();
                                     
                                     // Auto-detect option
                                     let auto_selected = !is_overridden;
-                                    if ui.selectable_label(auto_selected, "⟳ Auto-detect").clicked() {
+                                    if ui.selectable_label(auto_selected, t!("csv.delimiter_auto").to_string()).clicked() {
                                         if let Some(state) = self.csv_viewer_states.get_mut(&tab_id) {
                                             state.clear_delimiter_override();
                                         }
@@ -2047,12 +2045,12 @@ impl FerriteApp {
                                 // Header picker popup
                                 egui::popup_below_widget(ui, header_popup_id, &header_button_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
                                     ui.set_min_width(120.0);
-                                    ui.label(egui::RichText::new("Header Row").strong());
+                                    ui.label(egui::RichText::new(t!("csv.header_row").to_string()).strong());
                                     ui.separator();
                                     
                                     // Auto-detect option
                                     let auto_selected = !header_overridden;
-                                    if ui.selectable_label(auto_selected, "⟳ Auto-detect").clicked() {
+                                    if ui.selectable_label(auto_selected, t!("csv.delimiter_auto").to_string()).clicked() {
                                         if let Some(state) = self.csv_viewer_states.get_mut(&tab_id) {
                                             state.clear_header_override();
                                         }
@@ -2062,14 +2060,14 @@ impl FerriteApp {
                                     ui.separator();
                                     
                                     // Manual options
-                                    if ui.selectable_label(header_overridden && has_headers, "✓ First row is header").clicked() {
+                                    if ui.selectable_label(header_overridden && has_headers, t!("csv.has_headers_yes").to_string()).clicked() {
                                         if let Some(state) = self.csv_viewer_states.get_mut(&tab_id) {
                                             state.set_header_override(true);
                                         }
                                         ui.memory_mut(|mem| mem.close_popup());
                                     }
                                     
-                                    if ui.selectable_label(header_overridden && !has_headers, "✗ No header row").clicked() {
+                                    if ui.selectable_label(header_overridden && !has_headers, t!("csv.has_headers_no").to_string()).clicked() {
                                         if let Some(state) = self.csv_viewer_states.get_mut(&tab_id) {
                                             state.set_header_override(false);
                                         }
@@ -2623,7 +2621,7 @@ impl FerriteApp {
             if plus_response.clicked() {
                 self.state.new_tab();
             }
-            plus_response.on_hover_text("New tab");
+            plus_response.on_hover_text(t!("tooltip.new_tab").to_string());
 
             // Handle tab close action
             if let Some(index) = tab_to_close {
@@ -7032,7 +7030,7 @@ impl FerriteApp {
     fn render_dialogs(&mut self, ctx: &egui::Context) {
         // Confirmation dialog for unsaved changes
         if self.state.ui.show_confirm_dialog {
-            egui::Window::new("Unsaved Changes")
+            egui::Window::new(t!("dialog.unsaved_changes.title").to_string())
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -7057,7 +7055,7 @@ impl FerriteApp {
                         };
 
                         // "Save" button - save then proceed with action
-                        if ui.button("Save").clicked() {
+                        if ui.button(t!("dialog.unsaved_changes.save").to_string()).clicked() {
                             if is_tab_close {
                                 // Save the tab first
                                 if let Some(PendingAction::CloseTab(index)) =
@@ -7098,7 +7096,7 @@ impl FerriteApp {
                         }
 
                         // "Discard" button - proceed without saving
-                        if ui.button("Discard").clicked() {
+                        if ui.button(t!("dialog.unsaved_changes.dont_save").to_string()).clicked() {
                             self.state.handle_confirmed_action();
                             // Clean up viewer state after tab is closed
                             if let Some(id) = tab_id_to_cleanup {
@@ -7110,7 +7108,7 @@ impl FerriteApp {
                         }
 
                         // "Cancel" button - abort the action
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(t!("dialog.confirm.cancel").to_string()).clicked() {
                             self.state.cancel_pending_action();
                         }
                     });
@@ -7119,7 +7117,7 @@ impl FerriteApp {
 
         // Error modal
         if self.state.ui.show_error_modal {
-            egui::Window::new("Error")
+            egui::Window::new(t!("common.error").to_string())
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -7127,7 +7125,7 @@ impl FerriteApp {
                     ui.label(egui::RichText::new("⚠").size(24.0));
                     ui.label(&self.state.ui.error_message);
                     ui.separator();
-                    if ui.button("OK").clicked() {
+                    if ui.button(t!("common.ok").to_string()).clicked() {
                         self.state.dismiss_error();
                     }
                 });

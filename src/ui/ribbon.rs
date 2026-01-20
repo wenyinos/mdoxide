@@ -11,6 +11,7 @@ use crate::markdown::formatting::{FormattingState, MarkdownFormatCommand};
 use crate::state::FileType;
 use crate::theme::ThemeColors;
 use eframe::egui::{self, Color32, Response, RichText, Ui, Vec2};
+use rust_i18n::t;
 
 /// Height of the ribbon in expanded state.
 const RIBBON_HEIGHT_EXPANDED: f32 = 40.0;
@@ -235,7 +236,7 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             if !self.collapsed {
                 ui.label(
-                    RichText::new("File")
+                    RichText::new(t!("menu.file.label").to_string())
                         .size(10.0)
                         .color(theme_colors.text.muted),
                 );
@@ -280,14 +281,14 @@ impl Ribbon {
                 .width(40.0)
                 .show_ui(ui, |ui| {
                     if ui
-                        .selectable_label(false, "💾 Save")
+                        .selectable_label(false, format!("💾 {}", t!("menu.file.save")))
                         .on_hover_text(format!("Save ({}+S)", modifier_symbol()))
                         .clicked()
                     {
                         action = Some(RibbonAction::Save);
                     }
                     if ui
-                        .selectable_label(false, "📥 Save As...")
+                        .selectable_label(false, format!("📥 {}...", t!("menu.file.save_as")))
                         .on_hover_text(format!("Save As ({}+Shift+S)", modifier_symbol()))
                         .clicked()
                     {
@@ -304,7 +305,7 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             if !self.collapsed {
                 ui.label(
-                    RichText::new("Edit")
+                    RichText::new(t!("menu.edit.label").to_string())
                         .size(10.0)
                         .color(theme_colors.text.muted),
                 );
@@ -329,7 +330,7 @@ impl Ribbon {
                 // Markdown formatting buttons
                 if !self.collapsed {
                     ui.label(
-                        RichText::new("Format")
+                        RichText::new(t!("menu.format.label").to_string())
                             .size(10.0)
                             .color(theme_colors.text.muted),
                     );
@@ -416,7 +417,7 @@ impl Ribbon {
                         for level in 1..=6u8 {
                             let is_selected =
                                 current_heading.map(|h| h as u8 == level).unwrap_or(false);
-                            let label = format!("Heading {}", level);
+                            let label = t!("ribbon.heading_level", level = level).to_string();
                             if ui
                                 .selectable_label(is_selected, &label)
                                 .on_hover_text(format!("{}+{}", modifier_symbol(), level))
@@ -529,7 +530,7 @@ impl Ribbon {
                 if icon_button(
                     ui,
                     "✨",
-                    "Format Document (Pretty-print)",
+                    &t!("ribbon.format_document").to_string(),
                     has_editor,
                     is_dark,
                 )
@@ -539,7 +540,7 @@ impl Ribbon {
                 }
 
                 // Validate button
-                if icon_button(ui, "✓", "Validate Syntax", has_editor, is_dark).clicked() {
+                if icon_button(ui, "✓", &t!("ribbon.validate_syntax").to_string(), has_editor, is_dark).clicked() {
                     action = Some(RibbonAction::ValidateSyntax);
                 }
 
@@ -548,7 +549,7 @@ impl Ribbon {
                     if icon_button(
                         ui,
                         "⚡",
-                        &format!("Live Pipeline ({}+Shift+L)\nPipe document through shell commands", modifier_symbol()),
+                        &format!("{} ({}+Shift+L)", t!("ribbon.pipeline"), modifier_symbol()),
                         has_editor && pipeline_enabled,
                         is_dark,
                     )
@@ -569,7 +570,7 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             if !self.collapsed {
                 ui.label(
-                    RichText::new("Tools")
+                    RichText::new(t!("menu.tools.label").to_string())
                         .size(10.0)
                         .color(theme_colors.text.muted),
                 );
@@ -590,12 +591,12 @@ impl Ribbon {
                 }
             } else if file_type.is_structured() {
                 if outline_enabled {
-                    "Hide Info Panel".to_string()
+                    t!("ribbon.hide_info_panel").to_string()
                 } else {
-                    "Show Info Panel".to_string()
+                    t!("ribbon.show_info_panel").to_string()
                 }
             } else {
-                "Toggle Outline".to_string()
+                t!("ribbon.toggle_outline").to_string()
             };
             if icon_button(ui, outline_icon, &outline_tooltip, true, is_dark).clicked() {
                 action = Some(RibbonAction::ToggleOutline);
@@ -610,29 +611,29 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             if file_type.is_markdown() {
                 // Note: ComboBox adds its own dropdown arrow, so we don't add ▾ manually
-                let export_label = if self.collapsed { "🌐" } else { "Export" };
+                let export_label = if self.collapsed { "🌐".to_string() } else { t!("menu.file.export").to_string() };
                 egui::ComboBox::from_id_source("export_dropdown")
                     .selected_text(RichText::new(export_label).size(12.0))
                     .width(if self.collapsed { 40.0 } else { 65.0 })
                     .show_ui(ui, |ui| {
                         if ui
-                            .selectable_label(false, "🌐 Export as HTML")
+                            .selectable_label(false, format!("🌐 {}", t!("menu.file.export_html")))
                             .on_hover_text(format!("Export as HTML ({}+Shift+E)", modifier_symbol()))
                             .clicked()
                         {
                             action = Some(RibbonAction::ExportHtml);
                         }
                         if ui
-                            .selectable_label(false, "📋 Copy as HTML")
-                            .on_hover_text("Copy rendered HTML to clipboard")
+                            .selectable_label(false, format!("📋 {}", t!("menu.file.export_clipboard")))
+                            .on_hover_text(t!("ribbon.copy_html_tooltip").to_string())
                             .clicked()
                         {
                             action = Some(RibbonAction::CopyAsHtml);
                         }
                         ui.separator();
                         ui.add_enabled_ui(false, |ui| {
-                            ui.selectable_label(false, "📄 Export as PDF")
-                                .on_hover_text("Coming soon");
+                            ui.selectable_label(false, t!("ribbon.export_pdf").to_string())
+                                .on_hover_text(t!("ribbon.coming_soon").to_string());
                         });
                     });
             }

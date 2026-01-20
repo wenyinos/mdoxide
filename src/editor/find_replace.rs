@@ -13,6 +13,7 @@
 use eframe::egui::{self, Color32, Key, RichText, Ui, Vec2};
 use log::debug;
 use regex::Regex;
+use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Find State
@@ -346,7 +347,7 @@ impl FindReplacePanel {
             });
 
         // Show as floating window at top of screen
-        egui::Window::new("Find and Replace")
+        egui::Window::new(t!("find.title").to_string())
             .id(egui::Id::new("find_replace_panel"))
             .title_bar(false)
             .resizable(false)
@@ -385,11 +386,11 @@ impl FindReplacePanel {
                 // Header row with close button
                 ui.horizontal(|ui| {
                     let title = if find_state.is_replace_mode {
-                        "Find and Replace"
+                        t!("find.title_replace")
                     } else {
-                        "Find"
+                        t!("find.title_find")
                     };
-                    ui.label(RichText::new(title).size(14.0).color(text_color).strong());
+                    ui.label(RichText::new(title.to_string()).size(14.0).color(text_color).strong());
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close button
@@ -398,7 +399,7 @@ impl FindReplacePanel {
                                 egui::Button::new(RichText::new("×").size(16.0).color(muted_color))
                                     .frame(false),
                             )
-                            .on_hover_text("Close (Escape)")
+                            .on_hover_text(t!("find.close_tooltip").to_string())
                             .clicked()
                         {
                             output.close_requested = true;
@@ -411,9 +412,9 @@ impl FindReplacePanel {
                             "⇄"
                         };
                         let mode_tooltip = if find_state.is_replace_mode {
-                            "Hide Replace (Ctrl+H)"
+                            t!("find.hide_replace")
                         } else {
-                            "Show Replace (Ctrl+H)"
+                            t!("find.show_replace")
                         };
                         if ui
                             .add(
@@ -422,7 +423,7 @@ impl FindReplacePanel {
                                 )
                                 .frame(false),
                             )
-                            .on_hover_text(mode_tooltip)
+                            .on_hover_text(mode_tooltip.to_string())
                             .clicked()
                         {
                             find_state.is_replace_mode = !find_state.is_replace_mode;
@@ -441,7 +442,7 @@ impl FindReplacePanel {
                         Vec2::new(280.0, 24.0),
                         egui::TextEdit::singleline(&mut find_state.search_term)
                             .id(search_id)
-                            .hint_text("Search...")
+                            .hint_text(t!("find.placeholder").to_string())
                             .font(egui::FontId::proportional(13.0)),
                     );
 
@@ -460,7 +461,7 @@ impl FindReplacePanel {
                         if find_state.search_term.is_empty() {
                             String::new()
                         } else {
-                            "No matches".to_string()
+                            t!("find.no_results").to_string()
                         }
                     } else {
                         format!(
@@ -482,7 +483,7 @@ impl FindReplacePanel {
                         ui.add_sized(
                             Vec2::new(280.0, 24.0),
                             egui::TextEdit::singleline(&mut find_state.replace_term)
-                                .hint_text("Replace with...")
+                                .hint_text(t!("find.replace_placeholder").to_string())
                                 .font(egui::FontId::proportional(13.0)),
                         );
                     });
@@ -495,7 +496,7 @@ impl FindReplacePanel {
                     // Case sensitive toggle
                     let case_btn = ui.add(toggle_button(
                         "Aa",
-                        "Case Sensitive",
+                        &t!("find.match_case").to_string(),
                         find_state.case_sensitive,
                         is_dark,
                         accent_color,
@@ -510,7 +511,7 @@ impl FindReplacePanel {
                     // Whole word toggle
                     let word_btn = ui.add(toggle_button(
                         "W",
-                        "Whole Word",
+                        &t!("find.whole_word").to_string(),
                         find_state.whole_word,
                         is_dark,
                         accent_color,
@@ -525,7 +526,7 @@ impl FindReplacePanel {
                     // Regex toggle
                     let regex_btn = ui.add(toggle_button(
                         ".*",
-                        "Use Regex",
+                        &t!("find.use_regex").to_string(),
                         find_state.use_regex,
                         is_dark,
                         accent_color,
@@ -546,7 +547,7 @@ impl FindReplacePanel {
                             egui::Button::new(RichText::new("◀").size(12.0))
                                 .min_size(Vec2::new(28.0, 24.0)),
                         )
-                        .on_hover_text("Previous (Shift+F3)")
+                        .on_hover_text(t!("find.prev_tooltip").to_string())
                         .clicked()
                     {
                         output.prev_requested = true;
@@ -558,7 +559,7 @@ impl FindReplacePanel {
                             egui::Button::new(RichText::new("▶").size(12.0))
                                 .min_size(Vec2::new(28.0, 24.0)),
                         )
-                        .on_hover_text("Next (F3 or Enter)")
+                        .on_hover_text(t!("find.next_tooltip").to_string())
                         .clicked()
                     {
                         output.next_requested = true;
@@ -571,9 +572,9 @@ impl FindReplacePanel {
                         if ui
                             .add_enabled(
                                 has_matches,
-                                egui::Button::new("Replace").min_size(Vec2::new(60.0, 24.0)),
+                                egui::Button::new(t!("find.replace").to_string()).min_size(Vec2::new(60.0, 24.0)),
                             )
-                            .on_hover_text("Replace current match")
+                            .on_hover_text(t!("find.replace_tooltip").to_string())
                             .clicked()
                         {
                             output.replace_requested = true;
@@ -582,9 +583,9 @@ impl FindReplacePanel {
                         if ui
                             .add_enabled(
                                 has_matches,
-                                egui::Button::new("Replace All").min_size(Vec2::new(80.0, 24.0)),
+                                egui::Button::new(t!("find.replace_all").to_string()).min_size(Vec2::new(80.0, 24.0)),
                             )
-                            .on_hover_text("Replace all matches")
+                            .on_hover_text(t!("find.replace_all_tooltip").to_string())
                             .clicked()
                         {
                             output.replace_all_requested = true;
@@ -595,7 +596,7 @@ impl FindReplacePanel {
                 // Keyboard hints
                 ui.add_space(4.0);
                 ui.label(
-                    RichText::new("Enter/F3: Next • Shift+F3: Prev • Esc: Close")
+                    RichText::new(t!("find.keyboard_hints").to_string())
                         .size(10.0)
                         .color(muted_color),
                 );

@@ -14,6 +14,7 @@
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 use log::warn;
 use palette::{IntoColor, Oklch, Srgb};
+use rust_i18n::t;
 use std::path::Path;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -839,15 +840,12 @@ impl<'a> CsvViewer<'a> {
             ui.horizontal(|ui| {
                 ui.colored_label(
                     colors.error,
-                    format!(
-                        "⚠ Large file ({:.1} MB). Table view may be slow.",
-                        content_size as f64 / 1_000_000.0
-                    ),
+                    t!("csv.large_file_warning", size = format!("{:.1}", content_size as f64 / 1_000_000.0)).to_string(),
                 );
-                if ui.button("Dismiss").clicked() {
+                if ui.button(t!("common.dismiss").to_string()).clicked() {
                     self.state.large_file_warning_dismissed = true;
                 }
-                if ui.button("Show Raw").clicked() {
+                if ui.button(t!("csv.show_raw").to_string()).clicked() {
                     self.state.show_raw = true;
                     output.toggle_raw_requested = true;
                 }
@@ -893,7 +891,7 @@ impl<'a> CsvViewer<'a> {
 
     fn show_parse_error(&self, ui: &mut Ui, error: &CsvParseError, colors: &CsvViewerColors) {
         ui.horizontal(|ui| {
-            ui.colored_label(colors.error, "⚠ Parse Error:");
+            ui.colored_label(colors.error, t!("csv.error").to_string());
             ui.colored_label(colors.error, &error.message);
         });
         ui.separator();

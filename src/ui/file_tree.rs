@@ -11,6 +11,7 @@
 use crate::vcs::GitFileStatus;
 use crate::workspaces::{FileTreeNode, FileTreeNodeKind};
 use eframe::egui::{self, Color32, RichText, Sense, Ui, Vec2};
+use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -178,7 +179,7 @@ impl FileTreePanel {
                         ui.add_space(8.0);
                         if ui
                             .add(egui::Button::new("×").frame(false))
-                            .on_hover_text("Close Workspace")
+                            .on_hover_text(t!("workspace.close_folder").to_string())
                             .clicked()
                         {
                             output.close_requested = true;
@@ -474,17 +475,17 @@ impl FileTreePanel {
     }
 
     /// Get a human-readable description for a Git status.
-    fn status_description(status: GitFileStatus) -> &'static str {
+    fn status_description(status: GitFileStatus) -> String {
         match status {
-            GitFileStatus::Clean => "tracked",
-            GitFileStatus::Modified => "modified",
-            GitFileStatus::Staged => "staged",
-            GitFileStatus::StagedModified => "staged with changes",
-            GitFileStatus::Untracked => "untracked",
-            GitFileStatus::Ignored => "ignored",
-            GitFileStatus::Deleted => "deleted",
-            GitFileStatus::Renamed => "renamed",
-            GitFileStatus::Conflict => "conflict",
+            GitFileStatus::Clean => t!("git.tracked").to_string(),
+            GitFileStatus::Modified => t!("git.modified").to_string(),
+            GitFileStatus::Staged => t!("git.staged").to_string(),
+            GitFileStatus::StagedModified => t!("git.staged_modified").to_string(),
+            GitFileStatus::Untracked => t!("git.untracked").to_string(),
+            GitFileStatus::Ignored => t!("git.ignored").to_string(),
+            GitFileStatus::Deleted => t!("git.deleted").to_string(),
+            GitFileStatus::Renamed => t!("git.renamed").to_string(),
+            GitFileStatus::Conflict => t!("git.conflict").to_string(),
         }
     }
 
@@ -546,30 +547,30 @@ impl FileTreePanel {
         let is_dir = matches!(node.kind, FileTreeNodeKind::Directory { .. });
 
         if is_dir {
-            if ui.button("📄 New File").clicked() {
+            if ui.button(format!("📄 {}", t!("workspace.new_file"))).clicked() {
                 output.context_action = Some(FileTreeContextAction::NewFile(node.path.clone()));
                 ui.close_menu();
             }
-            if ui.button("📁 New Folder").clicked() {
+            if ui.button(format!("📁 {}", t!("workspace.new_folder"))).clicked() {
                 output.context_action = Some(FileTreeContextAction::NewFolder(node.path.clone()));
                 ui.close_menu();
             }
             ui.separator();
         }
 
-        if ui.button("✏️ Rename").clicked() {
+        if ui.button(format!("✏️ {}", t!("workspace.rename"))).clicked() {
             output.context_action = Some(FileTreeContextAction::Rename(node.path.clone()));
             ui.close_menu();
         }
 
-        if ui.button("🗑️ Delete").clicked() {
+        if ui.button(format!("🗑️ {}", t!("workspace.delete"))).clicked() {
             output.context_action = Some(FileTreeContextAction::Delete(node.path.clone()));
             ui.close_menu();
         }
 
         ui.separator();
 
-        if ui.button("📂 Reveal in Explorer").clicked() {
+        if ui.button(format!("📂 {}", t!("tab.reveal_in_explorer"))).clicked() {
             output.context_action =
                 Some(FileTreeContextAction::RevealInExplorer(node.path.clone()));
             ui.close_menu();
@@ -577,7 +578,7 @@ impl FileTreePanel {
 
         ui.separator();
 
-        if ui.button("🔄 Refresh").clicked() {
+        if ui.button(format!("🔄 {}", t!("workspace.refresh"))).clicked() {
             output.context_action = Some(FileTreeContextAction::Refresh);
             ui.close_menu();
         }

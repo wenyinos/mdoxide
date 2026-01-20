@@ -17,6 +17,7 @@
 use crate::config::Theme;
 use crate::markdown::parser::{HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
 use eframe::egui::{self, Color32, FontId, Key, RichText, TextEdit, Ui};
+use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget Output
@@ -1613,7 +1614,7 @@ impl<'a> EditableTable<'a> {
                                     // Add row button
                                     let add_row_btn = ui.add(
                                         egui::Button::new(
-                                            RichText::new("+ Row")
+                                            RichText::new(t!("widgets.table.add_row").to_string())
                                                 .size(self.font_size * 0.85)
                                                 .color(control_color)
                                         )
@@ -1623,7 +1624,7 @@ impl<'a> EditableTable<'a> {
                                         ui.painter().text(
                                             add_row_btn.rect.center(),
                                             egui::Align2::CENTER_CENTER,
-                                            "+ Row",
+                                            t!("widgets.table.add_row").to_string(),
                                             FontId::proportional(self.font_size * 0.85),
                                             control_hover_color,
                                         );
@@ -1635,7 +1636,7 @@ impl<'a> EditableTable<'a> {
                                     // Add column button
                                     let add_col_btn = ui.add(
                                         egui::Button::new(
-                                            RichText::new("+ Column")
+                                            RichText::new(t!("widgets.table.add_column").to_string())
                                                 .size(self.font_size * 0.85)
                                                 .color(control_color)
                                         )
@@ -1645,7 +1646,7 @@ impl<'a> EditableTable<'a> {
                                         ui.painter().text(
                                             add_col_btn.rect.center(),
                                             egui::Align2::CENTER_CENTER,
-                                            "+ Column",
+                                            t!("widgets.table.add_column").to_string(),
                                             FontId::proportional(self.font_size * 0.85),
                                             control_hover_color,
                                         );
@@ -1662,7 +1663,7 @@ impl<'a> EditableTable<'a> {
 
                                         // Column delete buttons (compact)
                                         ui.label(
-                                            RichText::new("Delete column:")
+                                            RichText::new(t!("widgets.table.delete_column_label").to_string())
                                                 .size(self.font_size * 0.8)
                                                 .color(control_color)
                                         );
@@ -1688,7 +1689,7 @@ impl<'a> EditableTable<'a> {
                                                 );
                                             }
                                             if del_col_btn
-                                                .on_hover_text(format!("Delete column {}", col + 1))
+                                                .on_hover_text(t!("widgets.table.delete_column", index = (col + 1).to_string()).to_string())
                                                 .clicked()
                                             {
                                                 action = Some(TableAction::RemoveColumn(col));
@@ -1703,7 +1704,7 @@ impl<'a> EditableTable<'a> {
                                         ui.add_space(4.0);
 
                                         ui.label(
-                                            RichText::new("Align:")
+                                            RichText::new(t!("widgets.table.align_label").to_string())
                                                 .size(self.font_size * 0.8)
                                                 .color(control_color)
                                         );
@@ -1717,10 +1718,10 @@ impl<'a> EditableTable<'a> {
                                                 .unwrap_or(TableAlignment::None);
 
                                             let (align_icon, tooltip) = match align {
-                                                TableAlignment::Left => ("⬅", "Left aligned"),
-                                                TableAlignment::Center => ("⬌", "Center aligned"),
-                                                TableAlignment::Right => ("➡", "Right aligned"),
-                                                TableAlignment::None => ("—", "No alignment"),
+                                                TableAlignment::Left => ("⬅", t!("widgets.table.align_left").to_string()),
+                                                TableAlignment::Center => ("⬌", t!("widgets.table.align_center").to_string()),
+                                                TableAlignment::Right => ("➡", t!("widgets.table.align_right").to_string()),
+                                                TableAlignment::None => ("—", t!("widgets.table.align_none").to_string()),
                                             };
 
                                             let align_btn = ui.add(
@@ -2289,8 +2290,8 @@ impl<'a> EditableCodeBlock<'a> {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Copy button
                         if ui
-                            .add(egui::Button::new("Copy").small())
-                            .on_hover_text("Copy to clipboard")
+                            .add(egui::Button::new(t!("common.copy").to_string()).small())
+                            .on_hover_text(t!("widgets.code_block.copy_tooltip").to_string())
                             .clicked()
                         {
                             ui.ctx().copy_text(self.data.code.clone());
@@ -2302,9 +2303,9 @@ impl<'a> EditableCodeBlock<'a> {
                         if ui
                             .add(egui::Button::new(edit_text).small())
                             .on_hover_text(if self.data.is_editing {
-                                "Finish editing"
+                                t!("widgets.code_block.finish_tooltip").to_string()
                             } else {
-                                "Edit code"
+                                t!("widgets.code_block.edit_tooltip").to_string()
                             })
                             .clicked()
                         {
@@ -2595,7 +2596,7 @@ impl<'a> RenderedLinkWidget<'a> {
                 self.state.popup_open = !self.state.popup_open;
             }
 
-            settings_response.on_hover_text("Edit link");
+            settings_response.on_hover_text(t!("widgets.link.edit").to_string());
         }
 
         // Show popup if open
@@ -2644,7 +2645,7 @@ impl<'a> RenderedLinkWidget<'a> {
                                 // Display text field
                                 ui.horizontal(|ui| {
                                     ui.label(
-                                        RichText::new("Text:")
+                                        RichText::new(t!("widgets.link.text_label").to_string())
                                             .color(colors.muted)
                                             .font(FontId::proportional(self.font_size * 0.9)),
                                     );
@@ -2664,7 +2665,7 @@ impl<'a> RenderedLinkWidget<'a> {
                             // URL field
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("URL:")
+                                    RichText::new(t!("widgets.link.url_label").to_string())
                                         .color(colors.muted)
                                         .font(FontId::proportional(self.font_size * 0.9)),
                                 );
@@ -2689,7 +2690,7 @@ impl<'a> RenderedLinkWidget<'a> {
                                     || self.state.edit_url.starts_with("https://");
 
                                 let open_button =
-                                    ui.add_enabled(can_open, egui::Button::new("🔗 Open"));
+                                    ui.add_enabled(can_open, egui::Button::new(t!("widgets.link.open").to_string()));
 
                                 // Store clicked state before consuming response
                                 let open_clicked = open_button.clicked();
@@ -2714,8 +2715,8 @@ impl<'a> RenderedLinkWidget<'a> {
 
                                 // Copy URL button
                                 if ui
-                                    .button("📋 Copy")
-                                    .on_hover_text("Copy URL to clipboard")
+                                    .button(t!("widgets.link.copy").to_string())
+                                    .on_hover_text(t!("widgets.link.copy_tooltip").to_string())
                                     .clicked()
                                 {
                                     ui.ctx().copy_text(self.state.edit_url.clone());
@@ -3188,7 +3189,7 @@ impl<'a> MermaidBlock<'a> {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Mermaid badge
                             ui.label(
-                                RichText::new("mermaid")
+                                RichText::new(t!("mermaid.badge").to_string())
                                     .color(muted_color)
                                     .italics()
                                     .size(self.font_size - 2.0),
@@ -3228,7 +3229,7 @@ impl<'a> MermaidBlock<'a> {
                     } else if self.data.source.trim().is_empty() {
                         // Empty diagram
                         ui.label(
-                            RichText::new("(empty diagram)")
+                            RichText::new(t!("mermaid.empty").to_string())
                                 .color(muted_color)
                                 .italics()
                                 .font(FontId::monospace(self.font_size)),
@@ -3328,7 +3329,7 @@ fn show_source_code(
             ui.vertical(|ui| {
                 if lines.is_empty() {
                     ui.label(
-                        RichText::new("(empty diagram)")
+                        RichText::new(t!("mermaid.empty").to_string())
                             .color(muted_color)
                             .italics()
                             .font(FontId::monospace(font_size)),
@@ -3374,7 +3375,7 @@ fn show_render_error(
             ui.horizontal(|ui| {
                 ui.label(RichText::new("⚠").color(error_text));
                 ui.label(
-                    RichText::new(format!("Render failed: {}", error))
+                    RichText::new(t!("mermaid.rendering_error", error = error).to_string())
                         .color(error_text)
                         .size(font_size - 1.0),
                 );
