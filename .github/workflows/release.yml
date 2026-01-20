@@ -59,13 +59,7 @@ jobs:
         run: cargo install cargo-wix
 
       - name: Build MSI installer
-        shell: pwsh
-        run: |
-          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
-          # Convert semver with prerelease to MSI-compatible format (x.y.z.w)
-          $msiVersion = $version -replace '-.*', '' -replace '^(\d+\.\d+\.\d+)$', '$1.0'
-          Write-Host "Building MSI with version: $msiVersion"
-          cargo wix --nocapture -D Version=$msiVersion
+        run: cargo wix --nocapture
 
       - name: Copy MSI to workspace root
         run: copy target\wix\*.msi .\ferrite-windows-x64.msi

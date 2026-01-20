@@ -15,7 +15,7 @@
         Manufacturer='OlaProeis'
         Language='1033'
         Codepage='1252'
-        Version='$(var.Version)'>
+        Version='0.2.5.2'>
         
         <Package
             Id='*'
