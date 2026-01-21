@@ -34,7 +34,7 @@ use crate::state::{AppState, FileType, PendingAction, Selection};
 use crate::theme::{ThemeColors, ThemeManager};
 use crate::vcs::GitAutoRefresh;
 use crate::ui::{
-    handle_window_resize, AboutPanel, FileOperationDialog, FileOperationResult,
+    handle_window_resize, load_app_logo_texture, AboutPanel, FileOperationDialog, FileOperationResult,
     FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, QuickSwitcher, Ribbon,
     RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton,
     ViewModeSegment, ViewSegmentAction, WindowResizeState,
@@ -240,6 +240,8 @@ pub struct FerriteApp {
     last_interaction_time: std::time::Instant,
     /// Last window title (to avoid sending viewport commands every frame)
     last_window_title: String,
+    /// App logo texture for title bar display (with transparent background)
+    app_logo_texture: Option<egui::TextureHandle>,
 }
 
 impl FerriteApp {
@@ -341,6 +343,12 @@ impl FerriteApp {
         let mut snippet_manager = SnippetManager::new();
         snippet_manager.set_enabled(state.settings.snippets_enabled);
 
+        // Load app logo texture for title bar display
+        let app_logo_texture = load_app_logo_texture(&cc.egui_ctx);
+        if app_logo_texture.is_some() {
+            info!("Loaded app logo texture for title bar");
+        }
+
         let mut app = Self {
             state,
             theme_manager,
@@ -379,6 +387,7 @@ impl FerriteApp {
             last_fps_log: std::time::Instant::now(),
             last_interaction_time: std::time::Instant::now(),
             last_window_title: String::new(),
+            app_logo_texture,
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -1256,14 +1265,20 @@ impl FerriteApp {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(8.0);
 
-                    // App icon/logo placeholder - vertically centered
-                    ui.label(egui::RichText::new("📝").size(14.0));
+                    // App icon/logo - display texture if available, fallback to emoji
+                    if let Some(texture) = &self.app_logo_texture {
+                        let logo_size = 18.0; // Match title bar height nicely
+                        ui.add(egui::Image::new(texture).fit_to_exact_size(egui::vec2(logo_size, logo_size)));
+                    } else {
+                        ui.label(egui::RichText::new("📝").size(14.0));
+                    }
 
-                    ui.add_space(8.0);
+                    ui.add_space(4.0); // Reduced spacing between icon and title
 
                     // Window title (dynamically generated) - use consistent sizing
+                    // Offset text slightly upward to better align with icon center
                     let title = self.window_title();
-                    ui.label(egui::RichText::new(title).size(12.0).color(text_color));
+                    ui.add(egui::Label::new(egui::RichText::new(title).size(12.0).color(text_color)).selectable(false));
 
                     // Auto-save indicator (after filename) - only show if there's an active editor
                     if has_editor {
