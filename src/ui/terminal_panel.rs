@@ -184,36 +184,61 @@ impl TerminalPanel {
                 let mut close_tab: Option<usize> = None;
 
                 for (idx, title, is_active) in &titles {
-                    let tab_response = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new(title)
-                                .size(12.0)
-                                .color(text_color),
-                        )
-                        .fill(if *is_active { tab_active_bg } else { tab_bg })
-                        .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(4.0)),
-                    );
-
-                    if tab_response.clicked() {
-                        state.manager.set_active(*idx);
-                    }
-
-                    // Show close button on hover
-                    if tab_response.hovered() {
-                        let close_response = ui.add(
+                    ui.horizontal(|ui| {
+                        let tab_response = ui.add(
                             egui::Button::new(
-                                egui::RichText::new("×")
+                                egui::RichText::new(title)
                                     .size(12.0)
                                     .color(text_color),
                             )
-                            .frame(false)
-                            .min_size(egui::vec2(16.0, 16.0)),
+                            .fill(if *is_active { tab_active_bg } else { tab_bg })
+                            .stroke(egui::Stroke::new(1.0, border_color))
+                            .rounding(egui::Rounding::same(4.0)),
                         );
-                        if close_response.clicked() {
+
+                        // Left click to activate
+                        if tab_response.clicked() {
+                            state.manager.set_active(*idx);
+                        }
+
+                        // Middle click to close
+                        if tab_response.middle_clicked() {
                             close_tab = Some(*idx);
                         }
-                    }
+
+                        // Right-click menu
+                        tab_response.context_menu(|ui| {
+                            if ui.button("Close").clicked() {
+                                close_tab = Some(*idx);
+                                ui.close_menu();
+                            }
+                            if ui.button("Close Others").clicked() {
+                                // Close all except this one
+                                for i in (0..state.manager.terminal_count()).rev() {
+                                    if i != *idx {
+                                        state.manager.close_terminal(i);
+                                    }
+                                }
+                                ui.close_menu();
+                            }
+                        });
+
+                        // Close button (always visible on active tab, or on hover)
+                        if *is_active || tab_response.hovered() {
+                            let close_response = ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new("×")
+                                        .size(14.0)
+                                        .color(text_color),
+                                )
+                                .frame(false)
+                                .min_size(egui::vec2(16.0, 16.0)),
+                            );
+                            if close_response.clicked() {
+                                close_tab = Some(*idx);
+                            }
+                        }
+                    });
 
                     ui.add_space(4.0);
                 }
@@ -240,6 +265,15 @@ impl TerminalPanel {
                 // Handle tab close
                 if let Some(idx) = close_tab {
                     state.manager.close_terminal(idx);
+                }
+
+                // Keyboard shortcuts
+                // Ctrl+F4 to close active terminal
+                if ui.input(|i| i.key_pressed(egui::Key::F4) && i.modifiers.ctrl) {
+                    let active_idx = state.manager.active_index();
+                    if state.manager.terminal_count() > 1 {
+                        state.manager.close_terminal(active_idx);
+                    }
                 }
 
                 // Spacer
