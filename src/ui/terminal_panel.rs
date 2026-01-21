@@ -316,7 +316,8 @@ impl TerminalPanel {
 
                 // Keyboard shortcuts
                 // Ctrl+Tab / Ctrl+Shift+Tab to cycle through terminals
-                if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl) {
+                let ctrl_tab_pressed = ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl);
+                if ctrl_tab_pressed {
                     let count = state.manager.terminal_count();
                     if count > 1 {
                         let active = state.manager.active_index();
@@ -328,6 +329,11 @@ impl TerminalPanel {
                             (active + 1) % count
                         };
                         state.manager.set_active(next);
+
+                        // Consume the event to prevent it from switching file tabs
+                        ui.ctx().input_mut(|i| {
+                            i.consume_key(egui::Modifiers::CTRL, egui::Key::Tab);
+                        });
                     }
                 }
 
@@ -350,6 +356,11 @@ impl TerminalPanel {
                         let idx = i - 1; // 0-indexed
                         if idx < state.manager.terminal_count() {
                             state.manager.set_active(idx);
+
+                            // Consume the event to prevent it from writing to files
+                            ui.ctx().input_mut(|input| {
+                                input.consume_key(egui::Modifiers::CTRL, key);
+                            });
                         }
                     }
                 }
@@ -359,6 +370,11 @@ impl TerminalPanel {
                     if let Some(terminal) = state.manager.active_terminal_mut() {
                         // Send Ctrl+L character (ASCII 12, form feed)
                         terminal.write_input(&[12]);
+
+                        // Consume the event
+                        ui.ctx().input_mut(|i| {
+                            i.consume_key(egui::Modifiers::CTRL, egui::Key::L);
+                        });
                     }
                 }
 
@@ -398,16 +414,19 @@ impl TerminalPanel {
             if let Some(terminal) = state.manager.active_terminal_mut() {
                 let screen = terminal.screen();
 
+                // Only focus terminal widget if NOT renaming
+                let is_renaming = state.renaming_index.is_some();
+
                 // Create terminal widget
                 let widget = TerminalWidget::new(screen)
                     .font_size(14.0)
-                    .focused(true)
+                    .focused(!is_renaming)
                     .is_dark(is_dark);
 
                 let widget_output = widget.show(ui);
 
-                // Send keyboard input to terminal
-                if !widget_output.input.is_empty() {
+                // Send keyboard input to terminal ONLY if not renaming
+                if !is_renaming && !widget_output.input.is_empty() {
                     terminal.write_input(&widget_output.input);
                 }
 
