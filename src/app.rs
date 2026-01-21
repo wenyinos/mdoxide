@@ -2728,8 +2728,13 @@ impl FerriteApp {
                         // Get bracket matching setting
                         let highlight_matching_pairs = self.state.settings.highlight_matching_pairs;
 
-                        // Get syntax highlighting setting
+                        // Get syntax highlighting settings
                         let syntax_highlighting_enabled = self.state.settings.syntax_highlighting_enabled;
+                        let syntax_theme = if self.state.settings.syntax_theme.is_empty() {
+                            None
+                        } else {
+                            Some(self.state.settings.syntax_theme.clone())
+                        };
 
                         // Get minimap settings (hidden in Zen Mode)
                         let minimap_enabled = self.state.settings.minimap_enabled && !zen_mode;
@@ -2870,7 +2875,8 @@ impl FerriteApp {
                                 .max_line_width(max_line_width) // Apply when not in Zen Mode
                                 .transient_highlight(transient_hl)
                                 .highlight_matching_pairs(highlight_matching_pairs)
-                                .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark);
+                                .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark)
+                                .syntax_theme(syntax_theme.clone());
 
                             // Add search highlights if available
                             if let Some(highlights) = search_highlights.clone() {
@@ -3030,8 +3036,13 @@ impl FerriteApp {
                             // Get bracket matching setting
                             let highlight_matching_pairs = self.state.settings.highlight_matching_pairs;
 
-                            // Get syntax highlighting setting
+                            // Get syntax highlighting settings
                             let syntax_highlighting_enabled = self.state.settings.syntax_highlighting_enabled;
+                            let syntax_theme = if self.state.settings.syntax_theme.is_empty() {
+                                None
+                            } else {
+                                Some(self.state.settings.syntax_theme.clone())
+                            };
 
                             // Get line width setting
                             let max_line_width = self.state.settings.max_line_width;
@@ -3154,7 +3165,8 @@ impl FerriteApp {
                                     .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                     .transient_highlight(transient_hl)
                                     .highlight_matching_pairs(highlight_matching_pairs)
-                                    .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark);
+                                    .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark)
+                                    .syntax_theme(syntax_theme.clone());
 
                                 // Add search highlights if available
                                 if let Some(highlights) = search_highlights.clone() {
