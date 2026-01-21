@@ -7,14 +7,14 @@ Transform Ferrite into a powerful terminal workspace with **grid/Kanban-style te
 ---
 
 ## Phase 1: Terminal Essentials ⚡ (v0.3.0)
-**Status:** In Progress
+**Status:** In Progress (4/5 completed)
 **Goal:** Make the terminal feature production-ready with essential UX
 
 ### Navigation & Shortcuts
-- [ ] **Tab switching** - Ctrl+Tab / Ctrl+Shift+Tab to cycle through terminals
-- [ ] **Numeric shortcuts** - Ctrl+1-9 to jump to specific terminal
-- [ ] **Tab rename** - Double-click tab or right-click → "Rename" to set custom names
-- [ ] **Clear terminal** - Ctrl+L to clear screen (send `clear` command)
+- [x] **Tab switching** - Ctrl+Tab / Ctrl+Shift+Tab to cycle through terminals
+- [x] **Numeric shortcuts** - Ctrl+1-9 to jump to specific terminal
+- [x] **Tab rename** - Double-click tab or right-click → "Rename" to set custom names
+- [x] **Clear terminal** - Ctrl+L to clear screen (sends Ctrl+L character)
 - [ ] **Duplicate tab** - Right-click → "New Terminal Here" (same directory)
 
 ### Copy/Paste

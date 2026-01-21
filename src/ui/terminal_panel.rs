@@ -29,6 +29,10 @@ pub struct TerminalPanelState {
     pub scroll_offset: usize,
     /// Working directory for new terminals (workspace root or current file's directory)
     pub working_dir: Option<std::path::PathBuf>,
+    /// Index of terminal being renamed (None if not renaming)
+    pub renaming_index: Option<usize>,
+    /// Temporary name buffer during rename
+    pub rename_buffer: String,
 }
 
 impl Default for TerminalPanelState {
@@ -40,6 +44,8 @@ impl Default for TerminalPanelState {
             initialized: false,
             scroll_offset: 0,
             working_dir: None,
+            renaming_index: None,
+            rename_buffer: String::new(),
         }
     }
 }
@@ -185,57 +191,98 @@ impl TerminalPanel {
 
                 for (idx, title, is_active) in &titles {
                     ui.horizontal(|ui| {
-                        let tab_response = ui.add(
-                            egui::Button::new(
-                                egui::RichText::new(title)
-                                    .size(12.0)
-                                    .color(text_color),
-                            )
-                            .fill(if *is_active { tab_active_bg } else { tab_bg })
-                            .stroke(egui::Stroke::new(1.0, border_color))
-                            .rounding(egui::Rounding::same(4.0)),
-                        );
+                        // Show text input if this tab is being renamed
+                        if state.renaming_index == Some(*idx) {
+                            let text_edit = egui::TextEdit::singleline(&mut state.rename_buffer)
+                                .desired_width(120.0)
+                                .font(egui::TextStyle::Body);
 
-                        // Left click to activate
-                        if tab_response.clicked() {
-                            state.manager.set_active(*idx);
-                        }
+                            let text_response = ui.add(text_edit);
 
-                        // Middle click to close
-                        if tab_response.middle_clicked() {
-                            close_tab = Some(*idx);
-                        }
+                            // Auto-focus the text input
+                            text_response.request_focus();
 
-                        // Right-click menu
-                        tab_response.context_menu(|ui| {
-                            if ui.button("Close").clicked() {
-                                close_tab = Some(*idx);
-                                ui.close_menu();
-                            }
-                            if ui.button("Close Others").clicked() {
-                                // Close all except this one
-                                for i in (0..state.manager.terminal_count()).rev() {
-                                    if i != *idx {
-                                        state.manager.close_terminal(i);
+                            // Apply rename on Enter or lose focus
+                            if text_response.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                if !state.rename_buffer.trim().is_empty() {
+                                    if let Some(terminal) = state.manager.terminal_mut(*idx) {
+                                        terminal.set_title(state.rename_buffer.clone());
                                     }
                                 }
-                                ui.close_menu();
+                                state.renaming_index = None;
+                                state.rename_buffer.clear();
                             }
-                        });
 
-                        // Close button (always visible on active tab, or on hover)
-                        if *is_active || tab_response.hovered() {
-                            let close_response = ui.add(
+                            // Cancel on Escape
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                state.renaming_index = None;
+                                state.rename_buffer.clear();
+                            }
+                        } else {
+                            // Normal tab button
+                            let tab_response = ui.add(
                                 egui::Button::new(
-                                    egui::RichText::new("×")
-                                        .size(14.0)
+                                    egui::RichText::new(title)
+                                        .size(12.0)
                                         .color(text_color),
                                 )
-                                .frame(false)
-                                .min_size(egui::vec2(16.0, 16.0)),
+                                .fill(if *is_active { tab_active_bg } else { tab_bg })
+                                .stroke(egui::Stroke::new(1.0, border_color))
+                                .rounding(egui::Rounding::same(4.0)),
                             );
-                            if close_response.clicked() {
+
+                            // Left click to activate
+                            if tab_response.clicked() {
+                                state.manager.set_active(*idx);
+                            }
+
+                            // Double-click to rename
+                            if tab_response.double_clicked() {
+                                state.renaming_index = Some(*idx);
+                                state.rename_buffer = title.to_string();
+                            }
+
+                            // Middle click to close
+                            if tab_response.middle_clicked() {
                                 close_tab = Some(*idx);
+                            }
+
+                            // Right-click menu
+                            tab_response.context_menu(|ui| {
+                                if ui.button("Rename").clicked() {
+                                    state.renaming_index = Some(*idx);
+                                    state.rename_buffer = title.to_string();
+                                    ui.close_menu();
+                                }
+                                if ui.button("Close").clicked() {
+                                    close_tab = Some(*idx);
+                                    ui.close_menu();
+                                }
+                                if ui.button("Close Others").clicked() {
+                                    // Close all except this one
+                                    for i in (0..state.manager.terminal_count()).rev() {
+                                        if i != *idx {
+                                            state.manager.close_terminal(i);
+                                        }
+                                    }
+                                    ui.close_menu();
+                                }
+                            });
+
+                            // Close button (always visible on active tab, or on hover)
+                            if *is_active || tab_response.hovered() {
+                                let close_response = ui.add(
+                                    egui::Button::new(
+                                        egui::RichText::new("×")
+                                            .size(14.0)
+                                            .color(text_color),
+                                    )
+                                    .frame(false)
+                                    .min_size(egui::vec2(16.0, 16.0)),
+                                );
+                                if close_response.clicked() {
+                                    close_tab = Some(*idx);
+                                }
                             }
                         }
                     });
@@ -268,6 +315,53 @@ impl TerminalPanel {
                 }
 
                 // Keyboard shortcuts
+                // Ctrl+Tab / Ctrl+Shift+Tab to cycle through terminals
+                if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl) {
+                    let count = state.manager.terminal_count();
+                    if count > 1 {
+                        let active = state.manager.active_index();
+                        let next = if ui.input(|i| i.modifiers.shift) {
+                            // Ctrl+Shift+Tab: previous tab
+                            if active == 0 { count - 1 } else { active - 1 }
+                        } else {
+                            // Ctrl+Tab: next tab
+                            (active + 1) % count
+                        };
+                        state.manager.set_active(next);
+                    }
+                }
+
+                // Ctrl+1-9 to jump to specific terminal
+                for i in 1..=9 {
+                    let key = match i {
+                        1 => egui::Key::Num1,
+                        2 => egui::Key::Num2,
+                        3 => egui::Key::Num3,
+                        4 => egui::Key::Num4,
+                        5 => egui::Key::Num5,
+                        6 => egui::Key::Num6,
+                        7 => egui::Key::Num7,
+                        8 => egui::Key::Num8,
+                        9 => egui::Key::Num9,
+                        _ => continue,
+                    };
+
+                    if ui.input(|input| input.key_pressed(key) && input.modifiers.ctrl) {
+                        let idx = i - 1; // 0-indexed
+                        if idx < state.manager.terminal_count() {
+                            state.manager.set_active(idx);
+                        }
+                    }
+                }
+
+                // Ctrl+L to clear terminal (send clear command)
+                if ui.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
+                    if let Some(terminal) = state.manager.active_terminal_mut() {
+                        // Send Ctrl+L character (ASCII 12, form feed)
+                        terminal.write_input(&[12]);
+                    }
+                }
+
                 // Ctrl+F4 to close active terminal
                 if ui.input(|i| i.key_pressed(egui::Key::F4) && i.modifiers.ctrl) {
                     let active_idx = state.manager.active_index();
