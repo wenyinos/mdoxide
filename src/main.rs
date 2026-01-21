@@ -42,6 +42,7 @@ mod platform;
 mod preview;
 mod state;
 mod string_utils;
+mod terminal;
 mod theme;
 mod ui;
 mod vcs;

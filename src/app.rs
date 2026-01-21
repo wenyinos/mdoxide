@@ -37,7 +37,7 @@ use crate::ui::{
     handle_window_resize, AboutPanel, FileOperationDialog, FileOperationResult,
     FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, QuickSwitcher, Ribbon,
     RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton,
-    ViewSegmentAction, WindowResizeState,
+    TerminalPanel, TerminalPanelState, ViewSegmentAction, WindowResizeState,
 };
 use eframe::egui;
 use log::{debug, info, trace, warn};
@@ -124,6 +124,8 @@ enum KeyboardAction {
     ToggleFoldAtCursor,
     /// Toggle Live Pipeline panel (Ctrl+Shift+L)
     TogglePipeline,
+    /// Toggle Terminal panel (Ctrl+`)
+    ToggleTerminal,
     /// Open Go to Line dialog (Ctrl+G)
     GoToLine,
     /// Duplicate current line or selection (Ctrl+Shift+D)
@@ -230,6 +232,10 @@ pub struct FerriteApp {
     pending_auto_save_recovery: Option<AutoSaveRecoveryInfo>,
     /// Snippet manager for text expansion
     snippet_manager: SnippetManager,
+    /// Terminal panel component
+    terminal_panel: TerminalPanel,
+    /// Terminal panel state
+    terminal_panel_state: TerminalPanelState,
     /// Frame counter for FPS tracking (diagnostic for repaint optimization)
     #[cfg(debug_assertions)]
     frame_count: u64,
@@ -373,6 +379,8 @@ impl FerriteApp {
             pending_recovery,
             pending_auto_save_recovery: None,
             snippet_manager,
+            terminal_panel: TerminalPanel::new(),
+            terminal_panel_state: TerminalPanelState::new(),
             #[cfg(debug_assertions)]
             frame_count: 0,
             #[cfg(debug_assertions)]
@@ -2444,12 +2452,77 @@ impl FerriteApp {
                 });
         }
 
+        // Terminal panel (bottom panel, shown when visible)
+        // Similar to pipeline panel but for integrated terminal
+        if self.terminal_panel_state.is_visible() && !zen_mode {
+            let panel_height = self.terminal_panel_state.height;
+            egui::TopBottomPanel::bottom("terminal_panel")
+                .resizable(false) // We handle resize ourselves
+                .exact_height(panel_height)
+                .show(ctx, |ui| {
+                    // Custom resize handle at the top of the panel
+                    let resize_response = ui.allocate_response(
+                        egui::vec2(ui.available_width(), 6.0),
+                        egui::Sense::drag(),
+                    );
+
+                    // Draw resize handle (thin line)
+                    let handle_rect = resize_response.rect;
+                    let handle_color = if resize_response.hovered() || resize_response.dragged() {
+                        if is_dark {
+                            egui::Color32::from_rgb(100, 100, 120)
+                        } else {
+                            egui::Color32::from_rgb(160, 160, 180)
+                        }
+                    } else {
+                        if is_dark {
+                            egui::Color32::from_rgb(60, 60, 70)
+                        } else {
+                            egui::Color32::from_rgb(200, 200, 210)
+                        }
+                    };
+                    ui.painter().rect_filled(
+                        egui::Rect::from_center_size(handle_rect.center(), egui::vec2(60.0, 3.0)),
+                        2.0,
+                        handle_color,
+                    );
+
+                    // Change cursor on hover
+                    if resize_response.hovered() || resize_response.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                    }
+
+                    // Handle drag to resize (dragging up = increase height, dragging down = decrease)
+                    if resize_response.dragged() {
+                        let delta = -resize_response.drag_delta().y; // Negative because up = bigger
+                        let new_height = (panel_height + delta).clamp(100.0, 500.0);
+                        if (new_height - panel_height).abs() > 0.5 {
+                            self.terminal_panel_state.height = new_height;
+                            self.state.settings.terminal_panel_height = new_height;
+                            self.state.mark_settings_dirty();
+                        }
+                    }
+
+                    // Show the terminal panel UI
+                    let output = self.terminal_panel.show(
+                        ui,
+                        &mut self.terminal_panel_state,
+                        is_dark,
+                    );
+
+                    // Handle panel close
+                    if output.closed {
+                        self.terminal_panel_state.visible = false;
+                    }
+                });
+        }
+
         // Central panel for editor content
         egui::CentralPanel::default().show(ctx, |ui| {
             // Tab bar - uses custom wrapping layout for multi-line support
             // Hidden in Zen Mode for distraction-free editing
             let mut tab_to_close: Option<usize> = None;
-            
+
             if !zen_mode {
 
             // Collect tab info first to avoid borrow issues
@@ -5205,6 +5278,7 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::ToggleOutline, KeyboardAction::ToggleOutline);
             check_shortcut!(ShortcutCommand::ToggleFileTree, KeyboardAction::ToggleFileTree);
             check_shortcut!(ShortcutCommand::TogglePipeline, KeyboardAction::TogglePipeline);
+            check_shortcut!(ShortcutCommand::ToggleTerminal, KeyboardAction::ToggleTerminal);
 
             // Edit - note: Undo/Redo handled separately, MoveLineUp/Down handled separately
             check_shortcut!(ShortcutCommand::DeleteLine, KeyboardAction::DeleteLine);
@@ -5374,6 +5448,9 @@ impl FerriteApp {
             }
             KeyboardAction::TogglePipeline => {
                 self.handle_toggle_pipeline();
+            }
+            KeyboardAction::ToggleTerminal => {
+                self.handle_toggle_terminal();
             }
             KeyboardAction::GoToLine => {
                 self.handle_open_go_to_line();
@@ -5845,6 +5922,34 @@ impl FerriteApp {
         debug!(
             "Outline panel toggled: {}",
             self.state.settings.outline_enabled
+        );
+    }
+
+    /// Toggle the terminal panel visibility.
+    fn handle_toggle_terminal(&mut self) {
+        // Set working directory from workspace or current file's directory
+        let working_dir = self.state.workspace.as_ref()
+            .map(|w| w.root_path.clone())
+            .or_else(|| {
+                self.state.active_tab()
+                    .and_then(|t| t.path.as_ref())
+                    .and_then(|p| p.parent())
+                    .map(|p| p.to_path_buf())
+            });
+        self.terminal_panel_state.working_dir = working_dir;
+
+        self.terminal_panel_state.toggle();
+
+        let time = self.get_app_time();
+        if self.terminal_panel_state.is_visible() {
+            self.state.show_toast("Terminal panel shown", time, 1.5);
+        } else {
+            self.state.show_toast("Terminal panel hidden", time, 1.5);
+        }
+
+        debug!(
+            "Terminal panel toggled: {}",
+            self.terminal_panel_state.is_visible()
         );
     }
 

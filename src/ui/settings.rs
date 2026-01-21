@@ -114,6 +114,7 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::OpenAbout => t!("shortcuts.commands.open_about").to_string(),
         ShortcutCommand::ExportHtml => t!("shortcuts.commands.export_html").to_string(),
         ShortcutCommand::InsertToc => t!("shortcuts.commands.insert_toc").to_string(),
+        ShortcutCommand::ToggleTerminal => t!("shortcuts.commands.toggle_terminal").to_string(),
     }
 }
 

@@ -417,6 +417,7 @@ pub enum ShortcutCommand {
     ToggleOutline,
     ToggleFileTree,
     TogglePipeline,
+    ToggleTerminal,
     // Edit
     Undo,
     Redo,
@@ -468,7 +469,7 @@ impl ShortcutCommand {
             // Navigation
             NextTab, PrevTab, GoToLine, QuickOpen,
             // View
-            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline,
+            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal,
             // Edit
             Undo, Redo, DeleteLine, DuplicateLine, MoveLineUp, MoveLineDown, SelectNextOccurrence,
             // Search
@@ -507,6 +508,7 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleOutline => "Toggle Outline",
             ShortcutCommand::ToggleFileTree => "Toggle File Tree",
             ShortcutCommand::TogglePipeline => "Toggle Pipeline",
+            ShortcutCommand::ToggleTerminal => "Toggle Terminal",
             // Edit
             ShortcutCommand::Undo => "Undo",
             ShortcutCommand::Redo => "Redo",
@@ -560,7 +562,7 @@ impl ShortcutCommand {
 
             ShortcutCommand::ToggleViewMode | ShortcutCommand::CycleTheme | ShortcutCommand::ToggleZenMode
             | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree 
-            | ShortcutCommand::TogglePipeline => "View",
+            | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal => "View",
 
             ShortcutCommand::Undo | ShortcutCommand::Redo | ShortcutCommand::DeleteLine
             | ShortcutCommand::DuplicateLine | ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown
@@ -607,6 +609,7 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleOutline => KeyBinding::new(M::ctrl_shift(), O),
             ShortcutCommand::ToggleFileTree => KeyBinding::new(M::ctrl(), B),
             ShortcutCommand::TogglePipeline => KeyBinding::new(M::ctrl_shift(), L),
+            ShortcutCommand::ToggleTerminal => KeyBinding::new(M::ctrl(), Backtick),
             // Edit
             ShortcutCommand::Undo => KeyBinding::new(M::ctrl(), Z),
             ShortcutCommand::Redo => KeyBinding::new(M::ctrl(), Y),
@@ -1772,6 +1775,21 @@ pub struct Settings {
     /// Only stores non-default bindings; defaults are used for unset commands.
     /// Reference: GitHub Issue #25
     pub keyboard_shortcuts: KeyboardShortcuts,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Terminal Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether the integrated terminal feature is enabled
+    pub terminal_enabled: bool,
+
+    /// Default height of the terminal panel in pixels
+    pub terminal_panel_height: f32,
+
+    /// Terminal font size in pixels
+    pub terminal_font_size: f32,
+
+    /// Maximum scrollback lines for the terminal
+    pub terminal_scrollback_lines: usize,
 }
 
 impl Default for Settings {
@@ -1878,6 +1896,12 @@ impl Default for Settings {
 
             // Keyboard Shortcuts Settings
             keyboard_shortcuts: KeyboardShortcuts::default(),
+
+            // Terminal Settings
+            terminal_enabled: true,           // Terminal feature enabled by default
+            terminal_panel_height: 300.0,     // Default panel height
+            terminal_font_size: 14.0,         // Default terminal font size
+            terminal_scrollback_lines: 10000, // Default scrollback buffer size
         }
     }
 }
