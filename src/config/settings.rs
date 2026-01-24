@@ -1492,6 +1492,11 @@ impl Default for TabInfo {
 // Main Settings Struct
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Helper function for serde default that returns true
+fn default_true() -> bool {
+    true
+}
+
 /// User preferences and application settings.
 ///
 /// This struct is serialized to JSON and persisted to the user's config directory.
@@ -1790,6 +1795,67 @@ pub struct Settings {
 
     /// Maximum scrollback lines for the terminal
     pub terminal_scrollback_lines: usize,
+
+    /// Whether to automatically copy text to clipboard on selection
+    pub terminal_copy_on_select: bool,
+
+    /// Name of the terminal color theme
+    pub terminal_theme_name: String,
+
+    /// Terminal background opacity (0.0 to 1.0)
+    pub terminal_opacity: f32,
+
+    /// Command to run automatically when a new terminal is created
+    pub terminal_startup_command: String,
+
+    /// Custom regex patterns for prompt detection
+    pub terminal_prompt_patterns: Vec<String>,
+
+    /// Color for the breathing animation when waiting for input
+    pub terminal_breathing_color: egui::Color32,
+
+    /// Whether to automatically load terminal layout from project root
+    pub terminal_auto_load_layout: bool,
+
+    /// Whether to automatically save terminal layout to project root on close/switch
+    #[serde(default = "default_true")]
+    pub terminal_auto_save_layout: bool,
+
+    /// Saved terminal macros
+    pub terminal_macros: std::collections::HashMap<String, String>,
+
+    /// Whether to play a sound when terminal prompt is detected (waiting for input)
+    #[serde(default)]
+    pub terminal_sound_enabled: bool,
+
+    /// Optional custom sound file path (None = system beep)
+    #[serde(default)]
+    pub terminal_sound_file: Option<String>,
+
+    /// Whether to automatically focus a terminal when it starts waiting for input
+    /// (transitions from running to prompt). Only triggers once per run cycle.
+    #[serde(default)]
+    pub terminal_focus_on_detect: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Panel Visibility (Future Features)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Whether the AI assistant panel is visible
+    #[serde(default)]
+    pub ai_panel_visible: bool,
+
+    /// Whether the database tools panel is visible
+    #[serde(default)]
+    pub database_panel_visible: bool,
+
+    /// Whether the SSH sessions panel is visible
+    #[serde(default)]
+    pub ssh_panel_visible: bool,
+
+    /// Whether the productivity hub (tasks/pomodoro/notes) panel is visible
+    #[serde(default)]
+    pub productivity_panel_visible: bool,
 }
 
 impl Default for Settings {
@@ -1902,6 +1968,24 @@ impl Default for Settings {
             terminal_panel_height: 300.0,     // Default panel height
             terminal_font_size: 14.0,         // Default terminal font size
             terminal_scrollback_lines: 10000, // Default scrollback buffer size
+            terminal_copy_on_select: false,   // Manual copy by default
+            terminal_theme_name: String::from("Ferrite Dark"), // Default theme
+            terminal_opacity: 1.0, // Opaque by default
+            terminal_startup_command: String::new(),
+            terminal_prompt_patterns: vec![
+                r"^>\s*$".to_string(),
+                r"^\$\s*$".to_string(),
+                r"^#\s*$".to_string(),
+                r"^>>>\s*$".to_string(),
+                r"PS.*>\s*$".to_string(),
+            ],
+            terminal_breathing_color: egui::Color32::from_rgb(100, 149, 237),
+            terminal_auto_load_layout: true,
+            terminal_auto_save_layout: true,
+            terminal_macros: std::collections::HashMap::new(),
+            terminal_sound_enabled: false, // Sound notification disabled by default
+            terminal_sound_file: None,     // Use system beep by default
+            terminal_focus_on_detect: false, // Auto-focus on prompt disabled by default
         }
     }
 }
