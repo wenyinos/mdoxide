@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 7 of 7 (Productivity Hub)
-Plan: 1 of 3 in phase (just completed)
+Plan: 2 of 3 in phase (just completed)
 Status: In progress
-Last activity: 2026-01-24 — Completed 07-01-PLAN.md (Data Models and Persistence)
+Last activity: 2026-01-24 — Completed 07-02-PLAN.md (Productivity Panel UI)
 
-Progress: [████░░] 67% (1 of 3 phase-7 plans complete)
+Progress: [█████░] 83% (2 of 3 phase-7 plans complete)
 
 ## Accumulated Context
 
@@ -30,6 +30,11 @@ Progress: [████░░] 67% (1 of 3 phase-7 plans complete)
 - 1000ms default debounce for AutoSave (prevents excessive writes) - 07-01
 - Use atomic write pattern from config/persistence.rs (write .bak, rename) - 07-01
 - Support priority markers in markdown (! and !! prefixes) - 07-01
+- Use egui::ScrollArea::id_source (not id_salt) for scroll persistence - 07-02
+- Use egui::ComboBox::from_id_source (not from_id_salt) for combo boxes - 07-02
+- Sync workspace in update loop for consistent panel state - 07-02
+- Save productivity data on app exit (not periodic) to minimize I/O - 07-02
+- Return needs_repaint flag from show() for timer efficiency - 07-02
 
 ### Blockers
 (none)
@@ -39,6 +44,6 @@ Progress: [████░░] 67% (1 of 3 phase-7 plans complete)
 
 ## Session Continuity
 
-Last session: 2026-01-24 15:17:01 UTC
-Stopped at: Completed 07-01-PLAN.md (Data Models and Persistence)
+Last session: 2026-01-24 15:27:33 UTC
+Stopped at: Completed 07-02-PLAN.md (Productivity Panel UI)
 Resume file: None
