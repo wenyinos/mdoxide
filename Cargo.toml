@@ -78,7 +78,7 @@ vte = "0.13"
 ctrlc = "3.5.1"
 
 # Async runtime for background workers (optional, feature-gated)
-tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync"], optional = true }
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync", "time"], optional = true }
 poll-promise = { version = "0.3", optional = true }
 
 # High-performance memory allocators (platform-specific)
