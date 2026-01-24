@@ -10,7 +10,7 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 6 | Async Foundation | Establish background worker infrastructure | INFRA-01..04 | Planning Complete |
+| 6 | Async Foundation | Establish background worker infrastructure | INFRA-01..04 | ✓ Complete |
 | 7 | Productivity Hub | Task tracking, Pomodoro, notes panels | PROD-01..07 | Pending |
 | 8 | AI Assistant | Streaming chat panel with provider selection | AI-01..07 | Pending |
 | 9 | Power Terminal | Command history and SSH session management | TERM-01..06 | Pending |
@@ -49,9 +49,9 @@
 **Plans:** 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Tokio runtime and worker infrastructure
-- [ ] 06-02-PLAN.md — Panel visibility settings and persistence
-- [ ] 06-03-PLAN.md — View menu integration with lazy initialization
+- [x] 06-01-PLAN.md — Tokio runtime and worker infrastructure
+- [x] 06-02-PLAN.md — Panel visibility settings and persistence
+- [x] 06-03-PLAN.md — View menu integration with lazy initialization
 
 ---
 
