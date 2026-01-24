@@ -154,6 +154,16 @@ impl PomodoroTimer {
         self.state = TimerState::Idle;
     }
 
+    /// Increment the completed cycles counter.
+    pub fn increment_cycle(&mut self) {
+        self.completed_cycles += 1;
+    }
+
+    /// Get the number of completed cycles.
+    pub fn cycles(&self) -> usize {
+        self.completed_cycles
+    }
+
     /// Get remaining time in current session.
     ///
     /// Returns `None` if timer is idle.
@@ -503,6 +513,13 @@ impl ProductivityPanel {
                 // TASKS SECTION
                 ui.heading("Tasks");
 
+                // Completed tasks counter
+                let completed = self.tasks.iter().filter(|t| t.completed).count();
+                let total = self.tasks.len();
+                if total > 0 {
+                    ui.label(format!("{}/{} completed", completed, total));
+                }
+
                 // New task input
                 ui.horizontal(|ui| {
                     let response = ui.add(
@@ -518,6 +535,9 @@ impl ProductivityPanel {
                     }
                 });
 
+                // Keyboard shortcut hint
+                ui.label(eframe::egui::RichText::new("Tip: Use - [ ] for checkbox, ! or !! for priority").small().weak());
+
                 ui.add_space(4.0);
 
                 // Task list with scroll area
@@ -526,9 +546,26 @@ impl ProductivityPanel {
                     .max_height(200.0)
                     .show(ui, |ui| {
                         let mut to_delete: Option<usize> = None;
+                        let mut to_move_up: Option<usize> = None;
+                        let mut to_move_down: Option<usize> = None;
+                        let tasks_len = self.tasks.len();
 
                         for (i, task) in self.tasks.iter_mut().enumerate() {
                             ui.horizontal(|ui| {
+                                // Move up button (disabled for first item)
+                                ui.add_enabled_ui(i > 0, |ui| {
+                                    if ui.small_button("^").on_hover_text("Move up").clicked() {
+                                        to_move_up = Some(i);
+                                    }
+                                });
+
+                                // Move down button (disabled for last item)
+                                ui.add_enabled_ui(i < tasks_len - 1, |ui| {
+                                    if ui.small_button("v").on_hover_text("Move down").clicked() {
+                                        to_move_down = Some(i);
+                                    }
+                                });
+
                                 // Checkbox
                                 if ui.checkbox(&mut task.completed, "").changed() {
                                     self.tasks_dirty = true;
@@ -558,6 +595,20 @@ impl ProductivityPanel {
                             });
                         }
 
+                        // Handle moves after the loop
+                        if let Some(i) = to_move_up {
+                            if i > 0 {
+                                self.tasks.swap(i, i - 1);
+                                self.tasks_dirty = true;
+                            }
+                        }
+                        if let Some(i) = to_move_down {
+                            if i < self.tasks.len() - 1 {
+                                self.tasks.swap(i, i + 1);
+                                self.tasks_dirty = true;
+                            }
+                        }
+
                         if let Some(index) = to_delete {
                             self.delete_task(index);
                         }
@@ -584,6 +635,11 @@ impl ProductivityPanel {
                     };
 
                     ui.label(eframe::egui::RichText::new(label).size(24.0).strong());
+
+                    // Cycles counter
+                    if self.timer.cycles() > 0 {
+                        ui.label(format!("Cycles: {}", self.timer.cycles()));
+                    }
                 });
 
                 ui.horizontal(|ui| {
@@ -603,6 +659,7 @@ impl ProductivityPanel {
 
                             // Auto-transition
                             if self.timer.is_work() {
+                                self.timer.increment_cycle();
                                 self.timer.start_break();
                             } else {
                                 self.timer.stop();
