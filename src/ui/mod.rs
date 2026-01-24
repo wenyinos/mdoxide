@@ -8,6 +8,7 @@ mod file_tree;
 mod icons;
 mod outline_panel;
 mod pipeline;
+mod productivity_panel;
 mod quick_switcher;
 mod ribbon;
 mod search;
@@ -22,11 +23,12 @@ pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::get_app_icon;
 pub use outline_panel::OutlinePanel;
 pub use pipeline::{PipelinePanel, TabPipelineState};
+pub use productivity_panel::{AutoSave, PomodoroTimer, Task};
 pub use quick_switcher::QuickSwitcher;
 pub use ribbon::{Ribbon, RibbonAction};
 pub use search::{SearchNavigationTarget, SearchPanel};
 pub use settings::SettingsPanel;
-pub use terminal_panel::{TerminalPanel, TerminalPanelState};
+pub use terminal_panel::{TerminalPanel, TerminalPanelState, FloatingWindow};
 pub use view_segment::{TitleBarButton, ViewSegmentAction};
 pub use window::{
     center_panel_in_viewport, constrain_rect_to_viewport, handle_window_resize,
