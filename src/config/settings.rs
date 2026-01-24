@@ -1986,6 +1986,12 @@ impl Default for Settings {
             terminal_sound_enabled: false, // Sound notification disabled by default
             terminal_sound_file: None,     // Use system beep by default
             terminal_focus_on_detect: false, // Auto-focus on prompt disabled by default
+
+            // Panel Visibility
+            ai_panel_visible: false,
+            database_panel_visible: false,
+            ssh_panel_visible: false,
+            productivity_panel_visible: false,
         }
     }
 }
