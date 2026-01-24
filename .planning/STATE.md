@@ -3,9 +3,9 @@
 ## Current Position
 
 Phase: 6 (Async Foundation)
-Plan: .planning/ROADMAP.md
-Status: Ready to plan phase
-Last activity: 2026-01-24 — Roadmap created with 6 phases
+Plan: .planning/phases/06-async-foundation/
+Status: Planned - ready to execute
+Last activity: 2026-01-24 — Phase 6 plans created (3 plans in 2 waves)
 
 ## Accumulated Context
 
