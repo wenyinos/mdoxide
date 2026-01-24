@@ -3485,20 +3485,58 @@ mod tests {
     #[test]
     fn test_commands_by_category() {
         let categories = KeyboardShortcuts::commands_by_category();
-        
+
         // Should have multiple categories
         assert!(!categories.is_empty());
-        
+
         // Each category should have at least one command
         for (name, commands) in &categories {
             assert!(!name.is_empty());
             assert!(!commands.is_empty());
         }
-        
+
         // Find "File" category
         let file_cat = categories.iter().find(|(name, _)| *name == "File");
         assert!(file_cat.is_some());
         let (_, file_commands) = file_cat.unwrap();
         assert!(file_commands.contains(&ShortcutCommand::Save));
+    }
+
+    #[test]
+    fn test_panel_visibility_defaults() {
+        let settings = Settings::default();
+        assert_eq!(settings.ai_panel_visible, false);
+        assert_eq!(settings.database_panel_visible, false);
+        assert_eq!(settings.ssh_panel_visible, false);
+        assert_eq!(settings.productivity_panel_visible, false);
+    }
+
+    #[test]
+    fn test_settings_migration_old_config() {
+        // Simulate old config without panel visibility fields
+        let old_config = r#"{
+            "theme": "dark",
+            "font_size": 14.0
+        }"#;
+
+        let settings: Settings = serde_json::from_str(old_config).unwrap();
+        // New fields should default to false
+        assert_eq!(settings.ai_panel_visible, false);
+    }
+
+    #[test]
+    fn test_settings_roundtrip() {
+        let mut settings = Settings::default();
+        settings.ai_panel_visible = true;
+        settings.database_panel_visible = true;
+
+        // Serialize
+        let json = serde_json::to_string(&settings).unwrap();
+
+        // Deserialize
+        let loaded: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.ai_panel_visible, true);
+        assert_eq!(loaded.database_panel_visible, true);
+        assert_eq!(loaded.ssh_panel_visible, false);
     }
 }
