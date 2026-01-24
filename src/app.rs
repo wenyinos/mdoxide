@@ -39,6 +39,10 @@ use crate::ui::{
     RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton,
     TerminalPanel, TerminalPanelState, ViewSegmentAction, WindowResizeState,
 };
+
+#[cfg(feature = "async-workers")]
+use crate::workers::{echo_worker, WorkerCommand, WorkerHandle, WorkerResponse};
+
 use eframe::egui;
 use log::{debug, info, trace, warn};
 use rust_i18n::t;
@@ -246,6 +250,9 @@ pub struct FerriteApp {
     last_interaction_time: std::time::Instant,
     /// Last window title (to avoid sending viewport commands every frame)
     last_window_title: String,
+    /// Echo worker handle for async demo (lazy initialization)
+    #[cfg(feature = "async-workers")]
+    echo_worker: Option<WorkerHandle>,
 }
 
 impl FerriteApp {
@@ -387,6 +394,8 @@ impl FerriteApp {
             last_fps_log: std::time::Instant::now(),
             last_interaction_time: std::time::Instant::now(),
             last_window_title: String::new(),
+            #[cfg(feature = "async-workers")]
+            echo_worker: None, // Lazy - spawns when AI panel first shown
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -6120,6 +6129,26 @@ impl FerriteApp {
         );
     }
 
+    /// Ensure echo worker is spawned (lazy initialization).
+    ///
+    /// This is called before rendering panels that need the worker.
+    /// The worker spawns only when the AI panel is first shown, not on app startup.
+    #[cfg(feature = "async-workers")]
+    fn ensure_echo_worker(&mut self) {
+        if self.echo_worker.is_none() && self.state.settings.ai_panel_visible {
+            info!("Spawning echo worker (lazy initialization)");
+            self.echo_worker = Some(WorkerHandle::spawn(echo_worker));
+
+            // Process ready signal
+            if let Some(worker) = &self.echo_worker {
+                match worker.response_rx.try_recv() {
+                    Ok(WorkerResponse::Ready) => info!("Echo worker ready"),
+                    _ => {}
+                }
+            }
+        }
+    }
+
     /// Toggle Zen Mode (distraction-free writing).
     fn handle_toggle_zen_mode(&mut self) {
         self.state.toggle_zen_mode();
@@ -7636,6 +7665,10 @@ impl eframe::App for FerriteApp {
         // IMPORTANT: Handle auto-close skip-over and selection wrapping BEFORE render
         // This consumes events that would otherwise be processed by TextEdit
         let auto_close_handled = self.handle_auto_close_pre_render(ctx);
+
+        // Ensure echo worker is spawned if AI panel is visible (lazy initialization)
+        #[cfg(feature = "async-workers")]
+        self.ensure_echo_worker();
 
         // Render the main UI (this updates editor selection)
         let deferred_format = self.render_ui(ctx);
