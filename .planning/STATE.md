@@ -2,10 +2,10 @@
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-01-24 — Milestone v0.5.0 started
+Phase: 6 (Async Foundation)
+Plan: .planning/ROADMAP.md
+Status: Ready to plan phase
+Last activity: 2026-01-24 — Roadmap created with 6 phases
 
 ## Accumulated Context
 
