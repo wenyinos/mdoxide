@@ -1543,7 +1543,44 @@ impl FerriteApp {
                 }
             });
 
-        // Ribbon panel (below title bar) - hidden in Zen Mode
+        // View menu bar (below title bar, above ribbon) - hidden in Zen Mode
+        if !zen_mode {
+            egui::TopBottomPanel::top("view_menu")
+                .show_separator_line(true)
+                .show(ctx, |ui| {
+                    egui::menu::bar(ui, |ui| {
+                        ui.menu_button("View", |ui| {
+                            ui.separator();
+
+                            // AI Assistant panel
+                            if ui.checkbox(&mut self.state.settings.ai_panel_visible, "AI Assistant").changed() {
+                                debug!("AI panel visibility changed: {}", self.state.settings.ai_panel_visible);
+                                self.state.mark_settings_dirty();
+                            }
+
+                            // Database Tools panel
+                            if ui.checkbox(&mut self.state.settings.database_panel_visible, "Database Tools").changed() {
+                                debug!("Database panel visibility changed: {}", self.state.settings.database_panel_visible);
+                                self.state.mark_settings_dirty();
+                            }
+
+                            // SSH Sessions panel
+                            if ui.checkbox(&mut self.state.settings.ssh_panel_visible, "SSH Sessions").changed() {
+                                debug!("SSH panel visibility changed: {}", self.state.settings.ssh_panel_visible);
+                                self.state.mark_settings_dirty();
+                            }
+
+                            // Productivity Hub panel
+                            if ui.checkbox(&mut self.state.settings.productivity_panel_visible, "Productivity Hub").changed() {
+                                debug!("Productivity panel visibility changed: {}", self.state.settings.productivity_panel_visible);
+                                self.state.mark_settings_dirty();
+                            }
+                        });
+                    });
+                });
+        }
+
+        // Ribbon panel (below view menu) - hidden in Zen Mode
         let ribbon_action = if !zen_mode {
             // Get state needed for ribbon
             let theme = self.state.settings.theme;
@@ -2495,7 +2532,7 @@ impl FerriteApp {
                     // Handle drag to resize (dragging up = increase height, dragging down = decrease)
                     if resize_response.dragged() {
                         let delta = -resize_response.drag_delta().y; // Negative because up = bigger
-                        let new_height = (panel_height + delta).clamp(100.0, 500.0);
+                        let new_height = (panel_height + delta).clamp(100.0, 3000.0);
                         if (new_height - panel_height).abs() > 0.5 {
                             self.terminal_panel_state.height = new_height;
                             self.state.settings.terminal_panel_height = new_height;
@@ -2507,6 +2544,7 @@ impl FerriteApp {
                     let output = self.terminal_panel.show(
                         ui,
                         &mut self.terminal_panel_state,
+                        &self.state.settings,
                         is_dark,
                     );
 
@@ -3954,6 +3992,36 @@ impl FerriteApp {
                     self.state
                         .show_toast(format!("Opened workspace: {}", folder_name), time, 2.5);
                     
+                    // Auto-load terminal layout if enabled
+                    if self.state.settings.terminal_auto_load_layout {
+                        let layout_path = folder_path.join("terminal_layout.json");
+                        if layout_path.exists() {
+                            if let Ok(json) = std::fs::read_to_string(layout_path) {
+                                if let Ok(workspace) = serde_json::from_str::<crate::terminal::SavedWorkspace>(&json) {
+                                    match self.terminal_panel_state.manager.load_workspace(workspace) {
+                                        Ok(fws) => {
+                                            self.terminal_panel_state.floating_windows.clear();
+                                            for (layout, title, pos, size) in fws {
+                                                let leaf = layout.first_leaf();
+                                                let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
+                                                self.terminal_panel_state.floating_windows.push(crate::ui::FloatingWindow {
+                                                    id,
+                                                    layout,
+                                                    title,
+                                                    pos: pos.map(|(x, y)| egui::pos2(x, y)),
+                                                    size: egui::vec2(size.0, size.1),
+                                                    first_frame: true,
+                                                });
+                                            }
+                                            info!("Auto-loaded terminal layout from workspace root");
+                                        }
+                                        Err(e) => warn!("Failed to auto-load terminal layout: {}", e),
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Immediately save session to persist the workspace path
                     self.force_session_save();
                 }
@@ -4162,6 +4230,10 @@ impl FerriteApp {
                 }
                 WorkspaceEvent::FileModified(path) => {
                     debug!("File modified: {}", path.display());
+                    
+                    // Notify terminal panel for watch mode
+                    self.terminal_panel_state.manager.on_file_changed(&path);
+
                     // Check if this file is open in a tab
                     for tab in self.state.tabs() {
                         if tab.path.as_ref() == Some(&path) {
@@ -4446,6 +4518,7 @@ impl FerriteApp {
         // Priority 1: If a folder was dropped, open it as a workspace
         if let Some(folder) = folders.into_iter().next() {
             info!("Opening dropped folder as workspace: {}", folder.display());
+            let folder_path = folder.clone();
             match self.state.open_workspace(folder.clone()) {
                 Ok(_) => {
                     let time = self.get_app_time();
@@ -4455,6 +4528,36 @@ impl FerriteApp {
                         .unwrap_or("folder");
                     self.state
                         .show_toast(format!("Opened workspace: {}", folder_name), time, 2.5);
+
+                    // Auto-load terminal layout if enabled
+                    if self.state.settings.terminal_auto_load_layout {
+                        let layout_path = folder_path.join("terminal_layout.json");
+                        if layout_path.exists() {
+                            if let Ok(json) = std::fs::read_to_string(layout_path) {
+                                if let Ok(workspace) = serde_json::from_str::<crate::terminal::SavedWorkspace>(&json) {
+                                    match self.terminal_panel_state.manager.load_workspace(workspace) {
+                                        Ok(fws) => {
+                                            self.terminal_panel_state.floating_windows.clear();
+                                            for (layout, title, pos, size) in fws {
+                                                let leaf = layout.first_leaf();
+                                                let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
+                                                self.terminal_panel_state.floating_windows.push(crate::ui::FloatingWindow {
+                                                    id,
+                                                    layout,
+                                                    title,
+                                                    pos: pos.map(|(x, y)| egui::pos2(x, y)),
+                                                    size: egui::vec2(size.0, size.1),
+                                                    first_frame: true,
+                                                });
+                                            }
+                                            info!("Auto-loaded terminal layout from workspace root");
+                                        }
+                                        Err(e) => warn!("Failed to auto-load terminal layout: {}", e),
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Immediately save session to persist the workspace path
                     self.force_session_save();
@@ -4712,6 +4815,11 @@ impl FerriteApp {
     /// By consuming these keys before the TextEdit is rendered, we ensure only
     /// our undo system handles the events.
     fn consume_undo_redo_keys(&mut self, ctx: &egui::Context) {
+        // Skip if terminal has focus - let terminal handle all keyboard input
+        if self.terminal_panel_state.terminal_has_focus {
+            return;
+        }
+
         let consumed_action: Option<bool> = ctx.input_mut(|i| {
             // Cmd+Shift+Z (macOS) / Ctrl+Shift+Z (Win/Linux): Redo (check first since it's more specific)
             if i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z) {
@@ -4746,12 +4854,22 @@ impl FerriteApp {
     /// egui's TextEdit has a bug where Ctrl+X with no selection cuts the entire
     /// document. This happens because eframe generates Event::Cut events which
     /// TextEdit processes. We filter out these events when there's no selection.
+    ///
+    /// Skips handling when the terminal has focus so the terminal widget can
+    /// process clipboard shortcuts directly.
     fn filter_cut_event_if_no_selection(&mut self, ctx: &egui::Context) {
+        // Skip editor cut/copy/paste handling when terminal has focus
+        if self.terminal_panel_state.terminal_has_focus
+            && self.terminal_panel_state.renaming_index.is_none()
+        {
+            return;
+        }
+
         // Check if there's a selection in the active tab
         let has_selection = self.state.active_tab()
             .map(|tab| tab.cursors.primary().is_selection())
             .unwrap_or(false);
-        
+
         // If no selection, filter out Event::Cut to prevent egui from cutting everything
         if !has_selection {
             ctx.input_mut(|i| {
@@ -4768,6 +4886,11 @@ impl FerriteApp {
     /// This must be called before the editor widget is rendered.
     /// Returns the direction to move (-1 for up, 1 for down) if a move was requested.
     fn consume_move_line_keys(&mut self, ctx: &egui::Context) -> Option<isize> {
+        // Skip if terminal has focus - let terminal handle its own input
+        if self.terminal_panel_state.terminal_has_focus {
+            return None;
+        }
+
         ctx.input_mut(|i| {
             // Alt+Up: Move line up
             if i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp) {
@@ -4862,6 +4985,12 @@ impl FerriteApp {
     ///
     /// Returns true if a paste event was consumed and handled with smart behavior.
     fn consume_smart_paste(&mut self, ctx: &egui::Context) -> bool {
+        if self.terminal_panel_state.terminal_has_focus
+            && self.terminal_panel_state.renaming_index.is_none()
+        {
+            return false;
+        }
+
         let Some(tab) = self.state.active_tab_mut() else {
             return false;
         };
@@ -5025,6 +5154,11 @@ impl FerriteApp {
     ///
     /// Returns true if an event was consumed and handled.
     fn handle_auto_close_pre_render(&mut self, ctx: &egui::Context) -> bool {
+        // Skip if terminal has focus - let terminal handle its own input
+        if self.terminal_panel_state.terminal_has_focus {
+            return false;
+        }
+
         if !self.state.settings.auto_close_brackets {
             return false;
         }
@@ -5241,6 +5375,12 @@ impl FerriteApp {
     /// Note: Undo/Redo (Ctrl+Z/Y) are handled separately in consume_undo_redo_keys()
     /// which must be called BEFORE render to prevent TextEdit from processing them.
     fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        // Skip ALL keyboard shortcuts if terminal has focus
+        // Terminal handles its own keyboard input
+        if self.terminal_panel_state.terminal_has_focus {
+            return;
+        }
+
         // Get keyboard shortcuts configuration
         let shortcuts = self.state.settings.keyboard_shortcuts.clone();
 
@@ -5262,11 +5402,18 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::Open, KeyboardAction::Open);
             check_shortcut!(ShortcutCommand::New, KeyboardAction::New);
             check_shortcut!(ShortcutCommand::NewTab, KeyboardAction::NewTab);
-            check_shortcut!(ShortcutCommand::CloseTab, KeyboardAction::CloseTab);
 
             // Navigation - check more specific shortcuts first
-            check_shortcut!(ShortcutCommand::PrevTab, KeyboardAction::PrevTab);
-            check_shortcut!(ShortcutCommand::NextTab, KeyboardAction::NextTab);
+            // Skip file tab navigation if terminal has focus (terminal handles its own tab switching)
+            if !self.terminal_panel_state.terminal_has_focus {
+                check_shortcut!(ShortcutCommand::PrevTab, KeyboardAction::PrevTab);
+                check_shortcut!(ShortcutCommand::NextTab, KeyboardAction::NextTab);
+            }
+
+            // Close tab - skip if terminal has focus (Ctrl+W is used for word deletion in terminal)
+            if !self.terminal_panel_state.terminal_has_focus {
+                check_shortcut!(ShortcutCommand::CloseTab, KeyboardAction::CloseTab);
+            }
             check_shortcut!(ShortcutCommand::GoToLine, KeyboardAction::GoToLine);
             check_shortcut!(ShortcutCommand::QuickOpen, KeyboardAction::QuickOpen);
 
@@ -5302,12 +5449,15 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::FormatLink, KeyboardAction::Format(MarkdownFormatCommand::Link));
             check_shortcut!(ShortcutCommand::FormatBlockquote, KeyboardAction::Format(MarkdownFormatCommand::Blockquote));
             check_shortcut!(ShortcutCommand::FormatInlineCode, KeyboardAction::Format(MarkdownFormatCommand::InlineCode));
-            check_shortcut!(ShortcutCommand::FormatHeading1, KeyboardAction::Format(MarkdownFormatCommand::Heading(1)));
-            check_shortcut!(ShortcutCommand::FormatHeading2, KeyboardAction::Format(MarkdownFormatCommand::Heading(2)));
-            check_shortcut!(ShortcutCommand::FormatHeading3, KeyboardAction::Format(MarkdownFormatCommand::Heading(3)));
-            check_shortcut!(ShortcutCommand::FormatHeading4, KeyboardAction::Format(MarkdownFormatCommand::Heading(4)));
-            check_shortcut!(ShortcutCommand::FormatHeading5, KeyboardAction::Format(MarkdownFormatCommand::Heading(5)));
-            check_shortcut!(ShortcutCommand::FormatHeading6, KeyboardAction::Format(MarkdownFormatCommand::Heading(6)));
+            // Skip markdown heading shortcuts if terminal has focus (terminal uses Ctrl+1-9 for tab selection)
+            if !self.terminal_panel_state.terminal_has_focus {
+                check_shortcut!(ShortcutCommand::FormatHeading1, KeyboardAction::Format(MarkdownFormatCommand::Heading(1)));
+                check_shortcut!(ShortcutCommand::FormatHeading2, KeyboardAction::Format(MarkdownFormatCommand::Heading(2)));
+                check_shortcut!(ShortcutCommand::FormatHeading3, KeyboardAction::Format(MarkdownFormatCommand::Heading(3)));
+                check_shortcut!(ShortcutCommand::FormatHeading4, KeyboardAction::Format(MarkdownFormatCommand::Heading(4)));
+                check_shortcut!(ShortcutCommand::FormatHeading5, KeyboardAction::Format(MarkdownFormatCommand::Heading(5)));
+                check_shortcut!(ShortcutCommand::FormatHeading6, KeyboardAction::Format(MarkdownFormatCommand::Heading(6)));
+            }
 
             // Folding
             check_shortcut!(ShortcutCommand::FoldAll, KeyboardAction::FoldAll);
@@ -5936,14 +6086,31 @@ impl FerriteApp {
                     .and_then(|p| p.parent())
                     .map(|p| p.to_path_buf())
             });
+
+        // Check if working directory changed - reset layout state if so
+        if self.terminal_panel_state.working_dir != working_dir {
+            self.terminal_panel_state.reset_workspace_layout_state();
+        }
         self.terminal_panel_state.working_dir = working_dir;
 
         self.terminal_panel_state.toggle();
+
+        // Try to auto-load workspace layout when panel opens (if enabled and not yet loaded)
+        if self.terminal_panel_state.is_visible() && self.state.settings.terminal_auto_load_layout {
+            if self.terminal_panel_state.try_load_workspace_layout() {
+                let time = self.get_app_time();
+                self.state.show_toast("Loaded workspace terminal layout", time, 2.0);
+            }
+        }
 
         let time = self.get_app_time();
         if self.terminal_panel_state.is_visible() {
             self.state.show_toast("Terminal panel shown", time, 1.5);
         } else {
+            // Auto-save when hiding the panel (if enabled)
+            if self.state.settings.terminal_auto_save_layout {
+                self.terminal_panel_state.save_workspace_layout();
+            }
             self.state.show_toast("Terminal panel hidden", time, 1.5);
         }
 
