@@ -73,19 +73,26 @@ Plans:
 2. Clicking checkbox marks task complete (strikethrough)
 3. Tasks survive app restart
 4. Pomodoro timer counts down visually
-5. Sound plays when timer reaches zero (reuse rodio)
+5. Sound plays when timer reaches zero (reuse existing sound module)
 6. Notes panel saves automatically
 7. Different workspaces have different notes
 
 **Implementation Notes:**
 - Create `src/ui/productivity_panel.rs`
-- Reuse existing rodio for notifications
+- Reuse existing sound notification from `src/terminal/sound.rs`
 - Store in `.ferrite/tasks.json` and `.ferrite/notes/`
-- Use chrono for timer logic
+- Use `std::time::Instant` for timer logic (NOT chrono - immune to clock changes)
 - No async needed (all local operations)
 
 **Estimated Complexity:** Low-Medium
 **Dependencies:** Phase 6 (panel infrastructure)
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Data models and persistence (Task, PomodoroTimer, AutoSave)
+- [ ] 07-02-PLAN.md — ProductivityPanel UI with egui integration
+- [ ] 07-03-PLAN.md — UX polish and requirements verification
 
 ---
 
