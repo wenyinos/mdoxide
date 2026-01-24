@@ -32,6 +32,13 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+// Worker implementations
+#[cfg(feature = "async-workers")]
+mod echo_worker;
+
+#[cfg(feature = "async-workers")]
+pub use echo_worker::echo_worker;
+
 /// Commands sent from UI thread to worker thread.
 #[derive(Debug, Clone)]
 pub enum WorkerCommand {
