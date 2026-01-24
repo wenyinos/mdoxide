@@ -17,6 +17,9 @@ bundle-icon = []
 # This reduces heap fragmentation and memory usage, especially for long-running sessions.
 # Disable with: cargo build --no-default-features --features bundle-icon
 high-perf-alloc = ["mimalloc", "tikv-jemallocator"]
+# Development-only: Use custom FerriteEditor instead of egui::TextEdit
+# This flag will be removed after Phase 3 validation when TextEdit is fully replaced
+ferrite-editor = []
 
 [dependencies]
 egui = "0.28"
@@ -72,6 +75,9 @@ slug = "0.1"
 
 # Date/time formatting for snippets
 chrono = "0.4"
+
+# Rope data structure for efficient large text editing
+ropey = "1.6"
 
 # Character encoding detection and conversion
 encoding_rs = "0.8"
