@@ -2,12 +2,12 @@
 
 ## Current Position
 
-Phase: 6 of 6 (Async Foundation)
-Plan: 3 of 3 in phase (just completed)
-Status: Phase 6 complete
-Last activity: 2026-01-24 — Completed 06-03-PLAN.md (View Menu and Lazy Panel Integration)
+Phase: 7 of 7 (Productivity Hub)
+Plan: 1 of 3 in phase (just completed)
+Status: In progress
+Last activity: 2026-01-24 — Completed 07-01-PLAN.md (Data Models and Persistence)
 
-Progress: [███] 100% (all 3 phase-6 plans complete)
+Progress: [████░░] 67% (1 of 3 phase-7 plans complete)
 
 ## Accumulated Context
 
@@ -24,6 +24,12 @@ Progress: [███] 100% (all 3 phase-6 plans complete)
 - Lazy worker initialization: workers spawn on first panel visibility (not at startup) - 06-03
 - View menu organized under "Panels" section with all four panel toggles - 06-03
 - Echo Demo as AI Assistant placeholder demonstrating worker pattern - 06-03
+- Use std::time::Instant instead of chrono for timer (monotonic, no clock drift) - 07-01
+- Store tasks in .ferrite/tasks.json (workspace-scoped, not global config) - 07-01
+- Store notes in .ferrite/notes/*.txt (one file per note, text format) - 07-01
+- 1000ms default debounce for AutoSave (prevents excessive writes) - 07-01
+- Use atomic write pattern from config/persistence.rs (write .bak, rename) - 07-01
+- Support priority markers in markdown (! and !! prefixes) - 07-01
 
 ### Blockers
 (none)
@@ -33,6 +39,6 @@ Progress: [███] 100% (all 3 phase-6 plans complete)
 
 ## Session Continuity
 
-Last session: 2026-01-24 12:25:00 UTC
-Stopped at: Completed 06-01-PLAN.md (Tokio Runtime and Worker Infrastructure)
+Last session: 2026-01-24 15:17:01 UTC
+Stopped at: Completed 07-01-PLAN.md (Data Models and Persistence)
 Resume file: None
