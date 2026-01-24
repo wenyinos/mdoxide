@@ -23,7 +23,7 @@ pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::get_app_icon;
 pub use outline_panel::OutlinePanel;
 pub use pipeline::{PipelinePanel, TabPipelineState};
-pub use productivity_panel::{AutoSave, PomodoroTimer, Task};
+pub use productivity_panel::{AutoSave, PomodoroTimer, ProductivityPanel, Task};
 pub use quick_switcher::QuickSwitcher;
 pub use ribbon::{Ribbon, RibbonAction};
 pub use search::{SearchNavigationTarget, SearchPanel};

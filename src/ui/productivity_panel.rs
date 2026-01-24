@@ -360,6 +360,142 @@ pub fn list_notes(workspace_root: &Path) -> Vec<String> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Productivity Panel UI Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// State for the productivity hub panel.
+pub struct ProductivityPanel {
+    /// Current workspace root (needed for persistence)
+    workspace_root: Option<std::path::PathBuf>,
+
+    /// Task list
+    tasks: Vec<Task>,
+
+    /// New task input text
+    new_task_input: String,
+
+    /// Pomodoro timer
+    timer: PomodoroTimer,
+
+    /// Notes content
+    notes_content: String,
+
+    /// Current note name
+    current_note: String,
+
+    /// Available notes list
+    available_notes: Vec<String>,
+
+    /// Auto-save helper for notes
+    auto_save: AutoSave,
+
+    /// Flag to indicate tasks need saving
+    tasks_dirty: bool,
+}
+
+impl ProductivityPanel {
+    /// Create a new productivity panel.
+    pub fn new() -> Self {
+        Self {
+            workspace_root: None,
+            tasks: Vec::new(),
+            new_task_input: String::new(),
+            timer: PomodoroTimer::new(),
+            notes_content: String::new(),
+            current_note: "default".to_string(),
+            available_notes: vec!["default".to_string()],
+            auto_save: AutoSave::new(1000),
+            tasks_dirty: false,
+        }
+    }
+
+    /// Set the workspace root and load data.
+    pub fn set_workspace(&mut self, workspace_root: Option<std::path::PathBuf>) {
+        if self.workspace_root != workspace_root {
+            // Save current workspace data before switching
+            self.save_all();
+
+            self.workspace_root = workspace_root.clone();
+
+            // Load data for new workspace
+            if let Some(ref root) = workspace_root {
+                self.tasks = load_tasks(root);
+                self.available_notes = list_notes(root);
+                self.current_note = self.available_notes.first()
+                    .cloned()
+                    .unwrap_or_else(|| "default".to_string());
+                self.notes_content = load_note(root, &self.current_note);
+            } else {
+                // No workspace - reset to defaults
+                self.tasks = Vec::new();
+                self.notes_content = String::new();
+                self.available_notes = vec!["default".to_string()];
+                self.current_note = "default".to_string();
+            }
+
+            self.tasks_dirty = false;
+        }
+    }
+
+    /// Save all pending data.
+    pub fn save_all(&mut self) {
+        if let Some(ref root) = self.workspace_root {
+            // Save tasks if dirty
+            if self.tasks_dirty {
+                if let Err(e) = save_tasks(root, &self.tasks) {
+                    log::warn!("Failed to save tasks: {}", e);
+                }
+                self.tasks_dirty = false;
+            }
+
+            // Save notes if pending
+            if let Some(content) = self.auto_save.take_pending() {
+                if let Err(e) = save_note(root, &self.current_note, &content) {
+                    log::warn!("Failed to save note: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Add a new task from the input field.
+    fn add_task(&mut self) {
+        let input = self.new_task_input.trim();
+        if input.is_empty() {
+            return;
+        }
+
+        // If input already has markdown syntax, parse it
+        if let Some(task) = Task::from_markdown(input) {
+            self.tasks.push(task);
+        } else {
+            // Otherwise create a simple unchecked task
+            self.tasks.push(Task {
+                completed: false,
+                text: input.to_string(),
+                priority: 0,
+            });
+        }
+
+        self.new_task_input.clear();
+        self.tasks_dirty = true;
+    }
+
+    /// Delete a task by index.
+    fn delete_task(&mut self, index: usize) {
+        if index < self.tasks.len() {
+            self.tasks.remove(index);
+            self.tasks_dirty = true;
+        }
+    }
+}
+
+impl Default for ProductivityPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
