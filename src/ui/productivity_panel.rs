@@ -170,21 +170,16 @@ impl PomodoroTimer {
     pub fn remaining(&self) -> Option<Duration> {
         match &self.state {
             TimerState::Idle => None,
-            TimerState::Work { started } => {
-                let elapsed = started.elapsed().as_secs();
-                if elapsed >= self.work_duration_secs {
-                    Some(Duration::from_secs(0))
-                } else {
-                    Some(Duration::from_secs(self.work_duration_secs - elapsed))
-                }
-            }
-            TimerState::Break { started } => {
-                let elapsed = started.elapsed().as_secs();
-                if elapsed >= self.break_duration_secs {
-                    Some(Duration::from_secs(0))
-                } else {
-                    Some(Duration::from_secs(self.break_duration_secs - elapsed))
-                }
+            TimerState::Work { started } | TimerState::Break { started } => {
+                let elapsed = started.elapsed();
+                let total = Duration::from_secs(
+                    if matches!(self.state, TimerState::Work { .. }) {
+                        self.work_duration_secs
+                    } else {
+                        self.break_duration_secs
+                    }
+                );
+                total.checked_sub(elapsed).or(Some(Duration::from_secs(0)))
             }
         }
     }
@@ -295,6 +290,7 @@ pub fn save_tasks(workspace_root: &Path, tasks: &[Task]) -> std::io::Result<()> 
 /// Load tasks from .ferrite/tasks.json in workspace root.
 ///
 /// Returns empty Vec if file doesn't exist or is invalid.
+/// If JSON is corrupted, creates a backup and returns empty Vec.
 pub fn load_tasks(workspace_root: &Path) -> Vec<Task> {
     let tasks_path = workspace_root.join(".ferrite").join("tasks.json");
 
@@ -302,10 +298,24 @@ pub fn load_tasks(workspace_root: &Path) -> Vec<Task> {
         return Vec::new();
     }
 
-    std::fs::read_to_string(&tasks_path)
-        .ok()
-        .and_then(|contents| serde_json::from_str(&contents).ok())
-        .unwrap_or_default()
+    match std::fs::read_to_string(&tasks_path) {
+        Ok(contents) => {
+            match serde_json::from_str(&contents) {
+                Ok(tasks) => tasks,
+                Err(e) => {
+                    log::warn!("Failed to parse tasks.json, creating backup: {}", e);
+                    // Create backup of corrupted file
+                    let backup = tasks_path.with_extension("json.corrupted");
+                    let _ = std::fs::rename(&tasks_path, &backup);
+                    Vec::new()
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to read tasks.json: {}", e);
+            Vec::new()
+        }
+    }
 }
 
 /// Save note content to .ferrite/notes/{name}.txt
@@ -474,14 +484,25 @@ impl ProductivityPanel {
             return;
         }
 
+        // Limit task text to 500 characters
+        let text = if input.len() > 500 {
+            format!("{}...", &input[..497])
+        } else {
+            input.to_string()
+        };
+
         // If input already has markdown syntax, parse it
-        if let Some(task) = Task::from_markdown(input) {
+        if let Some(mut task) = Task::from_markdown(&text) {
+            // Re-apply length limit to task text if needed
+            if task.text.len() > 500 {
+                task.text = format!("{}...", &task.text[..497]);
+            }
             self.tasks.push(task);
         } else {
             // Otherwise create a simple unchecked task
             self.tasks.push(Task {
                 completed: false,
-                text: input.to_string(),
+                text,
                 priority: 0,
             });
         }
@@ -502,6 +523,7 @@ impl ProductivityPanel {
     ///
     /// Returns true if the panel requested a repaint (timer active).
     pub fn show(&mut self, ctx: &eframe::egui::Context, visible: &mut bool) -> bool {
+        let was_visible = *visible;
         let mut needs_repaint = false;
 
         eframe::egui::Window::new("Productivity Hub")
@@ -510,6 +532,14 @@ impl ProductivityPanel {
             .min_width(250.0)
             .resizable(true)
             .show(ctx, |ui| {
+                // Show message if no workspace
+                if self.workspace_root.is_none() {
+                    ui.label(eframe::egui::RichText::new("Open a workspace to enable task and note persistence")
+                        .weak()
+                        .italics());
+                    ui.separator();
+                }
+
                 // TASKS SECTION
                 ui.heading("Tasks");
 
@@ -746,6 +776,11 @@ impl ProductivityPanel {
                     }
                 }
             });
+
+        // Save when panel closes (was visible, now hidden)
+        if was_visible && !*visible {
+            self.save_all();
+        }
 
         needs_repaint
     }
