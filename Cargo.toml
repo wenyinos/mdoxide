@@ -17,9 +17,11 @@ bundle-icon = []
 # This reduces heap fragmentation and memory usage, especially for long-running sessions.
 # Disable with: cargo build --no-default-features --features bundle-icon
 high-perf-alloc = ["mimalloc", "tikv-jemallocator"]
+# Async worker infrastructure for background operations (AI, SSH, database)
+async-workers = ["tokio", "poll-promise"]
 
 [dependencies]
-egui = "0.28"
+egui = { version = "0.28", features = ["serde"] }
 eframe = "0.28"
 comrak = "0.22"
 syntect = "5.1"
@@ -73,6 +75,11 @@ chardetng = "0.1"
 # Terminal emulation
 portable-pty = "0.8"
 vte = "0.13"
+ctrlc = "3.5.1"
+
+# Async runtime for background workers (optional, feature-gated)
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync"], optional = true }
+poll-promise = { version = "0.3", optional = true }
 
 # High-performance memory allocators (platform-specific)
 # mimalloc for Windows: faster allocation, reduced fragmentation
