@@ -35,9 +35,9 @@ use crate::theme::{ThemeColors, ThemeManager};
 use crate::vcs::GitAutoRefresh;
 use crate::ui::{
     handle_window_resize, AboutPanel, FileOperationDialog, FileOperationResult,
-    FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, QuickSwitcher, Ribbon,
-    RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TitleBarButton,
-    TerminalPanel, TerminalPanelState, ViewSegmentAction, WindowResizeState,
+    FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, ProductivityPanel,
+    QuickSwitcher, Ribbon, RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel,
+    TitleBarButton, TerminalPanel, TerminalPanelState, ViewSegmentAction, WindowResizeState,
 };
 
 #[cfg(feature = "async-workers")]
@@ -240,6 +240,8 @@ pub struct FerriteApp {
     terminal_panel: TerminalPanel,
     /// Terminal panel state
     terminal_panel_state: TerminalPanelState,
+    /// Productivity hub panel component
+    productivity_panel: ProductivityPanel,
     /// Frame counter for FPS tracking (diagnostic for repaint optimization)
     #[cfg(debug_assertions)]
     frame_count: u64,
@@ -391,6 +393,7 @@ impl FerriteApp {
             snippet_manager,
             terminal_panel: TerminalPanel::new(),
             terminal_panel_state: TerminalPanelState::new(),
+            productivity_panel: ProductivityPanel::new(),
             #[cfg(debug_assertions)]
             frame_count: 0,
             #[cfg(debug_assertions)]
@@ -2611,6 +2614,11 @@ impl FerriteApp {
                     ui.label("This panel will be replaced with AI chat in Phase 8.");
                     ui.label("Demonstrates: lazy worker spawn, mpsc communication, non-blocking UI.");
                 });
+        }
+
+        // Productivity Hub Panel
+        if self.state.settings.productivity_panel_visible {
+            self.productivity_panel.show(ctx, &mut self.state.settings.productivity_panel_visible);
         }
 
         // Central panel for editor content
@@ -7674,6 +7682,10 @@ impl eframe::App for FerriteApp {
         // Periodic session save for crash recovery
         self.update_session_recovery();
 
+        // Sync productivity panel with current workspace
+        let workspace_root = self.state.workspace_root().cloned();
+        self.productivity_panel.set_workspace(workspace_root);
+
         // Process auto-save for tabs that need it
         self.process_auto_saves();
 
@@ -7818,6 +7830,9 @@ impl eframe::App for FerriteApp {
         };
 
         info!("Application exiting");
+
+        // Save productivity panel data
+        self.productivity_panel.save_all();
 
         // Capture and save session state for next startup
         let mut session_state = self.state.capture_session_state();
