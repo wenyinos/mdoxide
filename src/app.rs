@@ -253,6 +253,9 @@ pub struct FerriteApp {
     /// Echo worker handle for async demo (lazy initialization)
     #[cfg(feature = "async-workers")]
     echo_worker: Option<WorkerHandle>,
+    /// Input buffer for echo demo panel
+    #[cfg(feature = "async-workers")]
+    echo_demo_input: String,
 }
 
 impl FerriteApp {
@@ -396,6 +399,8 @@ impl FerriteApp {
             last_window_title: String::new(),
             #[cfg(feature = "async-workers")]
             echo_worker: None, // Lazy - spawns when AI panel first shown
+            #[cfg(feature = "async-workers")]
+            echo_demo_input: String::new(),
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -2561,6 +2566,50 @@ impl FerriteApp {
                     if output.closed {
                         self.terminal_panel_state.visible = false;
                     }
+                });
+        }
+
+        // Echo Demo Panel (placeholder for AI Assistant)
+        // This demonstrates async workers via lazy initialization
+        #[cfg(feature = "async-workers")]
+        if self.state.settings.ai_panel_visible {
+            egui::Window::new("Echo Demo (AI Panel Placeholder)")
+                .open(&mut self.state.settings.ai_panel_visible)
+                .default_width(400.0)
+                .default_height(300.0)
+                .show(ctx, |ui| {
+                    ui.label("This demonstrates async workers. Type a message:");
+
+                    // Input field with state
+                    ui.add_space(8.0);
+
+                    let text_edit = ui.text_edit_singleline(&mut self.echo_demo_input);
+
+                    // Send message on Enter
+                    if text_edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        if let Some(worker) = &self.echo_worker {
+                            if !self.echo_demo_input.is_empty() {
+                                let _ = worker.command_tx.send(WorkerCommand::Echo(self.echo_demo_input.clone()));
+                                self.echo_demo_input.clear();
+                            }
+                        }
+                    }
+
+                    ui.separator();
+                    ui.label("Responses (100ms delay):");
+
+                    // Poll for responses (non-blocking)
+                    if let Some(worker) = &self.echo_worker {
+                        while let Ok(response) = worker.response_rx.try_recv() {
+                            if let WorkerResponse::Echo(msg) = response {
+                                ui.label(msg);
+                            }
+                        }
+                    }
+
+                    ui.separator();
+                    ui.label("This panel will be replaced with AI chat in Phase 8.");
+                    ui.label("Demonstrates: lazy worker spawn, mpsc communication, non-blocking UI.");
                 });
         }
 
