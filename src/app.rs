@@ -7409,6 +7409,12 @@ impl FerriteApp {
                 debug!("Ribbon: Insert/Update TOC");
                 self.handle_insert_toc();
             }
+
+            // Terminal
+            RibbonAction::ToggleTerminal => {
+                debug!("Ribbon: Toggle Terminal");
+                self.handle_toggle_terminal();
+            }
         }
     }
 
