@@ -12,10 +12,10 @@
 |---|-------|------|--------------|--------|
 | 6 | Async Foundation | Establish background worker infrastructure | INFRA-01..04 | ✓ Complete |
 | 7 | Productivity Hub | Task tracking, Pomodoro, notes panels | PROD-01..07 | ✓ Complete |
-| 8 | AI Assistant | Streaming chat panel with provider selection | AI-01..07 | Pending |
-| 9 | Power Terminal | Command history and SSH session management | TERM-01..06 | Pending |
-| 10 | Database Tools | SQLite browser with query editor | DB-01..08 | Pending |
-| 11 | Integration & Polish | Menu items, shortcuts, persistence | INT-01..04 | Pending |
+| 8 | AI Assistant | Streaming chat panel with provider selection | AI-01..07 | On Hold |
+| 9 | Power Terminal | Command history and SSH session management | TERM-01..06 | Skipped |
+| 10 | Database Tools | SQLite browser with query editor | DB-01..08 | Skipped |
+| 11 | Integration & Polish | Menu items, shortcuts, persistence | INT-01..04 | ✓ Complete |
 
 ---
 

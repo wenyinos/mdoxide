@@ -2,12 +2,23 @@
 
 ## Current Position
 
-Phase: 7 of 7 (Productivity Hub)
-Plan: 3 of 3 in phase (just completed)
-Status: Phase 7 complete
-Last activity: 2026-01-25 — Completed 07-03-PLAN.md (UX Polish and Verification)
+Phase: 11 of 11 (Integration & Polish)
+Plan: Complete (no formal plans, direct implementation)
+Status: Milestone v0.5.0 complete
+Last activity: 2026-01-25 — Phase 11 integration polish
 
-Progress: [██████] 100% (all 3 phase-7 plans complete)
+Progress: [██████] 100% (milestone complete)
+
+## Milestone Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 6 - Async Foundation | ✓ Complete | Tokio workers, panel visibility |
+| 7 - Productivity Hub | ✓ Complete | Tasks, Pomodoro, Notes |
+| 8 - AI Assistant | On Hold | Terminal covers LLM CLIs |
+| 9 - Power Terminal | Skipped | Future milestone |
+| 10 - Database Tools | Skipped | Future milestone |
+| 11 - Integration | ✓ Complete | Menu polish, keyboard shortcuts |
 
 ## Accumulated Context
 
@@ -39,6 +50,8 @@ Progress: [██████] 100% (all 3 phase-7 plans complete)
 - Corrupted JSON recovery: rename to .corrupted, return empty - 07-03
 - Text length limit of 500 chars to prevent UI overflow - 07-03
 - Auto-save on panel close (visibility toggle detection) - 07-03
+- Mark unimplemented panels as "Coming Soon" (not remove) - 11
+- Ctrl+Shift+H for Productivity Hub toggle - 11
 
 ### Blockers
 (none)
@@ -48,6 +61,6 @@ Progress: [██████] 100% (all 3 phase-7 plans complete)
 
 ## Session Continuity
 
-Last session: 2026-01-25 00:55:00 UTC
-Stopped at: Completed 07-03-PLAN.md (UX Polish and Verification)
+Last session: 2026-01-25 01:15:00 UTC
+Stopped at: Completed Phase 11 (Integration & Polish)
 Resume file: None
