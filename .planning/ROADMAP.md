@@ -11,7 +11,7 @@
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
 | 6 | Async Foundation | Establish background worker infrastructure | INFRA-01..04 | ✓ Complete |
-| 7 | Productivity Hub | Task tracking, Pomodoro, notes panels | PROD-01..07 | Pending |
+| 7 | Productivity Hub | Task tracking, Pomodoro, notes panels | PROD-01..07 | ✓ Complete |
 | 8 | AI Assistant | Streaming chat panel with provider selection | AI-01..07 | Pending |
 | 9 | Power Terminal | Command history and SSH session management | TERM-01..06 | Pending |
 | 10 | Database Tools | SQLite browser with query editor | DB-01..08 | Pending |
@@ -90,9 +90,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Data models and persistence (Task, PomodoroTimer, AutoSave)
-- [ ] 07-02-PLAN.md — ProductivityPanel UI with egui integration
-- [ ] 07-03-PLAN.md — UX polish and requirements verification
+- [x] 07-01-PLAN.md — Data models and persistence (Task, PomodoroTimer, AutoSave)
+- [x] 07-02-PLAN.md — ProductivityPanel UI with egui integration
+- [x] 07-03-PLAN.md — UX polish and requirements verification
 
 ---
 

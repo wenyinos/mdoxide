@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 7 of 7 (Productivity Hub)
-Plan: 2 of 3 in phase (just completed)
-Status: In progress
-Last activity: 2026-01-24 — Completed 07-02-PLAN.md (Productivity Panel UI)
+Plan: 3 of 3 in phase (just completed)
+Status: Phase 7 complete
+Last activity: 2026-01-25 — Completed 07-03-PLAN.md (UX Polish and Verification)
 
-Progress: [█████░] 83% (2 of 3 phase-7 plans complete)
+Progress: [██████] 100% (all 3 phase-7 plans complete)
 
 ## Accumulated Context
 
@@ -35,6 +35,10 @@ Progress: [█████░] 83% (2 of 3 phase-7 plans complete)
 - Sync workspace in update loop for consistent panel state - 07-02
 - Save productivity data on app exit (not periodic) to minimize I/O - 07-02
 - Return needs_repaint flag from show() for timer efficiency - 07-02
+- Task reordering via up/down buttons (simpler than drag-drop) - 07-03
+- Corrupted JSON recovery: rename to .corrupted, return empty - 07-03
+- Text length limit of 500 chars to prevent UI overflow - 07-03
+- Auto-save on panel close (visibility toggle detection) - 07-03
 
 ### Blockers
 (none)
@@ -44,6 +48,6 @@ Progress: [█████░] 83% (2 of 3 phase-7 plans complete)
 
 ## Session Continuity
 
-Last session: 2026-01-24 15:27:33 UTC
-Stopped at: Completed 07-02-PLAN.md (Productivity Panel UI)
+Last session: 2026-01-25 00:55:00 UTC
+Stopped at: Completed 07-03-PLAN.md (UX Polish and Verification)
 Resume file: None
