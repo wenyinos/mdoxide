@@ -130,6 +130,8 @@ enum KeyboardAction {
     TogglePipeline,
     /// Toggle Terminal panel (Ctrl+`)
     ToggleTerminal,
+    /// Toggle Productivity Hub panel (Ctrl+Shift+H)
+    ToggleProductivityHub,
     /// Open Go to Line dialog (Ctrl+G)
     GoToLine,
     /// Duplicate current line or selection (Ctrl+Shift+D)
@@ -1569,29 +1571,18 @@ impl FerriteApp {
                         ui.menu_button("View", |ui| {
                             ui.separator();
 
-                            // AI Assistant panel
-                            if ui.checkbox(&mut self.state.settings.ai_panel_visible, "AI Assistant").changed() {
-                                debug!("AI panel visibility changed: {}", self.state.settings.ai_panel_visible);
-                                self.state.mark_settings_dirty();
-                            }
-
-                            // Database Tools panel
-                            if ui.checkbox(&mut self.state.settings.database_panel_visible, "Database Tools").changed() {
-                                debug!("Database panel visibility changed: {}", self.state.settings.database_panel_visible);
-                                self.state.mark_settings_dirty();
-                            }
-
-                            // SSH Sessions panel
-                            if ui.checkbox(&mut self.state.settings.ssh_panel_visible, "SSH Sessions").changed() {
-                                debug!("SSH panel visibility changed: {}", self.state.settings.ssh_panel_visible);
-                                self.state.mark_settings_dirty();
-                            }
-
-                            // Productivity Hub panel
+                            // Productivity Hub panel (implemented)
                             if ui.checkbox(&mut self.state.settings.productivity_panel_visible, "Productivity Hub").changed() {
                                 debug!("Productivity panel visibility changed: {}", self.state.settings.productivity_panel_visible);
                                 self.state.mark_settings_dirty();
                             }
+
+                            ui.separator();
+
+                            // Coming soon panels (disabled)
+                            ui.add_enabled(false, egui::Label::new(egui::RichText::new("AI Assistant (Coming Soon)").weak()));
+                            ui.add_enabled(false, egui::Label::new(egui::RichText::new("Database Tools (Coming Soon)").weak()));
+                            ui.add_enabled(false, egui::Label::new(egui::RichText::new("SSH Sessions (Coming Soon)").weak()));
                         });
                     });
                 });
@@ -5492,6 +5483,7 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::ToggleFileTree, KeyboardAction::ToggleFileTree);
             check_shortcut!(ShortcutCommand::TogglePipeline, KeyboardAction::TogglePipeline);
             check_shortcut!(ShortcutCommand::ToggleTerminal, KeyboardAction::ToggleTerminal);
+            check_shortcut!(ShortcutCommand::ToggleProductivityHub, KeyboardAction::ToggleProductivityHub);
 
             // Edit - note: Undo/Redo handled separately, MoveLineUp/Down handled separately
             check_shortcut!(ShortcutCommand::DeleteLine, KeyboardAction::DeleteLine);
@@ -5667,6 +5659,10 @@ impl FerriteApp {
             }
             KeyboardAction::ToggleTerminal => {
                 self.handle_toggle_terminal();
+            }
+            KeyboardAction::ToggleProductivityHub => {
+                self.state.settings.productivity_panel_visible = !self.state.settings.productivity_panel_visible;
+                self.state.mark_settings_dirty();
             }
             KeyboardAction::GoToLine => {
                 self.handle_open_go_to_line();

@@ -418,6 +418,7 @@ pub enum ShortcutCommand {
     ToggleFileTree,
     TogglePipeline,
     ToggleTerminal,
+    ToggleProductivityHub,
     // Edit
     Undo,
     Redo,
@@ -469,7 +470,7 @@ impl ShortcutCommand {
             // Navigation
             NextTab, PrevTab, GoToLine, QuickOpen,
             // View
-            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal,
+            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal, ToggleProductivityHub,
             // Edit
             Undo, Redo, DeleteLine, DuplicateLine, MoveLineUp, MoveLineDown, SelectNextOccurrence,
             // Search
@@ -509,6 +510,7 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleFileTree => "Toggle File Tree",
             ShortcutCommand::TogglePipeline => "Toggle Pipeline",
             ShortcutCommand::ToggleTerminal => "Toggle Terminal",
+            ShortcutCommand::ToggleProductivityHub => "Toggle Productivity Hub",
             // Edit
             ShortcutCommand::Undo => "Undo",
             ShortcutCommand::Redo => "Redo",
@@ -561,8 +563,9 @@ impl ShortcutCommand {
             | ShortcutCommand::QuickOpen => "Navigation",
 
             ShortcutCommand::ToggleViewMode | ShortcutCommand::CycleTheme | ShortcutCommand::ToggleZenMode
-            | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree 
-            | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal => "View",
+            | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree
+            | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal
+            | ShortcutCommand::ToggleProductivityHub => "View",
 
             ShortcutCommand::Undo | ShortcutCommand::Redo | ShortcutCommand::DeleteLine
             | ShortcutCommand::DuplicateLine | ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown
@@ -610,6 +613,7 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleFileTree => KeyBinding::new(M::ctrl(), B),
             ShortcutCommand::TogglePipeline => KeyBinding::new(M::ctrl_shift(), L),
             ShortcutCommand::ToggleTerminal => KeyBinding::new(M::ctrl(), Backtick),
+            ShortcutCommand::ToggleProductivityHub => KeyBinding::new(M::ctrl_shift(), H),
             // Edit
             ShortcutCommand::Undo => KeyBinding::new(M::ctrl(), Z),
             ShortcutCommand::Redo => KeyBinding::new(M::ctrl(), Y),
