@@ -15,13 +15,13 @@
 - [x] **INFRA-04**: Lazy panel initialization (only create when first shown)
 
 ### Developer Productivity Hub (PROD)
-- [ ] **PROD-01**: User can create tasks with markdown checkbox syntax (`- [ ]`)
-- [ ] **PROD-02**: User can mark tasks complete (strikethrough, checkbox checked)
-- [ ] **PROD-03**: Tasks persist across app restarts (JSON storage in .ferrite/)
-- [ ] **PROD-04**: User can start/stop Pomodoro timer (25/5 work/break)
-- [ ] **PROD-05**: User receives sound notification when Pomodoro ends
-- [ ] **PROD-06**: User can write quick notes in a dedicated panel
-- [ ] **PROD-07**: Notes persist per workspace (.ferrite/notes/)
+- [x] **PROD-01**: User can create tasks with markdown checkbox syntax (`- [ ]`)
+- [x] **PROD-02**: User can mark tasks complete (strikethrough, checkbox checked)
+- [x] **PROD-03**: Tasks persist across app restarts (JSON storage in .ferrite/)
+- [x] **PROD-04**: User can start/stop Pomodoro timer (25/5 work/break)
+- [x] **PROD-05**: User receives sound notification when Pomodoro ends
+- [x] **PROD-06**: User can write quick notes in a dedicated panel
+- [x] **PROD-07**: Notes persist per workspace (.ferrite/notes/)
 
 ### AI Assistant (AI)
 - [ ] **AI-01**: User can open AI chat panel via View menu or keyboard shortcut
@@ -51,10 +51,10 @@
 - [ ] **DB-08**: Database connections persist in settings
 
 ### Integration (INT)
-- [ ] **INT-01**: User can toggle all new panels via View menu
-- [ ] **INT-02**: Panel visibility persists across app restarts
-- [ ] **INT-03**: Keyboard shortcuts work context-aware (no conflicts with terminal)
-- [ ] **INT-04**: All panels follow existing Ferrite UI patterns
+- [x] **INT-01**: User can toggle all new panels via View menu
+- [x] **INT-02**: Panel visibility persists across app restarts
+- [x] **INT-03**: Keyboard shortcuts work context-aware (no conflicts with terminal)
+- [x] **INT-04**: All panels follow existing Ferrite UI patterns
 
 ---
 
