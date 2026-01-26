@@ -84,9 +84,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.5.3 Released:** **View Mode Segmented Control** (clickable R/S/V pill buttons), **100+ syntax languages** (PowerShell, TypeScript, Zig, Svelte, Vue, Terraform, etc.), **25+ syntax themes** (Dracula, Nord, Catppuccin, Gruvbox, Solarized, etc.), list item line break fix, horizontal scroll for wide tables/blockquotes, Flathub submission files. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.6 Released:** **New Custom Editor Engine** with massive performance improvements for large files (80MB file uses ~80MB RAM, was 460MB+), **Multi-Cursor Editing** (Ctrl+Click to add cursors), **Code Folding** with content hiding (click ▶/▼ indicators), improved IME/CJK input, and cursor blink/auto-focus fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 📦 **v0.2.5.2 Highlights:** Windows portable build, Delete Line (Ctrl+D), Move Line Up/Down (Alt+↑/↓), Linux window drag fix, macOS file associations, MSI installer, RPM package, I18n cleanup.
+> 📦 **v0.2.5.3 Highlights:** View Mode Segmented Control, 100+ syntax languages, 25+ syntax themes, Flathub submission.
 
 ## Features
 
@@ -105,8 +105,9 @@ This transparency is intentional — I want others to learn from (and improve up
 
 ### Editor Features
 - **Syntax Highlighting** - Full-file syntax highlighting for 40+ languages (Rust, Python, JavaScript, Go, etc.)
-- **Code Folding** - Fold detection with gutter indicators (▶/▼) for headings, code blocks, and lists (text hiding deferred to v0.3.0)
+- **Code Folding** - Fold/unfold regions with gutter indicators (▶/▼) for headings, code blocks, and lists; collapsed content is hidden
 - **Semantic Minimap** - Navigation panel with clickable header labels, content type indicators, and text density bars (switchable to VS Code-style pixel view)
+- **Multi-Cursor Editing** - Ctrl+Click to add multiple cursors; type, delete, and navigate at all positions simultaneously
 - **Bracket Matching** - Highlight matching brackets `()[]{}<>` and emphasis pairs `**` `__`
 - **Auto-close Brackets & Quotes** - Type `(`, `[`, `{`, `"`, or `'` to get matching pair; selection wrapping supported
 - **Duplicate Line (Ctrl+Shift+D)** - Duplicate current line or selection
