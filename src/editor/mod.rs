@@ -3,6 +3,10 @@
 //! This module contains the text editor widget and related functionality
 //! for editing markdown documents.
 
+// Ferrite editor module (custom high-performance editor)
+mod ferrite;
+
+// Other editor modules
 mod find_replace;
 pub mod folding;
 mod line_numbers;
@@ -12,7 +16,10 @@ mod outline;
 mod stats;
 mod widget;
 
-// Only export what's actually used by the app
+// Re-export Ferrite editor types
+pub use ferrite::{Cursor, EditHistory, EditOperation, FerriteEditor, LineCache, Selection, TextBuffer, ViewState};
+
+// Re-export other editor types
 pub use find_replace::{FindReplacePanel, FindState};
 pub use line_numbers::count_lines;
 pub use minimap::{Minimap, SemanticMinimap};
@@ -22,3 +29,6 @@ pub use outline::{
 };
 pub use stats::{DocumentStats, TextStats};
 pub use widget::{EditorWidget, SearchHighlights};
+
+// Re-export FerriteEditor access helpers
+pub use widget::{cleanup_ferrite_editor, get_ferrite_editor_mut};

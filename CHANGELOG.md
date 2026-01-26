@@ -5,41 +5,106 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6] - 2026-XX-XX (Unreleased)
+## [0.2.6] - 2026-01-XX
 
-### Fixed
-
-#### Memory & Performance (Large Files) ([#45](https://github.com/OlaProeis/Ferrite/issues/45))
-> **Issue:** Opening a 4MB text file caused 1.8GB RAM usage and laggy editor (FPS drop)
-
-Rust-side optimizations (reduces Ferrite's allocations from ~400MB to ~44MB for 4MB files):
-
-- **Editor per-frame content clone** - Fixed critical memory issue where the editor cloned the entire document content every frame. For a 4MB file at 60fps, this was allocating 240MB/second. Now uses a lazy "pending undo snapshot" pattern that only clones when an edit is actually made.
-- **Case-insensitive search allocation** - Fixed `find_matches()` creating a full lowercase copy of the entire document for case-insensitive search. Now uses regex engine with `(?i)` flag for efficient streaming search without allocating a copy.
-- **Search debouncing** - Added 150ms debounce to find/replace search. Previously, every keystroke in the search box triggered a full document search, causing UI freezes with large files.
-- **Large file memory optimization** - Added `LARGE_FILE_THRESHOLD` (1MB) for files that get special memory treatment:
-  - Hash-based modification detection instead of storing full `original_content` copy (saves 4MB for 4MB file)
-  - Clear `original_bytes` after load for large files (saves another 4MB)
-  - Reduced undo stack from 100 to 10 entries for large files (saves up to 360MB worst case)
+> **Major Release:** Complete custom text editor (FerriteEditor) replacing egui's TextEdit. Enables editing of 100MB+ files with ~80MB RAM usage (previously 1.8GB+ for 4MB files).
 
 ### Added
 
-#### Custom Text Editor (In Progress)
-> **Remaining issue:** egui's TextEdit creates massive Galley structures (~500MB for 4MB file) that cannot be optimized away. This requires replacing egui's TextEdit with a custom editor using virtual scrolling.
+#### Custom Text Editor (FerriteEditor) 🎉
+> **Milestone achieved:** 80MB file now uses ~80MB RAM (was 460MB+). Editing is smooth and responsive.
 
-- [ ] **FerriteEditor widget** - Custom text editor using egui drawing primitives
-- [ ] **Virtual scrolling** - Only render and layout visible lines
-- [ ] **Rope-based buffer** - Efficient text storage via `ropey` crate
+Complete ground-up reimplementation of the text editor:
+
+- **FerriteEditor widget** - Custom text editor built with egui drawing primitives
+- **Virtual scrolling** - Only renders visible lines + buffer, enabling 100MB+ file editing
+- **Rope-based buffer** - O(log n) text operations via `ropey` crate for instant edits
+- **Full selection support** - Click-drag, Shift+Arrow, Shift+Home/End, double-click (word), triple-click (line), Ctrl+A
+- **Clipboard operations** - Ctrl+A/C/X/V with proper selection handling
+- **Syntax highlighting** - Viewport-aware per-line highlighting using syntect
+- **Search highlights** - Find/replace integration with capped highlight count (1000 max visible)
+- **Bracket matching** - Windowed O(window) algorithm (~200 lines around cursor), works at any file size
+- **Word wrap** - Dynamic line heights with proper visual cursor navigation
+- **Undo/redo** - Operation-based EditHistory with 500ms grouping, Ctrl+Z/Ctrl+Y
+- **IME support** - Chinese Pinyin, Japanese Romaji, Korean Hangul input
+- **Code folding** - Fold regions with gutter indicators, navigation skips folds
+- **Multi-cursor** - Ctrl+Click to add cursors, simultaneous editing
+
+#### UI/UX Improvements
+- **Document navigation buttons** - Top/Middle/Bottom jump buttons in editor corner
+- **Semi-transparent selection** - Selected text remains readable through highlight
+- **Cursor blink** - Standard ~500ms blink interval with theme-aware color
+- **Auto-focus new documents** - Cursor ready to type immediately without clicking
+- **.txt files in Open dialog** - Text files now visible in default filter
+
+### Fixed
+
+#### Memory & Performance ([#45](https://github.com/OlaProeis/Ferrite/issues/45))
+> **Critical fix:** Opening a 4MB text file caused 1.8GB RAM usage and laggy editor
+
+- **Editor per-frame content clone** - Fixed 240MB/second allocation from cloning document every frame. Now uses lazy undo snapshot pattern.
+- **Case-insensitive search allocation** - Fixed full document copy for search. Now uses regex `(?i)` flag for streaming search.
+- **Search debouncing** - Added 150ms debounce preventing search on every keystroke.
+- **Large file memory optimization** - Files >1MB get hash-based modification detection, cleared original bytes, reduced undo stack (10 vs 100).
+- **Bracket matching O(N) fix** - Was allocating entire buffer every frame (4.8GB/sec for 80MB file). Now uses windowed ~20KB extraction.
+- **Memory release on tab close** - Memory properly freed when closing large file tabs.
+
+#### Editor Bugs
+- **Text jumping to next line** - Fixed cursor unexpectedly jumping when typing at end of line
+- **Cannot scroll to bottom** - Fixed missing lines at bottom of large files with/without word wrap
+- **Outline/Minimap cursor placement** - Fixed cursor landing several lines below clicked heading
+- **Search highlight alignment** - Fixed highlight drift on wrapped lines in large files
+- **Box drawing characters** - Fixed U+2500-U+257F rendering as squares (added JetBrains Mono fallback)
+
+#### UI Fixes
+- **File browser context menu icons** - Fixed doubled/square icons in right-click menu
+- **Link hover gear icon removed** - Click now edits, Ctrl+Click opens in browser
+- **Initial cursor visibility** - New documents show blinking cursor immediately
+- **Cursor appearance** - Theme-aware color, proper height matching line height
+- **Windows Start Menu icon** - Fixed pixelated/low-res icon (proper multi-size .ico)
+
+### Changed
+
+#### FerriteEditor Modular Architecture
+> Improved maintainability by splitting 2735-line monolith into focused modules
+
+- **editor.rs refactored** - Reduced from 2735 to 1551 lines (43% reduction)
+- **New modules extracted:**
+  - `buffer.rs` - Rope-based TextBuffer with efficient text operations
+  - `cursor.rs` - Cursor and Selection types with multi-cursor support
+  - `history.rs` - EditHistory with operation-based undo/redo
+  - `view.rs` - ViewState for virtual scrolling and viewport tracking
+  - `line_cache.rs` - LRU galley cache for efficient rendering
+  - `selection.rs` - Selection rendering, word boundaries, select_all
+  - `highlights.rs` - Search/bracket highlight rendering
+  - `find_replace.rs` - Replace operations with undo support
+  - `mouse.rs` - Click position to cursor conversion
+  - `search.rs` - Search match management API
+  - `input/` - Keyboard and IME input handling
+  - `rendering/` - Cursor, gutter, and text rendering
+- **Pattern:** Rust's `impl FerriteEditor` distributed across modules
+
+#### Integration Updates
+- Format toolbar connected to FerriteEditor buffer operations
+- Outline panel and minimap integrated with new scroll system
+- Font settings dynamically update editor rendering
+- Line numbers toggle works without restart
+- File save preserves encoding through FerriteEditor
+
+### Deferred to v0.2.7
+- **Editor-Preview scroll synchronization** - Requires deeper investigation into viewport-based line tracking
+- **Large file preview disablement** - Preview disabled message for >5MB files
+- **SignPath code signing** - Awaiting organization approval
 
 ### Technical
-- New `LARGE_FILE_THRESHOLD` (1MB) and `LARGE_FILE_MAX_UNDO` (10) constants in `state.rs`
-- New `is_large_file` and `original_content_hash` fields in Tab struct
-- New `pending_undo_state` field in Tab for lazy undo snapshot management
-- New `prepare_for_edit()` and `record_edit_after_change()` methods for optimized undo recording
-- Updated `is_modified()` to use hash comparison for large files
-- Updated `mark_saved()` to update hash for large files
-- Find/replace now uses `is_word_boundary()` helper for cleaner word boundary detection
-- Added `find_search_pending` and `find_search_requested_at` to UiState for debounce tracking
+- Added `ropey` crate for rope-based text buffer
+- New `src/editor/ferrite/` module structure with 15+ submodules
+- `LARGE_FILE_THRESHOLD` (1MB) and `LARGE_FILE_MAX_UNDO` (10) constants
+- Hash-based modification detection for large files
+- Lazy undo snapshot pattern with `pending_undo_state`
+- Search debounce with `find_search_pending` and `find_search_requested_at`
+- ViewState tracks wrapped line heights for proper scrolling
+- LineCache with LRU eviction (200 entries max)
 
 ## [0.2.5.3] - 2026-01-24
 

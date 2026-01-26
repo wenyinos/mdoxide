@@ -35,6 +35,8 @@
 
 use std::time::{Duration, Instant};
 
+use crate::markdown::LineMapping;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,6 +322,11 @@ impl SyncScrollState {
         }
     }
 
+    /// Get the current scroll origin.
+    pub fn scroll_origin(&self) -> ScrollOrigin {
+        self.scroll_origin
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Line/Offset Conversion
     // ─────────────────────────────────────────────────────────────────────────
@@ -477,9 +484,36 @@ impl SyncScrollState {
         self.animation_start_rendered = self.last_rendered_offset;
     }
 
+    /// Set instant (non-animated) target for Raw view.
+    /// Use this for sync scrolling to reduce latency.
+    /// Note: This bypasses animation - the target will be returned immediately
+    /// on the next call to get_animated_raw_offset().
+    pub fn set_raw_target(&mut self, target: f32) {
+        self.target_raw_offset = Some(target);
+        // Mark as "instant" by setting animation_start to a completed state
+        // We use a sentinel value by NOT setting animation_start, which causes
+        // get_animated_raw_offset to return instantly when smooth_scrolling check fails
+    }
+
+    /// Set instant (non-animated) target for Rendered view.
+    /// Use this for sync scrolling to reduce latency.
+    pub fn set_rendered_target(&mut self, target: f32) {
+        self.target_rendered_offset = Some(target);
+    }
+
     /// Get the current animated Raw offset (or None if no animation).
     pub fn get_animated_raw_offset(&mut self) -> Option<f32> {
         let target = self.target_raw_offset?;
+
+        // If no animation_start, return target immediately (instant scroll)
+        let start_time = match self.animation_start {
+            Some(t) => t,
+            None => {
+                // Instant scroll - consume and return immediately
+                self.target_raw_offset = None;
+                return Some(target);
+            }
+        };
 
         if !self.config.smooth_scrolling {
             let result = target;
@@ -487,7 +521,6 @@ impl SyncScrollState {
             return Some(result);
         }
 
-        let start_time = self.animation_start?;
         let elapsed = start_time.elapsed().as_secs_f32();
         let progress = (elapsed / self.config.animation_duration).min(1.0);
 
@@ -509,13 +542,22 @@ impl SyncScrollState {
     pub fn get_animated_rendered_offset(&mut self) -> Option<f32> {
         let target = self.target_rendered_offset?;
 
+        // If no animation_start, return target immediately (instant scroll)
+        let start_time = match self.animation_start {
+            Some(t) => t,
+            None => {
+                // Instant scroll - consume and return immediately
+                self.target_rendered_offset = None;
+                return Some(target);
+            }
+        };
+
         if !self.config.smooth_scrolling {
             let result = target;
             self.target_rendered_offset = None;
             return Some(result);
         }
 
-        let start_time = self.animation_start?;
         let elapsed = start_time.elapsed().as_secs_f32();
         let progress = (elapsed / self.config.animation_duration).min(1.0);
 
@@ -607,6 +649,156 @@ impl SyncScrollState {
         let start_y = self.line_to_rendered_offset(first_line);
         let end_y = self.line_to_rendered_offset(last_line);
         (start_y, end_y)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LineMapping-Based Sync (Task 36)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Convert source line to rendered Y position using LineMapping.
+    ///
+    /// Uses binary search to find the block, then **interpolates within the block**
+    /// for smooth scrolling. This prevents jumping when scrolling through large blocks.
+    ///
+    /// # Arguments
+    /// * `source_line` - 1-indexed source line number
+    /// * `mappings` - Sorted Vec of LineMapping from MarkdownEditor
+    ///
+    /// # Returns
+    /// The Y offset in the preview corresponding to this source line.
+    pub fn source_line_to_preview_y(source_line: usize, mappings: &[LineMapping]) -> f32 {
+        if mappings.is_empty() || source_line == 0 {
+            return 0.0;
+        }
+
+        // Binary search for the mapping containing this line
+        let result = mappings.binary_search_by(|mapping| {
+            if source_line < mapping.start_line {
+                std::cmp::Ordering::Greater
+            } else if source_line > mapping.end_line {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        match result {
+            Ok(idx) => {
+                // Found mapping containing this line - interpolate within block
+                let mapping = &mappings[idx];
+                let line_range = mapping.end_line.saturating_sub(mapping.start_line);
+                if line_range == 0 {
+                    // Single-line block
+                    return mapping.rendered_y;
+                }
+                let line_offset = source_line.saturating_sub(mapping.start_line);
+                let progress = line_offset as f32 / line_range as f32;
+                mapping.rendered_y + progress * mapping.rendered_height
+            }
+            Err(idx) => {
+                // Line is in a gap between mappings
+                if idx == 0 {
+                    // Before first mapping
+                    if let Some(first) = mappings.first() {
+                        if first.start_line > 1 && first.rendered_y > 0.0 {
+                            let progress = source_line as f32 / first.start_line as f32;
+                            return progress * first.rendered_y;
+                        }
+                    }
+                    0.0
+                } else if idx >= mappings.len() {
+                    // After last mapping
+                    if let Some(last) = mappings.last() {
+                        last.rendered_y + last.rendered_height
+                    } else {
+                        0.0
+                    }
+                } else {
+                    // In gap - interpolate between previous and next block
+                    let prev = &mappings[idx - 1];
+                    let next = &mappings[idx];
+                    let prev_end_y = prev.rendered_y + prev.rendered_height;
+                    let gap_lines = next.start_line.saturating_sub(prev.end_line);
+                    if gap_lines == 0 {
+                        return next.rendered_y;
+                    }
+                    let line_in_gap = source_line.saturating_sub(prev.end_line);
+                    let progress = line_in_gap as f32 / gap_lines as f32;
+                    let gap_y = next.rendered_y - prev_end_y;
+                    prev_end_y + progress * gap_y
+                }
+            }
+        }
+    }
+
+    /// Convert preview Y offset to source line using LineMapping.
+    ///
+    /// Uses binary search to find the block, then **interpolates within the block**
+    /// for accurate line detection.
+    ///
+    /// # Arguments
+    /// * `preview_y` - Y offset in the preview scroll area
+    /// * `mappings` - Sorted Vec of LineMapping from MarkdownEditor
+    ///
+    /// # Returns
+    /// The 1-indexed source line corresponding to this preview position.
+    pub fn preview_y_to_source_line(preview_y: f32, mappings: &[LineMapping]) -> usize {
+        if mappings.is_empty() {
+            return 1;
+        }
+
+        if preview_y <= 0.0 {
+            return mappings.first().map(|m| m.start_line).unwrap_or(1);
+        }
+
+        // Binary search for the mapping containing this Y position
+        let result = mappings.binary_search_by(|mapping| {
+            let block_bottom = mapping.rendered_y + mapping.rendered_height;
+            if preview_y < mapping.rendered_y {
+                std::cmp::Ordering::Greater
+            } else if preview_y >= block_bottom {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        match result {
+            Ok(idx) => {
+                // Found mapping - interpolate within block
+                let mapping = &mappings[idx];
+                if mapping.rendered_height <= 0.0 {
+                    return mapping.start_line;
+                }
+                let y_offset = preview_y - mapping.rendered_y;
+                let progress = y_offset / mapping.rendered_height;
+                let line_range = mapping.end_line.saturating_sub(mapping.start_line);
+                let line_offset = (progress * line_range as f32) as usize;
+                mapping.start_line + line_offset
+            }
+            Err(idx) => {
+                // In a gap between blocks
+                if idx == 0 {
+                    1
+                } else if idx >= mappings.len() {
+                    mappings.last().map(|m| m.end_line).unwrap_or(1)
+                } else {
+                    // In gap - interpolate to find line
+                    let prev = &mappings[idx - 1];
+                    let next = &mappings[idx];
+                    let prev_end_y = prev.rendered_y + prev.rendered_height;
+                    let gap_y = next.rendered_y - prev_end_y;
+                    if gap_y <= 0.0 {
+                        return next.start_line;
+                    }
+                    let y_in_gap = preview_y - prev_end_y;
+                    let progress = y_in_gap / gap_y;
+                    let gap_lines = next.start_line.saturating_sub(prev.end_line);
+                    let line_in_gap = (progress * gap_lines as f32) as usize;
+                    prev.end_line + line_in_gap
+                }
+            }
+        }
     }
 }
 
@@ -755,5 +947,138 @@ mod tests {
         assert!(!state.has_significant_delta(5.0, 3.0));
         assert!(state.has_significant_delta(10.0, 3.0));
         assert!(state.has_significant_delta(0.0, 10.0));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LineMapping-Based Sync Tests (Task 36)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn create_test_line_mappings() -> Vec<crate::markdown::LineMapping> {
+        vec![
+            crate::markdown::LineMapping {
+                start_line: 1,
+                end_line: 3,
+                rendered_y: 0.0,
+                rendered_height: 60.0,
+            },
+            crate::markdown::LineMapping {
+                start_line: 5,
+                end_line: 10,
+                rendered_y: 80.0,
+                rendered_height: 120.0,
+            },
+            crate::markdown::LineMapping {
+                start_line: 12,
+                end_line: 15,
+                rendered_y: 220.0,
+                rendered_height: 80.0,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_source_line_to_preview_y_empty() {
+        let mappings: Vec<crate::markdown::LineMapping> = vec![];
+        assert_eq!(SyncScrollState::source_line_to_preview_y(5, &mappings), 0.0);
+        assert_eq!(SyncScrollState::source_line_to_preview_y(0, &mappings), 0.0);
+    }
+
+    #[test]
+    fn test_source_line_to_preview_y_in_block() {
+        let mappings = create_test_line_mappings();
+
+        // Line 1 is in first block (lines 1-3, Y 0-60)
+        assert_eq!(SyncScrollState::source_line_to_preview_y(1, &mappings), 0.0);
+        // Line 2 - interpolates within block (1/2 through = 30.0)
+        assert_eq!(SyncScrollState::source_line_to_preview_y(2, &mappings), 30.0);
+        // Line 3 - at end of block (2/2 = 60.0)
+        assert_eq!(SyncScrollState::source_line_to_preview_y(3, &mappings), 60.0);
+
+        // Line 5 is at start of second block (lines 5-10, Y 80-200)
+        assert_eq!(SyncScrollState::source_line_to_preview_y(5, &mappings), 80.0);
+        // Line 7 - 2/5 through the block = 80 + 2/5 * 120 = 80 + 48 = 128
+        assert_eq!(SyncScrollState::source_line_to_preview_y(7, &mappings), 128.0);
+        // Line 10 - at end of block
+        assert_eq!(SyncScrollState::source_line_to_preview_y(10, &mappings), 200.0);
+
+        // Line 12 is at start of third block
+        assert_eq!(SyncScrollState::source_line_to_preview_y(12, &mappings), 220.0);
+    }
+
+    #[test]
+    fn test_source_line_to_preview_y_in_gap() {
+        let mappings = create_test_line_mappings();
+
+        // Line 4 is in gap between blocks 1 (ends at line 3, Y=60) and 2 (starts at line 5, Y=80)
+        // gap_lines = 5 - 3 = 2, gap_y = 80 - 60 = 20
+        // line_in_gap = 4 - 3 = 1, progress = 1/2 = 0.5
+        // result = 60 + 0.5 * 20 = 70
+        assert_eq!(SyncScrollState::source_line_to_preview_y(4, &mappings), 70.0);
+
+        // Line 11 is in gap between blocks 2 (ends at line 10, Y=200) and 3 (starts at line 12, Y=220)
+        // gap_lines = 12 - 10 = 2, gap_y = 220 - 200 = 20
+        // line_in_gap = 11 - 10 = 1, progress = 1/2 = 0.5
+        // result = 200 + 0.5 * 20 = 210
+        assert_eq!(SyncScrollState::source_line_to_preview_y(11, &mappings), 210.0);
+    }
+
+    #[test]
+    fn test_source_line_to_preview_y_after_last() {
+        let mappings = create_test_line_mappings();
+
+        // Line 20 is after all blocks - return end of last block
+        let expected = 220.0 + 80.0; // rendered_y + rendered_height of last block
+        assert_eq!(SyncScrollState::source_line_to_preview_y(20, &mappings), expected);
+    }
+
+    #[test]
+    fn test_preview_y_to_source_line_empty() {
+        let mappings: Vec<crate::markdown::LineMapping> = vec![];
+        assert_eq!(SyncScrollState::preview_y_to_source_line(50.0, &mappings), 1);
+    }
+
+    #[test]
+    fn test_preview_y_to_source_line_in_block() {
+        let mappings = create_test_line_mappings();
+
+        // Y=0 is at start of first block (lines 1-3, Y 0-60)
+        assert_eq!(SyncScrollState::preview_y_to_source_line(0.0, &mappings), 1);
+        // Y=30 is 50% through first block = line 1 + 50% of 2 lines = line 2
+        assert_eq!(SyncScrollState::preview_y_to_source_line(30.0, &mappings), 2);
+        // Y=59 is near end of first block
+        assert_eq!(SyncScrollState::preview_y_to_source_line(59.0, &mappings), 2);
+
+        // Y=80 is at start of second block (lines 5-10, Y 80-200)
+        assert_eq!(SyncScrollState::preview_y_to_source_line(80.0, &mappings), 5);
+        // Y=150 is 70/120 = 58% through = line 5 + 58% of 5 lines = 5 + 2 = 7
+        assert_eq!(SyncScrollState::preview_y_to_source_line(150.0, &mappings), 7);
+
+        // Y=220 is at start of third block
+        assert_eq!(SyncScrollState::preview_y_to_source_line(220.0, &mappings), 12);
+    }
+
+    #[test]
+    fn test_preview_y_to_source_line_in_gap() {
+        let mappings = create_test_line_mappings();
+
+        // Y=65 is in gap between blocks 1 (ends Y=60) and 2 (starts Y=80)
+        // y_in_gap = 65 - 60 = 5, gap_y = 20, progress = 5/20 = 0.25
+        // gap_lines = 5 - 3 = 2, line_in_gap = 0.25 * 2 = 0
+        // result = prev.end_line + line_in_gap = 3 + 0 = 3
+        assert_eq!(SyncScrollState::preview_y_to_source_line(65.0, &mappings), 3);
+
+        // Y=210 is in gap between blocks 2 (ends Y=200) and 3 (starts Y=220)
+        // y_in_gap = 210 - 200 = 10, gap_y = 20, progress = 10/20 = 0.5
+        // gap_lines = 12 - 10 = 2, line_in_gap = 0.5 * 2 = 1
+        // result = prev.end_line + line_in_gap = 10 + 1 = 11
+        assert_eq!(SyncScrollState::preview_y_to_source_line(210.0, &mappings), 11);
+    }
+
+    #[test]
+    fn test_preview_y_to_source_line_after_last() {
+        let mappings = create_test_line_mappings();
+
+        // Y=350 is after all blocks
+        assert_eq!(SyncScrollState::preview_y_to_source_line(350.0, &mappings), 15);
     }
 }

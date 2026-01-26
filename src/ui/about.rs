@@ -131,7 +131,7 @@ fn get_shortcuts(category: ShortcutCategory) -> Vec<Shortcut> {
         ShortcutCategory::Navigation => vec![
             Shortcut::new(format!("{}+Tab", m), "shortcuts.nav.next_tab"),
             Shortcut::new(format!("{}+Shift+Tab", m), "shortcuts.nav.prev_tab"),
-            Shortcut::new(format!("{}+Shift+G", m), "shortcuts.nav.go_to_line"),
+            Shortcut::new(format!("{}+G", m), "shortcuts.nav.go_to_line"),
             Shortcut::new("F3", "shortcuts.nav.find_next"),
             Shortcut::new("Shift+F3", "shortcuts.nav.find_prev"),
         ],

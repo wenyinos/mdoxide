@@ -556,17 +556,25 @@ impl CjkLoadSpec {
             spec.load_japanese = true;
         }
 
-        // If Han characters detected without script-specific markers,
-        // load based on user preference
-        if detection.has_han && !detection.has_korean && !detection.has_japanese {
+        // If Han characters detected, ALWAYS load a Chinese font as fallback.
+        // Korean and Japanese fonts don't contain all Han characters, so we need
+        // a Chinese font to ensure complete coverage of Han characters.
+        // The user's preference determines which Chinese variant to load.
+        if detection.has_han {
             match preference {
-                CjkFontPreference::Korean => spec.load_korean = true,
-                CjkFontPreference::Japanese => spec.load_japanese = true,
-                CjkFontPreference::SimplifiedChinese => spec.load_chinese_sc = true,
-                CjkFontPreference::TraditionalChinese => spec.load_chinese_tc = true,
-                CjkFontPreference::Auto => {
-                    // Default to Simplified Chinese for Han-only text
+                CjkFontPreference::Korean => {
+                    // User prefers Korean, but still need Chinese for Han coverage
                     spec.load_chinese_sc = true;
+                }
+                CjkFontPreference::Japanese => {
+                    // Japanese fonts have good Han coverage, but add Chinese as backup
+                    spec.load_chinese_sc = true;
+                }
+                CjkFontPreference::SimplifiedChinese | CjkFontPreference::Auto => {
+                    spec.load_chinese_sc = true;
+                }
+                CjkFontPreference::TraditionalChinese => {
+                    spec.load_chinese_tc = true;
                 }
             }
         }
@@ -752,6 +760,10 @@ pub fn create_font_definitions_with_cjk_spec(
     let cjk_state = load_cjk_fonts_selective(&mut fonts, spec);
 
     // Set up Proportional font family
+    // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK fonts
+    // JetBrains Mono is added as fallback because Inter doesn't have box-drawing characters
+    // (U+2500-U+257F) and other common symbols. This ensures characters render correctly
+    // in both the editor and markdown preview.
     if custom_loaded {
         fonts
             .families
@@ -764,6 +776,12 @@ pub fn create_font_definitions_with_cjk_spec(
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_INTER.to_owned());
+    // Add JetBrains Mono as fallback for box-drawing characters and symbols
+    fonts
+        .families
+        .entry(FontFamily::Proportional)
+        .or_default()
+        .push(FONT_JETBRAINS.to_owned());
 
     // Add CJK fallbacks for loaded fonts
     if cjk_state.any_loaded() {
@@ -939,7 +957,10 @@ pub fn create_font_definitions_with_settings(
     };
 
     // Set up Proportional font family
-    // Order: Custom (if set) -> Inter -> CJK fonts (in preference order)
+    // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK fonts
+    // JetBrains Mono is added as fallback because Inter doesn't have box-drawing characters
+    // (U+2500-U+257F) and other common symbols. This ensures characters render correctly
+    // in both the editor and markdown preview.
     if custom_loaded {
         fonts
             .families
@@ -952,6 +973,12 @@ pub fn create_font_definitions_with_settings(
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_INTER.to_owned());
+    // Add JetBrains Mono as fallback for box-drawing characters and symbols
+    fonts
+        .families
+        .entry(FontFamily::Proportional)
+        .or_default()
+        .push(FONT_JETBRAINS.to_owned());
 
     // Only add CJK fallbacks if fonts were loaded
     if load_cjk {
@@ -1070,8 +1097,10 @@ pub fn create_font_definitions_with_settings(
 const BOX_DRAWING_CHARS: &str = "─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋╔╗╚╝╠╣╦╩╬═║▀▄█▌▐░▒▓";
 
 /// Common symbols that might not be in the initial font atlas.
-/// Includes arrows, bullets, checkmarks, and common UI symbols.
-const COMMON_SYMBOLS: &str = "←→↑↓↔↕⇐⇒⇑⇓⇄⇅↳↵•◦●○■□▪▫◆◇★☆✓✗✘✔✕✖…⋯";
+/// Includes arrows, bullets, checkmarks, mathematical brackets, and common UI symbols.
+/// Note: ⟨⟩ (U+27E8/U+27E9) are mathematical angle brackets used for HTML indicators in preview.
+/// Note: ↻↺ (U+21BB/U+21BA) are clockwise/counter-clockwise arrows for refresh actions.
+const COMMON_SYMBOLS: &str = "←→↑↓↔↕⇐⇒⇑⇓⇄⇅↳↵⤵•◦●○■□▪▫◆◇★☆✓✗✘✔✕✖…⋯⟨⟩«»⚠◐↻↺";
 
 /// Pre-warm the font atlas with commonly used special characters.
 ///
@@ -1284,6 +1313,9 @@ pub fn load_cjk_for_text(
     let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
     ctx.set_fonts(fonts);
     bump_font_generation();
+    
+    // Request a repaint to ensure UI updates immediately with new fonts
+    ctx.request_repaint();
 
     true
 }
@@ -1349,8 +1381,11 @@ pub fn get_styled_font_family(bold: bool, italic: bool, editor_font: &EditorFont
 /// Get the base font family for an editor font (regular weight, no style).
 pub fn get_base_font_family(editor_font: &EditorFont) -> FontFamily {
     match editor_font {
-        EditorFont::Inter => FontFamily::Name(FONT_INTER.into()),
-        EditorFont::JetBrainsMono => FontFamily::Name(FONT_JETBRAINS.into()),
+        // Use Proportional instead of Named family because Named families
+        // don't properly inherit CJK fallbacks when fonts are lazily loaded.
+        // FontFamily::Proportional has CJK fonts added via add_cjk_fallbacks.
+        EditorFont::Inter => FontFamily::Proportional,
+        EditorFont::JetBrainsMono => FontFamily::Monospace,
         EditorFont::Custom(_) => FontFamily::Name(FONT_CUSTOM.into()),
     }
 }

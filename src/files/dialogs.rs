@@ -12,6 +12,18 @@ const JSON_EXTENSIONS: &[&str] = &["json", "jsonc"];
 const YAML_EXTENSIONS: &[&str] = &["yaml", "yml"];
 const TOML_EXTENSIONS: &[&str] = &["toml"];
 const TEXT_EXTENSIONS: &[&str] = &["txt", "text"];
+const CSV_EXTENSIONS: &[&str] = &["csv", "tsv"];
+
+/// Combined filter for all commonly edited file types (default filter).
+/// Includes markdown, text, and data files that Ferrite supports.
+const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "md", "markdown", "mdown", "mkd", "mkdn", // Markdown
+    "txt", "text",                            // Plain text
+    "json", "jsonc",                          // JSON
+    "yaml", "yml",                            // YAML
+    "toml",                                   // TOML
+    "csv", "tsv",                             // Tabular data
+];
 
 /// Opens a native folder picker dialog for selecting a workspace folder.
 ///
@@ -28,16 +40,19 @@ pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
 
 /// Opens a native file dialog for selecting multiple files.
 ///
-/// Supports Markdown, JSON, YAML, TOML, and plain text files.
+/// Supports Markdown, JSON, YAML, TOML, CSV/TSV, and plain text files.
+/// The default filter shows all supported file types.
 /// Returns a vector of selected file paths. Empty if the dialog was cancelled.
 pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> Vec<PathBuf> {
     let mut dialog = FileDialog::new()
         .set_title("Open Files")
+        .add_filter("Supported Files", SUPPORTED_EXTENSIONS)
         .add_filter("Markdown Files", MARKDOWN_EXTENSIONS)
+        .add_filter("Text Files", TEXT_EXTENSIONS)
         .add_filter("JSON Files", JSON_EXTENSIONS)
         .add_filter("YAML Files", YAML_EXTENSIONS)
         .add_filter("TOML Files", TOML_EXTENSIONS)
-        .add_filter("Text Files", TEXT_EXTENSIONS)
+        .add_filter("CSV/TSV Files", CSV_EXTENSIONS)
         .add_filter("All Files", &["*"]);
 
     if let Some(dir) = initial_dir {
@@ -56,11 +71,13 @@ pub fn save_file_dialog(
 ) -> Option<PathBuf> {
     let mut dialog = FileDialog::new()
         .set_title("Save File")
+        .add_filter("Supported Files", SUPPORTED_EXTENSIONS)
         .add_filter("Markdown Files", MARKDOWN_EXTENSIONS)
+        .add_filter("Text Files", TEXT_EXTENSIONS)
         .add_filter("JSON Files", JSON_EXTENSIONS)
         .add_filter("YAML Files", YAML_EXTENSIONS)
         .add_filter("TOML Files", TOML_EXTENSIONS)
-        .add_filter("Text Files", TEXT_EXTENSIONS)
+        .add_filter("CSV/TSV Files", CSV_EXTENSIONS)
         .add_filter("All Files", &["*"]);
 
     if let Some(dir) = initial_dir {

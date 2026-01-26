@@ -47,6 +47,7 @@
 
 use crate::config::{EditorFont, MaxLineWidth, ParagraphIndent, Settings, Theme};
 use crate::fonts;
+use crate::ui::{render_nav_buttons, NavAction};
 use crate::markdown::ast_ops::{
     exit_list_to_paragraph, heading_enter, indent_list_item, merge_with_previous_list_item,
     outdent_list_item, split_list_item, split_paragraph, EditContext, EditNodeType, StructuralEdit,
@@ -114,6 +115,8 @@ pub struct LineMapping {
     pub end_line: usize,
     /// Y position where this element starts in rendered view
     pub rendered_y: f32,
+    /// Height of this element in rendered view (pixels)
+    pub rendered_height: f32,
 }
 
 /// Information about the currently focused element in rendered mode.
@@ -646,6 +649,13 @@ impl<'a> MarkdownEditor<'a> {
         let mut edit_state = EditState::new();
         let mut structural_state = StructuralEditState::new();
 
+        // Clear the link click consumed flag at start of each frame
+        // This prevents stale flags from previous frames affecting edit mode entry
+        ui.memory_mut(|mem| {
+            mem.data
+                .remove::<bool>(egui::Id::new("link_click_consumed_this_frame"));
+        });
+
         // Parse the markdown content
         let doc = match parse_markdown(self.content) {
             Ok(doc) => doc,
@@ -680,18 +690,32 @@ impl<'a> MarkdownEditor<'a> {
             None
         };
 
+        // Check for pending navigation scroll from nav buttons (stored in previous frame)
+        let nav_scroll_id = id.with("nav_scroll_target");
+        let pending_nav_scroll: Option<f32> = ui.memory(|mem| mem.data.get_temp(nav_scroll_id));
+        if pending_nav_scroll.is_some() {
+            // Clear the pending scroll after reading it
+            ui.memory_mut(|mem| {
+                mem.data.remove::<f32>(nav_scroll_id);
+            });
+        }
+
         // Render the document in a scroll area
         let mut scroll_area = ScrollArea::vertical()
             .id_source(id.with("rendered_scroll"))
             .auto_shrink([false, false]);
 
-        // Priority: Apply pending scroll offset from mode switch first
-        if let Some(offset) = self.pending_scroll_offset {
+        // Priority order for scroll offset:
+        // 1. Nav button scroll (from previous frame)
+        // 2. Pending scroll offset from mode switch
+        // 3. Target scroll offset from outline navigation
+        if let Some(offset) = pending_nav_scroll {
+            scroll_area = scroll_area.vertical_scroll_offset(offset);
+            log::debug!("Applied nav button scroll offset in rendered mode: {}", offset);
+        } else if let Some(offset) = self.pending_scroll_offset {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
             log::debug!("Applied pending scroll offset in rendered mode: {}", offset);
-        }
-        // Otherwise, apply scroll offset if we need to jump to a line
-        else if let Some(offset) = target_scroll_offset {
+        } else if let Some(offset) = target_scroll_offset {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
 
@@ -778,11 +802,16 @@ impl<'a> MarkdownEditor<'a> {
                                 self.paragraph_indent,
                             );
                             
+                            // Capture Y position after rendering to get block height
+                            let y_after = ui.cursor().top();
+                            let height = (y_after - y_before).max(1.0); // Ensure minimum height
+                            
                             // Record the line mapping for this top-level node
                             line_mappings.push(LineMapping {
                                 start_line: node.start_line,
                                 end_line: node.end_line,
                                 rendered_y: y_before,
+                                rendered_height: height,
                             });
                         }
 
@@ -804,6 +833,40 @@ impl<'a> MarkdownEditor<'a> {
             })
             .inner
         });
+
+        // Render navigation buttons overlay (top-left corner of scroll area)
+        // These buttons allow quick jumping to top, middle, or bottom of the document
+        let is_dark_mode = ui.visuals().dark_mode;
+        let nav_action = render_nav_buttons(ui, scroll_output.inner_rect, is_dark_mode);
+        
+        // Handle navigation button actions by storing target scroll offset in memory
+        // This will be applied on the next frame
+        if nav_action != NavAction::None {
+            let content_height = scroll_output.content_size.y;
+            let viewport_height = scroll_output.inner_rect.height();
+            
+            let target_offset = match nav_action {
+                NavAction::Top => 0.0,
+                NavAction::Middle => {
+                    // Center the middle of the document in the viewport
+                    let middle = content_height / 2.0;
+                    (middle - viewport_height / 2.0).max(0.0)
+                }
+                NavAction::Bottom => {
+                    // Scroll to show the bottom of the document
+                    (content_height - viewport_height).max(0.0)
+                }
+                NavAction::None => 0.0, // unreachable
+            };
+            
+            // Store the target offset in egui memory for the next frame
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(nav_scroll_id, target_offset);
+            });
+            
+            // Request repaint to apply the scroll on the next frame
+            ui.ctx().request_repaint();
+        }
 
         // Apply any pending structural edits
         let mut structural_changed = false;
@@ -947,7 +1010,7 @@ fn render_node_with_structural_keys(
                 // Other HTML blocks - show with subtle indicator
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new("⟨HTML⟩")
+                        RichText::new("«HTML»")
                             .color(colors.quote_text)
                             .small()
                             .italics(),
@@ -1106,7 +1169,7 @@ fn render_node(
                 // Other HTML blocks - show with subtle indicator
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new("⟨HTML⟩")
+                        RichText::new("«HTML»")
                             .color(colors.quote_text)
                             .small()
                             .italics(),
@@ -1238,6 +1301,7 @@ fn render_heading(
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.heading)
                     .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
                     .desired_width(f32::INFINITY);
 
                 let output = text_edit.show(ui);
@@ -1352,6 +1416,7 @@ fn render_heading_with_structural_keys(
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.heading)
                     .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
                     .desired_width(f32::INFINITY),
             );
 
@@ -1404,17 +1469,6 @@ fn render_paragraph_with_structural_keys(
         )
     });
 
-    // Check if paragraph starts with bold text (section header pattern)
-    let starts_with_bold = node
-        .children
-        .first()
-        .map(|c| matches!(c.node_type, MarkdownNodeType::Strong))
-        .unwrap_or(false);
-
-    if starts_with_bold && indent_level == 0 {
-        ui.add_space(6.0);
-    }
-
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
     // Calculate CJK paragraph indentation (only for top-level paragraphs)
@@ -1454,6 +1508,7 @@ fn render_paragraph_with_structural_keys(
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
                     .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
                     .desired_rows(1);
 
@@ -1550,25 +1605,33 @@ fn render_paragraph_with_structural_keys(
                 );
 
                 if sense_response.clicked() {
-                    para_edit_state.editing = true;
-                    para_edit_state.needs_focus = true;
-                    para_edit_state.edit_text =
-                        extract_paragraph_content(source, node.start_line, node.end_line);
+                    // Check if a link widget consumed this click
+                    let link_consumed = ui.memory(|mem| {
+                        mem.data
+                            .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
+                            .unwrap_or(false)
+                    });
 
-                    // Calculate cursor position from click location using Galley for accuracy
-                    // This maps screen position to character index in displayed text
-                    let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                        let displayed_text = node.text_content();
-                        let displayed_idx = compute_displayed_cursor_index(
-                            ui,
-                            &displayed_text,
-                            click_pos,
-                            display_response.rect,
-                            font_size,
-                            editor_font,
-                            &para_edit_state.edit_text,
-                        );
-                        // Map displayed position to raw position (accounting for formatting markers)
+                    if !link_consumed {
+                        para_edit_state.editing = true;
+                        para_edit_state.needs_focus = true;
+                        para_edit_state.edit_text =
+                            extract_paragraph_content(source, node.start_line, node.end_line);
+
+                        // Calculate cursor position from click location using Galley for accuracy
+                        // This maps screen position to character index in displayed text
+                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                            let displayed_text = node.text_content();
+                            let displayed_idx = compute_displayed_cursor_index(
+                                ui,
+                                &displayed_text,
+                                click_pos,
+                                display_response.rect,
+                                font_size,
+                                editor_font,
+                                &para_edit_state.edit_text,
+                            );
+                            // Map displayed position to raw position (accounting for formatting markers)
                         let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
                         Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
                     } else {
@@ -1576,15 +1639,16 @@ fn render_paragraph_with_structural_keys(
                     };
                     para_edit_state.pending_cursor_pos = cursor_pos;
 
-                    debug!(
-                        "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
-                        node.start_line, cursor_pos
-                    );
+                        debug!(
+                            "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
+                            node.start_line, cursor_pos
+                        );
 
-                    ui.memory_mut(|mem| {
-                        mem.data
-                            .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                    });
+                        ui.memory_mut(|mem| {
+                            mem.data
+                                .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
+                        });
+                    }
                 }
 
                 if sense_response.hovered() {
@@ -1607,6 +1671,7 @@ fn render_paragraph_with_structural_keys(
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
+                        .margin(egui::vec2(0.0, 0.0))
                         .desired_width(f32::INFINITY)
                         .desired_rows(1),
                 );
@@ -1831,7 +1896,8 @@ fn render_list_item_with_structural_keys(
     };
 
     // Base indentation to align with content area + nested indent
-    let base_indent = 16.0; // Align with other content
+    // Use 4.0 to match BASE_INDENT used by headings, paragraphs, code blocks, etc.
+    let base_indent = 4.0;
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
@@ -2000,54 +2066,63 @@ fn render_list_item_with_structural_keys(
                     );
 
                     if sense_response.clicked() {
-                        // DEBUG: Log click on structural key list item
-                        debug!(
-                            "[LIST_DEBUG] CLICK DETECTED (sk): para.start_line={}, item_index={}, \
-                             display_rect={:?}",
-                            para.start_line, item_index, display_response.rect
-                        );
-
-                        // Enter edit mode
-                        item_edit_state.editing = true;
-                        item_edit_state.needs_focus = true;
-                        // Get raw markdown content from source
-                        item_edit_state.edit_text =
-                            extract_list_item_content(source, para.start_line);
-
-                        // Calculate cursor position from click location
-                        // Use the DISPLAYED text to calculate position, then use directly in raw text
-                        // (don't scale - scaling makes position drift worse)
-                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                            let rect = display_response.rect;
-                            let raw_len = item_edit_state.edit_text.len();
-                            // Get the displayed text (without formatting markers like **)
-                            let displayed_text = para.text_content();
-                            let displayed_len = displayed_text.len();
-                            if displayed_len > 0 && rect.width() > 0.0 {
-                                let relative_x = ((click_pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-                                // Map to displayed character position and use directly
-                                // Don't scale to raw - that makes the drift worse
-                                let char_pos = (relative_x * displayed_len as f32).round() as usize;
-                                Some(char_pos.min(raw_len))
-                            } else {
-                                Some(0)
-                            }
-                        } else {
-                            None
-                        };
-                        item_edit_state.pending_cursor_pos = cursor_pos;
-
-                        // DEBUG: Log edit mode entry
-                        debug!(
-                            "[LIST_DEBUG] EDIT MODE ENTERED (sk): para.start_line={}, item_index={}, content='{}', cursor_pos={:?}",
-                            para.start_line, item_index, item_edit_state.edit_text, cursor_pos
-                        );
-
-                        // Store the new state
-                        ui.memory_mut(|mem| {
+                        // Check if a link widget consumed this click
+                        let link_consumed = ui.memory(|mem| {
                             mem.data
-                                .insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
+                                .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
+                                .unwrap_or(false)
                         });
+
+                        if !link_consumed {
+                            // DEBUG: Log click on structural key list item
+                            debug!(
+                                "[LIST_DEBUG] CLICK DETECTED (sk): para.start_line={}, item_index={}, \
+                                 display_rect={:?}",
+                                para.start_line, item_index, display_response.rect
+                            );
+
+                            // Enter edit mode
+                            item_edit_state.editing = true;
+                            item_edit_state.needs_focus = true;
+                            // Get raw markdown content from source
+                            item_edit_state.edit_text =
+                                extract_list_item_content(source, para.start_line);
+
+                            // Calculate cursor position from click location
+                            // Use the DISPLAYED text to calculate position, then use directly in raw text
+                            // (don't scale - scaling makes position drift worse)
+                            let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                                let rect = display_response.rect;
+                                let raw_len = item_edit_state.edit_text.len();
+                                // Get the displayed text (without formatting markers like **)
+                                let displayed_text = para.text_content();
+                                let displayed_len = displayed_text.len();
+                                if displayed_len > 0 && rect.width() > 0.0 {
+                                    let relative_x = ((click_pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+                                    // Map to displayed character position and use directly
+                                    // Don't scale to raw - that makes the drift worse
+                                    let char_pos = (relative_x * displayed_len as f32).round() as usize;
+                                    Some(char_pos.min(raw_len))
+                                } else {
+                                    Some(0)
+                                }
+                            } else {
+                                None
+                            };
+                            item_edit_state.pending_cursor_pos = cursor_pos;
+
+                            // DEBUG: Log edit mode entry
+                            debug!(
+                                "[LIST_DEBUG] EDIT MODE ENTERED (sk): para.start_line={}, item_index={}, content='{}', cursor_pos={:?}",
+                                para.start_line, item_index, item_edit_state.edit_text, cursor_pos
+                            );
+
+                            // Store the new state
+                            ui.memory_mut(|mem| {
+                                mem.data
+                                    .insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
+                            });
+                        }
                     }
 
                     // Show hover cursor to indicate clickability
@@ -2129,18 +2204,6 @@ fn render_paragraph(
         )
     });
 
-    // Check if paragraph starts with bold text (section header pattern like "**Description:**")
-    let starts_with_bold = node
-        .children
-        .first()
-        .map(|c| matches!(c.node_type, MarkdownNodeType::Strong))
-        .unwrap_or(false);
-
-    // Add top margin for section-header-like paragraphs
-    if starts_with_bold && indent_level == 0 {
-        ui.add_space(6.0);
-    }
-
     // Get font family for regular (non-styled) text
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
@@ -2179,6 +2242,7 @@ fn render_paragraph(
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
                     .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
                     .desired_rows(1);
 
@@ -2289,42 +2353,51 @@ fn render_paragraph(
             );
 
             if sense_response.clicked() {
-                // Enter edit mode
-                para_edit_state.editing = true;
-                para_edit_state.needs_focus = true;
-                para_edit_state.edit_text =
-                    extract_paragraph_content(source, node.start_line, node.end_line);
-
-                // Calculate cursor position from click location using Galley for accuracy
-                // This maps screen position to character index in displayed text
-                let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                    let displayed_text = node.text_content();
-                    let displayed_idx = compute_displayed_cursor_index(
-                        ui,
-                        &displayed_text,
-                        click_pos,
-                        display_response.rect,
-                        font_size,
-                        editor_font,
-                        &para_edit_state.edit_text,
-                    );
-                    // Map displayed position to raw position (accounting for formatting markers)
-                    let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
-                    Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
-                } else {
-                    None
-                };
-                para_edit_state.pending_cursor_pos = cursor_pos;
-
-                debug!(
-                    "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
-                    node.start_line, cursor_pos
-                );
-
-                ui.memory_mut(|mem| {
+                // Check if a link widget consumed this click
+                let link_consumed = ui.memory(|mem| {
                     mem.data
-                        .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
+                        .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
+                        .unwrap_or(false)
                 });
+
+                if !link_consumed {
+                    // Enter edit mode
+                    para_edit_state.editing = true;
+                    para_edit_state.needs_focus = true;
+                    para_edit_state.edit_text =
+                        extract_paragraph_content(source, node.start_line, node.end_line);
+
+                    // Calculate cursor position from click location using Galley for accuracy
+                    // This maps screen position to character index in displayed text
+                    let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                        let displayed_text = node.text_content();
+                        let displayed_idx = compute_displayed_cursor_index(
+                            ui,
+                            &displayed_text,
+                            click_pos,
+                            display_response.rect,
+                            font_size,
+                            editor_font,
+                            &para_edit_state.edit_text,
+                        );
+                        // Map displayed position to raw position (accounting for formatting markers)
+                        let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
+                        Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
+                    } else {
+                        None
+                    };
+                    para_edit_state.pending_cursor_pos = cursor_pos;
+
+                    debug!(
+                        "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
+                        node.start_line, cursor_pos
+                    );
+
+                    ui.memory_mut(|mem| {
+                        mem.data
+                            .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
+                    });
+                }
             }
 
             if sense_response.hovered() {
@@ -2346,6 +2419,7 @@ fn render_paragraph(
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
+                        .margin(egui::vec2(0.0, 0.0))
                         .desired_width(f32::INFINITY)
                         .desired_rows(1);
 
@@ -3232,7 +3306,8 @@ fn render_list_item(
 
 
     // Base indentation to align with content area + nested indent
-    let base_indent = 16.0; // Align with other content
+    // Use 4.0 to match BASE_INDENT used by headings, paragraphs, code blocks, etc.
+    let base_indent = 4.0;
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
@@ -3369,51 +3444,60 @@ fn render_list_item(
                     );
 
                     if sense_response.clicked() {
-                        // DEBUG: Log detailed click information
-                        debug!(
-                            "[LIST_DEBUG] CLICK DETECTED on list item: node.start_line={}, para.start_line={}, \
-                             display_rect={:?}, item_number={}",
-                            node.start_line, para.start_line, display_response.rect, item_number
-                        );
-
-                        // Enter edit mode
-                        item_edit_state.editing = true;
-                        item_edit_state.needs_focus = true;
-                        // Get raw markdown content from source
-                        item_edit_state.edit_text = extract_list_item_content(source, para.start_line);
-
-                        // Calculate cursor position from click location using Galley for accuracy
-                        // This maps screen position to character index in displayed text
-                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                            let displayed_text = para.text_content();
-                            let displayed_idx = compute_displayed_cursor_index(
-                                ui,
-                                &displayed_text,
-                                click_pos,
-                                display_response.rect,
-                                font_size,
-                                editor_font,
-                                &item_edit_state.edit_text,
-                            );
-                            // Map displayed position to raw position (accounting for formatting markers)
-                            let raw_idx = map_displayed_to_raw(displayed_idx, &item_edit_state.edit_text);
-                            Some(raw_idx.min(item_edit_state.edit_text.chars().count()))
-                        } else {
-                            None
-                        };
-                        item_edit_state.pending_cursor_pos = cursor_pos;
-
-                        // DEBUG: Log the edit state being set
-                        debug!(
-                            "[LIST_DEBUG] EDIT MODE ENTERED: formatted_item_id uses node.start_line={}, \
-                             extracting content from para.start_line={}, content='{}', cursor_pos={:?}",
-                            node.start_line, para.start_line, item_edit_state.edit_text, cursor_pos
-                        );
-
-                        // Store the new state
-                        ui.memory_mut(|mem| {
-                            mem.data.insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
+                        // Check if a link widget consumed this click
+                        let link_consumed = ui.memory(|mem| {
+                            mem.data
+                                .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
+                                .unwrap_or(false)
                         });
+
+                        if !link_consumed {
+                            // DEBUG: Log detailed click information
+                            debug!(
+                                "[LIST_DEBUG] CLICK DETECTED on list item: node.start_line={}, para.start_line={}, \
+                                 display_rect={:?}, item_number={}",
+                                node.start_line, para.start_line, display_response.rect, item_number
+                            );
+
+                            // Enter edit mode
+                            item_edit_state.editing = true;
+                            item_edit_state.needs_focus = true;
+                            // Get raw markdown content from source
+                            item_edit_state.edit_text = extract_list_item_content(source, para.start_line);
+
+                            // Calculate cursor position from click location using Galley for accuracy
+                            // This maps screen position to character index in displayed text
+                            let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                                let displayed_text = para.text_content();
+                                let displayed_idx = compute_displayed_cursor_index(
+                                    ui,
+                                    &displayed_text,
+                                    click_pos,
+                                    display_response.rect,
+                                    font_size,
+                                    editor_font,
+                                    &item_edit_state.edit_text,
+                                );
+                                // Map displayed position to raw position (accounting for formatting markers)
+                                let raw_idx = map_displayed_to_raw(displayed_idx, &item_edit_state.edit_text);
+                                Some(raw_idx.min(item_edit_state.edit_text.chars().count()))
+                            } else {
+                                None
+                            };
+                            item_edit_state.pending_cursor_pos = cursor_pos;
+
+                            // DEBUG: Log the edit state being set
+                            debug!(
+                                "[LIST_DEBUG] EDIT MODE ENTERED: formatted_item_id uses node.start_line={}, \
+                                 extracting content from para.start_line={}, content='{}', cursor_pos={:?}",
+                                node.start_line, para.start_line, item_edit_state.edit_text, cursor_pos
+                            );
+
+                            // Store the new state
+                            ui.memory_mut(|mem| {
+                                mem.data.insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
+                            });
+                        }
                     }
 
                     // Show hover cursor to indicate clickability
@@ -3749,6 +3833,14 @@ fn render_link(
     ui.memory_mut(|mem| {
         mem.data.insert_temp(link_id.with("state"), link_state);
     });
+
+    // If the link consumed a click, store a flag so parent handlers can skip edit mode
+    if output.click_consumed {
+        ui.memory_mut(|mem| {
+            mem.data
+                .insert_temp(egui::Id::new("link_click_consumed_this_frame"), true);
+        });
+    }
 
     // Handle changes - update the markdown source
     if output.changed {

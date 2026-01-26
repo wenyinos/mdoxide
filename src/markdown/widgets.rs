@@ -2476,6 +2476,8 @@ pub struct RenderedLinkOutput {
     pub markdown: String,
     /// Whether this is an autolink (bare URL, no separate text)
     pub is_autolink: bool,
+    /// Whether this link consumed a click event (prevents parent from entering edit mode)
+    pub click_consumed: bool,
 }
 
 /// A rendered link widget with hover menu for editing.
@@ -2561,7 +2563,7 @@ impl<'a> RenderedLinkWidget<'a> {
         // Get dark mode for popup styling
         let is_dark = colors.text.r() > 128;
 
-        // Render the link text with underline styling
+        // Render the link text with underline styling - clickable for interaction
         let link_response = ui.add(
             egui::Label::new(
                 RichText::new(&self.state.edit_text)
@@ -2569,45 +2571,86 @@ impl<'a> RenderedLinkWidget<'a> {
                     .font(FontId::proportional(self.font_size))
                     .underline(),
             )
-            .sense(egui::Sense::hover()),
+            .sense(egui::Sense::click()),
         );
 
         // Store rect before consuming response
         let link_rect = link_response.rect;
 
-        // Create a unified hover zone that includes both link and button area
-        // This prevents flickering when moving between them
-        let hover_zone = egui::Rect::from_min_max(
-            link_rect.min,
-            link_rect.max + egui::vec2(26.0, 0.0), // Extend to include button
-        );
-
-        // Check if mouse is anywhere in the combined hover zone
-        let mouse_in_hover_zone = ui.rect_contains_pointer(hover_zone);
-        let show_settings = mouse_in_hover_zone || self.state.popup_open;
-
-        // Show tooltip with URL when hovering over link (if popup not open)
-        if mouse_in_hover_zone && !self.state.popup_open {
-            link_response.on_hover_text(format!("URL: {}", self.state.edit_url));
+        // Show hand cursor on hover to indicate clickable link
+        if link_response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
-        if show_settings {
-            // Position the settings button immediately after the link (no gap)
-            let button_rect = egui::Rect::from_min_size(
-                link_rect.right_top(),
-                egui::vec2(24.0, link_rect.height().max(20.0)),
-            );
+        // Get pointer state for detecting Ctrl+Click
+        // We need to check for primary button release while hovering and with modifiers
+        let (primary_released, modifiers, pointer_pos) = ui.input(|i| {
+            (
+                i.pointer.primary_released(),
+                i.modifiers,
+                i.pointer.interact_pos(),
+            )
+        });
 
-            // Draw settings button
-            let settings_response =
-                ui.put(button_rect, egui::Button::new("⚙").small().frame(false));
+        // Check if pointer is over this link when released
+        let clicked_on_link = primary_released
+            && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
 
-            if settings_response.clicked() {
+        // Track whether we consumed a click (to prevent parent from entering edit mode)
+        let mut click_consumed = false;
+
+        // Handle click interactions
+        // Check for middle-click first (always opens in browser)
+        if link_response.middle_clicked() {
+            click_consumed = true;
+            let can_open = self.state.edit_url.starts_with("http://")
+                || self.state.edit_url.starts_with("https://");
+            if can_open {
+                if let Err(e) = open::that(&self.state.edit_url) {
+                    log::error!("Failed to open URL: {}", e);
+                } else {
+                    log::debug!("Opened URL via middle-click: {}", self.state.edit_url);
+                }
+            }
+        } else if clicked_on_link {
+            click_consumed = true;
+            // Check if Ctrl/Cmd was held during the click
+            let open_in_browser = modifiers.ctrl || modifiers.command;
+
+            if open_in_browser {
+                // Ctrl+Click / Cmd+Click: Open URL in default browser
+                let can_open = self.state.edit_url.starts_with("http://")
+                    || self.state.edit_url.starts_with("https://");
+                if can_open {
+                    if let Err(e) = open::that(&self.state.edit_url) {
+                        log::error!("Failed to open URL: {}", e);
+                    } else {
+                        log::debug!("Opened URL via Ctrl+Click: {}", self.state.edit_url);
+                    }
+                }
+            } else {
+                // Regular click: Open edit popup
                 self.state.popup_open = !self.state.popup_open;
             }
-
-            settings_response.on_hover_text(t!("widgets.link.edit").to_string());
         }
+
+        // Show tooltip with URL and interaction hint when hovering (if popup not open)
+        if link_response.hovered() && !self.state.popup_open {
+            let can_open = self.state.edit_url.starts_with("http://")
+                || self.state.edit_url.starts_with("https://");
+            let tooltip = if can_open {
+                format!(
+                    "{}\n\nClick to edit • Ctrl+Click to open in browser",
+                    self.state.edit_url
+                )
+            } else {
+                format!("{}\n\nClick to edit", self.state.edit_url)
+            };
+            link_response.on_hover_text(tooltip);
+        }
+
+        // Use link rect for hover zone (no longer need button extension)
+        let hover_zone = link_rect;
 
         // Show popup if open
         if self.state.popup_open {
@@ -2782,6 +2825,7 @@ impl<'a> RenderedLinkWidget<'a> {
             url: self.state.edit_url.clone(),
             markdown,
             is_autolink,
+            click_consumed,
         }
     }
 }
@@ -4025,6 +4069,7 @@ mod tests {
             url: "https://example.com".to_string(),
             markdown: "[Link Text](https://example.com)".to_string(),
             is_autolink: false,
+            click_consumed: false,
         };
         assert!(output.changed);
         assert_eq!(output.text, "Link Text");
@@ -4041,6 +4086,7 @@ mod tests {
             url: "https://example.com".to_string(),
             markdown: "https://example.com".to_string(), // Just the URL for autolinks
             is_autolink: true,
+            click_consumed: false,
         };
         assert!(output.is_autolink);
         // For autolinks, markdown is just the URL (no [text](url) syntax)

@@ -9,6 +9,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 - [CLI Reference](./cli.md) - Command-line interface documentation
 - [Contributing](../CONTRIBUTING.md) - Contribution guidelines
 - [AI Context](./ai-context.md) - Lean context file for AI assistant sessions
+- [v0.2.6 Test Suite](./v0.2.6-manual-test-suite.md) - Manual testing checklist for FerriteEditor release
 
 ---
 
@@ -33,8 +34,17 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 
 | Document | Description |
 |----------|-------------|
+| **[Architecture](./technical/editor/architecture.md)** | **⚠️ REQUIRED READING: Core principles, complexity tiers, memory budget, anti-patterns** |
+| **[FerriteEditor](./technical/editor/ferrite-editor.md)** | **Custom editor widget integrating TextBuffer, EditHistory, ViewState, LineCache** |
+| **[TextBuffer](./technical/editor/text-buffer.md)** | **Rope-based text buffer for O(log n) editing operations on large files** |
+| **[EditHistory](./technical/editor/edit-history.md)** | **Operation-based undo/redo for memory-efficient large file editing** |
+| **[ViewState](./technical/editor/view-state.md)** | **Viewport tracking and visible line range calculation for virtual scrolling** |
+| **[LineCache](./technical/editor/line-cache.md)** | **LRU-cached galley storage for efficient text rendering without recreation each frame** |
+| **[Large File Performance](./technical/editor/large-file-performance.md)** | **Per-frame optimizations for 5MB+ files: hash avoidance, minimap disable, content caching** |
+| **[Memory Optimization](./technical/editor/memory-optimization.md)** | **Tab closure cleanup, FerriteEditorStorage management, debug vs release performance** |
+| **[Word Wrap](./technical/editor/word-wrap.md)** | **Phase 2 word wrap support: visual row tracking, wrapped galley caching, cursor navigation** |
 | [Editor Widget](./technical/editor/editor-widget.md) | Text editor widget, cursor tracking, scroll persistence, egui TextEdit integration |
-| [Line Numbers](./technical/editor/line-numbers.md) | Editor line number display with scroll sync, dynamic width, theme integration |
+| [Line Numbers & Gutter](./technical/editor/line-numbers.md) | Gutter system with toggleable line numbers and fold indicators, dynamic width calculation |
 | [Line Number Alignment](./technical/editor/line-number-alignment.md) | Technical fix for line number drift, galley-based positioning |
 | [Cursor Position Mapping](./technical/editor/cursor-position-mapping.md) | Raw-to-displayed text position mapping for formatted content editing |
 | [Galley Cursor Positioning](./technical/editor/galley-cursor-positioning.md) | Pixel-accurate cursor placement using egui Galley text layout |
@@ -43,9 +53,9 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Go to Line](./technical/editor/go-to-line.md) | Ctrl+G modal dialog for line navigation, viewport centering |
 | [Duplicate Line](./technical/editor/duplicate-line.md) | Ctrl+Shift+D line/selection duplication, char-to-byte index handling |
 | [Move Line](./technical/editor/move-line.md) | Alt+↑/↓ line reordering, pre-render key consumption, cursor following |
-| [Code Folding](./technical/editor/code-folding.md) | Fold region detection, gutter indicators (text hiding deferred to v0.3.0) |
+| [Code Folding](./technical/editor/code-folding.md) | Fold region detection, gutter indicators, content hiding |
 | [Code Folding UI](./technical/editor/code-folding-ui.md) | Code folding user interface and interactions |
-| [Multi-Cursor (Partial)](./technical/editor/multi-cursor.md) | Selection/MultiCursor data structures, Ctrl+D next occurrence, Ctrl+Click add cursor (text ops deferred) |
+| [Multi-Cursor Editing](./technical/editor/multi-cursor.md) | Multiple cursor support with Ctrl+Click, simultaneous editing, cursor navigation, selection merging |
 | [Semantic Minimap](./technical/editor/semantic-minimap.md) | Semantic minimap with clickable heading labels, content type indicators, density visualization bars |
 | [Editor Minimap (Legacy)](./technical/editor/minimap.md) | VS Code-style pixel minimap (replaced by semantic minimap) |
 | [Search Highlight](./technical/editor/search-highlight.md) | Search-in-files result navigation with transient highlight, auto Raw mode switch |
@@ -74,6 +84,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Light Mode Contrast](./technical/ui/light-mode-contrast.md) | WCAG AA color tokens, contrast ratios, border/text improvements |
 | [Theme System](./technical/ui/theme-system.md) | Unified theming with ThemeColors, ThemeManager, light/dark themes, runtime switching |
 | [Adaptive Toolbar](./technical/ui/adaptive-toolbar.md) | File-type aware toolbar, conditional buttons for Markdown vs JSON/YAML/TOML |
+| [Navigation Buttons](./technical/ui/nav-buttons.md) | Document navigation overlay for quick jumping to top, middle, or bottom |
 
 ### Markdown & WYSIWYG
 
@@ -225,8 +236,18 @@ ferrite/
 │   │   ├── mod.rs        # Module exports
 │   │   ├── settings.rs   # Settings struct, TabInfo, validation
 │   │   └── persistence.rs # Config file load/save
-│   ├── editor/           # Text editor widget
+│   ├── editor/           # Text editor widgets
 │   │   ├── mod.rs        # Module exports
+│   │   ├── ferrite/      # FerriteEditor custom widget (modular)
+│   │   │   ├── mod.rs    # Re-exports
+│   │   │   ├── editor.rs # Main FerriteEditor widget
+│   │   │   ├── buffer.rs # TextBuffer - rope-based text storage
+│   │   │   ├── cursor.rs # Cursor position tracking
+│   │   │   ├── history.rs # EditHistory - operation-based undo/redo
+│   │   │   ├── view.rs   # ViewState - viewport tracking
+│   │   │   ├── line_cache.rs # LineCache - galley caching
+│   │   │   ├── input/    # Input handling (keyboard, mouse)
+│   │   │   └── rendering/ # Rendering (gutter, text, cursor)
 │   │   ├── widget.rs     # EditorWidget with line numbers, search highlights
 │   │   ├── line_numbers.rs # Line counting utilities
 │   │   ├── stats.rs      # Text statistics (words, chars, lines)
@@ -270,6 +291,7 @@ ferrite/
 │   │   ├── search.rs     # Search in files (Ctrl+Shift+F)
 │   │   ├── pipeline.rs   # Live Pipeline panel (JSON/YAML command piping)
 │   │   ├── dialogs.rs    # File operation dialogs
+│   │   ├── nav_buttons.rs # Document navigation buttons overlay
 │   │   ├── view_segment.rs # Title bar view mode segment, buttons
 │   │   └── window.rs     # Custom window resize for borderless windows
 │   ├── vcs/              # Version control integration

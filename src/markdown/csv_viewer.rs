@@ -40,7 +40,7 @@ const LARGE_FILE_THRESHOLD: usize = 1_000_000;
 const DELIMITER_SAMPLE_LINES: usize = 10;
 
 /// Candidate delimiters to test (comma, tab, semicolon, pipe)
-pub const DELIMITERS: &[u8] = &[b',', b'\t', b';', b'|'];
+pub const DELIMITERS: &[u8] = b",\t;|";
 
 /// Minimum rows needed to attempt header detection
 const MIN_ROWS_FOR_HEADER_DETECTION: usize = 2;

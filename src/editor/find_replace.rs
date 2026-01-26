@@ -420,26 +420,23 @@ impl FindReplacePanel {
                 ui.set_min_width(450.0);
 
                 // Handle keyboard shortcuts within the panel
+                // Note: F3/Shift+F3 are handled globally in handle_keyboard_shortcuts()
+                // to avoid double-processing when both panel and global handler see the key
                 let input = ui.input(|i| {
                     (
                         i.key_pressed(Key::Escape),
                         i.key_pressed(Key::Enter),
-                        i.key_pressed(Key::F3) && !i.modifiers.shift,
-                        i.key_pressed(Key::F3) && i.modifiers.shift,
                         i.modifiers.ctrl && i.key_pressed(Key::H),
                     )
                 });
 
-                let (escape, enter, f3_next, f3_prev, ctrl_h) = input;
+                let (escape, enter, ctrl_h) = input;
 
                 if escape {
                     output.close_requested = true;
                 }
-                if enter || f3_next {
+                if enter {
                     output.next_requested = true;
-                }
-                if f3_prev {
-                    output.prev_requested = true;
                 }
                 if ctrl_h {
                     find_state.is_replace_mode = !find_state.is_replace_mode;

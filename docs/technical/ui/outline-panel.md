@@ -176,6 +176,20 @@ pub outline_width: f32,
 - Uses efficient single-pass regex parsing
 - Collapse state preserved per-document session
 
+### Navigation (Click-to-Navigate)
+
+When clicking a heading in the outline or minimap, the navigation flow is:
+
+1. **Outline panel** returns `scroll_to_line` (1-indexed) from `OutlineItem.line`
+2. **App** calls `navigate_to_heading()` which:
+   - Finds the byte range for the target line via `find_line_byte_range()`
+   - Converts byte offsets to **character offsets** via `byte_to_char_offset()` (critical for UTF-8 with multi-byte characters like emojis)
+   - Sets transient highlight on the heading line
+   - Sets `pending_scroll_to_line` for the editor
+3. **EditorWidget** receives `scroll_to_line` and calls `view.scroll_to_line()` to position the heading at the **top** of the viewport
+
+**Important**: Always convert byte offsets to character offsets before passing to egui/transient highlight. For UTF-8 text with multi-byte characters (emojis, non-ASCII), byte offsets differ from char offsets. Using byte offsets directly causes the cursor to land on the wrong line.
+
 ### Heading Detection
 ```rust
 // ATX-style headings only

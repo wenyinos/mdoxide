@@ -1,158 +1,181 @@
-# Multi-Cursor Editing (Partial Implementation)
+# Multi-Cursor Editing
 
-> **Status: DEFERRED** - Core infrastructure implemented, but text editing with multiple cursors is not functional due to egui limitations. The Ctrl+D "select next occurrence" feature works standalone for find/replace workflows.
+## Overview
 
-## What Works ✅
+Multi-cursor editing allows users to edit text at multiple positions simultaneously. This implementation lives entirely within `FerriteEditor` and supports:
 
-### Ctrl+D: Select Next Occurrence
-This is the main usable feature from this implementation:
+- **Ctrl+Click**: Add cursor at clicked position
+- **Simultaneous typing**: Text inserted at all cursor positions
+- **Simultaneous deletion**: Backspace/Delete affects all cursors
+- **Cursor navigation**: Arrow keys move all cursors together
+- **Escape**: Clear extra cursors, return to single cursor
 
-1. **First press**: Selects the word under the cursor
-2. **Repeated presses**: Finds and selects the next occurrence of that word
-3. **Wraps around**: Continues searching from document start after reaching the end
-4. **Skips duplicates**: Won't select already-selected occurrences
+## Key Files
 
-**Use case**: Quickly find all occurrences of a variable name or word for review or replacement.
+| File | Purpose |
+|------|---------|
+| `src/editor/ferrite/editor.rs` | Main implementation - `selections: Vec<Selection>`, edit methods |
+| `src/editor/ferrite/cursor.rs` | `Selection` and `Cursor` types |
 
-### Ctrl+Click: Add Cursor
-- Hold Ctrl and click to add a cursor at that position
-- Multiple cursors are visually rendered with blue carets
-- Selection highlights shown in semi-transparent blue
+## Implementation Details
 
-### Escape: Exit Multi-Cursor Mode
-- Press Escape to collapse all cursors back to a single cursor
-- Returns to the primary cursor position
-
-### Visual Rendering
-- Additional cursors shown as blue vertical lines (2px wide)
-- Selections shown as semi-transparent blue rectangles
-- Colors adapt to dark/light theme
-- Primary cursor handled by egui's native TextEdit
-
-## What Does NOT Work ❌
-
-### Text Operations (Typing/Deleting)
-**This is the critical limitation that makes full multi-cursor editing non-functional.**
-
-- When you type, text only appears at the PRIMARY cursor
-- Backspace/Delete only works at the primary cursor
-- All other cursors remain static and don't receive input
-
-**Why?** egui's `TextEdit` widget is fundamentally designed for single-cursor editing. It handles all text input internally with no hooks for multi-cursor operations.
-
-### Column Selection (Alt+Click+Drag)
-Not implemented. Would require:
-- Detecting drag events with Alt modifier
-- Converting drag rectangle to line/column positions
-- Creating cursors across multiple lines
-
-### Compound Undo/Redo
-Multi-cursor edits are not grouped as single undo operations. The current undo system stores entire document snapshots, not cursor-aware edit operations.
-
-## Technical Implementation
-
-### Data Structures (`src/state.rs`)
+### Data Structure
 
 ```rust
-/// A single cursor or selection
-pub struct Selection {
-    pub anchor: usize,           // Fixed end (char index)
-    pub head: usize,             // Cursor position (char index)
-    pub preferred_column: Option<usize>, // For vertical nav
-}
-
-/// Collection of cursors/selections
-pub struct MultiCursor {
-    selections: Vec<Selection>,  // Sorted, non-overlapping
-    primary_index: usize,        // For status bar, scroll
-}
+// In FerriteEditor struct
+pub(crate) selections: Vec<Selection>,
+pub(crate) primary_selection_index: usize,
 ```
 
-### Tab Integration
-```rust
-pub struct Tab {
-    pub cursors: MultiCursor,              // New: multi-cursor state
-    pub cursor_position: (usize, usize),   // Legacy: synced from primary
-    pub selection: Option<(usize, usize)>, // Legacy: synced from primary
-    // ...
-}
-```
+Replaced single `selection: Selection` with a vector of selections. The primary selection is tracked by index and used for:
+- IME input positioning
+- Bracket matching reference point
+- Single-cursor fallback operations
 
 ### Key Methods
 
-| Method | Purpose |
-|--------|---------|
-| `Tab::add_cursor(pos)` | Add cursor at character position |
-| `Tab::add_selection(anchor, head)` | Add selection range |
-| `Tab::exit_multi_cursor_mode()` | Collapse to single cursor |
-| `Tab::get_primary_selection_text()` | Get selected text or word at cursor |
-| `Tab::find_next_occurrence(text, after)` | Find next match for Ctrl+D |
-| `Tab::word_range_at_position(pos)` | Get word boundaries at position |
+#### Cursor Management
+- `add_cursor(cursor: Cursor)` - Add a new cursor position
+- `clear_extra_cursors()` - Remove all but primary cursor
+- `has_multiple_cursors()` - Check if multi-cursor mode is active
+- `merge_overlapping_selections()` - Combine overlapping selections after edits
 
-### Keyboard Handling (`src/app.rs`)
+#### Multi-Cursor Edit Operations
+- `insert_text_at_all_cursors(text: &str)` - Insert text at every cursor
+- `backspace_at_all_cursors()` - Delete char before each cursor
+- `delete_at_all_cursors()` - Delete char after each cursor
+- `move_all_cursors(key, modifiers)` - Apply navigation to all cursors
+
+### Offset Adjustment Strategy
+
+When editing with multiple cursors, changes at earlier positions affect the character offsets of later cursors. The solution has two critical parts:
+
+#### Part 1: Capture Positions BEFORE Modifications
+
+**Critical**: Cursor positions must be captured as character offsets BEFORE any buffer modifications. After the buffer changes, the old `Cursor` line/column values become invalid and can cause panics.
 
 ```rust
-enum KeyboardAction {
-    SelectNextOccurrence,  // Ctrl+D
-    ExitMultiCursor,       // Escape (when multi-cursor active)
-    // ...
+// CORRECT: Capture positions first
+let original_positions: Vec<(usize, usize)> = self.selections
+    .iter()
+    .enumerate()
+    .map(|(idx, s)| (idx, cursor_to_char_pos(&self.buffer, &s.head)))
+    .collect();
+
+// Then modify buffer...
+// Then recalculate cursor positions from char offsets
+```
+
+#### Part 2: Delete from End to Start
+
+Processing deletions from end to start ensures earlier positions remain valid:
+
+1. **Capture all original char positions** before any modifications
+2. **Calculate delete targets** (char_pos - 1 for backspace, char_pos for delete)
+3. **Sort descending and deduplicate** - process from end first
+4. **Perform deletions** - no offset adjustment needed when going backwards
+5. **Recalculate cursor positions** based on how many deletions occurred before each
+
+```rust
+// Example: backspace at all cursors
+// 1. Capture original positions
+let original_positions: Vec<(usize, usize)> = self.selections
+    .iter()
+    .enumerate()
+    .map(|(idx, s)| (idx, cursor_to_char_pos(&self.buffer, &s.head)))
+    .collect();
+
+// 2. Get unique delete targets (char BEFORE cursor)
+let mut delete_targets: Vec<usize> = original_positions
+    .iter()
+    .filter_map(|(_, pos)| if *pos > 0 { Some(*pos - 1) } else { None })
+    .collect();
+delete_targets.sort_by(|a, b| b.cmp(a));
+delete_targets.dedup();
+
+// 3. Delete from end to start
+for delete_at in &delete_targets {
+    self.buffer.remove(*delete_at, 1);
+}
+
+// 4. Recalculate positions
+delete_targets.sort(); // ascending for offset calculation
+for (idx, original_pos) in original_positions {
+    let deletions_before = delete_targets.iter()
+        .filter(|&&del_pos| del_pos < original_pos)
+        .count();
+    let new_pos = original_pos.saturating_sub(deletions_before);
+    // Convert new_pos back to Cursor...
 }
 ```
 
-### Rendering (`src/editor/widget.rs`)
+### Cursor Merging
 
-Additional cursors rendered as painter overlays after TextEdit:
-- `draw_cursor_caret()` - Draws blue vertical line at cursor position
-- `draw_selection_highlight()` - Draws semi-transparent rectangle for selection
+After edits or navigation, cursors may overlap. The merge algorithm:
 
-## Future Work Required
+1. Sort selections by start position
+2. Iterate through, merging adjacent/overlapping selections
+3. Update `primary_selection_index` if it becomes invalid
 
-To make full multi-cursor editing work, one of these approaches would be needed:
+### Navigation Keys
 
-### Option 1: Custom Editor Widget
-Build a complete text editor from scratch that:
-- Handles all keyboard input manually
-- Maintains multiple cursor positions
-- Applies text changes to all cursors with proper offset adjustments
+When multiple cursors exist, navigation keys (arrows, Home, End) move ALL cursors:
 
-### Option 2: Intercept and Replicate
-After each edit through TextEdit:
-- Detect what changed (diff old vs new content)
-- Apply the same change at all other cursor positions
-- Update cursor positions accounting for text length changes
+```rust
+if is_navigation && self.has_multiple_cursors() {
+    self.move_all_cursors(*key, modifiers);
+    continue;
+}
+```
 
-Both options are significant undertakings and were deferred in favor of higher-priority features.
+Each cursor moves independently based on its position (e.g., ArrowUp from different columns results in different final columns).
 
-## Files Modified
+## Usage
 
-| File | Changes |
-|------|---------|
-| `src/state.rs` | Added `Selection`, `MultiCursor` structs; Tab multi-cursor methods |
-| `src/editor/widget.rs` | Added cursor/selection rendering; `EditorOutput.ctrl_click_pos` |
-| `src/app.rs` | Added `SelectNextOccurrence`, `ExitMultiCursor` actions and handlers |
+### Adding Cursors
+- **Ctrl+Click**: Add cursor at clicked position
+- Cursors are rendered as vertical lines (same as primary cursor)
+- Selections are rendered with semi-transparent background
+
+### Editing
+- Type normally - text appears at all cursor positions
+- Backspace/Delete - works at all positions
+- Arrow keys - all cursors move together
+
+### Clearing Cursors
+- **Escape**: Return to single cursor mode
+- Clicking without Ctrl: Also clears extra cursors
 
 ## Testing
 
-Manual testing checklist:
-- [x] Ctrl+D selects word under cursor (first press)
-- [x] Ctrl+D finds next occurrences (repeated press)
-- [x] Ctrl+Click adds cursor at click position
-- [x] Multiple cursors are visually rendered (blue carets)
-- [x] Escape clears to single cursor
-- [x] Status bar shows primary cursor position
-- [ ] ~~Typing at multiple cursors~~ (NOT WORKING)
-- [ ] ~~Deleting at multiple cursors~~ (NOT WORKING)
-- [ ] ~~Column selection~~ (NOT IMPLEMENTED)
+```bash
+cargo run --release
+```
 
-## Summary
+### Test Cases
+1. Ctrl+Click 3+ different positions
+2. Type "hello" - should appear at all positions
+3. Press Backspace 3x - should delete "llo" from all
+4. Press ArrowRight - all cursors move right
+5. Press Escape - return to single cursor
 
-| Feature | Status |
-|---------|--------|
-| Ctrl+D select next occurrence | ✅ Working |
-| Ctrl+Click add cursor | ✅ Working (visual only) |
-| Visual multi-cursor rendering | ✅ Working |
-| Escape to exit | ✅ Working |
-| Text input at multiple cursors | ❌ Not working |
-| Delete/backspace at multiple cursors | ❌ Not working |
-| Alt+Click+Drag column selection | ❌ Not implemented |
-| Compound undo/redo | ❌ Not implemented |
+### Edge Cases Handled
+- Cursors at same position: Deduplicated, single edit
+- Cursors that merge after deletion: Combined automatically
+- Cursor at buffer start: Backspace is no-op for that cursor
+- Cursor at buffer end: Delete is no-op for that cursor
+- Lines deleted during edit: Cursor positions recalculated from char offsets (no panic)
+- Multiple cursors on same line: Each deletes independently, positions tracked correctly
+
+## Performance Considerations
+
+- Cursor operations are O(n) where n = number of cursors
+- Sorting for offset adjustment is O(n log n)
+- Merge is O(n) with single pass
+- Typical use: 2-10 cursors, so performance is not a concern
+
+## Limitations
+
+- No "Ctrl+D" for select next occurrence (future enhancement)
+- No column selection mode (future enhancement)
+- Undo/redo doesn't track multi-cursor state (uses single selection)

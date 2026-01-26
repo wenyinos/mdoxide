@@ -558,6 +558,11 @@ impl FileTreePanel {
     }
 
     /// Render the context menu for a tree node.
+    ///
+    /// Uses simple Unicode symbols (from COMMON_SYMBOLS in fonts.rs) instead of
+    /// emoji characters that may not render correctly in Inter/JetBrains fonts.
+    /// Emoji like ✏️ contain variation selectors (U+FE0F) that cause doubled or
+    /// square glyph rendering when the font doesn't support the emoji variant.
     fn render_context_menu(&self, ui: &mut Ui, node: &FileTreeNode, output: &mut FileTreeOutput) {
         let is_dir = matches!(
             node.kind,
@@ -565,30 +570,35 @@ impl FileTreePanel {
         );
 
         if is_dir {
-            if ui.button(format!("📄 {}", t!("workspace.new_file"))).clicked() {
+            // + for "new/add" action (universally understood)
+            if ui.button(format!("+ {}", t!("workspace.new_file"))).clicked() {
                 output.context_action = Some(FileTreeContextAction::NewFile(node.path.clone()));
                 ui.close_menu();
             }
-            if ui.button(format!("📁 {}", t!("workspace.new_folder"))).clicked() {
+            // ▪ (small filled square) for folder icon
+            if ui.button(format!("▪ {}", t!("workspace.new_folder"))).clicked() {
                 output.context_action = Some(FileTreeContextAction::NewFolder(node.path.clone()));
                 ui.close_menu();
             }
             ui.separator();
         }
 
-        if ui.button(format!("✏️ {}", t!("workspace.rename"))).clicked() {
+        // Text-only for rename (no simple icon fits well)
+        if ui.button(t!("workspace.rename").to_string()).clicked() {
             output.context_action = Some(FileTreeContextAction::Rename(node.path.clone()));
             ui.close_menu();
         }
 
-        if ui.button(format!("🗑️ {}", t!("workspace.delete"))).clicked() {
+        // ✕ (multiplication x) for delete action - in COMMON_SYMBOLS
+        if ui.button(format!("✕ {}", t!("workspace.delete"))).clicked() {
             output.context_action = Some(FileTreeContextAction::Delete(node.path.clone()));
             ui.close_menu();
         }
 
         ui.separator();
 
-        if ui.button(format!("📂 {}", t!("tab.reveal_in_explorer"))).clicked() {
+        // → (right arrow) for "reveal/navigate" action - in COMMON_SYMBOLS
+        if ui.button(format!("→ {}", t!("tab.reveal_in_explorer"))).clicked() {
             output.context_action =
                 Some(FileTreeContextAction::RevealInExplorer(node.path.clone()));
             ui.close_menu();
@@ -596,7 +606,9 @@ impl FileTreePanel {
 
         ui.separator();
 
-        if ui.button(format!("🔄 {}", t!("workspace.refresh"))).clicked() {
+        // ↻ for refresh - simple clockwise arrow (not in COMMON_SYMBOLS but widely supported)
+        // Fallback: text-only if this still causes issues
+        if ui.button(format!("↻ {}", t!("workspace.refresh"))).clicked() {
             output.context_action = Some(FileTreeContextAction::Refresh);
             ui.close_menu();
         }

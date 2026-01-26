@@ -15,8 +15,8 @@ use crate::config::{
     apply_snippet, find_trigger_at_cursor, CjkFontPreference, Settings, ShortcutCommand, SnippetManager, Theme, ViewMode, WindowSize,
 };
 use crate::editor::{
-    extract_outline_for_file, DocumentOutline, DocumentStats, EditorWidget, FindReplacePanel,
-    Minimap, OutlineType, SearchHighlights, SemanticMinimap, TextStats,
+    cleanup_ferrite_editor, extract_outline_for_file, DocumentOutline, DocumentStats, EditorWidget,
+    FindReplacePanel, Minimap, OutlineType, SearchHighlights, SemanticMinimap, TextStats,
 };
 use crate::export::{copy_html_to_clipboard, generate_html_document};
 use crate::files::dialogs::{open_multiple_files_dialog, save_file_dialog};
@@ -108,7 +108,7 @@ enum KeyboardAction {
     ExportHtml,
     /// Open about/help panel (F1)
     OpenAbout,
-    /// Select next occurrence of current word/selection (Ctrl+D)
+    /// Select next occurrence of current word/selection (Ctrl+Shift+G)
     SelectNextOccurrence,
     /// Exit multi-cursor mode (Escape when multi-cursor active)
     ExitMultiCursor,
@@ -146,6 +146,18 @@ struct HeadingNavRequest {
     title: Option<String>,
     /// Heading level (1-6) for constructing the markdown pattern
     level: Option<u8>,
+}
+
+/// A deferred format action that captures the selection state at click time.
+/// This ensures the formatting is applied to the correct selection even if
+/// the editor loses focus between click and processing.
+#[derive(Debug, Clone)]
+struct DeferredFormatAction {
+    /// The formatting command to apply
+    cmd: MarkdownFormatCommand,
+    /// The selection range in character positions (start, end) captured at click time
+    /// If None, the cursor position will be used
+    selection: Option<(usize, usize)>,
 }
 
 /// Information about a pending auto-save recovery for user confirmation.
@@ -202,8 +214,7 @@ pub struct FerriteApp {
     /// CSV viewer states per tab (keyed by tab ID)
     csv_viewer_states: HashMap<usize, CsvViewerState>,
     /// Sync scroll states per tab (keyed by tab ID)
-    /// Note: Reserved for future split-view bidirectional sync scrolling
-    #[allow(dead_code)]
+    /// Used for bidirectional scroll synchronization in split view
     sync_scroll_states: HashMap<usize, SyncScrollState>,
     /// Track if we should exit (after confirmation)
     should_exit: bool,
@@ -242,6 +253,10 @@ pub struct FerriteApp {
     last_window_title: String,
     /// App logo texture for title bar display (with transparent background)
     app_logo_texture: Option<egui::TextureHandle>,
+    /// Flag indicating CJK font check is needed after a file was opened.
+    /// Set when a file is opened during the UI render pass, checked at end of update().
+    /// This ensures CJK fonts are loaded immediately rather than waiting for next frame.
+    pending_cjk_check: bool,
 }
 
 impl FerriteApp {
@@ -388,6 +403,7 @@ impl FerriteApp {
             last_interaction_time: std::time::Instant::now(),
             last_window_title: String::new(),
             app_logo_texture,
+            pending_cjk_check: false,
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -484,6 +500,7 @@ impl FerriteApp {
                         if first_opened_tab_idx.is_none() {
                             first_opened_tab_idx = Some(tab_idx);
                         }
+                        self.pending_cjk_check = true;
                     }
                     Err(e) => {
                         warn!("Failed to open file '{}': {}", file_path.display(), e);
@@ -521,7 +538,8 @@ impl FerriteApp {
     /// - Chinese text → loads only Chinese font based on preference (~15-20MB)
     ///
     /// This is much more memory efficient than loading all CJK fonts at once.
-    fn load_cjk_fonts_for_content(&self, ctx: &egui::Context, content: &str) {
+    /// Returns `true` if any new fonts were loaded.
+    fn load_cjk_fonts_for_content(&self, ctx: &egui::Context, content: &str) -> bool {
         let custom_font = self
             .state
             .settings
@@ -533,7 +551,7 @@ impl FerriteApp {
             ctx,
             custom_font.as_deref(),
             self.state.settings.cjk_font_preference,
-        );
+        )
     }
 
     /// Update window size in settings if changed.
@@ -722,6 +740,9 @@ impl FerriteApp {
         // Clean up egui temporary data for rendered editor widgets
         if let Some(ctx) = ctx {
             cleanup_rendered_editor_memory(ctx);
+            // Clean up FerriteEditor instance (TextBuffer, LineCache, EditHistory)
+            // This is critical for freeing memory after closing tabs with large files
+            cleanup_ferrite_editor(ctx, tab_id);
         }
     }
 
@@ -1196,8 +1217,8 @@ impl FerriteApp {
     }
 
     /// Render the main UI content.
-    /// Returns a deferred format command if one was requested from the ribbon.
-    fn render_ui(&mut self, ctx: &egui::Context) -> Option<MarkdownFormatCommand> {
+    /// Returns a deferred format action if one was requested from the ribbon.
+    fn render_ui(&mut self, ctx: &egui::Context) -> Option<DeferredFormatAction> {
         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         let is_dark = ctx.style().visuals.dark_mode;
         let zen_mode = self.state.is_zen_mode();
@@ -1620,9 +1641,58 @@ impl FerriteApp {
         };
 
         // Handle ribbon actions - defer format actions until after editor renders
+        // IMPORTANT: Capture selection NOW, before the editor might lose focus
         let deferred_format_action = if let Some(action) = ribbon_action {
             match action {
-                RibbonAction::Format(cmd) => Some(cmd), // Defer format actions
+                RibbonAction::Format(cmd) => {
+                    // Capture the current selection state from FerriteEditor
+                    use crate::editor::get_ferrite_editor_mut;
+                    let tab_id = self.state.active_tab().map(|t| t.id);
+                    let selection = tab_id.and_then(|id| {
+                        get_ferrite_editor_mut(ctx, id, |editor| {
+                            let sel = editor.selection();
+                            let (start, end) = sel.ordered();
+                            
+                            // Convert character positions to byte positions for the formatting function
+                            let content = editor.buffer().to_string();
+                            let line_count = editor.buffer().line_count();
+                            
+                            // Clamp lines to valid range to prevent panics
+                            let start_line = start.line.min(line_count.saturating_sub(1));
+                            let end_line = end.line.min(line_count.saturating_sub(1));
+                            
+                            // Use try_line_to_char for safety
+                            let start_line_char = editor.buffer().try_line_to_char(start_line).unwrap_or(0);
+                            let end_line_char = editor.buffer().try_line_to_char(end_line).unwrap_or(0);
+                            
+                            let start_char = start_line_char + start.column;
+                            let end_char = end_line_char + end.column;
+                            
+                            // Convert char indices to byte indices
+                            let start_byte = crate::string_utils::char_index_to_byte_index(&content, start_char);
+                            let end_byte = crate::string_utils::char_index_to_byte_index(&content, end_char);
+                            
+                            // Get preview of selected text for debugging
+                            let selected_preview: String = content.chars()
+                                .skip(start_char)
+                                .take((end_char.saturating_sub(start_char)).min(30))
+                                .collect();
+                            
+                            debug!(
+                                "Capturing selection for format: cursor=({},{}) to ({},{}), chars={}..{}, bytes={}..{}, selected='{}'",
+                                start.line, start.column, end.line, end.column, 
+                                start_char, end_char, start_byte, end_byte, selected_preview
+                            );
+                            (start_byte, end_byte)
+                        })
+                    });
+                    if selection.is_none() {
+                        debug!("WARNING: No selection captured for format action {:?} - FerriteEditor may not be initialized yet", cmd);
+                    } else {
+                        debug!("Deferred format action: {:?}, selection={:?}", cmd, selection);
+                    }
+                    Some(DeferredFormatAction { cmd, selection })
+                }
                 other => {
                     self.handle_ribbon_action(other, ctx);
                     None
@@ -1894,6 +1964,7 @@ impl FerriteApp {
                             }
                             match self.state.open_file_with_focus(path.clone(), focus) {
                                 Ok(_) => {
+                                    self.pending_cjk_check = true;
                                     if focus {
                                         debug!("Opened recent file with focus: {}", path.display());
                                     } else {
@@ -1940,11 +2011,16 @@ impl FerriteApp {
                     }
                 }
 
-                // Center: Toast message (temporary notifications)
+                // Add separator between left and right sections
+                ui.separator();
+                
+                // Center: Toast message (temporary notifications) - shown inline, not expanding
                 if let Some(toast) = &self.state.ui.toast_message {
-                    ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                        ui.label(egui::RichText::new(toast).italics());
-                    });
+                    ui.label(egui::RichText::new(format!("✓ {}", toast)).italics().color(
+                        if is_dark { egui::Color32::from_rgb(120, 200, 120) } 
+                        else { egui::Color32::from_rgb(40, 140, 40) }
+                    ));
+                    ui.separator();
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2320,6 +2396,7 @@ impl FerriteApp {
         if let Some(file_path) = file_tree_file_clicked {
             match self.state.open_file(file_path.clone()) {
                 Ok(_) => {
+                    self.pending_cjk_check = true;
                     debug!("Opened file from tree: {}", file_path.display());
                     // Add to workspace recent files
                     if let Some(workspace) = self.state.workspace_mut() {
@@ -2612,6 +2689,7 @@ impl FerriteApp {
                 // Handle interactions
                 if tab_response.clicked() && !close_response.hovered() {
                     self.state.set_active_tab(*tab_idx);
+                    self.pending_cjk_check = true;
                 }
                 if close_response.clicked() {
                     tab_to_close = Some(*tab_idx);
@@ -2705,6 +2783,7 @@ impl FerriteApp {
             let word_wrap = self.state.settings.word_wrap;
             let theme = self.state.settings.theme;
             let show_line_numbers = self.state.settings.show_line_numbers;
+            let auto_close_brackets = self.state.settings.auto_close_brackets;
 
             // Get theme colors for line number styling
             let theme_colors = ThemeColors::from_theme(theme, ui.visuals());
@@ -2769,7 +2848,9 @@ impl FerriteApp {
                         };
 
                         // Get minimap settings (hidden in Zen Mode)
-                        let minimap_enabled = self.state.settings.minimap_enabled && !zen_mode;
+                        // Disable minimap for large files to avoid per-frame content iteration
+                        let is_tab_large_file = self.state.active_tab().map(|t| t.is_large_file()).unwrap_or(false);
+                        let minimap_enabled = self.state.settings.minimap_enabled && !zen_mode && !is_tab_large_file;
                         let minimap_width = self.state.settings.minimap_width;
                         let minimap_mode = self.state.settings.minimap_mode;
 
@@ -2852,9 +2933,15 @@ impl FerriteApp {
                         // Track minimap scroll request
                         let mut minimap_nav_request: Option<HeadingNavRequest> = None;
                         let mut minimap_scroll_to_offset: Option<f32> = None;
+                        let mut ime_text_for_font_loading: Option<String> = None;
 
                         // Clone tab path before mutable borrow for syntax highlighting
                         let tab_path_for_syntax = self.state.active_tab().and_then(|t| t.path.clone());
+
+                        // Capture content and cursor before editing for undo support
+                        let (content_before, cursor_before) = self.state.active_tab()
+                            .map(|t| (t.content.clone(), t.cursors.primary().head))
+                            .unwrap_or_default();
 
                         if let Some(tab) = self.state.active_tab_mut() {
                             // Update folds if dirty
@@ -2908,7 +2995,8 @@ impl FerriteApp {
                                 .transient_highlight(transient_hl)
                                 .highlight_matching_pairs(highlight_matching_pairs)
                                 .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark)
-                                .syntax_theme(syntax_theme.clone());
+                                .syntax_theme(syntax_theme.clone())
+                                .auto_close_brackets(auto_close_brackets);
 
                             // Add search highlights if available
                             if let Some(highlights) = search_highlights.clone() {
@@ -2917,9 +3005,12 @@ impl FerriteApp {
 
                             let editor_output = editor.show(&mut editor_ui);
 
-                            // Handle fold toggle click
-                            if let Some(fold_line) = editor_output.fold_toggle_line {
-                                tab.toggle_fold_at_line(fold_line);
+                            // NOTE: Fold toggle is handled internally by FerriteEditor and synced
+                            // back to Tab in widget.rs. We just need to check if a fold was toggled
+                            // for any post-processing (currently none needed).
+                            if editor_output.fold_toggle_line.is_some() {
+                                // Fold state already synced from FerriteEditor to Tab in widget.rs
+                                log::debug!("Fold toggled at line {:?}", editor_output.fold_toggle_line);
                             }
 
                             // Handle transient highlight expiry
@@ -2943,10 +3034,17 @@ impl FerriteApp {
 
                             if editor_output.changed {
                                 debug!("Content modified in raw editor");
+                                // Record edit for undo/redo support
+                                tab.record_edit(content_before.clone(), cursor_before);
                                 // Mark folds as dirty when content changes
                                 if folding_enabled {
                                     tab.mark_folds_dirty();
                                 }
+                            }
+                            
+                            // Capture IME committed text for font loading (processed after tab borrow ends)
+                            if editor_output.ime_committed_text.is_some() {
+                                ime_text_for_font_loading = editor_output.ime_committed_text.clone();
                             }
 
                             // Handle Ctrl+Click to add cursor
@@ -3025,6 +3123,11 @@ impl FerriteApp {
                                 ui.ctx().request_repaint();
                             }
                         }
+                        
+                        // Load CJK fonts if IME committed text contains CJK characters
+                        if let Some(ref ime_text) = ime_text_for_font_loading {
+                            let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
+                        }
                     }
                     ViewMode::Split => {
                         // Split view: raw editor on left, rendered preview on right
@@ -3047,7 +3150,9 @@ impl FerriteApp {
                             let zen_max_column_width = self.state.settings.zen_max_column_width;
 
                             // Get minimap settings (hidden in Zen Mode for distraction-free editing)
-                            let minimap_enabled = self.state.settings.minimap_enabled && !zen_mode;
+                            // Disable minimap for large files to avoid per-frame content iteration
+                        let is_tab_large_file = self.state.active_tab().map(|t| t.is_large_file()).unwrap_or(false);
+                        let minimap_enabled = self.state.settings.minimap_enabled && !zen_mode && !is_tab_large_file;
                             let minimap_width = self.state.settings.minimap_width;
                             let minimap_mode = self.state.settings.minimap_mode;
                             let effective_minimap_width = if minimap_enabled { minimap_width } else { 0.0 };
@@ -3141,6 +3246,52 @@ impl FerriteApp {
 
                             // Track minimap navigation request
                             let mut minimap_nav_request: Option<HeadingNavRequest> = None;
+                            let mut ime_text_for_font_loading_split: Option<String> = None;
+
+                            // ═══════════════════════════════════════════════════════════════
+                            // Sync Scroll Setup (DISABLED - deferred to v0.3.0)
+                            // ═══════════════════════════════════════════════════════════════
+                            // Feature disabled until v0.3.0 - ignore settings value
+                            let sync_scroll_enabled = false; // was: self.state.settings.sync_scroll_enabled
+                            
+                            // Get or create sync scroll state for this tab
+                            // Use longer debounce to prevent jitter (200ms instead of 16ms)
+                            let sync_state = self.sync_scroll_states.entry(tab_id).or_insert_with(|| {
+                                let mut state = SyncScrollState::new();
+                                // Disable smooth scrolling to reduce feedback loops
+                                state.set_enabled(sync_scroll_enabled);
+                                state
+                            });
+                            sync_state.set_enabled(sync_scroll_enabled);
+                            
+                            // Get pending scroll offsets for each pane (from previous frame's sync)
+                            let pending_editor_scroll = if sync_scroll_enabled {
+                                sync_state.get_animated_raw_offset()
+                            } else {
+                                None
+                            };
+                            // For preview, read and clear tab.pending_scroll_offset (set by sync code)
+                            let pending_preview_scroll = if sync_scroll_enabled {
+                                self.state.active_tab_mut().and_then(|t| t.pending_scroll_offset.take())
+                            } else {
+                                None
+                            };
+                            
+                            // Track scroll outputs from both panes
+                            let mut editor_scroll_offset: Option<f32> = None;
+                            let mut editor_content_height: Option<f32> = None;
+                            let mut editor_first_visible_line: Option<usize> = None;
+                            let mut editor_line_height: Option<f32> = None;
+                            let mut editor_viewport_height: Option<f32> = None;
+                            let mut preview_scroll_offset: Option<f32> = None;
+                            let mut preview_content_height: Option<f32> = None;
+                            let mut preview_viewport_height: Option<f32> = None;
+                            let mut preview_line_mappings: Vec<crate::markdown::LineMapping> = Vec::new();
+
+                            // Capture content and cursor before editing for undo support
+                            let (content_before_split, cursor_before_split) = self.state.active_tab()
+                                .map(|t| (t.content.clone(), t.cursors.primary().head))
+                                .unwrap_or_default();
 
                             // Calculate explicit rectangles for split view layout
                             // Layout: [Editor] [Minimap] [Splitter] [Preview]
@@ -3198,7 +3349,9 @@ impl FerriteApp {
                                     .transient_highlight(transient_hl)
                                     .highlight_matching_pairs(highlight_matching_pairs)
                                     .syntax_highlighting(syntax_highlighting_enabled, tab_path_for_syntax.clone(), is_dark)
-                                    .syntax_theme(syntax_theme.clone());
+                                    .syntax_theme(syntax_theme.clone())
+                                    .auto_close_brackets(auto_close_brackets)
+                                    .pending_sync_scroll_offset(pending_editor_scroll);
 
                                 // Add search highlights if available
                                 if let Some(highlights) = search_highlights.clone() {
@@ -3206,10 +3359,20 @@ impl FerriteApp {
                                 }
 
                                 let editor_output = editor.show(&mut left_ui);
+                                
+                                // Capture scroll metrics for sync scrolling
+                                editor_scroll_offset = Some(editor_output.scroll_offset);
+                                editor_content_height = Some(editor_output.content_height);
+                                editor_first_visible_line = Some(editor_output.first_visible_line);
+                                editor_line_height = Some(editor_output.line_height);
+                                editor_viewport_height = Some(editor_output.viewport_height);
 
-                                // Handle fold toggle click
-                                if let Some(fold_line) = editor_output.fold_toggle_line {
-                                    tab.toggle_fold_at_line(fold_line);
+                                // NOTE: Fold toggle is handled internally by FerriteEditor and synced
+                                // back to Tab in widget.rs. We just need to check if a fold was toggled
+                                // for any post-processing (currently none needed).
+                                if editor_output.fold_toggle_line.is_some() {
+                                    // Fold state already synced from FerriteEditor to Tab in widget.rs
+                                    log::debug!("Fold toggled at line {:?}", editor_output.fold_toggle_line);
                                 }
 
                                 // Handle transient highlight expiry
@@ -3222,10 +3385,15 @@ impl FerriteApp {
                                 }
 
                                 if editor_output.changed {
+                                    // Record edit for undo/redo support
+                                    tab.record_edit(content_before_split.clone(), cursor_before_split);
                                     if folding_enabled {
                                         tab.mark_folds_dirty();
                                     }
                                 }
+                                
+                                // Capture IME committed text for font loading (processed after tab borrow ends)
+                                ime_text_for_font_loading_split = editor_output.ime_committed_text.clone();
                             }
 
                             // ═══════════════════════════════════════════════════════════════
@@ -3371,7 +3539,7 @@ impl FerriteApp {
                                     let content_before = tab.content.clone();
                                     let cursor_before = tab.cursors.primary().head;
 
-                                    let editor_output = MarkdownEditor::new(&mut tab.content)
+                                    let md_editor_output = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
                                         .font_size(font_size)
                                         .font_family(font_family.clone())
@@ -3381,9 +3549,16 @@ impl FerriteApp {
                                         .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                         .paragraph_indent(paragraph_indent) // CJK paragraph indentation
                                         .id(egui::Id::new("split_preview_rendered"))
+                                        .pending_scroll_offset(pending_preview_scroll)
                                         .show(&mut right_ui);
+                                    
+                                    // Capture scroll metrics for sync scrolling
+                                    preview_scroll_offset = Some(md_editor_output.scroll_offset);
+                                    preview_content_height = Some(md_editor_output.content_height);
+                                    preview_viewport_height = Some(md_editor_output.viewport_height);
+                                    preview_line_mappings = md_editor_output.line_mappings.clone();
 
-                                    if editor_output.changed {
+                                    if md_editor_output.changed {
                                         // Record edit for undo/redo support
                                         tab.record_edit(content_before, cursor_before);
                                         // Mark content as edited for auto-save scheduling
@@ -3397,7 +3572,7 @@ impl FerriteApp {
                                     // cursor_position is only needed for Rendered-only mode.
 
                                     // Update selection from focused element (for formatting toolbar)
-                                    if let Some(focused) = editor_output.focused_element {
+                                    if let Some(focused) = md_editor_output.focused_element {
                                         if let Some((sel_start, sel_end)) = focused.selection {
                                             if sel_start != sel_end {
                                                 let abs_start = focused.start_char + sel_start;
@@ -3411,6 +3586,92 @@ impl FerriteApp {
                                         }
                                     }
                                 }
+                            }
+                            
+                            // ═══════════════════════════════════════════════════════════════
+                            // Bidirectional Scroll Sync (after both panes render)
+                            // ═══════════════════════════════════════════════════════════════
+                            // DEBOUNCED sync: Only sync AFTER scrolling stops to avoid 
+                            // fighting egui's scroll physics. Track scroll state and sync
+                            // once when user stops scrolling.
+                            //
+                            // Strategy:
+                            // 1. While scrolling: track which pane is being scrolled
+                            // 2. After scroll stops (~100ms): do a single sync jump
+                            // ─────────────────────────────────────────────────────────────
+                            // Viewport-Based Scroll Sync (Task 36)
+                            // Uses binary search + interpolation for smooth, accurate sync
+                            // ─────────────────────────────────────────────────────────────
+                            if sync_scroll_enabled && !preview_line_mappings.is_empty() {
+                                // Get scroll delta to detect active scrolling
+                                let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
+                                let is_scrolling = scroll_delta.y.abs() > 0.5;
+                                
+                                // Determine which pane the mouse is over
+                                let mouse_pos = ui.input(|i| i.pointer.hover_pos());
+                                let editor_area = egui::Rect::from_min_max(
+                                    left_rect.min,
+                                    egui::pos2(splitter_rect.min.x, left_rect.max.y),
+                                );
+                                let mouse_over_editor = mouse_pos.map(|p| editor_area.contains(p)).unwrap_or(false);
+                                let mouse_over_preview = mouse_pos.map(|p| right_rect.contains(p)).unwrap_or(false);
+                                
+                                // Get sync state for this tab
+                                let sync_state = self.sync_scroll_states.entry(tab_id).or_insert_with(SyncScrollState::new);
+                                
+                                if is_scrolling {
+                                    // ─────────────────────────────────────────────────────────
+                                    // Active scrolling: record origin and offset, sync to other pane
+                                    // ─────────────────────────────────────────────────────────
+                                    if mouse_over_editor {
+                                        if let Some(ed_offset) = editor_scroll_offset {
+                                            // Record that editor is the scroll source
+                                            sync_state.mark_scroll(crate::preview::ScrollOrigin::Raw);
+                                            sync_state.update_raw_offset(ed_offset);
+                                            
+                                            // Sync editor → preview (user scrolling editor)
+                                            if let Some(first_line) = editor_first_visible_line {
+                                                let source_line = first_line.saturating_add(1);
+                                                let target_y = SyncScrollState::source_line_to_preview_y(
+                                                    source_line,
+                                                    &preview_line_mappings,
+                                                );
+                                                
+                                                if let Some(tab) = self.state.active_tab_mut() {
+                                                    tab.pending_scroll_offset = Some(target_y);
+                                                }
+                                            }
+                                        }
+                                    } else if mouse_over_preview {
+                                        if let Some(pv_offset) = preview_scroll_offset {
+                                            // Record that preview is the scroll source
+                                            sync_state.mark_scroll(crate::preview::ScrollOrigin::Rendered);
+                                            sync_state.update_rendered_offset(pv_offset);
+                                            
+                                            // Sync preview → editor (user scrolling preview)
+                                            if let Some(ed_line_height) = editor_line_height {
+                                                let source_line = SyncScrollState::preview_y_to_source_line(
+                                                    pv_offset,
+                                                    &preview_line_mappings,
+                                                );
+                                                let editor_line = source_line.saturating_sub(1);
+                                                let target_offset = editor_line as f32 * ed_line_height;
+                                                
+                                                sync_state.set_raw_target(target_offset);
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // ─────────────────────────────────────────────────────────
+                                    // Not scrolling: clear origin after debounce to allow next sync
+                                    // ─────────────────────────────────────────────────────────
+                                    sync_state.clear_origin();
+                                }
+                            }
+                            
+                            // Load CJK fonts if IME committed text contains CJK characters
+                            if let Some(ref ime_text) = ime_text_for_font_loading_split {
+                                let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
                             }
                         }
                     }
@@ -3604,6 +3865,7 @@ impl FerriteApp {
                 if let Some(file_path) = output.selected_file {
                     match self.state.open_file(file_path.clone()) {
                         Ok(_) => {
+                            self.pending_cjk_check = true;
                             debug!("Opened file from quick switcher: {}", file_path.display());
                             // Add to workspace recent files
                             if let Some(workspace) = self.state.workspace_mut() {
@@ -3730,6 +3992,7 @@ impl FerriteApp {
             match self.state.open_file(path.clone()) {
                 Ok(tab_index) => {
                     success_count += 1;
+                    self.pending_cjk_check = true;
                     // Check for auto-save recovery
                     self.check_auto_save_recovery(tab_index);
                 }
@@ -4031,6 +4294,7 @@ impl FerriteApp {
         // Open the file (or switch to existing tab)
         match self.state.open_file(file_path.clone()) {
             Ok(_) => {
+                self.pending_cjk_check = true;
                 debug!(
                     "Opened file from search: {} at line {}, char offset {}",
                     file_path.display(),
@@ -4450,6 +4714,7 @@ impl FerriteApp {
         for file in documents {
             match self.state.open_file(file.clone()) {
                 Ok(_) => {
+                    self.pending_cjk_check = true;
                     debug!("Opened dropped file: {}", file.display());
                     // Add to workspace recent files if in workspace mode
                     if let Some(workspace) = self.state.workspace_mut() {
@@ -4534,8 +4799,13 @@ impl FerriteApp {
                 self.state.refresh_workspace();
 
                 // Open the new file in a tab
-                if let Err(e) = self.state.open_file(path.clone()) {
-                    warn!("Failed to open new file: {}", e);
+                match self.state.open_file(path.clone()) {
+                    Ok(_) => {
+                        self.pending_cjk_check = true;
+                    }
+                    Err(e) => {
+                        warn!("Failed to open new file: {}", e);
+                    }
                 }
             }
             Err(e) => {
@@ -5279,6 +5549,18 @@ impl FerriteApp {
                 return Some(KeyboardAction::ExitMultiCursor);
             }
 
+            // F3/Shift+F3: Find next/prev (hardcoded fallback in case shortcut system misses it)
+            // This ensures F3 works even when TextEdit in find panel has focus
+            if i.key_pressed(egui::Key::F3) {
+                if i.modifiers.shift {
+                    debug!("Keyboard shortcut: Shift+F3 (Find Previous - hardcoded)");
+                    return Some(KeyboardAction::FindPrev);
+                } else {
+                    debug!("Keyboard shortcut: F3 (Find Next - hardcoded)");
+                    return Some(KeyboardAction::FindNext);
+                }
+            }
+
             None
         })
         .map(|action| match action {
@@ -5325,7 +5607,7 @@ impl FerriteApp {
                 self.handle_find_prev();
             }
             KeyboardAction::Format(cmd) => {
-                self.handle_format_command(cmd);
+                self.handle_format_command(ctx, cmd);
             }
             KeyboardAction::ToggleOutline => {
                 self.handle_toggle_outline();
@@ -5435,6 +5717,7 @@ impl FerriteApp {
             let current = self.state.active_tab_index();
             let next = (current + 1) % count;
             self.state.set_active_tab(next);
+            self.pending_cjk_check = true;
         }
     }
 
@@ -5445,6 +5728,7 @@ impl FerriteApp {
             let current = self.state.active_tab_index();
             let prev = if current == 0 { count - 1 } else { current - 1 };
             self.state.set_active_tab(prev);
+            self.pending_cjk_check = true;
         }
     }
 
@@ -5755,7 +6039,55 @@ impl FerriteApp {
     /// Handle a markdown formatting command.
     ///
     /// Applies the formatting to the current selection in the active editor.
-    fn handle_format_command(&mut self, cmd: MarkdownFormatCommand) {
+    /// Uses FerriteEditor when available for better undo/redo integration,
+    /// falling back to TabState-based formatting for legacy code paths.
+    fn handle_format_command(&mut self, ctx: &egui::Context, cmd: MarkdownFormatCommand) {
+        use crate::editor::get_ferrite_editor_mut;
+
+        // Get tab_id before borrowing state mutably
+        let tab_id = self.state.active_tab().map(|t| t.id);
+
+        if let Some(tab_id) = tab_id {
+            // Try to use FerriteEditor (preferred path)
+            let ferrite_result = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                let applied = editor.apply_markdown_format(cmd);
+                if applied {
+                    // Return new content and cursor state for syncing back to TabState
+                    let content = editor.buffer().to_string();
+                    let cursor = editor.cursor();
+                    let selection = if editor.has_selection() {
+                        let sel = editor.selection();
+                        let (start, end) = sel.ordered();
+                        // Convert cursors to char indices (with bounds checking)
+                        let start_char = editor.buffer().try_line_to_char(start.line).unwrap_or(0) + start.column;
+                        let end_char = editor.buffer().try_line_to_char(end.line).unwrap_or(0) + end.column;
+                        Some((start_char, end_char))
+                    } else {
+                        None
+                    };
+                    Some((content, (cursor.line, cursor.column), selection))
+                } else {
+                    None
+                }
+            });
+
+            // Sync result back to TabState if FerriteEditor was used
+            if let Some(Some((content, cursor_pos, selection))) = ferrite_result {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.content = content;
+                    tab.cursor_position = cursor_pos;
+                    tab.selection = selection;
+                    // Note: is_modified() automatically detects changes via content comparison
+                    debug!(
+                        "Applied formatting via FerriteEditor: {:?}, selection={:?}",
+                        cmd, tab.selection
+                    );
+                }
+                return;
+            }
+        }
+
+        // Fallback: Use TabState-based formatting (legacy path)
         if let Some(tab) = self.state.active_tab_mut() {
             let content = tab.content.clone();
 
@@ -5789,10 +6121,71 @@ impl FerriteApp {
             }
 
             debug!(
-                "Applied formatting: {:?}, applied={}, selection={:?}",
+                "Applied formatting via TabState: {:?}, applied={}, selection={:?}",
                 cmd, result.applied, tab.selection
             );
         }
+    }
+
+    /// Handle a markdown formatting command with a pre-captured selection.
+    ///
+    /// This variant is used when the selection was captured at button-click time
+    /// to ensure formatting is applied to the correct text even if focus changed.
+    fn handle_format_command_with_selection(
+        &mut self,
+        ctx: &egui::Context,
+        cmd: MarkdownFormatCommand,
+        captured_selection: Option<(usize, usize)>,
+    ) {
+        use crate::editor::get_ferrite_editor_mut;
+
+        // Get tab_id before borrowing state mutably
+        let tab_id = self.state.active_tab().map(|t| t.id);
+
+        if let Some(tab_id) = tab_id {
+            if let Some(selection) = captured_selection {
+                debug!("Using captured selection {:?} for tab_id {}", selection, tab_id);
+                // Use the pre-captured selection with FerriteEditor
+                let ferrite_result = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                    let applied = editor.apply_markdown_format_with_selection(cmd, selection);
+                    if applied {
+                        let content = editor.buffer().to_string();
+                        let cursor = editor.cursor();
+                        let new_selection = if editor.has_selection() {
+                            let sel = editor.selection();
+                            let (start, end) = sel.ordered();
+                            // Use try_line_to_char for bounds safety
+                            let start_char = editor.buffer().try_line_to_char(start.line).unwrap_or(0) + start.column;
+                            let end_char = editor.buffer().try_line_to_char(end.line).unwrap_or(0) + end.column;
+                            Some((start_char, end_char))
+                        } else {
+                            None
+                        };
+                        Some((content, (cursor.line, cursor.column), new_selection))
+                    } else {
+                        None
+                    }
+                });
+
+                // Sync result back to TabState
+                if let Some(Some((content, cursor_pos, selection))) = ferrite_result {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.content = content;
+                        tab.cursor_position = cursor_pos;
+                        tab.selection = selection;
+                        debug!(
+                            "Applied formatting via FerriteEditor with captured selection: {:?}",
+                            cmd
+                        );
+                    }
+                    return;
+                }
+            }
+        }
+
+        // Fallback: use the standard method (will read current selection)
+        debug!("Fallback: using handle_format_command for {:?}", cmd);
+        self.handle_format_command(ctx, cmd);
     }
 
     /// Handle Table of Contents insertion/update.
@@ -6537,17 +6930,28 @@ impl FerriteApp {
     /// Update the cached outline if the document content has changed.
     fn update_outline_if_needed(&mut self) {
         if let Some(tab) = self.state.active_tab() {
-            // Calculate a simple hash of the content and path
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-
-            let mut hasher = DefaultHasher::new();
-            tab.content.hash(&mut hasher);
-            tab.path.hash(&mut hasher); // Include path in hash for file type changes
-            let content_hash = hasher.finish();
+            // PERFORMANCE: Use content_version (O(1)) instead of hashing (O(n))
+            // content_version is incremented whenever content changes
+            let tab_id = tab.id;
+            let content_version = tab.content_version();
+            let path_hash = {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                tab.path.hash(&mut hasher);
+                hasher.finish()
+            };
+            
+            // Combine tab_id, content_version, and path_hash for change detection
+            // This is O(1) instead of O(n) for content hashing
+            let change_key = (tab_id as u64)
+                .wrapping_mul(31)
+                .wrapping_add(content_version)
+                .wrapping_mul(31)
+                .wrapping_add(path_hash);
 
             // Only regenerate if content or path changed
-            if content_hash != self.last_outline_content_hash {
+            if change_key != self.last_outline_content_hash {
                 // Use file-type aware outline extraction
                 self.cached_outline = extract_outline_for_file(&tab.content, tab.path.as_deref());
 
@@ -6558,7 +6962,7 @@ impl FerriteApp {
                     self.cached_doc_stats = None;
                 }
 
-                self.last_outline_content_hash = content_hash;
+                self.last_outline_content_hash = change_key;
             }
         } else {
             // No active tab, clear outline and stats
@@ -6577,50 +6981,55 @@ impl FerriteApp {
     /// 2. Applying transient highlight to make the heading visible
     /// 3. Positioning the cursor at the heading
     fn navigate_to_heading(&mut self, nav: HeadingNavRequest) {
-        // Find the line range using the line number from OutlineItem
-        // This is the most reliable approach since line numbers are always correct
-        let found_range = if let Some(tab) = self.state.active_tab() {
+        // Find the byte range for the target line, then convert to character offsets
+        // for the transient highlight (which expects char offsets, not byte offsets).
+        let char_range = if let Some(tab) = self.state.active_tab() {
             let content = &tab.content;
             
             // Find the byte range for the target line (nav.line is 1-indexed)
-            Self::find_line_byte_range(content, nav.line)
-        } else {
-            None
-        };
-
-        // Apply navigation and calculate target line (1-indexed for scroll)
-        let target_line_1indexed = if let Some(tab) = self.state.active_tab_mut() {
-            if let Some((char_start, char_end)) = found_range {
-                // Set transient highlight for the heading line (expects char offsets)
-                tab.set_transient_highlight(char_start, char_end);
-                
-                // Calculate line and column from character offset (0-indexed)
-                let (target_line, _) = Self::offset_to_line_col(&tab.content, char_start);
-                tab.cursor_position = (target_line, 0);
-                
-                let line_1indexed = target_line + 1;
-                debug!(
-                    "Navigated to heading at char offset {}-{}, line {}",
-                    char_start, char_end, line_1indexed
-                );
-                Some(line_1indexed)
+            if let Some((byte_start, byte_end)) = Self::find_line_byte_range(content, nav.line) {
+                // IMPORTANT: Convert byte offsets to character offsets!
+                // set_transient_highlight expects char offsets, but find_line_byte_range
+                // returns byte offsets. For UTF-8 text with multi-byte characters
+                // (emojis, non-ASCII), bytes != chars and using bytes causes the
+                // highlight and cursor to land on the wrong line.
+                let char_start = Self::byte_to_char_offset(content, byte_start);
+                let char_end = Self::byte_to_char_offset(content, byte_end);
+                Some((char_start, char_end))
             } else {
-                // Fall back to basic line navigation using nav.line (already 1-indexed)
-                tab.cursor_position = (nav.line.saturating_sub(1), 0);
-                debug!("Navigated to heading via fallback, line {}", nav.line);
-                Some(nav.line)
+                None
             }
         } else {
             None
         };
 
+        // Apply navigation using nav.line directly (already correct, 1-indexed)
+        // We don't need to recalculate the line from char_offset since OutlineItem
+        // already has the correct line number from outline extraction.
+        if let Some(tab) = self.state.active_tab_mut() {
+            if let Some((char_start, char_end)) = char_range {
+                // Set transient highlight for the heading line
+                tab.set_transient_highlight(char_start, char_end);
+            }
+            
+            // Set cursor position using nav.line directly (convert to 0-indexed)
+            // This is more reliable than recalculating from byte/char offsets.
+            tab.cursor_position = (nav.line.saturating_sub(1), 0);
+            // Prevent EditorWidget from overwriting this position
+            tab.skip_cursor_sync = true;
+            
+            debug!(
+                "Navigated to heading '{}' at line {} (char range: {:?})",
+                nav.title.as_deref().unwrap_or("unknown"),
+                nav.line,
+                char_range
+            );
+        }
+
         // Set pending scroll AFTER releasing the mutable borrow.
         // Use App-level pending_scroll_to_line so EditorWidget calculates
         // scroll offset with fresh line height from ui.fonts().
-        // This is more accurate than using potentially stale raw_line_height.
-        if let Some(line) = target_line_1indexed {
-            self.pending_scroll_to_line = Some(line);
-        }
+        self.pending_scroll_to_line = Some(nav.line);
     }
 
     /// Find a heading near a specific line (for fuzzy matching).
@@ -6793,8 +7202,12 @@ impl FerriteApp {
     }
 
     /// Handle find next match action.
+    ///
+    /// Works when find panel is open OR when there are existing matches from a previous search.
+    /// This allows F3 to cycle through matches even after closing the find panel.
     fn handle_find_next(&mut self) {
-        if !self.state.ui.show_find_replace {
+        // Allow navigation if panel is open OR if there are matches from previous search
+        if !self.state.ui.show_find_replace && self.state.ui.find_state.matches.is_empty() {
             return;
         }
 
@@ -6805,8 +7218,12 @@ impl FerriteApp {
     }
 
     /// Handle find previous match action.
+    ///
+    /// Works when find panel is open OR when there are existing matches from a previous search.
+    /// This allows Shift+F3 to cycle through matches even after closing the find panel.
     fn handle_find_prev(&mut self) {
-        if !self.state.ui.show_find_replace {
+        // Allow navigation if panel is open OR if there are matches from previous search
+        if !self.state.ui.show_find_replace && self.state.ui.find_state.matches.is_empty() {
             return;
         }
 
@@ -6877,18 +7294,38 @@ impl FerriteApp {
     }
 
     /// Handle replace current match action.
-    fn handle_replace_current(&mut self) {
-        if let Some(tab) = self.state.active_tab() {
-            let content = tab.content.clone();
-            if let Some(new_content) = self.state.ui.find_state.replace_current(&content) {
-                // Apply replacement through tab to maintain undo history
+    ///
+    /// This uses the FerriteEditor's rope-based replace for better performance
+    /// with large files.
+    fn handle_replace_current(&mut self, ctx: &egui::Context) {
+        use crate::editor::get_ferrite_editor_mut;
+        
+        let replacement = self.state.ui.find_state.replace_term.clone();
+        
+        // Get the active tab ID for FerriteEditor lookup
+        let tab_id = self.state.active_tab().map(|t| t.id);
+        
+        if let Some(tab_id) = tab_id {
+            // Use FerriteEditor's replace (efficient for large files)
+            let replaced = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                editor.replace_current_match(&replacement)
+            });
+            
+            if replaced.unwrap_or(false) {
+                // The editor content changed - sync back to Tab and re-search
+                // to update match positions and count
+                let new_content = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                    editor.buffer().to_string()
+                }).unwrap_or_default();
+                
+                // Update Tab content
                 if let Some(tab) = self.state.active_tab_mut() {
-                    tab.set_content(new_content.clone());
+                    tab.content = new_content.clone();
                 }
-
-                // Re-search to update matches
+                
+                // Re-search to update match positions
                 self.state.ui.find_state.find_matches(&new_content);
-
+                
                 let time = self.get_app_time();
                 self.state.show_toast("Replaced", time, 1.5);
                 debug!("Replaced current match");
@@ -6897,33 +7334,55 @@ impl FerriteApp {
     }
 
     /// Handle replace all matches action.
-    fn handle_replace_all(&mut self) {
-        if let Some(tab) = self.state.active_tab() {
-            let content = tab.content.clone();
-            let match_count = self.state.ui.find_state.match_count();
-
-            if match_count > 0 {
-                let new_content = self.state.ui.find_state.replace_all(&content);
-
-                // Apply replacement through tab to maintain undo history
-                if let Some(tab) = self.state.active_tab_mut() {
-                    tab.set_content(new_content.clone());
+    ///
+    /// This uses the FerriteEditor's efficient batch replace for
+    /// O(matches × log N) performance.
+    fn handle_replace_all(&mut self, ctx: &egui::Context) {
+        use crate::editor::get_ferrite_editor_mut;
+        
+        let replacement = self.state.ui.find_state.replace_term.clone();
+        let match_count = self.state.ui.find_state.match_count();
+        
+        if match_count == 0 {
+            return;
+        }
+        
+        // Get the active tab ID for FerriteEditor lookup
+        let tab_id = self.state.active_tab().map(|t| t.id);
+        
+        if let Some(tab_id) = tab_id {
+            // Use FerriteEditor's batch replace (efficient for large files)
+            let replaced_count = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                editor.replace_all_matches(&replacement)
+            });
+            
+            if let Some(count) = replaced_count {
+                if count > 0 {
+                    // The editor content changed - sync back to Tab
+                    let new_content = get_ferrite_editor_mut(ctx, tab_id, |editor| {
+                        editor.buffer().to_string()
+                    }).unwrap_or_default();
+                    
+                    // Update Tab content
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.content = new_content.clone();
+                    }
+                    
+                    // Re-search (will find 0 matches since all were replaced)
+                    self.state.ui.find_state.find_matches(&new_content);
+                    
+                    let time = self.get_app_time();
+                    self.state.show_toast(
+                        format!(
+                            "Replaced {} occurrence{}",
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ),
+                        time,
+                        2.0,
+                    );
+                    debug!("Replaced all {} matches", count);
                 }
-
-                // Re-search (will find 0 matches after replace all)
-                self.state.ui.find_state.find_matches(&new_content);
-
-                let time = self.get_app_time();
-                self.state.show_toast(
-                    format!(
-                        "Replaced {} occurrence{}",
-                        match_count,
-                        if match_count == 1 { "" } else { "s" }
-                    ),
-                    time,
-                    2.0,
-                );
-                debug!("Replaced all {} matches", match_count);
             }
         }
     }
@@ -7076,7 +7535,7 @@ impl FerriteApp {
             // Markdown formatting operations
             RibbonAction::Format(cmd) => {
                 debug!("Ribbon: Format {:?}", cmd);
-                self.handle_format_command(cmd);
+                self.handle_format_command(ctx, cmd);
             }
 
             // Markdown document operations
@@ -7307,11 +7766,11 @@ impl FerriteApp {
 
             // Handle replace actions
             if output.replace_requested {
-                self.handle_replace_current();
+                self.handle_replace_current(ctx);
             }
 
             if output.replace_all_requested {
-                self.handle_replace_all();
+                self.handle_replace_all(ctx);
             }
 
             // Handle close
@@ -7346,9 +7805,11 @@ impl eframe::App for FerriteApp {
         // Lazy load CJK fonts when CJK content is detected (for faster startup)
         // Only loads the specific fonts needed for detected scripts (Korean/Japanese/Chinese)
         // This is much more memory efficient than loading all CJK fonts at once
+        // NOTE: We check every frame because files can be opened mid-update-loop.
+        // The load_cjk_for_text function already optimizes by not reloading fonts.
         if let Some(tab) = self.state.active_tab() {
             if fonts::needs_cjk(&tab.content) {
-                self.load_cjk_fonts_for_content(ctx, &tab.content);
+                let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
             }
         }
 
@@ -7397,9 +7858,9 @@ impl eframe::App for FerriteApp {
         // built-in undo from processing them. Must happen before render_ui().
         self.consume_undo_redo_keys(ctx);
         
-        // IMPORTANT: Filter out Event::Cut when nothing is selected to prevent egui bug
-        // where Ctrl+X cuts the entire document instead of doing nothing.
-        self.filter_cut_event_if_no_selection(ctx);
+        // NOTE: Event::Cut filter removed - FerriteEditor handles cut correctly
+        // The old filter checked Tab.cursors which isn't synced with FerriteEditor.selections
+        // FerriteEditor's cut handler already checks has_selection() before cutting
         
         // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
         // from processing the arrow keys and moving the cursor before we can handle the move.
@@ -7410,20 +7871,32 @@ impl eframe::App for FerriteApp {
         // and transform them into markdown links/images when appropriate.
         self.consume_smart_paste(ctx);
 
-        // Capture pre-render state for auto-close bracket detection
-        let (pre_render_content, pre_render_cursor) = self.state.active_tab()
-            .map(|tab| (tab.content.clone(), tab.cursors.primary().head))
-            .unwrap_or_default();
+        // PERFORMANCE: Only capture pre-render state for auto-close if enabled AND file is small
+        // Cloning large content (5MB+) every frame is extremely expensive
+        let is_large_file = self.state.active_tab().map(|t| t.is_large_file()).unwrap_or(false);
+        let auto_close_enabled = self.state.settings.auto_close_brackets && !is_large_file;
+        
+        let (pre_render_content, pre_render_cursor) = if auto_close_enabled {
+            self.state.active_tab()
+                .map(|tab| (tab.content.clone(), tab.cursors.primary().head))
+                .unwrap_or_default()
+        } else {
+            (String::new(), 0)
+        };
 
         // IMPORTANT: Handle auto-close skip-over and selection wrapping BEFORE render
         // This consumes events that would otherwise be processed by TextEdit
-        let auto_close_handled = self.handle_auto_close_pre_render(ctx);
+        let auto_close_handled = if auto_close_enabled {
+            self.handle_auto_close_pre_render(ctx)
+        } else {
+            false
+        };
 
         // Render the main UI (this updates editor selection)
         let deferred_format = self.render_ui(ctx);
         
         // Handle auto-close pair insertion AFTER render (if not already handled pre-render)
-        if !auto_close_handled {
+        if auto_close_enabled && !auto_close_handled {
             self.handle_auto_close_post_render(&pre_render_content, pre_render_cursor);
         }
 
@@ -7436,10 +7909,11 @@ impl eframe::App for FerriteApp {
         // Note: Undo/redo is handled separately above, before render
         self.handle_keyboard_shortcuts(ctx);
 
-        // Handle deferred format action from ribbon AFTER render so selection is up-to-date
-        if let Some(cmd) = deferred_format {
-            debug!("Applying deferred format command from ribbon: {:?}", cmd);
-            self.handle_format_command(cmd);
+        // Handle deferred format action from ribbon with pre-captured selection
+        if let Some(deferred) = deferred_format {
+            debug!("Applying deferred format command from ribbon: {:?} with selection {:?}", 
+                   deferred.cmd, deferred.selection);
+            self.handle_format_command_with_selection(ctx, deferred.cmd, deferred.selection);
         }
 
         // Try to expand snippets if enabled
@@ -7488,6 +7962,24 @@ impl eframe::App for FerriteApp {
                 );
                 self.frame_count = 0;
                 self.last_fps_log = std::time::Instant::now();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // Deferred CJK Font Loading
+        // ═══════════════════════════════════════════════════════════════════════
+        // Check for CJK content in newly opened files and load fonts immediately.
+        // This flag is set when a file is opened during the UI render pass (which
+        // happens AFTER the regular CJK check at the start of update). By checking
+        // here, we ensure CJK fonts are loaded before the next frame renders,
+        // preventing the "tofu/boxes" issue on file open.
+        if self.pending_cjk_check {
+            self.pending_cjk_check = false;
+            if let Some(tab) = self.state.active_tab() {
+                if fonts::needs_cjk(&tab.content) {
+                    log::debug!("Deferred CJK check: loading fonts for newly opened file");
+                    let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
+                }
             }
         }
 

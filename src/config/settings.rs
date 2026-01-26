@@ -597,7 +597,7 @@ impl ShortcutCommand {
             // Navigation
             ShortcutCommand::NextTab => KeyBinding::new(M::ctrl(), Tab),
             ShortcutCommand::PrevTab => KeyBinding::new(M::ctrl_shift(), Tab),
-            ShortcutCommand::GoToLine => KeyBinding::new(M::ctrl_shift(), G),
+            ShortcutCommand::GoToLine => KeyBinding::new(M::ctrl(), G),
             ShortcutCommand::QuickOpen => KeyBinding::new(M::ctrl(), P),
             // View
             ShortcutCommand::ToggleViewMode => KeyBinding::new(M::ctrl(), E),
@@ -605,7 +605,7 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleZenMode => KeyBinding::new(M::none(), F11),
             ShortcutCommand::ToggleFullscreen => KeyBinding::new(M::none(), F10),
             ShortcutCommand::ToggleOutline => KeyBinding::new(M::ctrl_shift(), O),
-            ShortcutCommand::ToggleFileTree => KeyBinding::new(M::ctrl(), B),
+            ShortcutCommand::ToggleFileTree => KeyBinding::new(M::ctrl_shift(), E),
             ShortcutCommand::TogglePipeline => KeyBinding::new(M::ctrl_shift(), L),
             // Edit
             ShortcutCommand::Undo => KeyBinding::new(M::ctrl(), Z),
@@ -614,7 +614,7 @@ impl ShortcutCommand {
             ShortcutCommand::DuplicateLine => KeyBinding::new(M::ctrl_shift(), D),
             ShortcutCommand::MoveLineUp => KeyBinding::new(M::alt(), ArrowUp),
             ShortcutCommand::MoveLineDown => KeyBinding::new(M::alt(), ArrowDown),
-            ShortcutCommand::SelectNextOccurrence => KeyBinding::new(M::raw_ctrl(), G),
+            ShortcutCommand::SelectNextOccurrence => KeyBinding::new(M::ctrl_shift(), G),
             // Search
             ShortcutCommand::Find => KeyBinding::new(M::ctrl(), F),
             ShortcutCommand::FindReplace => KeyBinding::new(M::ctrl(), H),
@@ -1811,8 +1811,8 @@ impl Default for Settings {
             outline_side: OutlinePanelSide::default(),
             outline_width: 200.0,
 
-            // Sync Scrolling
-            sync_scroll_enabled: true, // Enabled by default
+            // Sync Scrolling (deferred to v0.3.0 - UI removed, feature disabled)
+            sync_scroll_enabled: false,
 
             // Export Settings
             last_export_directory: None,

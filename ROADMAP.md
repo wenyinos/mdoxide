@@ -6,9 +6,11 @@
 These issues cannot be fixed without replacing egui's built-in text editor:
 - [ ] **Multi-cursor incomplete** - Basic cursor rendering works, but text operations not implemented
 - [ ] **Code folding incomplete** - Detection works, but text hiding not possible
-- [ ] **Scroll sync imperfect** - Limited access to egui's internal scroll state
 - [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window appears offset from cursor position; egui's IME support is limited
 - [ ] **IME undo behavior** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Undoing during IME composition may delete an extra character; related to egui's text input handling
+
+### Deferred to v0.3.0
+- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Multiple attempts with LineMapping-based detection and binary search have not achieved smooth, accurate sync. Requires deeper investigation into egui's ScrollArea behavior and possibly custom scroll handling. Deferred from v0.2.6.
 
 ### Cursor Positioning Limitations
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting (bold + italic + links). This is due to font width differences between regular and bold text that cannot be perfectly measured without access to the actual render layout. Will be properly fixed with custom editor in v0.3.0.
@@ -225,14 +227,16 @@ Point release with Windows code signing, syntax theme selector, extended languag
 
 ---
 
-### v0.2.6 (Planned) - Custom Text Editor & Memory Fix (Critical)
+### v0.2.6 (Ready for Release) - Custom Text Editor & Memory Fix (Critical)
 
-> **Status:** In Progress
-> **Docs:** [Custom Editor Plan](docs/technical/planning/custom-editor-widget-plan.md)
+> **Status:** ✅ Feature Complete | Testing in Progress
+> **Docs:** [Architecture](docs/technical/editor/architecture.md) | [Test Suite](docs/v0.2.6-manual-test-suite.md)
 
-**v0.2.6 is a focused release addressing the critical large file memory issue** ([#45](https://github.com/OlaProeis/Ferrite/issues/45)). The root cause is egui's TextEdit widget, which creates massive Galley structures (~500MB for a 4MB file). The only solution is replacing egui's TextEdit with a custom editor that uses virtual scrolling.
+**v0.2.6 successfully addresses the critical large file memory issue** ([#45](https://github.com/OlaProeis/Ferrite/issues/45)). The root cause was egui's TextEdit widget creating massive Galley structures. The solution: a custom `FerriteEditor` with virtual scrolling.
 
-#### Memory Optimization (Done) ([#45](https://github.com/OlaProeis/Ferrite/issues/45))
+> **🎉 Milestone achieved:** 80MB file now uses ~80MB RAM (was 460MB+). Editing is smooth and responsive.
+
+#### Memory Optimization (Complete) ([#45](https://github.com/OlaProeis/Ferrite/issues/45))
 > **Issue:** Opening a 4MB text file caused 1.8GB RAM usage and laggy editor
 
 Rust-side optimizations completed (reduces Ferrite's allocations from ~400MB to ~44MB for 4MB files):
@@ -244,34 +248,72 @@ Rust-side optimizations completed (reduces Ferrite's allocations from ~400MB to 
   - Hash-based modification detection instead of full content clone
   - Clear original_bytes after load (saves 4MB per 4MB file)
   - Reduced undo stack (10 entries instead of 100)
+- [x] **Bracket matching O(N) fix** - Windowed search (cursor ±100 lines) instead of full buffer scan.
+- [x] **Memory release on tab close** - Proper cleanup of TextBuffer, LineCache, and retained references.
 
-> **Remaining issue:** egui's TextEdit still creates massive Galley structures (~500MB for 4MB file). This requires the custom editor below.
+#### Custom Text Editor (Complete)
+> **Memory achieved:** 80MB file uses ~80MB RAM (target was ~100-120MB). FerriteEditor is a success!
 
-#### Custom Text Editor (Critical Priority)
-> **Why this is critical:** egui's TextEdit is fundamentally incompatible with large files. It lays out ALL text upfront, storing glyphs and positions for every character. For a 4MB file, this alone uses ~500MB-1GB of RAM. No amount of optimization on Ferrite's side can fix this — we must replace the underlying text widget.
+Complete replacement of egui's `TextEdit` with custom `FerriteEditor` widget:
 
-Replace egui's `TextEdit` with a custom `FerriteEditor` widget:
+- [x] **FerriteEditor widget** - Custom text editor using egui drawing primitives
+- [x] **Virtual scrolling** - Only renders visible lines + small buffer
+- [x] **Rope-based buffer** - O(log n) text operations via `ropey` crate
+- [x] **Line-based rendering** - Layout one line at a time, cache visible lines only
+- [x] **Lazy galley creation** - Galley objects only for visible content
+- [x] **Syntax highlighting integration** - Per-line highlighting, viewport-aware
+- [x] **Scroll position management** - Line-based scroll tracking
+- [x] **Full selection support** - Click-drag, Shift+Arrow, double/triple-click
+- [x] **Clipboard operations** - Ctrl+A/C/X/V with selection handling
+- [x] **Bracket matching** - Windowed O(window) search (cursor ±100 lines), works at any file size
+- [x] **Search highlights** - Find/replace integration with capped display (1000 max)
+- [x] **Word wrap** - Dynamic line heights with proper cursor navigation
+- [x] **Undo/redo** - EditHistory with Ctrl+Z/Ctrl+Y shortcuts
+- [x] **IME/CJK support** - Chinese, Japanese, Korean input methods
+- [x] **Code folding** - Fold regions with gutter indicators
+- [x] **Multi-cursor** - Basic Ctrl+Click multi-cursor editing
 
-- [ ] **FerriteEditor widget** - Custom text editor using egui drawing primitives
-- [ ] **Virtual scrolling** - Only render and layout visible lines + small buffer
-- [ ] **Rope-based buffer** - Efficient text storage via `ropey` crate for O(log n) operations
-- [ ] **Line-based rendering** - Layout one line at a time, cache visible lines only
-- [ ] **Lazy galley creation** - Create Galley objects only for visible content
-- [ ] **Syntax highlighting integration** - Per-line highlighting with visible-only processing
-- [ ] **Scroll position management** - Track scroll by line number, not pixel offset
+#### Code Architecture (Complete)
+- [x] **Modular refactoring** - Split `editor.rs` from 2735 → 1551 lines (43% reduction)
+  - `buffer.rs` - Rope-based TextBuffer
+  - `cursor.rs` - Cursor and Selection types
+  - `history.rs` - EditHistory with undo/redo
+  - `view.rs` - ViewState for virtual scrolling
+  - `line_cache.rs` - LRU galley caching
+  - `selection.rs` - Selection rendering, word boundaries
+  - `highlights.rs` - Search/bracket highlight rendering
+  - `find_replace.rs` - Replace operations with undo
+  - `mouse.rs` - Click position conversion
+  - `search.rs` - Search match management
+  - `input/` - Keyboard and IME handling
+  - `rendering/` - Cursor, gutter, text rendering
+- [x] **impl pattern** - Methods distributed via `impl FerriteEditor` across files
 
-> **Memory target:** A 4MB file should use ~10-20MB total (content + visible galleys), not 500MB+.
+#### Integration (Complete)
+- [x] **Font settings connected** - Dynamic font size/family updates
+- [x] **Format toolbar connected** - Bold, italic, code, link buttons work
+- [x] **Outline/Minimap connected** - Bidirectional navigation
+- [x] **Line numbers toggle** - Works without restart
+- [x] **File encoding preservation** - Save maintains original encoding
 
-#### Additional Features (If Time Permits)
-These become possible with the custom editor:
+#### UI/UX Fixes (Complete)
+- [x] **Cursor blink** - Standard ~500ms interval with theme-aware color
+- [x] **Auto-focus new documents** - Cursor ready immediately
+- [x] **Text selection visibility** - Semi-transparent highlight
+- [x] **Text jumping fix** - No unexpected cursor jumps at line end
+- [x] **Scroll to bottom** - All lines visible in large files
+- [x] **Navigation buttons** - Top/Middle/Bottom jump buttons
+- [x] **Box drawing characters** - Proper font fallback for U+2500-U+257F
+- [x] **Link behavior** - Click to edit, Ctrl+Click to open
+- [x] **Context menu icons** - Fixed doubled/square icons
+- [x] **Windows icon** - Multi-size .ico for crisp Start Menu icon
+- [x] **.txt in Open dialog** - Text files in default filter
 
-- [ ] **Full multi-cursor editing** - Text operations at all cursor positions (blocked by egui TextEdit)
-- [ ] **Code folding with text hiding** - Actually collapse regions visually (blocked by egui TextEdit)
-- [ ] **Pixel-perfect scroll positioning** - Use actual galley coordinates for perfect navigation
-
-#### Code Signing
-- [ ] **SignPath organization approval** - Awaiting SignPath.io approval for code signing
-- [ ] **Windows artifacts signing** - exe, MSI, portable zip will be signed once approved
+#### Deferred to v0.2.7
+- [ ] **Editor-Preview scroll sync** - Requires viewport-based line tracking
+- [ ] **Large file preview disable** - Show message for >5MB files
+- [ ] **Conditional search debounce** - Instant search for small files
+- [ ] **Portuguese language** - Add to language selector
 
 ---
 
@@ -280,6 +322,10 @@ These become possible with the custom editor:
 > **Status:** Planned
 
 v0.2.7 contains features moved from v0.2.6 to allow focus on the critical text editor work.
+
+#### Code Signing
+- [ ] **SignPath organization approval** - Awaiting SignPath.io support response for code signing
+- [ ] **Windows artifacts signing** - exe, MSI, portable zip will be signed once approved
 
 #### Check for Updates
 > **Docs:** [Check for Updates PRD](docs/ai-workflow/prds/prd-v0.2.6-check-for-updates.md)
@@ -504,6 +550,20 @@ View Word and Excel documents without traditional page layouts — modern "page-
 - [ ] **ODS file opening** - Open `.ods` (Calc) files with same approach as XLSX
 - [ ] **Shared rendering** - Reuse DOCX/XLSX renderers (both are XML-in-ZIP formats)
 
+#### FerriteEditor Crate Extraction
+Extract FerriteEditor as a standalone egui text editor crate.
+
+> **Prerequisites:** FerriteEditor stable from v0.2.6, undo/redo working, scroll bugs fixed.
+
+- [ ] **Abstract font provider** - `FontProvider` trait to decouple from Ferrite's font system
+- [ ] **Abstract syntax highlighter** - `SyntaxHighlighter` trait for pluggable highlighting
+- [ ] **Abstract folding provider** - `FoldingProvider` trait for code folding
+- [ ] **Move bracket matching** - Include `DelimiterMatcher` in the crate
+- [ ] **Standalone crate** - Publish as `ferrite-editor` on crates.io
+- [ ] **Documentation** - API docs, usage examples, feature flags
+
+> **Scope:** egui-specific initially. Backend-agnostic (trait-based rendering) is a larger effort planned for v0.5.0+.
+
 ---
 
 ### Future (v0.5.0+)
@@ -511,6 +571,7 @@ View Word and Excel documents without traditional page layouts — modern "page-
 > **Note:** Features in this section are ideas under consideration. We haven't fully decided which to implement — some may be deferred, modified, or not implemented at all based on user feedback and development priorities.
 
 #### Core Improvements
+- [ ] **Persistent undo history** - Save undo/redo history to disk; restore on file reopen. Requires operation-based storage (diffs, not full snapshots) to avoid 100× file size on disk. Similar to VS Code's local history feature.
 - [ ] **Memory-mapped file I/O** ([#19](https://github.com/OlaProeis/Ferrite/issues/19)) - Handle GB-scale CSV/JSON files efficiently without loading into RAM
 - [ ] **TODO list editing UX** - Smart cursor behavior in task lists (respect line start position, don't jump past `- [ ]` syntax)
 - [ ] **Spell checking** - Integrated spell check with custom dictionaries

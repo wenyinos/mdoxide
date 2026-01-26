@@ -704,17 +704,10 @@ impl SettingsPanel {
                 }
                 ui.end_row();
 
-                // Row 2: Show Minimap | Sync Scroll
+                // Row 2: Show Minimap
                 if ui
                     .checkbox(&mut settings.minimap_enabled, t!("settings.editor.show_minimap"))
                     .on_hover_text(t!("settings.editor.minimap_tooltip"))
-                    .changed()
-                {
-                    changed = true;
-                }
-                if ui
-                    .checkbox(&mut settings.sync_scroll_enabled, t!("settings.preview.sync_scroll"))
-                    .on_hover_text(t!("settings.editor.sync_scroll_tooltip"))
                     .changed()
                 {
                     changed = true;

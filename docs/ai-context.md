@@ -1,109 +1,110 @@
-# Ferrite - AI Context
+# Ferrite - AI Context !ONLY context related to the project here, do not put in task-related context
 
 Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI, no retained widget state.
 
 ## Architecture
 
-| Module | Purpose | Key Types |
-|--------|---------|-----------|
-| `app.rs` | Update loop, event dispatch, title bar | `FerriteApp` |
-| `state.rs` | All application state | `AppState`, `Tab`, `TabState` |
-| `editor/widget.rs` | Text editing, line numbers | `EditorWidget` |
-| `markdown/editor.rs` | WYSIWYG rendered editing | `MarkdownEditor` |
-| `markdown/mermaid/` | Native diagram rendering | Per-type modules |
-| `ui/ribbon.rs` | Main toolbar/menu | Toolbar buttons, dropdowns |
-| `ui/settings.rs` | Settings modal | Settings panel |
-| `config/settings.rs` | Persistent settings | `Settings`, `Language` |
-| `theme/manager.rs` | Theme switching | `ThemeManager`, `ThemeColors` |
+| Module | Purpose |
+|--------|---------|
+| `app.rs` | Main update loop, keyboard shortcuts, event dispatch |
+| `state.rs` | All application state (`AppState`, `Tab`, `TabState`) |
+| `editor/widget.rs` | Editor widget wrapper, integrates FerriteEditor |
+| `editor/ferrite/` | Custom rope-based editor for large files |
+| `markdown/editor.rs` | WYSIWYG rendered editing |
+| `markdown/mermaid/` | Native mermaid diagram rendering |
+| `ui/` | UI panels (ribbon, settings, file_tree, etc.) |
+| `config/settings.rs` | Persistent settings |
+| `theme/` | Light/dark theme management |
 
-## Rust Patterns Used
+## FerriteEditor (v0.2.6 - Complete)
+
+Custom high-performance editor at `src/editor/ferrite/`. Uses rope (`ropey`) for O(log n) text operations.
+
+**Key files:** `editor.rs` (main), `buffer.rs` (rope), `view.rs` (viewport), `history.rs` (undo)
+
+**v0.2.6 features:** Virtual scrolling, multi-cursor (Ctrl+Click), code folding, undo/redo (Ctrl+Z/Y), bracket matching, IME/CJK input, syntax highlighting.
+
+**Memory:** 80MB file uses ~80MB RAM (was 460MB+ with egui TextEdit).
+
+**Integration:** `EditorWidget` in `widget.rs` creates/retrieves `FerriteEditor` from egui memory, syncs with `Tab.content`.
+
+**Read first:** `docs/technical/editor/architecture.md`
+
+## Critical Patterns
 
 ```rust
-// Error propagation - use anyhow, not panic
-fn load_file(path: &Path) -> anyhow::Result<String> {
-    let content = std::fs::read_to_string(path)?;
-    Ok(content)
-}
-
-// Option handling - always check, never unwrap in library code
-if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-    tab.modified = true;
-}
-
-// Borrowing - prefer references over clone
-fn process(text: &str) -> Vec<&str> {  // not String, not clone
-    text.lines().collect()
-}
-
-// Saturating math for indices (prevents underflow)
+// Always use saturating math for line indices
 let idx = line_number.saturating_sub(1);
+
+// Never unwrap in library code
+if let Some(tab) = self.tabs.get_mut(self.active_tab) { ... }
+
+// Prefer borrowing over clone
+fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 ```
 
-## egui Patterns
-
-```rust
-// Immediate mode: UI rebuilds every frame, state lives in AppState
-fn update(&mut self, ctx: &egui::Context) {
-    // Read state → draw UI → handle response → mutate state
-    if ui.button("Save").clicked() {
-        self.save_current_tab();  // mutation happens after UI
-    }
-}
-
-// Repaint scheduling - don't spin CPU
-ctx.request_repaint_after(Duration::from_millis(100));  // idle
-ctx.request_repaint();  // only when needed (user input, animation)
-
-// Response chaining
-let response = ui.text_edit_singleline(&mut self.search_term);
-if response.changed() { self.do_search(); }
-if response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) { ... }
-```
-
-## Critical Gotchas
+## Common Gotchas
 
 | Issue | Wrong | Right |
 |-------|-------|-------|
-| **Byte vs char index** | `text[start..end]` with char positions | `text.char_indices()` or byte offsets |
-| **Line indexing** | Mixing 0-indexed and 1-indexed | Explicit conversion: `line.saturating_sub(1)` |
-| **Line height** | Hardcoded `20.0` | Get from galley: `galley.rows[0].height()` |
-| **CPU spin** | Always `request_repaint()` | Use `request_repaint_after()` when idle |
-| **Clone abuse** | `data.clone()` everywhere | Borrow with `&data` when possible |
+| Byte vs char index | `text[start..end]` with char pos | Use `text.char_indices()` or byte offsets |
+| Line indexing | Mixing 0/1-indexed | Explicit: `line.saturating_sub(1)` |
+| CPU spin | Always `request_repaint()` | Use `request_repaint_after()` when idle |
 
-## Code Conventions
+## Conventions
 
-- **Logging**: `log::info!`, `log::warn!`, `log::error!` (not println!)
-- **i18n**: `t!("key.path")` for UI strings, keys in `locales/en.yaml`
-- **State mutation**: Modify `TabState` for per-tab, `AppState` for global
-- **File organization**: One concept per file, group in module folders
-- **Error messages**: User-facing via `show_toast()`, technical via `log::error!`
+- **Logging:** `log::info!`, `log::error!` (not println!)
+- **i18n:** `t!("key.path")`, keys in `locales/en.yaml`
+- **State:** `TabState` for per-tab, `AppState` for global
+- **Errors:** User-facing via `show_toast()`, technical via `log::error!`
 
 ## Where Things Live
 
 | Want to... | Look in... |
 |------------|------------|
 | Add keyboard shortcut | `app.rs` → `handle_keyboard_shortcuts()` |
-| Add UI panel | `ui/` → new file, wire in `app.rs` |
 | Add setting | `config/settings.rs` → `Settings` struct |
 | Add translation | `locales/en.yaml` + use `t!("key")` |
-| Change theme colors | `theme/light.rs` or `theme/dark.rs` |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
 | Add mermaid diagram type | `markdown/mermaid/` → new module |
+| Modify editor behavior | `editor/ferrite/editor.rs` |
 
-## Known Limitations (egui TextEdit)
+## Performance Rules
 
-These cannot be fixed without custom editor widget (planned v0.3.0):
-- Multi-cursor text operations
-- Code folding (hiding text)
-- Perfect IME positioning
-- Scroll state access for sync
-- **Large file memory** - egui TextEdit not designed for 4MB+ files; creates massive galleys
+For FerriteEditor (large file support):
+
+| Tier | When Allowed | Examples |
+|------|--------------|----------|
+| O(1) | Always | `line_count()`, `is_dirty()` |
+| O(log N) | Always | `get_line(idx)`, index conversions |
+| O(visible) | Per-frame | Syntax highlighting visible lines |
+| O(N) | User-initiated ONLY | Find All, Save, Export |
+
+**Never** call `buffer.to_string()` in per-frame code.
 
 ## Large File Handling
 
-Files > 1MB (`LARGE_FILE_THRESHOLD`) get special memory treatment:
-- Hash-based `is_modified()` instead of full content comparison
+Files > 1MB get special treatment:
+- Hash-based `is_modified()` instead of full comparison
 - Reduced undo stack (10 vs 100 entries)
 - No `original_bytes` storage
 
-**Known limitation:** egui's TextEdit creates massive Galley structures for large files (~500MB for 4MB file). This requires custom editor with virtual scrolling (planned v0.2.6).
+## Build & Test
+
+```bash
+cargo build          # Build debug
+cargo run            # Run app
+cargo clippy         # Lint
+cargo test           # Run tests
+```
+
+## Recently Changed
+
+**v0.2.6 (Jan 2026):** Complete FerriteEditor custom text editor
+- Replaced egui TextEdit with rope-based editor for large file performance
+- Virtual scrolling renders only visible lines (O(visible) per frame)
+- Multi-cursor editing (Ctrl+Click), code folding, bracket matching
+- Full undo/redo with operation-based history
+- Memory: ~1x file size (was ~6x with TextEdit)
+- IME/CJK input support
+- See `docs/v0.2.6-manual-test-suite.md` for test coverage

@@ -110,9 +110,30 @@ if let Some(pair) = matcher.find_match(cursor_pos) {
 
 ## Performance
 
-- Matching is computed on cursor movement, not every frame
+### FerriteEditor (Windowed Search)
+
+FerriteEditor bracket matching uses a **windowed search** algorithm:
+
+- **Window size**: Cursor line ±100 lines (`MAX_BRACKET_SEARCH_LINES`)
+- **Complexity**: O(window) instead of O(N)
+- **Per-frame allocation**: ~20KB (200 lines) instead of full file
+- **Scales to any file size**: 80MB file works smoothly
+
+The implementation extracts only the search window via `buffer.slice_lines_to_string()`:
+
+```rust
+// O(window) allocation, not O(N)
+let (window_content, window_start_char) = 
+    buffer.slice_lines_to_string(cursor_line - 100, cursor_line + 100);
+let matcher = DelimiterMatcher::new(&window_content);
+// Byte positions are adjusted from window-relative to full document
+```
+
+### Standard Editor (Full Content)
+
+Without FerriteEditor, matching scans the full content:
 - Stack-based algorithm is O(k) where k is the distance to the matching bracket
-- For very large files, the algorithm scans only until a match is found
+- For very large files, consider using FerriteEditor
 - Emphasis matching uses string `find()` which is optimized
 
 ## Edge Cases

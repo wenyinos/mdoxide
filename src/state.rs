@@ -1036,6 +1036,8 @@ pub struct Tab {
     pub raw_line_height: f32,
     /// Pending target line to scroll to (for sync scrolling, used with line mappings)
     pub pending_scroll_to_line: Option<usize>,
+    /// Skip cursor sync from editor on next frame (set when navigating from outline/minimap)
+    pub skip_cursor_sync: bool,
     /// View mode for this tab (raw or rendered)
     pub view_mode: ViewMode,
     /// Undo history stack (stores content + cursor position)
@@ -1075,13 +1077,23 @@ pub struct Tab {
     /// Currently selected encoding label (used for save operations)
     /// Defaults to "utf-8" for new documents
     pub current_encoding: &'static str,
+    /// Whether the original file had a BOM (Byte Order Mark).
+    /// Used to preserve BOM when saving UTF-16 and UTF-8 with BOM files.
+    pub had_bom: bool,
     /// Pending undo state - snapshot of content before the current edit session.
     /// Used to avoid cloning content every frame. Only clones when:
     /// 1. First frame after file open (to prepare for first edit)
     /// 2. After an edit is recorded (to prepare for next edit)
     /// This dramatically reduces memory allocation for large files.
     pending_undo_state: Option<UndoEntry>,
+    /// Time of last undo entry - used for time-based undo grouping.
+    /// Rapid edits within UNDO_GROUP_THRESHOLD are merged into a single undo entry.
+    last_undo_time: Option<std::time::Instant>,
 }
+
+/// Time threshold for grouping rapid edits into a single undo entry.
+/// Edits within this duration of each other will be merged.
+const UNDO_GROUP_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(500);
 
 impl Tab {
     /// Compute a 64-bit hash of content for modification detection.
@@ -1117,6 +1129,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
             pending_scroll_to_line: None,
+            skip_cursor_sync: false,
             view_mode: ViewMode::Raw, // New documents default to raw mode
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1134,7 +1147,9 @@ impl Tab {
             detected_encoding: None, // New documents have no detected encoding
             original_bytes: Vec::new(), // No original bytes for new docs
             current_encoding: "utf-8", // Default to UTF-8 for new documents
+            had_bom: false, // New documents don't have a BOM
             pending_undo_state: None, // Will be populated on first frame
+            last_undo_time: None,
         }
     }
 
@@ -1190,6 +1205,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
             pending_scroll_to_line: None,
+            skip_cursor_sync: false,
             view_mode: ViewMode::Raw, // Newly opened files default to raw mode
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1207,7 +1223,9 @@ impl Tab {
             detected_encoding: Some("utf-8"), // Will be overridden by with_file_bytes
             original_bytes: Vec::new(), // Will be set by with_file_bytes
             current_encoding: "utf-8", // Will be overridden by with_file_bytes
+            had_bom: false, // Will be set by with_file_bytes if BOM detected
             pending_undo_state: None, // Will be populated on first frame
+            last_undo_time: None,
         }
     }
 
@@ -1229,17 +1247,17 @@ impl Tab {
         let encoding_label = detected.name();
 
         // Check for BOM first - encoding_rs handles this
-        let (content, actual_encoding, _had_errors) = if let Some((bom_encoding, bom_len)) =
+        let (content, actual_encoding, _had_errors, had_bom) = if let Some((bom_encoding, bom_len)) =
             encoding_rs::Encoding::for_bom(&bytes)
         {
             // BOM detected, use that encoding and skip BOM bytes
             // Use decode_without_bom_handling since we already handled the BOM
             let (decoded, had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
-            (decoded.into_owned(), bom_encoding.name(), had_errors)
+            (decoded.into_owned(), bom_encoding.name(), had_errors, true)
         } else {
             // No BOM, use detected encoding
             let (decoded, _, had_errors) = detected.decode(&bytes);
-            (decoded.into_owned(), encoding_label, had_errors)
+            (decoded.into_owned(), encoding_label, had_errors, false)
         };
 
         // For large files, store hash instead of full content to save memory
@@ -1275,6 +1293,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            skip_cursor_sync: false,
             view_mode: ViewMode::Raw,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1292,7 +1311,9 @@ impl Tab {
             detected_encoding: Some(actual_encoding),
             original_bytes,
             current_encoding: actual_encoding,
+            had_bom,
             pending_undo_state: None, // Will be populated on first frame
+            last_undo_time: None,
         }
     }
 
@@ -1378,6 +1399,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
             pending_scroll_to_line: None,
+            skip_cursor_sync: false,
             view_mode: info.view_mode, // Restore saved view mode
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1395,7 +1417,9 @@ impl Tab {
             detected_encoding: Some("utf-8"), // Restored tabs default to UTF-8
             original_bytes: Vec::new(), // Bytes are reloaded if needed
             current_encoding: "utf-8", // Default encoding for restored tabs
+            had_bom: false, // Will be set correctly when bytes are loaded
             pending_undo_state: None, // Will be populated on first frame
+            last_undo_time: None,
         }
     }
 
@@ -1429,15 +1453,15 @@ impl Tab {
         let detected = detector.guess(None, true);
 
         // Check for BOM first
-        let (content, actual_encoding) = if let Some((bom_encoding, bom_len)) =
+        let (content, actual_encoding, had_bom) = if let Some((bom_encoding, bom_len)) =
             encoding_rs::Encoding::for_bom(&bytes)
         {
             // Use decode_without_bom_handling since we already handled the BOM
             let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
-            (decoded.into_owned(), bom_encoding.name())
+            (decoded.into_owned(), bom_encoding.name(), true)
         } else {
             let (decoded, _, _) = detected.decode(&bytes);
-            (decoded.into_owned(), detected.name())
+            (decoded.into_owned(), detected.name(), false)
         };
 
         // Convert legacy cursor position to char index
@@ -1473,6 +1497,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            skip_cursor_sync: false,
             view_mode: info.view_mode,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1490,7 +1515,9 @@ impl Tab {
             detected_encoding: Some(actual_encoding),
             original_bytes,
             current_encoding: actual_encoding,
+            had_bom,
             pending_undo_state: None, // Will be populated on first frame
+            last_undo_time: None,
         }
     }
 
@@ -1660,12 +1687,70 @@ impl Tab {
     ///
     /// Returns the encoded bytes. If the encoding doesn't support certain characters,
     /// they may be replaced with fallback characters.
+    ///
+    /// If the original file had a BOM (Byte Order Mark), it will be prepended to the output.
+    /// This is important for UTF-16 files which require a BOM for proper detection.
+    ///
+    /// Note: encoding_rs does NOT support encoding TO UTF-16, only decoding FROM it.
+    /// We handle UTF-16 encoding manually using Rust's built-in encode_utf16().
     pub fn encode_content(&self) -> Vec<u8> {
+        let encoding_lower = self.current_encoding.to_lowercase();
+        
+        // Handle UTF-16 specially - encoding_rs doesn't support encoding TO UTF-16
+        if encoding_lower == "utf-16le" || encoding_lower == "utf-16-le" {
+            let mut result = Vec::new();
+            // Add BOM if original had one
+            if self.had_bom {
+                result.extend_from_slice(&[0xFF, 0xFE]);
+            }
+            // Encode to UTF-16LE (little endian)
+            for code_unit in self.content.encode_utf16() {
+                result.extend_from_slice(&code_unit.to_le_bytes());
+            }
+            return result;
+        }
+        
+        if encoding_lower == "utf-16be" || encoding_lower == "utf-16-be" {
+            let mut result = Vec::new();
+            // Add BOM if original had one
+            if self.had_bom {
+                result.extend_from_slice(&[0xFE, 0xFF]);
+            }
+            // Encode to UTF-16BE (big endian)
+            for code_unit in self.content.encode_utf16() {
+                result.extend_from_slice(&code_unit.to_be_bytes());
+            }
+            return result;
+        }
+        
+        // For all other encodings, use encoding_rs
         let encoding = encoding_rs::Encoding::for_label(self.current_encoding.as_bytes())
             .unwrap_or(encoding_rs::UTF_8);
 
         let (encoded, _actual_encoding, _had_errors) = encoding.encode(&self.content);
-        encoded.into_owned()
+        let mut result = encoded.into_owned();
+
+        // Prepend BOM if the original file had one (for UTF-8 with BOM)
+        if self.had_bom {
+            let bom = Self::get_bom_for_encoding(self.current_encoding);
+            if !bom.is_empty() {
+                let mut with_bom = bom.to_vec();
+                with_bom.append(&mut result);
+                return with_bom;
+            }
+        }
+
+        result
+    }
+
+    /// Get the BOM bytes for a given encoding label.
+    fn get_bom_for_encoding(encoding_label: &str) -> &'static [u8] {
+        match encoding_label.to_lowercase().as_str() {
+            "utf-8" => &[0xEF, 0xBB, 0xBF],
+            "utf-16le" | "utf-16-le" => &[0xFF, 0xFE],
+            "utf-16be" | "utf-16-be" => &[0xFE, 0xFF],
+            _ => &[], // Other encodings don't use BOM
+        }
     }
 
     /// Check if the current encoding is UTF-8.
@@ -1756,6 +1841,7 @@ impl Tab {
     /// Returns `Some(cursor_position)` if undo was performed, `None` otherwise.
     /// The cursor position is the position that was saved when the edit was made.
     /// Increments `content_version` to signal external content change to UI widgets.
+    /// Resets `last_undo_time` so subsequent typing starts a new undo group.
     pub fn undo(&mut self) -> Option<usize> {
         if let Some(entry) = self.undo_stack.pop() {
             // Save current state to redo stack (with current cursor position)
@@ -1764,6 +1850,8 @@ impl Tab {
             // Restore previous state
             self.content = entry.content;
             self.content_version = self.content_version.wrapping_add(1);
+            // Reset undo grouping so new typing starts a fresh group
+            self.last_undo_time = None;
             Some(entry.cursor_position)
         } else {
             None
@@ -1775,6 +1863,7 @@ impl Tab {
     /// Returns `Some(cursor_position)` if redo was performed, `None` otherwise.
     /// The cursor position is the position that was saved when undo was performed.
     /// Increments `content_version` to signal external content change to UI widgets.
+    /// Resets `last_undo_time` so subsequent typing starts a new undo group.
     pub fn redo(&mut self) -> Option<usize> {
         if let Some(entry) = self.redo_stack.pop() {
             // Save current state to undo stack (with current cursor position)
@@ -1783,6 +1872,8 @@ impl Tab {
             // Restore next state
             self.content = entry.content;
             self.content_version = self.content_version.wrapping_add(1);
+            // Reset undo grouping so new typing starts a fresh group
+            self.last_undo_time = None;
             Some(entry.cursor_position)
         } else {
             None
@@ -1839,11 +1930,30 @@ impl Tab {
     pub fn record_edit(&mut self, old_content: String, old_cursor: usize) {
         // Only record if content actually changed
         if old_content != self.content {
-            self.undo_stack.push(UndoEntry::new(old_content, old_cursor));
-            if self.undo_stack.len() > self.max_undo_size {
-                self.undo_stack.remove(0);
+            let now = std::time::Instant::now();
+            
+            // Check if we should merge with the previous undo entry (time-based grouping)
+            // Merge if: there's a recent entry AND it was within the threshold
+            let should_merge = self.last_undo_time
+                .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
+                .unwrap_or(false);
+            
+            if should_merge && !self.undo_stack.is_empty() {
+                // Merge: keep the OLD content from the previous entry (the original state)
+                // but don't push a new entry - the existing entry already has the
+                // content from before the typing session started
+                // We just update the timestamp to extend the grouping window
+            } else {
+                // New undo group: push the old content
+                self.undo_stack.push(UndoEntry::new(old_content, old_cursor));
+                if self.undo_stack.len() > self.max_undo_size {
+                    self.undo_stack.remove(0);
+                }
             }
+            
+            // Always clear redo stack on new edits and update timestamp
             self.redo_stack.clear();
+            self.last_undo_time = Some(now);
         }
     }
 
@@ -1868,24 +1978,37 @@ impl Tab {
     /// Record an edit that was detected via egui's response.changed().
     ///
     /// This uses the pending undo state (prepared by `prepare_for_edit`)
-    /// to record the previous state for undo. After recording, the pending
-    /// state is cleared and will be repopulated on the next frame.
+    /// to record the previous state for undo. Uses time-based grouping to
+    /// merge rapid edits into a single undo entry.
     ///
     /// # Arguments
     /// * `old_cursor` - The cursor position before the edit (for undo positioning)
     pub fn record_edit_after_change(&mut self, old_cursor: usize) {
-        if let Some(mut entry) = self.pending_undo_state.take() {
-            // Use the provided cursor position (more accurate than stored one)
+        let now = std::time::Instant::now();
+        
+        // Check if we should merge with the previous undo entry (time-based grouping)
+        let should_merge = self.last_undo_time
+            .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
+            .unwrap_or(false);
+        
+        if should_merge && !self.undo_stack.is_empty() {
+            // Merge: keep pending_undo_state (it has the original content from
+            // before the typing session started), don't push a new undo entry.
+            // Just update timestamp and clear redo.
+            self.redo_stack.clear();
+            self.last_undo_time = Some(now);
+        } else if let Some(mut entry) = self.pending_undo_state.take() {
+            // New undo group: push the pending state
             entry.cursor_position = old_cursor;
-            
-            // Push to undo stack
             self.undo_stack.push(entry);
             if self.undo_stack.len() > self.max_undo_size {
                 self.undo_stack.remove(0);
             }
             self.redo_stack.clear();
+            self.last_undo_time = Some(now);
         }
-        // pending_undo_state is now None, will be repopulated by prepare_for_edit
+        // If merging, pending_undo_state is kept; if new group, it's now None
+        // and will be repopulated by prepare_for_edit on next frame
     }
 
     /// Convert to TabInfo for session persistence.
@@ -2404,22 +2527,6 @@ pub enum PendingAction {
 // Application State
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Central application state struct.
-///
-/// This struct holds all runtime state for the application including:
-/// - Open tabs and their content
-/// - User settings (loaded from config)
-/// - UI state (dialogs, panels, etc.)
-/// - Application mode (single file or workspace)
-///
-/// # Example
-///
-/// ```ignore
-/// let mut state = AppState::new();
-/// state.new_tab();
-/// state.active_tab_mut().set_content("# Hello".to_string());
-/// ```
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Session Content Resolution
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2434,6 +2541,7 @@ enum ResolvedContent {
         content: String,
         original_bytes: Vec<u8>,
         encoding: &'static str,
+        had_bom: bool,
     },
 }
 
@@ -2738,6 +2846,10 @@ impl AppState {
     pub fn set_active_tab(&mut self, index: usize) -> bool {
         if index < self.tabs.len() {
             self.active_tab_index = index;
+            // Request focus for the newly active tab so user can type immediately
+            if let Some(tab) = self.tabs.get_mut(index) {
+                tab.needs_focus = true;
+            }
             debug!("Switched to tab {}", index);
             true
         } else {
@@ -3208,7 +3320,7 @@ impl AppState {
                             t
                         }
                     }
-                    ResolvedContent::FromDisk { content, original_bytes, encoding } => {
+                    ResolvedContent::FromDisk { content, original_bytes, encoding, had_bom } => {
                         if let Some(path) = &session_tab.path {
                             let file_type = FileType::from_path(path);
                             let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
@@ -3243,6 +3355,7 @@ impl AppState {
                                 rendered_line_mappings: Vec::new(),
                                 raw_line_height: 20.0,
                                 pending_scroll_to_line: None,
+                                skip_cursor_sync: false,
                                 view_mode: ViewMode::Raw,
                                 undo_stack: Vec::new(),
                                 redo_stack: Vec::new(),
@@ -3260,7 +3373,9 @@ impl AppState {
                                 detected_encoding: Some(encoding),
                                 original_bytes: final_original_bytes,
                                 current_encoding: encoding,
+                                had_bom,
                                 pending_undo_state: None,
+                                last_undo_time: None,
                             };
                             t
                         } else {
@@ -3427,25 +3542,26 @@ impl AppState {
                         let detected = detector.guess(None, true);
 
                         // Check for BOM first
-                        let (content, encoding) = if let Some((bom_encoding, bom_len)) =
+                        let (content, encoding, had_bom) = if let Some((bom_encoding, bom_len)) =
                             encoding_rs::Encoding::for_bom(&bytes)
                         {
                             // Use decode_without_bom_handling since we already handled the BOM
                             let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
-                            (decoded.into_owned(), bom_encoding.name())
+                            (decoded.into_owned(), bom_encoding.name(), true)
                         } else {
                             let (decoded, _, _) = detected.decode(&bytes);
-                            (decoded.into_owned(), detected.name())
+                            (decoded.into_owned(), detected.name(), false)
                         };
 
                         debug!(
-                            "Loaded content from disk for tab {} (encoding: {})",
-                            session_tab.tab_id, encoding
+                            "Loaded content from disk for tab {} (encoding: {}, had_bom: {})",
+                            session_tab.tab_id, encoding, had_bom
                         );
                         return Some(ResolvedContent::FromDisk {
                             content,
                             original_bytes: bytes,
                             encoding,
+                            had_bom,
                         });
                     }
                     Err(e) => {

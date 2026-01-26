@@ -1,10 +1,10 @@
-# Code Folding (Indicators Only)
+# Code Folding
 
 ## Overview
 
-Code folding infrastructure with gutter fold indicators. Currently implements fold region detection and visual indicators in the gutter, but **text hiding is deferred to v0.3.0** as it requires deep integration with egui's TextEdit widget.
+Code folding with gutter fold indicators and content hiding. Supports hierarchical folding for Markdown files (headings, code blocks, lists) and indentation-based folding for code/data files.
 
-**Status:** Partial implementation - indicators work, text hiding deferred.
+**Status:** Fully functional with FerriteEditor.
 
 ## Key Files
 
@@ -12,7 +12,9 @@ Code folding infrastructure with gutter fold indicators. Currently implements fo
 |------|---------|
 | `src/state.rs` | `FoldKind`, `FoldRegion`, `FoldState` data structures |
 | `src/editor/folding.rs` | Fold region detection algorithms |
-| `src/editor/widget.rs` | Gutter fold indicator rendering |
+| `src/editor/widget.rs` | Fold state sync between Tab and FerriteEditor |
+| `src/editor/ferrite/editor.rs` | Click handling, y-position calculation for hidden lines |
+| `src/editor/ferrite/rendering/gutter.rs` | Fold indicator rendering (▶/▼) |
 | `src/config/settings.rs` | Folding configuration settings |
 
 ## Data Structures
@@ -95,33 +97,75 @@ pub fold_indentation: bool,         // Detect indentation folds
 - ✅ Fold state persistence across content changes
 - ✅ Keyboard shortcuts for fold operations
 - ✅ Settings UI for enabling/disabling fold types
+- ✅ **Text hiding** - Collapsed regions hide content and space collapses
+- ✅ Fold state synced between Tab and FerriteEditor
 
-## What's Deferred (v0.3.0)
+## Implementation Notes
 
-- ❌ **Text hiding** - Collapsed regions don't hide content
-- ❌ **Placeholder lines** - No "... (X lines folded)" display
-- ❌ **Cursor interaction** - Auto-expand when cursor enters folded region
+### Fold Toggle Flow
 
-### Why Deferred
+1. User clicks fold indicator in gutter
+2. `FerriteEditor.ui()` detects click in fold indicator area
+3. `y_to_line()` converts click position to line number
+4. `fold_state.toggle_at_line()` toggles the fold in FerriteEditor
+5. `widget.rs` syncs fold state back to Tab: `tab.fold_state = editor.fold_state().clone()`
 
-Actual text hiding requires one of:
-1. Custom text layouter that skips folded lines
-2. Content filtering with cursor position mapping
-3. Virtual document model (view separate from content)
+**Important:** The toggle happens in FerriteEditor and is synced to Tab. Do NOT toggle again in app.rs.
 
-All approaches require significant changes to how egui's TextEdit is used, which would also benefit multi-cursor editing (also deferred to v0.3.0).
+### Hidden Line Handling
+
+When rendering, hidden lines (inside collapsed folds) are handled by:
+1. Y-position calculation skips hidden lines (they don't add height)
+2. Render loop skips hidden lines with `continue`
+3. Hidden lines still get y-positions (for vector indexing) but don't occupy space
+
+```rust
+// In y-position calculation
+if !self.fold_state.is_line_hidden(line_idx) {
+    y += self.view.get_line_height(line_idx);
+}
+
+// In render loop
+if self.fold_state.is_line_hidden(line_idx) {
+    continue;
+}
+```
+
+### Hierarchical Folding
+
+Folds are hierarchical - outer folds contain inner folds:
+- Folding an outer region hides all nested content
+- Inner folds can be toggled independently when outer is expanded
+
+Example for Rust code with indentation-based folding:
+- `impl` block (indent 0) contains entire implementation
+- `fn` (indent 4) contains function body  
+- `match` (indent 8) contains match arms
+- Folding the `impl` hides everything inside
+
+## Future Improvements
+
+- ⏳ **Placeholder lines** - "... (X lines folded)" display
+- ⏳ **Cursor interaction** - Auto-expand when cursor enters folded region
+- ⏳ **Scroll accounting** - Scroll position doesn't fully account for hidden lines yet
+- ⏳ **Bracket-based folding** - More intuitive for code files than pure indentation
 
 ## Usage
 
 1. Open any file (fold detection works for Markdown, JSON, YAML, etc.)
-2. Look for fold indicators (▼) in the gutter next to foldable regions
-3. Click an indicator to toggle collapsed state (turns orange ▶ when collapsed)
-4. Use keyboard shortcuts for bulk operations
+2. Enable fold indicators: Settings > Editor > Code Folding > Show Fold Indicators
+3. Look for fold indicators (▼) in the gutter next to foldable regions
+4. Click an indicator to toggle collapsed state (turns ▶ when collapsed, content hides)
+5. Use keyboard shortcuts for bulk operations
 
-## Future Improvements (v0.3.0)
+## Testing
 
-- Implement custom text editor widget with line-level control
-- Support for hiding folded content
-- Placeholder line rendering with fold preview
-- Auto-expand on cursor navigation
-- Integration with search (skip hidden content or auto-expand matches)
+```bash
+cargo build
+cargo run
+```
+
+1. Open a Markdown file with headings - fold indicators appear
+2. Click a fold indicator - content should collapse and space should shrink
+3. Click again - content should expand
+4. Test keyboard shortcuts (Ctrl+Shift+[/]/.)
