@@ -1,0 +1,625 @@
+# Ferrite - English (Base Language)
+# This file contains all user-facing strings for internationalization.
+# Naming convention: category.subcategory.key (e.g., menu.file.open)
+
+# Application metadata
+app:
+  name: "Ferrite"
+
+# Menu bar items
+menu:
+  file:
+    label: "Ficheiro"
+    open: "Abrir..."
+    save: "Guardar"
+    save_as: "Guardar Como..."
+    recent: "Ficheiros Recentes"
+    export: "Exportar"
+    export_html: "Exportar para HTML..."
+    export_clipboard: "Copiar como HTML"
+  edit:
+    label: "Editar"
+  format:
+    label: "Formatar"
+  tools:
+    label: "Ferramentas"
+
+# Toolbar buttons
+
+# View mode labels
+view_mode:
+  raw_desc: "Edição de texto markdown simples"
+  rendered_desc: "Edição WYSIWYG exibido"
+  split_desc: "Editor de texto + pré-visualização do conteúdo lado a lado"
+
+# Status bar
+status:
+  untitled: "Sem Título"
+  no_file: "Nenhum ficheiro aberto"
+
+# File dialogs
+dialog:
+  unsaved_changes:
+    title: "Alterações não guardadas"
+    save: "Guardar"
+    dont_save: "Não Guardar"
+  confirm:
+    cancel: "Cancelar"
+    close: "Fechar"
+  # File operation dialogs
+  file:
+    new_file: "Novo Ficheiro"
+    new_folder: "Nova Pasta"
+    enter_file_name: "Introduzir nome do ficheiro:"
+    enter_folder_name: "Introduzir nome da pasta:"
+    hint_file: "nomedoficheiro md"
+    hint_folder: "nome-da-pasta"
+    create: "Criar"
+    rename: "Renomear"
+    enter_new_name: "Introduzir novo nome:"
+    exists_error: "Um ficheiro ou uma pasta com este nome já existe"
+    confirm_delete: "Confirmar Eliminar"
+    delete_folder_warning: "⚠ Esta ação vai eliminar a pasta e todo o seu conteúdo!"
+    delete: "Eliminar"
+    file: "ficheiro"
+    folder: "pasta"
+    location: "Localização: %{path}"
+    delete_confirm: "Tem a certeza que quer eliminar este(a) %{item_type}?"
+  # Go to Line dialog
+  go_to_line:
+    title: "Ir para Linha"
+    enter_line: "Indroduzir número da linha:"
+    go: "Ir"
+    range: "Intervalo: 1-%{max}"
+
+# Settings panel
+settings:
+  title: "Definições"
+  reset_all: "Repor tudo"
+  reset_tooltip: "Repor todas as predefinições"
+  auto_save_hint: "Definições são guardadas automaticamente"
+  default_view_hint: "Modo de visualização para novas abas (abas existentes mantêm
+    o seu modo de visualização guardado)"
+  font_size:
+    small: "Pequeno"
+    medium: "Médio"
+    large: "Grande"
+  general:
+    theme: "Tema"
+    theme_dark: "Escuro"
+    theme_light: "Claro"
+    theme_system: "Sistema"
+    restore_session: "Restaurar sessão prévia no arranque"
+  editor:
+    title: "Editor"
+    font_family: "Tipo de letra"
+    font_size: "Tamanho do tipo de letra"
+    font_inter_desc: "Tipo de letra moderno, simples e proporcional"
+    font_jetbrains_desc: "Tipo de letra \"Monospace\" para código"
+    custom_font: "Tipo de letra de sistema costumizado"
+    custom_font_desc: "Selecionar a partir de tipos de letra instalados no sistema"
+    select_system_font: "Selecionar Tipo de letra:"
+    font_preview: "Pré-visualização:"
+    font_not_found: "⚠ O Tipo de letra não o foi encontrado no sistema"
+    cjk_preference: "Preferência Regional CJK"
+    cjk_preference_hint: "Escolha que tipo de letra CJK toma precedência para variantes
+      regionais de símbolos"
+    cjk_auto: "Automático (Idioma do Sistema)"
+    cjk_auto_desc: "Utilizar idioma do sistema para determinar a prioridade de tipo
+      de letra CJK"
+    cjk_korean: "Koreano (한국어)"
+    cjk_korean_desc: "Priorizar variantes de símbolos de Koreano"
+    cjk_simplified_chinese: "Chinês Simplificado (简体中文)"
+    cjk_simplified_chinese_desc: "Priorizar variantes de símbolos de Chinês Simplificado"
+    cjk_traditional_chinese: "Chinês Tradicional (繁體中文)"
+    cjk_traditional_chinese_desc: "Priorizar variantes de símbolos de Chinês Tradicional"
+    cjk_japanese: "Japonês (日本語)"
+    cjk_japanese_desc: "Priorizar variantes de símbolos de Japonês"
+    tab_size: "Tamanho da Aba"
+    spaces: "espaços"
+    word_wrap: "Quebra de linha"
+    word_wrap_tooltip: "Quebrar linhas longas ao invés de deslocar horizontalmente"
+    show_line_numbers: "Mostrar números de linha"
+    line_numbers_tooltip: "Exibir números de linha na barra lateral do editor"
+    show_minimap: "Mostrar minimapa"
+    minimap_tooltip: "Mostrar painel com minimapa ao lado direito do editor"
+    minimap_mode: "Modo do minimapa"
+    minimap_mode_auto: "Automático"
+    minimap_mode_auto_desc: "Semântico para markdown , pixel para código"
+    minimap_mode_semantic: "Semântico"
+    minimap_mode_semantic_desc: "Visão geral da estrutura com cabeçalhos"
+    minimap_mode_pixel: "Pixel"
+    minimap_mode_pixel_desc: "Visão geral do código com caractéres"
+    highlight_brackets: "Destacar delimitadores correspondentes"
+    brackets_tooltip: "Destacar delimitadores correspondentes (), [], {}, <> e pares
+      de ênfase ** e __ adjacentes ao cursor"
+    auto_close_brackets: "Fechar delimitadores e aspas automaticamente"
+    auto_close_tooltip: "Inserir parênteses e aspas de fecho. Insere uma quebra de
+      linha depois de escrever um delimitador de abertura."
+    syntax_highlighting: "Destaque de Sintaxe"
+    syntax_tooltip: "Ativar destaque de sintaxe para ficheiros de código fonte (Rust,
+      Python, JavaScript, etc.)"
+    sync_scroll_tooltip: "Sincronizar posição de deslocamento ao trocar entre os modos
+      de visualização \"Original\" e \"Exibição\""
+    use_spaces: "Utilizar espaços para indentação"
+    use_spaces_tooltip: "Utilizar espaços em vez de tabulações para indentação"
+    max_line_width: "Largura Máxima da Linha"
+    custom_width: "Costumizado - Especificar largura em pixeis"
+    code_folding: "Expansão do Código"
+    enable_folding: "Ativar Expansão de Código"
+    folding_tooltip: "Permitir colapsar secções do documento (Ctrl+Shift+[ para colapsar
+      todas, Ctrl+Shift+] para expandir)"
+    show_fold_indicators: "Mostrar Indicadores de Expansão"
+    fold_indicators_tooltip: "Mostrar indicadores de espanção na barra lateral do
+      editor (apenas visual - Colapso ainda não implementado)"
+    fold_headings: "Cabeçalhos"
+    fold_headings_tooltip: "Colapsar cabeçalhos markdown e os seus conteúdos"
+    fold_code_blocks: "Blocos de Código"
+    fold_code_blocks_tooltip: "Colapsar blocos de código delimitados (```...```)"
+    fold_lists: "Listas"
+    fold_lists_tooltip: "Colapsar hierarquias de listas aninhadas"
+    fold_indentation: "Indentação (JSON/YAML)"
+    fold_indentation_tooltip: "Colapsar estruturas baseadas em indentação em ficheiros
+      JSON/YAML"
+    snippets: "Snippets"
+    enable_snippets: "Ativar expansão de Snippets"
+    snippets_tooltip: "Expandir paravras-chave em texto pré-definido. Snippets pré-definidos:
+      ;date, ;time, ;datetime, ;now"
+    builtin_snippets: "Snippets Pré-definidos:"
+    snippet_date: ";date → YYYY-MM-DD"
+    snippet_time: ";time → HH:MM"
+    snippet_datetime: ";datetime → Date+time"
+    snippet_now: ";now → ISO 8601"
+    # CJK Paragraph Indentation
+    paragraph_indent: "Indentação de Parágrafos"
+    paragraph_indent_hint: "Indentação de primeira linha para convenções tipográficas
+      de CJK"
+    paragraph_indent_custom: "Customizado"
+    paragraph_indent_custom_desc: "Valor \"em\" Costumizado"
+  preview:
+    sync_scroll: "Sincronizar Deslocamento"
+    default_view: "Modo de Visualização Pré-definido"
+  files:
+    title: "Ficheiros"
+    restore_session_tooltip: "Quando ativado, restaura as abas abertas anteriormente
+      no arranque. Quando desativado, inicia com uma única aba vazia. Dados da sessão
+      são sempre guardados."
+    enable_auto_save: "Ativar gravação automática po defeito"
+    auto_save_tooltip: "Novos documentos têm gravação automática ativada. Utiliza
+      ficheiros temporários para prevenir perda de dados."
+    auto_save_delay: "Atraso de gravação automática:"
+    recent_files: "Ficheiros Recentes"
+    clear_recent: "Limpar Ficheiros Recentes"
+    clear_recent_tooltip: "Remover todos os ficheiros da lista de ficheiros recentes"
+    seconds: "%{count} segundos"
+    remember_files: "Memorizar os últimos %{count} ficheiros"
+    files_count: "%{count} ficheiros"
+  appearance:
+    title: "Aparência"
+    language: "Idioma"
+    language_hint: "Selecionar idioma de exibição para a interface do utilizador"
+    syntax_theme: "Tema de Sintaxe"
+    syntax_theme_hint: "Tema de cor para o destaque de sintaxe de código"
+    syntax_theme_auto: "Automático (igualar o tema da aplicação)"
+  keyboard:
+    title: "Teclado"
+    search_hint: "Filtrar atalhos..."
+    reset_all: "Repor Todos os Atalhos"
+    reset_all_tooltip: "Repor todos os atalhos de teclado para as configurações pré-definidas"
+    reset_default: "Repor Configurações Defeito"
+    press_key: "Pressionar tecla para"
+    waiting: "À espera de tecla..."
+    cancel: "Cancelar"
+    apply: "Aplicar"
+    conflict_with: "Conflitos com"
+    click_to_change: "Clique para alterar atalho"
+
+# Find and Replace panel
+find:
+  placeholder: "Procurar..."
+  replace_placeholder: "Substituir para..."
+  match_case: "Igualar Maiúscula/Minúscula"
+  match_case_short: "Aa"
+  whole_word: "Palavra Inteira"
+  use_regex: "Utilizar Regex"
+  replace: "Substituir"
+  replace_all: "Substituir Todos"
+  no_results: "Sem Resultados"
+  title: "Localizar e Substituir"
+  title_replace: "Localizar e Substituir"
+  title_find: "Localizar"
+  close_tooltip: "Fechar (Escape)"
+  hide_replace: "Esconder Substituir (Ctrl+H)"
+  show_replace: "Mostrar Substituir (Ctrl+H)"
+  prev_tooltip: "Anterior (Shift+F3)"
+  next_tooltip: "Próximo (F3 ou Enter)"
+  replace_tooltip: "Substituir resultado atual"
+  replace_all_tooltip: "Substituir todos os resultados"
+  keyboard_hints: "Enter/F3: Próximo • Shift+F3: Anterior • Esc: Fechar"
+
+# Outline panel
+outline:
+  panel_title: "Documento"
+  statistics: "Estatísticas"
+  tab_outline: "Contorno"
+  tab_statistics: "Estatísticas"
+  no_headings: "Nenhum cabeçalho encontrado"
+  add_headings_hint: "Adicione cabeçalhos com a sintaxe #"
+  close_tooltip: "Fechar Contorno (Ctrl+Shift+O)"
+  parse_error: "⚠ Erro de Análise"
+
+# Document statistics
+stats:
+  no_data: "Sem estatísticas disponíveis"
+  text_stats: "Texto"
+  words: "Palavras"
+  characters: "Destacar parênteses correspondentes (), [], {}, <> e pares de ênfase
+    ** e __ adjacentes ao cursor"
+  characters_no_spaces: "Caractéres (sem espaços)"
+  lines: "Linhas"
+  paragraphs: "Parágrafos"
+  structure: "Estrutura"
+  headings_total: "Cabeçalhos"
+  list_items: "Items de lista"
+  horizontal_rules: "Regras horizontais"
+  media_links: "Media e Hiperligações"
+  links: "Hiperligações"
+  images: "Imagens"
+  code_diagrams: "Código & Diagramas"
+  code_blocks: "Blocos de Código"
+  mermaid_diagrams: "Diagramas Mermaid"
+  tables: "Tabelas"
+  blockquotes: "Blocos de Citação"
+
+# File tree / Sidebar
+
+# Quick switcher
+quick_switcher:
+  placeholder: "Procurar ficheiros..."
+  no_results: "Nenhum ficheiro encontrado"
+  recent_tooltip: "Abertos recentemente"
+  keyboard_hints: "↑↓ Navegar  ⏎ Abrir  Esc Fechar"
+
+# Search in files
+search:
+  title: "Procurar nos Ficheiros"
+  label: "Procurar:"
+  placeholder: "Introduzir texto de procura:"
+  more_matches: "    ... mais resultados não exibidos"
+  keyboard_hints: "Pressionar Enter para procurar • Clicar no resultado para abrir
+    • Esc para fechar"
+
+# About dialog
+about:
+  title: "Sobre / Ajuda"
+  tab:
+    about: "Sobre"
+    shortcuts: "Atalhos"
+  description: "Um editor rapido e leve para Markdown, JSON e mais."
+  close_hint: "Pressione F1 ou Esc para fechar"
+  # Links section
+  links: "Hiperligações"
+  github_label: "GitHub:"
+  view_on_github: "Ver no Github"
+  github_tooltip: "Abrir repositório no navegador"
+  report_issue_label: "Reportar Problema:"
+  submit_bug: "Enviar relatório de problema"
+  issue_tooltip: "Abrir rastreador de problemas no navegador"
+  # Built with section
+  built_with: "Compilado Com"
+  lib:
+    egui: "Framework de GUI em modo imediato"
+    comrak: "Analisador de Markdown no formato do GitHub"
+    syntect: "Destaque de Sintaxe"
+    serde: "Framework de serialização"
+    notify: "Observador do sistema de ficheiros"
+  # License section
+  license: "Licença"
+  license_type: "Licença MIT"
+  copyright: "© 2026 Ferrite Contributors"
+  version: "Versão %{version}"
+
+# Keyboard shortcuts
+shortcuts:
+  title: "Atalhos de Teclado"
+  expand_hint: "Clique numa categoria para a expandir/colapsar"
+  # Categories
+  category:
+    file: "Ficheiro"
+    edit: "Editar"
+    view: "Ver"
+    formatting: "Formatação"
+    workspace: "Área de Trabalho"
+    navigation: "Navegação"
+  # Command names (used in keyboard settings panel)
+  commands:
+    # File operations
+    save: "Guardar"
+    save_as: "Guardar Como"
+    open: "Abrir Ficheiro"
+    new: "Novo Ficheiro"
+    new_tab: "Nova Aba"
+    close_tab: "Fechar Aba"
+    # Navigation
+    next_tab: "Próxima Aba"
+    prev_tab: "Aba anterior"
+    go_to_line: "Ir para Linha"
+    quick_open: "Abertura Rápida"
+    # View
+    toggle_view_mode: "Alternar Modo de Visualização"
+    cycle_theme: "Alternar Tema"
+    toggle_zen_mode: "Alternar Modo Zen"
+    toggle_fullscreen: "Alternar Ecrã Inteiro"
+    toggle_outline: "Alternar Contorno"
+    toggle_file_tree: "Alternar Árvore de Ficheiros"
+    toggle_pipeline: "Alternar Pipeline"
+    # Edit
+    undo: "Desfazer"
+    redo: "Refazer"
+    delete_line: "Eliminar Linha"
+    duplicate_line: "Duplicar Linha"
+    move_line_up: "Mover linha para cima"
+    move_line_down: "Mover linha para baixo"
+    select_next_occurrence: "Selecionar Próxima Ocorrência"
+    # Search
+    find: "Localizar"
+    find_replace: "Localizar & Substituir"
+    find_next: "Localizar Próximo"
+    find_prev: "Localizar Anterior"
+    search_in_files: "Procurar nos Ficheiros"
+    # Formatting
+    bold: "Negrito"
+    italic: "Itálico"
+    inline_code: "Código em linha"
+    code_block: "Bloco de Código"
+    link: "Ligar"
+    image: "Imagem"
+    blockquote: "Bloco de Citação"
+    bullet_list: "Lista Desordenada"
+    numbered_list: "Lista Ordenada"
+    heading_1: "Cabeçalho 1"
+    heading_2: "Cabeçalho 2"
+    heading_3: "Cabeçalho 3"
+    heading_4: "Cabeçalho 4"
+    heading_5: "Cabeçalho 5"
+    heading_6: "Cabeçalho 6"
+    # Folding
+    fold_all: "Recolher Todos"
+    unfold_all: "Expandir Todos"
+    toggle_fold: "Alternar expansão"
+    # Other
+    open_settings: "Abrir Definições"
+    open_about: "Sobre / Ajuda"
+    export_html: "Exportar HTML"
+    insert_toc: "Inserir Índice"
+  # File shortcuts (for help panel)
+  file:
+    new: "Novo Ficheiro"
+    open: "Abrir Ficheiro"
+    save: "Guardar"
+    save_as: "Guardar Como"
+    close_tab: "Fechar Aba"
+  # Edit shortcuts (for help panel)
+  edit:
+    undo: "Desfazer"
+    redo: "Refazer"
+    find: "Localizar"
+    find_replace: "Localizar & Substituir"
+    select_all: "Selecionar todos"
+    copy: "Copiar"
+    cut: "Cortar"
+    paste: "Colar"
+    delete_line: "Eliminar Linha"
+    duplicate_line: "Duplicar Linha"
+    move_line_up: "Mover linha para cima"
+    move_line_down: "Mover linha para baixo"
+    select_next_occurrence: "Selecionar Próxima Ocorrência"
+  # View shortcuts (for help panel)
+  view:
+    toggle_view: "Alternar Texto/Exibição"
+    toggle_outline: "Alternar Contorno"
+    zoom_in: "Ampliar"
+    zoom_out: "Reduzir"
+    reset_zoom: "Repor Ampliação"
+    settings: "Definições"
+    about: "Sobre / Ajuda"
+  # Formatting shortcuts (for help panel)
+  format:
+    bold: "Negrito"
+    italic: "Itálico"
+    underline: "Sublinhado"
+    link: "Inserir Hiperligação"
+    code: "Código em Linha"
+  # Workspace shortcuts (for help panel)
+  workspace:
+    quick_switcher: "Alternador de ficheiro rápido"
+    search_files: "Procurar nos ficheiros"
+    toggle_tree: "Alternar Árvore de Ficheiros"
+  # Navigation shortcuts (for help panel)
+  nav:
+    next_tab: "Próxima Aba"
+    prev_tab: "Aba Anterior"
+    go_to_line: "Ir para Linha"
+    find_next: "Localizar Próximo"
+    find_prev: "Localizar Anterior"
+
+# Error messages
+
+# Notifications / Toasts
+notification:
+  restored_auto_save: "Restaurado de gravação automática"
+  auto_save_discarded: "Gravar descartados automaticamente"
+  session_restored: "Sessão Restaurada"
+
+# Tree viewer (JSON/YAML/TOML)
+tree_viewer:
+  collapse_all: "▶ Colapsar Todos"
+  expand_all: "▼ Expandir Todos"
+  copy_path: "📋 Copiar Caminho"
+  show_raw: "Mostrar Texto"
+  parse_error: "⚠ Erro de análise"
+  large_file_warning: "Ficheiro é grande (%{size} MB). A exibir conteúdo original"
+
+# Git integration
+git:
+  modified: "modificado"
+  deleted: "eliminado"
+  renamed: "renomeado"
+  untracked: "Não rastreado"
+  staged: "preparado"
+  tracked: "rastreado"
+  staged_modified: "preparado com alterações"
+  ignored: "ignorado"
+  conflict: "conflito"
+
+# Accessibility
+a11y:
+  close_button: "Fechar"
+  minimize_button: "Minimizar"
+
+# Recovery and session dialogs
+recovery:
+  auto_save:
+    title: "Recuperação de gravações automáticas"
+    backup_found: "Foi encontrada uma gravação automática para este ficheiro."
+    restore_question: "Gostaria de restaurar o conteúdo da gravação automática?"
+    restore: "Restaurar"
+    discard: "Descartar"
+    time_label: "Última modificação: %{time}"
+  session:
+    title: "Recuperação da Sessão"
+    crash_detected: "O Ferrite detectou que a sua sessão anterior foi encerrada incorrectamente."
+    restore_question: "Gostaria de restaurar a sessão prévia?"
+    restore: "Restaurar Sessão"
+    start_fresh: "Começar do Início"
+    restore_tooltip: "Restaurar todas as abas da sessão anterior"
+    start_fresh_tooltip: "Descartar a sessão anterior e começar com um editor vazio"
+  untitled: "Documento sem título"
+
+# Common buttons and actions
+common:
+  ok: "OK"
+  copy: "Copiar"
+  error: "Erro"
+  dismiss: "Dispensar"
+
+# Code blocks and widgets
+widgets:
+  code_block:
+    copy_tooltip: "Copiar para a ária de transferência"
+    finish_tooltip: "Finish editting"
+    edit_tooltip: "Editar Código"
+  table:
+    add_row: "+ Linha"
+    add_column: "+ Coluna"
+    align_left: "Alinhado à esquerda"
+    align_center: "Alinhado ao centro"
+    align_right: "Alinhado à direita"
+    delete_column_label: "Eliminar Coluna:"
+    delete_column: "Eliminar Coluna %{index}"
+    align_label: "Alinhar:"
+    align_none: "Sem alinhamento"
+  link:
+    edit: "Editar hiperligação"
+    open: "🔗 Abrir"
+    copy: "📋 Copiar"
+    text_label: "Texto:"
+    url_label: "URL:"
+    copy_tooltip: "Copiar hiperligação"
+
+# CSV Viewer
+csv:
+  delimiter_auto: "Deteção automática"
+  error: "Falha na análise do CSV"
+  select_delimiter: "Selecionar Delimitador"
+  header_row: "Linha de Cabeçalho"
+  has_headers_yes: "✓ A primeira linha é o cabeçalho"
+  has_headers_no: "✗ sem linha de cabeçalho"
+  show_raw: "Mostrar Original"
+  large_file_warning: "Ficheiro é grande (%{size} MB). A exibir conteúdo original."
+
+# Pipeline panel
+pipeline:
+  title: "⚡ Pipeline Ativa"
+  command_placeholder: "jq '.items[]' or yq '.data' ..."
+  run: "▶ Executar"
+  recent: "Comandos Recentes"
+  no_output: "(sem resultados)"
+  running: "A Executar..."
+  truncated: "(reduzido)"
+  close_tooltip: "Fechar painel da pipeline"
+  cancel_tooltip: "Cancelar execução"
+  run_tooltip: "Executar comando (Enter)"
+  stdout: "stdout"
+  stderr: "stderr"
+  hint: "Introduza um comando acima para processar o seu documento através dele.\n\
+    Exemplos:\n• jq '.'           - Formatar JSON\n• jq '.items[]'    - Extrair elementos
+    do array\n• yq '.data'       - Extrair campo YAML\n• grep 'padrão'    - Pesquisar
+    por padrão"
+  no_output_success: "(o comando não produziu resultados)"
+
+# Encoding
+
+# Tab context menu
+tab:
+  reveal_in_explorer: "Revelar no explorador"
+
+# Mermaid diagrams
+mermaid:
+  badge: "mermaid"
+  empty: "(diagrama vazio)"
+  rendering_error: "Erro de exibição: %{error}"
+
+# Table of Contents
+
+# Formatting toolbar tooltips
+
+# Workspace
+workspace:
+  close_folder: "Fechar Pasta"
+  new_file: "Novo Ficheiro"
+  new_folder: "Nova Pasta"
+  rename: "Renomear"
+  delete: "Eliminar"
+  refresh: "Atualizar"
+  recent_folders: "📁 Pastas Recentes"
+
+# Zen mode
+zen:
+  enter: "Entrar em modo Zen"
+  exit: "Sair do modo Zen"
+
+# Log levels (for settings)
+
+# Drag and drop
+
+# Time relative strings
+time:
+  seconds_ago: "Há %{count} segundos"
+  minutes_ago: "Há %{count} minutos"
+  hours_ago: "Há %{count} horas"
+  days_ago: "Há %{count} dias"
+
+# Tooltips
+tooltip:
+  fullscreen_exit: "Sair do ecrã inteiro (F10 ou Esc)"
+  fullscreen_enter: "Ecrã inteiro (F10)"
+  settings: "Definições (Ctrl+,)"
+  recent_items: "Clique para ficheiros & pastas\nShift+Clique para abrir em plano
+    de fundo"
+  about_help: "Sobre / Ajuda (F1)"
+  git_branch: "Branch Git atual"
+  new_tab: "Nova Aba"
+
+# Ribbon toolbar additions
+ribbon:
+  format_document: "Formatar Documento"
+  validate_syntax: "Validar Sintaxe"
+  pipeline: "Pipeline ativa..."
+  hide_info_panel: "Esconder Painel Informativo"
+  show_info_panel: "Mostrar Painel Informativo"
+  toggle_outline: "Alternar Contorno"
+  copy_html_tooltip: "Copiar HTML exibido"
+  export_pdf: "📄 Exportar como PDF"
+  coming_soon: "Brevemente"
+  heading_level: "Cabeçalho %{level}"
