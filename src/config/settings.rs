@@ -744,6 +744,9 @@ pub enum Language {
     #[default]
     #[serde(rename = "en")]
     English,
+    /// Portuguese (Português)
+    #[serde(rename = "pt")]
+    Portuguese,
     /// Simplified Chinese (简体中文)
     #[serde(rename = "zh-Hans")]
     ChineseSimplified,
@@ -754,6 +757,7 @@ impl Language {
     pub fn locale_code(&self) -> &'static str {
         match self {
             Language::English => "en",
+            Language::Portuguese => "pt",
             Language::ChineseSimplified => "zh_Hans",
         }
     }
@@ -762,6 +766,7 @@ impl Language {
     pub fn native_name(&self) -> &'static str {
         match self {
             Language::English => "English",
+            Language::Portuguese => "Português",
             Language::ChineseSimplified => "简体中文",
         }
     }
@@ -770,6 +775,7 @@ impl Language {
     pub fn all() -> &'static [Language] {
         &[
             Language::English,
+            Language::Portuguese,
             Language::ChineseSimplified,
         ]
     }
@@ -801,6 +807,7 @@ impl Language {
         // Match against available languages
         match primary_lang {
             "en" => Some(Language::English),
+            "pt" => Some(Language::Portuguese),
             "zh" => Some(Language::ChineseSimplified),
             _ => None,
         }

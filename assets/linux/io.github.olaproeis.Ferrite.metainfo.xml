@@ -52,15 +52,15 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.5-hotfix.3/assets/screenshots/split-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/split-dark.png</image>
       <caption>Ferrite in dark mode with split view showing markdown editing and live preview</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.5-hotfix.3/assets/screenshots/raw-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/raw-dark.png</image>
       <caption>Raw editing mode with syntax highlighting</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.5-hotfix.3/assets/screenshots/zen-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/zen-dark.png</image>
       <caption>Zen mode for distraction-free writing</caption>
     </screenshot>
   </screenshots>
@@ -68,6 +68,21 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.6" date="2026-01-26">
+      <description>
+        <p>Major release: Custom text editor (FerriteEditor) replacing egui's TextEdit</p>
+        <ul>
+          <li>Virtual scrolling enables 100MB+ file editing</li>
+          <li>Memory optimization: 80MB file uses ~80MB RAM (was 460MB+)</li>
+          <li>Rope-based buffer for O(log n) text operations</li>
+          <li>Full selection, clipboard, undo/redo support</li>
+          <li>IME support for Chinese, Japanese, Korean input</li>
+          <li>Code folding and multi-cursor editing</li>
+          <li>Navigation buttons (Top/Middle/Bottom)</li>
+          <li>Box drawing character support</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.5.3" date="2026-01-24">
       <description>
         <p>UI improvements, extended syntax support, Linux performance fixes, and Flathub submission</p>

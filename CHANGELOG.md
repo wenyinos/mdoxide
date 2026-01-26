@@ -5,7 +5,7 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6] - 2026-01-XX
+## [0.2.6] - 2026-01-26
 
 > **Major Release:** Complete custom text editor (FerriteEditor) replacing egui's TextEdit. Enables editing of 100MB+ files with ~80MB RAM usage (previously 1.8GB+ for 4MB files).
 

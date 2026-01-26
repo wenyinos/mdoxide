@@ -2,31 +2,40 @@
 
 ## Known Issues 🐛
 
-### Blocked by egui TextEdit
-These issues cannot be fixed without replacing egui's built-in text editor:
-- [ ] **Multi-cursor incomplete** - Basic cursor rendering works, but text operations not implemented
-- [ ] **Code folding incomplete** - Detection works, but text hiding not possible
-- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window appears offset from cursor position; egui's IME support is limited
-- [ ] **IME undo behavior** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Undoing during IME composition may delete an extra character; related to egui's text input handling
+### FerriteEditor Limitations
+With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
 
-### Deferred to v0.3.0
-- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Multiple attempts with LineMapping-based detection and binary search have not achieved smooth, accurate sync. Requires deeper investigation into egui's ScrollArea behavior and possibly custom scroll handling. Deferred from v0.2.6.
+- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position
+- [ ] **Code folding UI** - Fold regions detected but visual collapse not yet implemented in FerriteEditor
 
-### Cursor Positioning Limitations
-- [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting (bold + italic + links). This is due to font width differences between regular and bold text that cannot be perfectly measured without access to the actual render layout. Will be properly fixed with custom editor in v0.3.0.
+### Deferred to v0.2.7
+- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
+
+### Rendered View Limitations
+- [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting (bold + italic + links). This is due to font width differences between regular and bold text.
 
 ---
 
 ## Planned Features 🚀
 
-### v0.2.5 (Released) - Mermaid Update & Editor Polish
+> **Note:** v0.2.5.x releases are documented in the [Completed](#completed-) section below.
 
-> **Status:** Released (2026-01-16)
+### v0.2.6 (Released) - Custom Text Editor & Memory Fix (Critical)
 
-#### Mermaid Improvements
-- [x] **Modular refactor** - Split 7000+ line `mermaid.rs` into `src/markdown/mermaid/` directory with separate files per diagram type
-- [x] **Edge parsing fixes** - Fix chained edge parsing (`A --> B --> C`), arrow pattern matching, label extraction
-- [x] **Flowchart direction fix** - Respect LR/TB/RL/BT direction keywords in layout algorithm
+> **Status:** Released (2026-01-26)
+> **Docs:** [Architecture](docs/technical/editor/architecture.md) | [Test Suite](docs/v0.2.6-manual-test-suite.md)
+
+**v0.2.6 successfully addresses the critical large file memory issue** ([#45](https://github.com/OlaProeis/Ferrite/issues/45)). The root cause was egui's TextEdit widget creating massive Galley structures. The solution: a custom `FerriteEditor` with virtual scrolling.
+
+> **🎉 Milestone achieved:** 80MB file now uses ~80MB RAM (was 460MB+). Editing is smooth and responsive.
+
+#### Memory Optimization (Complete) ([#45](https://github.com/OlaProeis/Ferrite/issues/45))
+> **Issue:** Opening a 4MB text file caused 1.8GB RAM usage and laggy editor
+
+Rust-side optimizations completed (reduces Ferrite's allocations from ~400MB to ~44MB for 4MB files):
+
+- [x] **Editor per-frame clone fix** - Eliminated 240MB/second allocation from cloning content every frame. Now uses lazy undo snapshot pattern.
+- [x] **Search allocation fix** - Case-insensitive search no longer allocates full document copy. Uses regex with `(?i)` flag.
 - [x] **Node detection fixes** - Fix missing nodes and improve branching layout in complex flowcharts
 - [x] **YAML frontmatter support** - Parse `---` metadata blocks with `title:`, `config:` etc. (MermaidJS v8.13+ syntax)
 - [x] **Parallel edge operator (`&`)** - Support `A --> B & C & D` syntax for multiple edges from one source
@@ -227,9 +236,9 @@ Point release with Windows code signing, syntax theme selector, extended languag
 
 ---
 
-### v0.2.6 (Ready for Release) - Custom Text Editor & Memory Fix (Critical)
+### v0.2.6 (Released) - Custom Text Editor & Memory Fix (Critical)
 
-> **Status:** ✅ Feature Complete | Testing in Progress
+> **Status:** Released (2026-01-26)
 > **Docs:** [Architecture](docs/technical/editor/architecture.md) | [Test Suite](docs/v0.2.6-manual-test-suite.md)
 
 **v0.2.6 successfully addresses the critical large file memory issue** ([#45](https://github.com/OlaProeis/Ferrite/issues/45)). The root cause was egui's TextEdit widget creating massive Galley structures. The solution: a custom `FerriteEditor` with virtual scrolling.
