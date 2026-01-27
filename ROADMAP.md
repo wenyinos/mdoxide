@@ -365,11 +365,19 @@ With custom editor in place, add additional large file features:
 - [ ] **Modular refactor** - Split the 3500+ line `flowchart.rs` into smaller, maintainable modules (parser, layout, renderer, shapes, edges)
 - [ ] **Code cleanup** - Improve code organization, reduce duplication, add documentation
 
+#### App.rs Refactoring
+- [ ] **Modular refactor** - Split the 8000+ line `app.rs` into smaller, focused modules
+- [ ] **Extract event handling** - Move keyboard shortcuts and event handlers to dedicated module
+- [ ] **Extract UI rendering** - Separate panel rendering logic from main app loop
+- [ ] **Extract file operations** - Move file I/O and tab management to dedicated modules
+
 #### Mermaid Improvements
 - [ ] **Testing & validation** - Comprehensive testing of all diagram types with edge cases
 - [ ] **Bug fixes** - Address rendering issues discovered during v0.2.5 testing
 
 #### Bug Fixes & Polish
+- [x] **Startup crash from corrupted window position** ([#57](https://github.com/OlaProeis/Ferrite/issues/57)) - Validate window position on config load; reset invalid values (NaN, infinity, out of bounds) to prevent crash
+- [x] **Portable zip missing folder** ([#57](https://github.com/OlaProeis/Ferrite/issues/57)) - Include `portable` folder in release zip (zip files don't preserve empty directories)
 - [ ] **Table overflow UX improvement** - Cell word-wrap by default, thin hover-visible scrollbar for truly wide tables
 - [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync on Intel Macs
 - [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style
@@ -382,6 +390,7 @@ With custom editor in place, add additional large file features:
 - [ ] **Vim keybindings** - Optional Vim-style modal editing (Normal/Insert/Visual modes)
 
 #### Internationalization Polish
+- [ ] **Portuguese translation** - Add pt.yaml (missed v0.2.6 release window)
 - [ ] **Expand i18n coverage** - Add translation keys for keyboard shortcuts panel, JSON structure panel, ribbon tooltips
 - [ ] **HTML export i18n** - Include CJK paragraph indentation in exported HTML
 
