@@ -37,6 +37,15 @@ jobs:
           mkdir release
           copy target\release\ferrite.exe release\
           mkdir release\portable
+          # Add a readme inside portable folder so it gets included in the zip
+          # (zip files don't include empty directories)
+          $portableReadme = @(
+            "This folder stores your Ferrite settings and session data."
+            ""
+            "You can safely delete this file - it's just here to ensure"
+            "the portable folder is included in the zip archive."
+          ) -join "`r`n"
+          Set-Content -Path release\portable\README.txt -Value $portableReadme -NoNewline
           $readme = @(
             "Ferrite - Portable Edition"
             "==========================="

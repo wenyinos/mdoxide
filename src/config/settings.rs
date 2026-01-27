@@ -2097,6 +2097,33 @@ impl Settings {
             .height
             .clamp(Self::MIN_WINDOW_SIZE, Self::MAX_WINDOW_SIZE);
 
+        // Validate window position - reset to None if invalid
+        // Invalid positions can cause crashes on Windows when the window manager
+        // tries to position a window at impossible coordinates (NaN, very large
+        // negative values, or coordinates from a disconnected monitor).
+        // Valid range: -10000 to 10000 should cover any reasonable monitor setup
+        // while catching clearly invalid values.
+        const MAX_POSITION: f32 = 10000.0;
+        const MIN_POSITION: f32 = -10000.0;
+        if let Some(x) = self.window_size.x {
+            if !x.is_finite() || x < MIN_POSITION || x > MAX_POSITION {
+                log::warn!(
+                    "Invalid window X position {}, resetting to default",
+                    x
+                );
+                self.window_size.x = None;
+            }
+        }
+        if let Some(y) = self.window_size.y {
+            if !y.is_finite() || y < MIN_POSITION || y > MAX_POSITION {
+                log::warn!(
+                    "Invalid window Y position {}, resetting to default",
+                    y
+                );
+                self.window_size.y = None;
+            }
+        }
+
         // Clamp split ratio
         self.split_ratio = self.split_ratio.clamp(0.0, 1.0);
 
@@ -2476,6 +2503,53 @@ mod tests {
         assert!(size.x.is_none());
         assert!(size.y.is_none());
         assert!(!size.maximized);
+    }
+
+    #[test]
+    fn test_window_position_sanitization() {
+        // Test that invalid window positions are reset to None
+        // This prevents crashes on Windows when positions are corrupted
+        // (GitHub Issue #57)
+
+        // Valid positions should be preserved
+        let mut settings = Settings::default();
+        settings.window_size.x = Some(100.0);
+        settings.window_size.y = Some(200.0);
+        settings.sanitize();
+        assert_eq!(settings.window_size.x, Some(100.0));
+        assert_eq!(settings.window_size.y, Some(200.0));
+
+        // NaN should be reset
+        let mut settings = Settings::default();
+        settings.window_size.x = Some(f32::NAN);
+        settings.window_size.y = Some(f32::NAN);
+        settings.sanitize();
+        assert!(settings.window_size.x.is_none());
+        assert!(settings.window_size.y.is_none());
+
+        // Infinity should be reset
+        let mut settings = Settings::default();
+        settings.window_size.x = Some(f32::INFINITY);
+        settings.window_size.y = Some(f32::NEG_INFINITY);
+        settings.sanitize();
+        assert!(settings.window_size.x.is_none());
+        assert!(settings.window_size.y.is_none());
+
+        // Very large values should be reset
+        let mut settings = Settings::default();
+        settings.window_size.x = Some(999999.0);
+        settings.window_size.y = Some(-999999.0);
+        settings.sanitize();
+        assert!(settings.window_size.x.is_none());
+        assert!(settings.window_size.y.is_none());
+
+        // Reasonable negative positions (second monitor to the left) should be preserved
+        let mut settings = Settings::default();
+        settings.window_size.x = Some(-1920.0);
+        settings.window_size.y = Some(0.0);
+        settings.sanitize();
+        assert_eq!(settings.window_size.x, Some(-1920.0));
+        assert_eq!(settings.window_size.y, Some(0.0));
     }
 
     #[test]
