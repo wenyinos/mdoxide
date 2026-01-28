@@ -332,7 +332,7 @@ Complete replacement of egui's `TextEdit` with custom `FerriteEditor` widget:
 
 v0.2.7 contains features moved from v0.2.6 to allow focus on the critical text editor work.
 
-#### Code Signing
+#### Code Signing ([#58](https://github.com/OlaProeis/Ferrite/issues/58))
 - [ ] **SignPath organization approval** - Awaiting SignPath.io support response for code signing
 - [ ] **Windows artifacts signing** - exe, MSI, portable zip will be signed once approved
 
@@ -378,6 +378,7 @@ With custom editor in place, add additional large file features:
 #### Bug Fixes & Polish
 - [x] **Startup crash from corrupted window position** ([#57](https://github.com/OlaProeis/Ferrite/issues/57)) - Validate window position on config load; reset invalid values (NaN, infinity, out of bounds) to prevent crash
 - [x] **Portable zip missing folder** ([#57](https://github.com/OlaProeis/Ferrite/issues/57)) - Include `portable` folder in release zip (zip files don't preserve empty directories)
+- [x] **Raw mode viewport/text jitter** - Fixed periodic visual glitches during typing in Raw mode caused by spurious editor recreation and aggressive scroll clamping. Added viewport restoration, scroll clamp tolerance, and spurious sync detection.
 - [ ] **Table overflow UX improvement** - Cell word-wrap by default, thin hover-visible scrollbar for truly wide tables
 - [ ] **macOS Intel sync scrolling** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Bidirectional scroll sync on Intel Macs
 - [ ] **macOS window controls** ([#24](https://github.com/OlaProeis/Ferrite/issues/24)) - Native traffic light style
@@ -432,6 +433,20 @@ Styled callout blocks for notes, warnings, tips — common in technical document
 - [ ] **Log file detection** - Recognize `.log` files and common log patterns
 - [ ] **Level highlighting** - Color-code ERROR, WARN, INFO, DEBUG
 - [ ] **Timestamp recognition** - Highlight ISO timestamps and common date formats
+
+---
+
+### v0.2.8 (Planned) - UI & Accessibility
+
+> **Status:** Planned
+
+#### Traditional Menu Bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
+Add optional traditional text menus for improved discoverability and accessibility.
+
+- [ ] **Alt-key menu access** - Press Alt to reveal/toggle traditional File/Edit/View/Help menus (similar to VS Code behavior)
+- [ ] **Full menu functionality** - All significant features accessible via menus (File operations, Edit commands, View modes, Settings, Help)
+- [ ] **Menu bar preference** - Settings option to choose: Ribbon only / Menus only / Both
+- [ ] **Keyboard navigation** - Arrow keys and Enter to navigate menus; underlined mnemonics (Alt+F for File, etc.)
 
 ---
 

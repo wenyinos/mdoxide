@@ -452,30 +452,50 @@ impl<'a> EditorWidget<'a> {
 
             // Quick check: if lengths differ, content definitely changed
             // Only compute expensive hash if length matches (rare for external changes)
-            let (needs_sync, hash) = if !has_editor {
+            let (needs_sync, hash, sync_reason) = if !has_editor {
                 // No editor yet - need to create one, compute hash for future comparisons
                 let hash = compute_content_hash(&self.tab.content);
-                (true, hash)
+                (true, hash, "no_editor")
             } else if existing_len != Some(content_len) {
                 // Length changed - content definitely changed, compute new hash
                 let hash = compute_content_hash(&self.tab.content);
-                (true, hash)
+                debug!(
+                    "EditorWidget sync: length changed ({:?} -> {})",
+                    existing_len, content_len
+                );
+                (true, hash, "length_changed")
             } else if let Some(existing) = existing_hash {
                 // Length matches - for large files, assume no change to avoid expensive hash
                 // For small files, compute hash to detect subtle changes
                 if is_large_file {
                     // Large file with same length - assume unchanged (fast path)
-                    (false, existing)
+                    (false, existing, "large_file_skip")
                 } else {
                     // Small file - compute hash to check
                     let hash = compute_content_hash(&self.tab.content);
-                    (hash != existing, hash)
+                    if hash != existing {
+                        debug!(
+                            "EditorWidget sync: hash mismatch (existing={}, computed={}, len={})",
+                            existing, hash, content_len
+                        );
+                        (true, hash, "hash_mismatch")
+                    } else {
+                        (false, hash, "hash_match")
+                    }
                 }
             } else {
                 // No existing hash - compute one
                 let hash = compute_content_hash(&self.tab.content);
-                (true, hash)
+                (true, hash, "no_hash")
             };
+            
+            // Log sync decision (only when sync is needed, to avoid spam)
+            if needs_sync && has_editor {
+                debug!(
+                    "EditorWidget: needs_content_sync=true for tab {} (reason: {})",
+                    tab_id, sync_reason
+                );
+            }
 
             // Get or create editor
             let editor = storage.editors.entry(tab_id).or_insert_with(|| {
@@ -492,13 +512,46 @@ impl<'a> EditorWidget<'a> {
 
         // Sync content from Tab to FerriteEditor if external changes detected
         if needs_content_sync {
-            debug!("Syncing Tab content to FerriteEditor for tab {}", tab_id);
-            editor = FerriteEditor::from_string(&self.tab.content);
+            // DIAGNOSTIC: Check if content actually differs to identify spurious syncs
+            let editor_content = editor.buffer().to_string();
+            let content_actually_differs = editor_content != self.tab.content;
+            
+            if !content_actually_differs {
+                // Hash mismatch but content is the same - this is a spurious sync!
+                // Skip the expensive recreation to prevent visual jitter
+                log::warn!(
+                    "EditorWidget: Spurious sync detected for tab {} - hash mismatch but content identical (len={})",
+                    tab_id, self.tab.content.len()
+                );
+                // Don't recreate the editor - just update the stored hash (happens at end of frame)
+            } else {
+                // Content actually differs - perform sync
+                debug!(
+                    "Syncing Tab content to FerriteEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
+                    tab_id, self.tab.content.len(), self.tab.scroll_offset, 
+                    self.tab.cursor_position.0, self.tab.cursor_position.1
+                );
+                editor = FerriteEditor::from_string(&self.tab.content);
 
-            // Restore cursor position from Tab if possible
-            let cursor_line = self.tab.cursor_position.0;
-            let cursor_col = self.tab.cursor_position.1;
-            editor.set_cursor(super::ferrite::Cursor::new(cursor_line, cursor_col));
+                // Restore cursor position from Tab if possible
+                let cursor_line = self.tab.cursor_position.0;
+                let cursor_col = self.tab.cursor_position.1;
+                editor.set_cursor(super::ferrite::Cursor::new(cursor_line, cursor_col));
+
+                // Restore viewport/scroll position from Tab
+                // This prevents viewport jitter when the editor is recreated
+                let line_height = editor.view().line_height();
+                if line_height > 0.0 && self.tab.scroll_offset > 0.0 {
+                    let target_line = (self.tab.scroll_offset / line_height) as usize;
+                    let total_lines = editor.buffer().line_count();
+                    let clamped_line = target_line.min(total_lines.saturating_sub(1));
+                    editor.view_mut().scroll_to_line(clamped_line);
+                    debug!(
+                        "Restored viewport to line {} (scroll_offset={:.1}, line_height={:.1})",
+                        clamped_line, self.tab.scroll_offset, line_height
+                    );
+                }
+            }
         }
 
         // Apply settings from EditorWidget configuration

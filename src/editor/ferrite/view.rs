@@ -443,6 +443,9 @@ impl ViewState {
     /// Call this after viewport or document size changes to prevent invalid states
     /// like scrolling past the document boundaries.
     ///
+    /// This function includes a tolerance zone to prevent jitter from small height
+    /// fluctuations (e.g., when word wrap info is updated for visible lines only).
+    ///
     /// # Arguments
     /// * `total_lines` - Total number of lines in the document
     pub fn clamp_scroll_position(&mut self, total_lines: usize) {
@@ -461,6 +464,24 @@ impl ViewState {
         // Calculate current absolute scroll position using actual line offsets
         let current_absolute = self.get_line_y_offset(self.first_visible_line) + self.scroll_offset_y;
 
+        // Tolerance zone: allow small overflows to prevent jitter from height estimate
+        // fluctuations. Only clamp if we're significantly outside the valid range.
+        // This prevents viewport jitter when wrap_info changes for visible lines.
+        let tolerance = self.line_height * 2.0; // Allow up to 2 lines of tolerance
+        
+        // Only clamp if we're significantly outside the valid range
+        let needs_clamping = current_absolute < -tolerance || current_absolute > max_absolute + tolerance;
+        
+        if !needs_clamping {
+            // Position is within tolerance - only do minimal adjustments
+            // Ensure we're not scrolled above line 0
+            if self.first_visible_line == 0 && self.scroll_offset_y < 0.0 {
+                self.scroll_offset_y = 0.0;
+            }
+            return;
+        }
+
+        // Position is significantly outside valid range - perform full clamping
         // Clamp to valid range [0, max_absolute]
         let clamped_absolute = current_absolute.clamp(0.0, max_absolute);
 
