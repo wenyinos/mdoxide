@@ -10,10 +10,10 @@ app:
 menu:
   file:
     label: "Datei"
-    open: "Öffnen..."
-    save: "Speichern"
-    save_as: "Speichern unter..."
-    recent: "Letzte Dateien"
+    open: "Datei Öffnen..."
+    save: "Datei Speichern"
+    save_as: "Datei Speichern unter..."
+    recent: "Jüngste Dateien"
     export: "Exportieren"
     export_html: "Exportieren als HTML..."
     export_clipboard: "Kopieren als HTML"
@@ -35,7 +35,7 @@ view_mode:
 # Status bar
 status:
   untitled: "Ohne Titel"
-  no_file: "Keine geöffnete Datei"
+  no_file: "Keine Datei geöffnet"
 
 # File dialogs
 dialog:
@@ -48,19 +48,19 @@ dialog:
     close: "Schließen"
   # File operation dialogs
   file:
-    new_file: "Neue Datei"
-    new_folder: "Neuer Dateiordner"
+    new_file: "Datei neuanlegen"
+    new_folder: "Dateiordner neuanlegen"
     enter_file_name: "Dateiname eingeben:"
     enter_folder_name: "Dateiordnername eingeben:"
     hint_file: "dateiname.md"
     hint_folder: "Dateiordnername"
-    create: "Erschaffen"
-    rename: "Umbenennen"
-    enter_new_name: "Neuen Namen eingeben:"
+    create: "Datei erstellen"
+    rename: "Datei umbenennen"
+    enter_new_name: "Neuen Dateinamen eingeben:"
     exists_error: "Eine Datei oder ein Ordner mit diesem Namen existiert bereits"
-    confirm_delete: "Löschung bestätigen"
+    confirm_delete: "Löschen der Datei bestätigen"
     delete_folder_warning: "Das wird den Ordner mitsamt seinem Inhalt löschen!"
-    delete: "Löschen"
+    delete: "Datei löschen"
     file: "Datei"
     folder: "Dateiordner"
     location: "Speicherort: %{path}"
@@ -135,8 +135,8 @@ settings:
     auto_close_tooltip: "Automatisch \"rechte\" Klammern und Anführungszeichen einfügen.
       Ausgewählten Text einbinden bei Eingabe eines \"linken\" Zeichens."
     syntax_highlighting: "Syntax optisch anzeigen"
-    syntax_tooltip: "optische Syntaxdarstellung für Programmtext (Rust, Python, JavaScript,
-      etc.)"
+    syntax_tooltip: "Optische Hervorhebung der Syntax für Programmtext (Rust, Python,
+      JavaScript etc.)"
     sync_scroll_tooltip: "Scrollposition zwischen Rohtext und Vorschau synchronisieren"
     use_spaces: "Leerzeichen für Einrückungen verwenden"
     use_spaces_tooltip: "Leerzeichen anstelle von Tabulatoren für Einrückungen verwenden"
@@ -156,8 +156,7 @@ settings:
     fold_lists: "Aufzählungen"
     fold_lists_tooltip: "Hierarchisch verschachtelte Aufzählungen einklappen"
     fold_indentation: "Einrückungen (JSON/YAML)"
-    fold_indentation_tooltip: "Einrückungsbasierte Strukturen in JSON/YAML-Dateien
-      einklappen"
+    fold_indentation_tooltip: "Eingerückte Abschnitte in JSON/YAML-Dateien einklappen"
     snippets: "Schnipsel"
     enable_snippets: "Schnipsel-Erweiterung ermöglichen"
     snippets_tooltip: "Trigger-Worte in vordefinierten Text erweitern. Eingebaute
@@ -220,7 +219,7 @@ find:
   no_results: ""
   title: ""
   title_replace: ""
-  title_find: ""
+  title_find: "Suchen"
   close_tooltip: ""
   hide_replace: ""
   show_replace: ""
@@ -359,12 +358,12 @@ shortcuts:
     find_prev: ""
     search_in_files: ""
     # Formatting
-    bold: ""
+    bold: "fett"
     italic: ""
     inline_code: ""
     code_block: ""
     link: ""
-    image: ""
+    image: "Bild"
     blockquote: ""
     bullet_list: ""
     numbered_list: ""
@@ -453,14 +452,14 @@ tree_viewer:
 
 # Git integration
 git:
-  modified: ""
-  deleted: ""
-  renamed: ""
+  modified: "verändert"
+  deleted: "gelöscht"
+  renamed: "umbenannt"
   untracked: ""
   staged: ""
   tracked: ""
   staged_modified: ""
-  ignored: ""
+  ignored: "ignoriert"
   conflict: ""
 
 # Accessibility
