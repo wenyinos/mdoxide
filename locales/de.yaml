@@ -208,17 +208,17 @@ settings:
 
 # Find and Replace panel
 find:
-  placeholder: ""
-  replace_placeholder: ""
+  placeholder: "Suchen..."
+  replace_placeholder: "Ersetzen durch..."
   match_case: ""
   match_case_short: ""
   whole_word: ""
   use_regex: ""
-  replace: ""
-  replace_all: ""
+  replace: "Ersetzen"
+  replace_all: "Alle ersetzen"
   no_results: ""
-  title: ""
-  title_replace: ""
+  title: "Suchen und Ersetzen"
+  title_replace: "Weiter (F3 oder Eingabetaste)"
   title_find: "Suchen"
   close_tooltip: ""
   hide_replace: ""
@@ -226,7 +226,7 @@ find:
   prev_tooltip: ""
   next_tooltip: ""
   replace_tooltip: ""
-  replace_all_tooltip: ""
+  replace_all_tooltip: "Alle Suchergebnisse ersetzen"
   keyboard_hints: ""
 
 # Outline panel
@@ -384,22 +384,22 @@ shortcuts:
     insert_toc: ""
   # File shortcuts (for help panel)
   file:
-    new: ""
+    new: "Neue Datei"
     open: ""
-    save: ""
-    save_as: ""
+    save: "Speichern"
+    save_as: "Speichern als"
     close_tab: ""
   # Edit shortcuts
   edit:
     undo: ""
     redo: ""
-    find: ""
+    find: "Suchen"
     find_replace: ""
-    select_all: ""
-    copy: ""
+    select_all: "Alles auswählen"
+    copy: "Kopieren"
     cut: ""
     paste: ""
-    delete_line: ""
+    delete_line: "Zeile löschen"
     duplicate_line: ""
     move_line_up: ""
     move_line_down: ""
@@ -408,16 +408,16 @@ shortcuts:
   view:
     toggle_view: ""
     toggle_outline: ""
-    zoom_in: ""
-    zoom_out: ""
+    zoom_in: "Vergrößern"
+    zoom_out: "Verkleinern"
     reset_zoom: ""
-    settings: ""
+    settings: "Einstellungen"
     about: ""
   # Formatting shortcuts
   format:
-    bold: ""
-    italic: ""
-    underline: ""
+    bold: "fett"
+    italic: "kursiv"
+    underline: "Unterstreichen"
     link: ""
     code: ""
   # Workspace shortcuts
@@ -429,7 +429,7 @@ shortcuts:
   nav:
     next_tab: ""
     prev_tab: ""
-    go_to_line: ""
+    go_to_line: "Gehe zu Zeile"
     find_next: ""
     find_prev: ""
 
