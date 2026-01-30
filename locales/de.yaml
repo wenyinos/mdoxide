@@ -445,7 +445,7 @@ notification:
 tree_viewer:
   collapse_all: ""
   expand_all: ""
-  copy_path: ""
+  copy_path: "📋 Pfad kopieren"
   show_raw: ""
   parse_error: ""
   large_file_warning: ""
@@ -488,9 +488,9 @@ recovery:
 
 # Common buttons and actions
 common:
-  ok: ""
-  copy: ""
-  error: ""
+  ok: "OK"
+  copy: "Kopieren"
+  error: "Fehler"
   dismiss: ""
 
 # Code blocks and widgets
@@ -500,26 +500,26 @@ widgets:
     finish_tooltip: ""
     edit_tooltip: ""
   table:
-    add_row: ""
-    add_column: ""
-    align_left: ""
-    align_center: ""
-    align_right: ""
+    add_row: "+ Zeile"
+    add_column: "+ Spalte"
+    align_left: "linksbündig"
+    align_center: "zentriert"
+    align_right: "rechtsbündig"
     delete_column_label: ""
     delete_column: ""
-    align_label: ""
-    align_none: ""
+    align_label: "Ausrichtung:"
+    align_none: "Ohne Ausrichtung"
   link:
     edit: ""
     open: ""
-    copy: ""
-    text_label: ""
-    url_label: ""
+    copy: "📋 Kopieren"
+    text_label: "Text:"
+    url_label: "URL:"
     copy_tooltip: ""
 
 # CSV Viewer
 csv:
-  delimiter_auto: ""
+  delimiter_auto: "automatisch erkennen"
   error: "CSV-Datei nicht lesbar"
   select_delimiter: "Trennzeichen auswählen"
   header_row: "Überschrifts-Zeile"
