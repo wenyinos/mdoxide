@@ -1178,13 +1178,34 @@ pub fn setup_fonts_with_settings(
     cjk_preference: CjkFontPreference,
 ) {
     let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
-    ctx.set_fonts(fonts);
+
+    // Defensive fallback: if a non-Auto CJK preference resulted in *no CJK fonts
+    // being added to this FontDefinitions*, retry with Auto.
+    let has_any_cjk_font = fonts.font_data.contains_key("CJK_KR")
+        || fonts.font_data.contains_key("CJK_JP")
+        || fonts.font_data.contains_key("CJK_SC")
+        || fonts.font_data.contains_key("CJK_TC");
+
+    let final_fonts = if cjk_preference != CjkFontPreference::Auto && !has_any_cjk_font {
+        warn!(
+            "CJK preference {:?} produced no CJK fonts; falling back to Auto",
+            cjk_preference
+        );
+        create_font_definitions_with_settings(custom_font, CjkFontPreference::Auto, true)
+    } else {
+        fonts
+    };
+
+    ctx.set_fonts(final_fonts);
+
     bump_font_generation();
     configure_text_styles(ctx);
-    // Schedule font atlas pre-warming for the first frame
     schedule_prewarm();
-    info!("Configured egui text styles with custom_font={:?}, cjk_preference={:?}", 
-          custom_font, cjk_preference);
+
+    info!(
+        "Configured egui text styles with custom_font={:?}, cjk_preference={:?}",
+        custom_font, cjk_preference
+    );
 }
 
 /// Configure text styles for the egui context.
@@ -1223,14 +1244,34 @@ pub fn reload_fonts(
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
 ) {
-    info!("Reloading fonts with custom_font={:?}, cjk_preference={:?}", 
-          custom_font, cjk_preference);
+    info!(
+        "Reloading fonts with custom_font={:?}, cjk_preference={:?}",
+        custom_font, cjk_preference
+    );
+
     let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
-    ctx.set_fonts(fonts);
+
+    let has_any_cjk_font = fonts.font_data.contains_key("CJK_KR")
+        || fonts.font_data.contains_key("CJK_JP")
+        || fonts.font_data.contains_key("CJK_SC")
+        || fonts.font_data.contains_key("CJK_TC");
+
+    let final_fonts = if cjk_preference != CjkFontPreference::Auto && !has_any_cjk_font {
+        warn!(
+            "CJK preference {:?} produced no CJK fonts; falling back to Auto",
+            cjk_preference
+        );
+        create_font_definitions_with_settings(custom_font, CjkFontPreference::Auto, true)
+    } else {
+        fonts
+    };
+
+    ctx.set_fonts(final_fonts);
+
     bump_font_generation();
     configure_text_styles(ctx);
-    // Pre-warm immediately since reload_fonts is called after context is running
-    prewarm_font_atlas(ctx);
+    // Font atlas cannot be accessed until after the first Context::run()
+    schedule_prewarm();
 }
 
 /// Ensure CJK fonts are loaded on-demand (loads ALL CJK fonts).
