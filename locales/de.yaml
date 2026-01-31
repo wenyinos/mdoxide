@@ -211,9 +211,9 @@ find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
   match_case: ""
-  match_case_short: ""
-  whole_word: ""
-  use_regex: ""
+  match_case_short: "Aa"
+  whole_word: "ganzes Wort"
+  use_regex: "Regex verwenden"
   replace: "Ersetzen"
   replace_all: "Alle ersetzen"
   no_results: ""
@@ -242,24 +242,24 @@ outline:
 
 # Document statistics
 stats:
-  no_data: ""
-  text_stats: ""
-  words: ""
-  characters: ""
-  characters_no_spaces: ""
-  lines: ""
-  paragraphs: ""
-  structure: ""
-  headings_total: ""
+  no_data: "Statistik nicht verfügbar"
+  text_stats: "Text"
+  words: "Worte"
+  characters: "Zeichen"
+  characters_no_spaces: "Zeichen (außer Leerzeichen)"
+  lines: "Zeilen"
+  paragraphs: "Absätze"
+  structure: "Gliederung"
+  headings_total: "Überschriften"
   list_items: ""
   horizontal_rules: ""
   media_links: ""
-  links: ""
-  images: ""
+  links: "Links"
+  images: "Bilder"
   code_diagrams: ""
   code_blocks: ""
-  mermaid_diagrams: ""
-  tables: ""
+  mermaid_diagrams: "Mermaid-Diagramme"
+  tables: "Tabellen"
   blockquotes: ""
 
 # File tree / Sidebar
@@ -491,7 +491,7 @@ common:
   ok: "OK"
   copy: "Kopieren"
   error: "Fehler"
-  dismiss: ""
+  dismiss: "Schließen"
 
 # Code blocks and widgets
 widgets:
@@ -582,16 +582,16 @@ zen:
 
 # Time relative strings
 time:
-  seconds_ago: ""
-  minutes_ago: ""
-  hours_ago: ""
-  days_ago: ""
+  seconds_ago: "vor %{count} Sekunden"
+  minutes_ago: "vor %{count} Minuten"
+  hours_ago: "vor %{count} Stunden"
+  days_ago: "vor %{count} Tagen"
 
 # Tooltips
 tooltip:
   fullscreen_exit: ""
   fullscreen_enter: ""
-  settings: ""
+  settings: "Einstellungen (Ctrl+,)"
   recent_items: ""
   about_help: ""
   git_branch: ""
