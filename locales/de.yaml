@@ -213,7 +213,7 @@ settings:
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
-  match_case: ""
+  match_case: "Groß-/Kleinschreibung beachten"
   match_case_short: "Aa"
   whole_word: "ganzes Wort"
   use_regex: "Regex verwenden"
@@ -230,18 +230,18 @@ find:
   next_tooltip: "Weiter (F3 oder Eingabetaste)"
   replace_tooltip: "Aktuelles Suchergebnis ersetzen"
   replace_all_tooltip: "Alle Suchergebnisse ersetzen"
-  keyboard_hints: ""
+  keyboard_hints: "Eingabetaste/F3: vorwärts • Shift+F3: zurück • Esc: Beenden"
 
 # Outline panel
 outline:
-  panel_title: ""
+  panel_title: "Dokument"
   statistics: "Statistik"
-  tab_outline: ""
-  tab_statistics: ""
+  tab_outline: "Übersicht"
+  tab_statistics: "Statistik"
   no_headings: "Keine Überschriften gefunden"
   add_headings_hint: "Überschriften mit der #-Syntax hinzufügen"
-  close_tooltip: ""
-  parse_error: ""
+  close_tooltip: "Übersicht schließen"
+  parse_error: "⚠ Parse-Fehler"
 
 # Document statistics
 stats:
@@ -254,9 +254,9 @@ stats:
   paragraphs: "Absätze"
   structure: "Gliederung"
   headings_total: "Überschriften"
-  list_items: ""
+  list_items: "Aufzählungspunkte"
   horizontal_rules: "Trennlinien"
-  media_links: ""
+  media_links: "Medien und Links"
   links: "Links"
   images: "Bilder"
   code_diagrams: "Code und Diagramme"
@@ -276,7 +276,7 @@ quick_switcher:
 
 # Search in files
 search:
-  title: ""
+  title: "Suche in Dateien"
   label: "Suchen:"
   placeholder: ""
   more_matches: ""
@@ -294,18 +294,18 @@ about:
   links: "Links"
   github_label: "GitHub:"
   view_on_github: "Auf GitHub betrachten"
-  github_tooltip: ""
+  github_tooltip: "Repository im Browser öffnen"
   report_issue_label: "Problem berichten:"
   submit_bug: "Fehlerbericht einreichen"
-  issue_tooltip: ""
+  issue_tooltip: "Problemliste im Browser öffnen"
   # Built with section
   built_with: "Erstellt mit"
   lib:
     egui: "Grafische Benutzeroberfläche"
-    comrak: ""
+    comrak: "GitHub-ähnlicher Markdown-Parser"
     syntect: "Syntax-Hervorhebung"
-    serde: ""
-    notify: ""
+    serde: "Serialisierungsbibliothek"
+    notify: "Dateisystem-Beobachter"
   # License section
   license: "Lizenz"
   license_type: "MIT-Lizenz"
@@ -350,7 +350,7 @@ shortcuts:
     undo: ""
     redo: ""
     delete_line: "Zeile löschen"
-    duplicate_line: ""
+    duplicate_line: "Zeile duplizieren"
     move_line_up: "Zeile nach oben"
     move_line_down: "Zeile nach unten"
     select_next_occurrence: ""
@@ -384,11 +384,11 @@ shortcuts:
     open_settings: ""
     open_about: ""
     export_html: "Als HTML exportieren"
-    insert_toc: ""
+    insert_toc: "Inhaltsverzeichnis einfügen"
   # File shortcuts (for help panel)
   file:
     new: "Neue Datei"
-    open: ""
+    open: "Datei öffnen"
     save: "Speichern"
     save_as: "Speichern als"
     close_tab: ""
@@ -397,19 +397,19 @@ shortcuts:
     undo: ""
     redo: ""
     find: "Suchen"
-    find_replace: ""
+    find_replace: "Suchen und Ersetzen"
     select_all: "Alles auswählen"
     copy: "Kopieren"
     cut: ""
     paste: "einfügen"
     delete_line: "Zeile löschen"
     duplicate_line: ""
-    move_line_up: ""
-    move_line_down: ""
+    move_line_up: "eine Zeile nach oben"
+    move_line_down: "eine Zeile nach unten"
     select_next_occurrence: ""
   # View shortcuts
   view:
-    toggle_view: ""
+    toggle_view: "Dokumentansicht wechseln"
     toggle_outline: ""
     zoom_in: "Vergrößern"
     zoom_out: "Verkleinern"
@@ -422,7 +422,7 @@ shortcuts:
     italic: "kursiv"
     underline: "Unterstreichen"
     link: "Link einfügen"
-    code: ""
+    code: "Code-Formatierung im laufenden Text"
   # Workspace shortcuts
   workspace:
     quick_switcher: ""
@@ -458,10 +458,10 @@ git:
   modified: "verändert"
   deleted: "gelöscht"
   renamed: "umbenannt"
-  untracked: ""
-  staged: ""
-  tracked: ""
-  staged_modified: ""
+  untracked: "Änderungen nicht verfolgt"
+  staged: "vorgemerkt"
+  tracked: "Änderungen verfolgt"
+  staged_modified: "modifiziert und vorgemerkt"
   ignored: "ignoriert"
   conflict: "Konflikt"
 
@@ -487,7 +487,7 @@ recovery:
     start_fresh: ""
     restore_tooltip: ""
     start_fresh_tooltip: ""
-  untitled: ""
+  untitled: "Dokument ohne Namen"
 
 # Common buttons and actions
 common:
@@ -541,12 +541,12 @@ pipeline:
   running: "Läuft..."
   truncated: "(gekürzt)"
   close_tooltip: ""
-  cancel_tooltip: ""
+  cancel_tooltip: "Ausführung beenden"
   run_tooltip: "Befehl ausführen (Eingabetaste)"
   stdout: "stdout"
   stderr: "stderr"
   hint: ""
-  no_output_success: ""
+  no_output_success: "(Befehl hat keine Ausgabe erzeugt)"
 
 # Encoding
 
@@ -607,8 +607,8 @@ ribbon:
   pipeline: ""
   hide_info_panel: ""
   show_info_panel: ""
-  toggle_outline: ""
+  toggle_outline: "Übersicht ein/aus"
   copy_html_tooltip: ""
   export_pdf: ""
   coming_soon: ""
-  heading_level: ""
+  heading_level: "Überschrift %{level}"
