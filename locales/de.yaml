@@ -134,7 +134,7 @@ settings:
     auto_close_brackets: "Klammern und Anführungszeichen automatisch schließen"
     auto_close_tooltip: "Automatisch \"rechte\" Klammern und Anführungszeichen einfügen.
       Ausgewählten Text einbinden bei Eingabe eines \"linken\" Zeichens."
-    syntax_highlighting: "Syntax optisch anzeigen"
+    syntax_highlighting: "Syntax hervorheben"
     syntax_tooltip: "Optische Hervorhebung der Syntax für Programmtext (Rust, Python,
       JavaScript etc.)"
     sync_scroll_tooltip: "Scrollposition zwischen Rohtext und Vorschau synchronisieren"
@@ -193,52 +193,55 @@ settings:
     title: "Aussehen"
     language: "Sprache"
     language_hint: "Sprache für die Oberfläche auswählen"
+    syntax_theme_hint: Farbschema für Hervorhebung von Code-Syntax
+    syntax_theme: Syntax-Farbschema
+    syntax_theme_auto: automatisch (passend zum App-Farbschema)
   keyboard:
     title: "Tastatur"
     search_hint: "Filter-Tastenkürzel..."
     reset_all: "Alle Tastenkürzel zurücksetzen"
     reset_all_tooltip: "Alle Tastenklürzel auf Standardeinstellung zurücksetzen"
     reset_default: "Auf Standardeinstellung zurücksetzen"
-    press_key: ""
-    waiting: ""
-    cancel: ""
-    apply: ""
-    conflict_with: ""
-    click_to_change: ""
+    press_key: "Drücke Taste für"
+    waiting: "Warten auf Tastendruck..."
+    cancel: "Abbrechen"
+    apply: "anwenden"
+    conflict_with: "Konflikte mit"
+    click_to_change: "Anklicken um Tastenkürzel zu ändern"
 
 # Find and Replace panel
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
-  match_case: ""
+  match_case: "Groß-/Kleinschreibung beachten"
   match_case_short: "Aa"
   whole_word: "ganzes Wort"
   use_regex: "Regex verwenden"
   replace: "Ersetzen"
   replace_all: "Alle ersetzen"
-  no_results: ""
+  no_results: "nichts gefunden"
   title: "Suchen und Ersetzen"
   title_replace: "Weiter (F3 oder Eingabetaste)"
   title_find: "Suchen"
-  close_tooltip: ""
-  hide_replace: ""
-  show_replace: ""
-  prev_tooltip: ""
-  next_tooltip: ""
-  replace_tooltip: ""
+  close_tooltip: "Schließen (Escape)"
+  hide_replace: "Suchen+Ersetzen verstecken (Ctrl-H)"
+  show_replace: "Suchen+Ersetzen (Ctrl-H)"
+  prev_tooltip: "Zurück (SHift-F3)"
+  next_tooltip: "Weiter (F3 oder Eingabetaste)"
+  replace_tooltip: "Aktuelles Suchergebnis ersetzen"
   replace_all_tooltip: "Alle Suchergebnisse ersetzen"
-  keyboard_hints: ""
+  keyboard_hints: "Eingabetaste/F3: vorwärts • Shift+F3: zurück • Esc: Beenden"
 
 # Outline panel
 outline:
-  panel_title: ""
-  statistics: ""
-  tab_outline: ""
-  tab_statistics: ""
-  no_headings: ""
-  add_headings_hint: ""
-  close_tooltip: ""
-  parse_error: ""
+  panel_title: "Dokument"
+  statistics: "Statistik"
+  tab_outline: "Übersicht"
+  tab_statistics: "Statistik"
+  no_headings: "Keine Überschriften gefunden"
+  add_headings_hint: "Überschriften mit der #-Syntax hinzufügen"
+  close_tooltip: "Übersicht schließen"
+  parse_error: "⚠ Parse-Fehler"
 
 # Document statistics
 stats:
@@ -251,16 +254,16 @@ stats:
   paragraphs: "Absätze"
   structure: "Gliederung"
   headings_total: "Überschriften"
-  list_items: ""
-  horizontal_rules: ""
-  media_links: ""
+  list_items: "Aufzählungspunkte"
+  horizontal_rules: "Trennlinien"
+  media_links: "Medien und Links"
   links: "Links"
   images: "Bilder"
-  code_diagrams: ""
-  code_blocks: ""
+  code_diagrams: "Code und Diagramme"
+  code_blocks: "Code-Blöcke"
   mermaid_diagrams: "Mermaid-Diagramme"
   tables: "Tabellen"
-  blockquotes: ""
+  blockquotes: "Zitate"
 
 # File tree / Sidebar
 
@@ -273,39 +276,39 @@ quick_switcher:
 
 # Search in files
 search:
-  title: ""
-  label: ""
+  title: "Suche in Dateien"
+  label: "Suchen:"
   placeholder: ""
   more_matches: ""
   keyboard_hints: ""
 
 # About dialog
 about:
-  title: ""
+  title: "Über / Hilfe"
   tab:
-    about: ""
+    about: "Über"
     shortcuts: "Tastaturkürzel"
   description: "Schnelle und schlanke Bearbeitung von Markdown, JSON und mehr."
   close_hint: "F1 oder Escape zum Schließen drücken"
   # Links section
   links: "Links"
   github_label: "GitHub:"
-  view_on_github: ""
-  github_tooltip: ""
-  report_issue_label: ""
-  submit_bug: ""
-  issue_tooltip: ""
+  view_on_github: "Auf GitHub betrachten"
+  github_tooltip: "Repository im Browser öffnen"
+  report_issue_label: "Problem berichten:"
+  submit_bug: "Fehlerbericht einreichen"
+  issue_tooltip: "Problemliste im Browser öffnen"
   # Built with section
   built_with: "Erstellt mit"
   lib:
-    egui: ""
-    comrak: ""
-    syntect: ""
-    serde: ""
-    notify: ""
+    egui: "Grafische Benutzeroberfläche"
+    comrak: "GitHub-ähnlicher Markdown-Parser"
+    syntect: "Syntax-Hervorhebung"
+    serde: "Serialisierungsbibliothek"
+    notify: "Dateisystem-Beobachter"
   # License section
   license: "Lizenz"
-  license_type: ""
+  license_type: "MIT-Lizenz"
   copyright: "© 2026 Ferrite-Entwicklungshelfer"
   version: "Version %{version}"
 
@@ -346,46 +349,46 @@ shortcuts:
     # Edit
     undo: ""
     redo: ""
-    delete_line: ""
-    duplicate_line: ""
-    move_line_up: ""
-    move_line_down: ""
+    delete_line: "Zeile löschen"
+    duplicate_line: "Zeile duplizieren"
+    move_line_up: "Zeile nach oben"
+    move_line_down: "Zeile nach unten"
     select_next_occurrence: ""
     # Search
-    find: ""
-    find_replace: ""
-    find_next: ""
-    find_prev: ""
-    search_in_files: ""
+    find: "Suchen"
+    find_replace: "Suchen und Ersetzen"
+    find_next: "Weitersuchen"
+    find_prev: "rückwärts Suchen"
+    search_in_files: "In Dateien suchen"
     # Formatting
     bold: "fett"
-    italic: ""
+    italic: "kursiv"
     inline_code: ""
     code_block: ""
-    link: ""
+    link: "Link"
     image: "Bild"
-    blockquote: ""
-    bullet_list: ""
+    blockquote: "Zitat"
+    bullet_list: "Punktaufzählung"
     numbered_list: ""
-    heading_1: ""
-    heading_2: ""
-    heading_3: ""
-    heading_4: ""
-    heading_5: ""
-    heading_6: ""
+    heading_1: "Überschrift 1"
+    heading_2: "Überschrift 2"
+    heading_3: "Überschrift 3"
+    heading_4: "Überschrift 4"
+    heading_5: "Überschrift 5"
+    heading_6: "Überschrift 6"
     # Folding
-    fold_all: ""
-    unfold_all: ""
-    toggle_fold: ""
+    fold_all: "Alles zusammenklappen"
+    unfold_all: "Alles aufklappen"
+    toggle_fold: "An aktueller Zeile ein-/ausklappen"
     # Other
     open_settings: ""
     open_about: ""
-    export_html: ""
-    insert_toc: ""
+    export_html: "Als HTML exportieren"
+    insert_toc: "Inhaltsverzeichnis einfügen"
   # File shortcuts (for help panel)
   file:
     new: "Neue Datei"
-    open: ""
+    open: "Datei öffnen"
     save: "Speichern"
     save_as: "Speichern als"
     close_tab: ""
@@ -394,23 +397,23 @@ shortcuts:
     undo: ""
     redo: ""
     find: "Suchen"
-    find_replace: ""
+    find_replace: "Suchen und Ersetzen"
     select_all: "Alles auswählen"
     copy: "Kopieren"
     cut: ""
-    paste: ""
+    paste: "einfügen"
     delete_line: "Zeile löschen"
     duplicate_line: ""
-    move_line_up: ""
-    move_line_down: ""
+    move_line_up: "eine Zeile nach oben"
+    move_line_down: "eine Zeile nach unten"
     select_next_occurrence: ""
   # View shortcuts
   view:
-    toggle_view: ""
+    toggle_view: "Dokumentansicht wechseln"
     toggle_outline: ""
     zoom_in: "Vergrößern"
     zoom_out: "Verkleinern"
-    reset_zoom: ""
+    reset_zoom: "normale Vergrößerung"
     settings: "Einstellungen"
     about: ""
   # Formatting shortcuts
@@ -418,20 +421,20 @@ shortcuts:
     bold: "fett"
     italic: "kursiv"
     underline: "Unterstreichen"
-    link: ""
-    code: ""
+    link: "Link einfügen"
+    code: "Code-Formatierung im laufenden Text"
   # Workspace shortcuts
   workspace:
     quick_switcher: ""
-    search_files: ""
-    toggle_tree: ""
+    search_files: "Suche in Dateien"
+    toggle_tree: "Arbeitsordner-Ansicht ein/aus"
   # Navigation shortcuts
   nav:
     next_tab: ""
     prev_tab: ""
     go_to_line: "Gehe zu Zeile"
-    find_next: ""
-    find_prev: ""
+    find_next: "Weitersuchen"
+    find_prev: "rückwärts Weitersuchen"
 
 # Error messages
 
@@ -439,28 +442,28 @@ shortcuts:
 notification:
   restored_auto_save: ""
   auto_save_discarded: ""
-  session_restored: ""
+  session_restored: "Sitzung ist wiederhergestellt"
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
-  collapse_all: ""
-  expand_all: ""
+  collapse_all: "▶ Alles einklappen"
+  expand_all: "▼ Alles aufklappen"
   copy_path: "📋 Pfad kopieren"
-  show_raw: ""
+  show_raw: "Rohtext anzeigen"
   parse_error: ""
-  large_file_warning: ""
+  large_file_warning: "Große Datei (%{size} MB). Rohtext wird angezeigt."
 
 # Git integration
 git:
   modified: "verändert"
   deleted: "gelöscht"
   renamed: "umbenannt"
-  untracked: ""
-  staged: ""
-  tracked: ""
-  staged_modified: ""
+  untracked: "Änderungen nicht verfolgt"
+  staged: "vorgemerkt"
+  tracked: "Änderungen verfolgt"
+  staged_modified: "modifiziert und vorgemerkt"
   ignored: "ignoriert"
-  conflict: ""
+  conflict: "Konflikt"
 
 # Accessibility
 a11y:
@@ -484,7 +487,7 @@ recovery:
     start_fresh: ""
     restore_tooltip: ""
     start_fresh_tooltip: ""
-  untitled: ""
+  untitled: "Dokument ohne Namen"
 
 # Common buttons and actions
 common:
@@ -496,7 +499,7 @@ common:
 # Code blocks and widgets
 widgets:
   code_block:
-    copy_tooltip: ""
+    copy_tooltip: "In Zwischenablage kopieren"
     finish_tooltip: ""
     edit_tooltip: ""
   table:
@@ -505,17 +508,17 @@ widgets:
     align_left: "linksbündig"
     align_center: "zentriert"
     align_right: "rechtsbündig"
-    delete_column_label: ""
-    delete_column: ""
+    delete_column_label: "Spalte löschen:"
+    delete_column: "Spalte %{index} löschen"
     align_label: "Ausrichtung:"
     align_none: "Ohne Ausrichtung"
   link:
-    edit: ""
-    open: ""
+    edit: "Link bearbeiten"
+    open: "🔗 Öffnen"
     copy: "📋 Kopieren"
     text_label: "Text:"
     url_label: "URL:"
-    copy_tooltip: ""
+    copy_tooltip: "URL in Zwischenablage kopieren"
 
 # CSV Viewer
 csv:
@@ -538,12 +541,12 @@ pipeline:
   running: "Läuft..."
   truncated: "(gekürzt)"
   close_tooltip: ""
-  cancel_tooltip: ""
-  run_tooltip: ""
-  stdout: ""
-  stderr: ""
+  cancel_tooltip: "Ausführung beenden"
+  run_tooltip: "Befehl ausführen (Eingabetaste)"
+  stdout: "stdout"
+  stderr: "stderr"
   hint: ""
-  no_output_success: ""
+  no_output_success: "(Befehl hat keine Ausgabe erzeugt)"
 
 # Encoding
 
@@ -553,8 +556,8 @@ tab:
 
 # Mermaid diagrams
 mermaid:
-  badge: ""
-  empty: ""
+  badge: "Mermaid"
+  empty: "(leeres Diagramm)"
   rendering_error: ""
 
 # Table of Contents
@@ -563,11 +566,11 @@ mermaid:
 
 # Workspace
 workspace:
-  close_folder: ""
-  new_file: ""
+  close_folder: "Arbeitsordner schließen"
+  new_file: "Neue Datei"
   new_folder: ""
-  rename: ""
-  delete: ""
+  rename: "Umbenennen"
+  delete: "Löschen"
   refresh: ""
   recent_folders: ""
 
@@ -604,8 +607,8 @@ ribbon:
   pipeline: ""
   hide_info_panel: ""
   show_info_panel: ""
-  toggle_outline: ""
+  toggle_outline: "Übersicht ein/aus"
   copy_html_tooltip: ""
   export_pdf: ""
   coming_soon: ""
-  heading_level: ""
+  heading_level: "Überschrift %{level}"
