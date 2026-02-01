@@ -6,8 +6,13 @@
 **Focus:** Critical bug fixes, code signing, and stability improvements following the major editor rewrite.
 
 - [ ] **Code Signing** - Windows artifacts (exe, MSI) will be code signed via SignPath.io (pending approval).
-- [ ] **Japanese Crash Fix** - Fix critical crash affecting Japanese users.
-- [ ] **General Bug Fixes** - Addressing issues reported post-v0.2.6 release.
+- [ ] **CJK Font Crash on Startup** ([#63](https://github.com/OlaProeis/Ferrite/issues/63))  
+  Fix crash caused by invalid persisted CJK font configuration when a non-Auto CJK preference is selected but the corresponding system font cannot be loaded. Startup will defensively validate persisted font/CJK settings and fall back to *Auto* instead of crashing. Also resolves missing glyphs (tofu □) in settings UI.
+- [ ] **Portable Windows Startup Crash** ([#57](https://github.com/OlaProeis/Ferrite/issues/57))  
+  Validate persisted window position values on load. Corrupted values (NaN, infinity, or out-of-bounds) are reset so the OS selects a safe default. Portable ZIP now always includes the `portable/` folder with a placeholder file.
+- [ ] **Duplicate Keyboard Shortcut (Ctrl+B)** ([#46](https://github.com/OlaProeis/Ferrite/issues/46))  
+  Remove duplicate keybinding assignment so Ctrl+B is mapped to a single, consistent action.
+- [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6 release.
 
 ---
 
