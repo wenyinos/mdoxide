@@ -28,14 +28,14 @@ menu:
 
 # View mode labels
 view_mode:
-  raw_desc: ""
-  rendered_desc: ""
-  split_desc: ""
+  raw_desc: "プレーンなMarkdownテキスト編集"
+  rendered_desc: "WYSIWYG表示で編集"
+  split_desc: "ソース編集 + プレビューの分割表示"
 
 # Status bar
 status:
-  untitled: ""
-  no_file: ""
+  untitled: "Untitled"
+  no_file: "開いているファイルがありません"
 
 # File dialogs
 dialog:
@@ -137,7 +137,7 @@ settings:
     use_spaces: "インデントにスペースを使用"
     use_spaces_tooltip: "インデントにタブの代わりにスペースを使用します"
     max_line_width: "最大行幅"
-    custom_width: ""
+    custom_width: "カスタム - 幅をピクセル数で指定"
     code_folding: ""
     enable_folding: ""
     folding_tooltip: ""
