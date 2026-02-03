@@ -24,70 +24,24 @@ impl Default for Color {
 
 impl Color {
     /// Convert to egui color with theme awareness.
-    pub fn to_egui(&self, is_foreground: bool, is_dark_theme: bool) -> eframe::egui::Color32 {
+    pub fn to_egui(&self, is_foreground: bool, ansi_colors: &[eframe::egui::Color32; 16], default_fg: eframe::egui::Color32, default_bg: eframe::egui::Color32) -> eframe::egui::Color32 {
         match self {
             Color::Default => {
                 if is_foreground {
-                    if is_dark_theme {
-                        eframe::egui::Color32::from_rgb(220, 220, 220)
-                    } else {
-                        eframe::egui::Color32::from_rgb(30, 30, 30)
-                    }
+                    default_fg
                 } else {
                     eframe::egui::Color32::TRANSPARENT
                 }
             }
-            Color::Indexed(idx) => Self::indexed_to_rgb(*idx, is_dark_theme),
+            Color::Indexed(idx) => Self::indexed_to_rgb(*idx, ansi_colors),
             Color::Rgb(r, g, b) => eframe::egui::Color32::from_rgb(*r, *g, *b),
         }
     }
 
     /// Convert 256-color index to RGB.
-    fn indexed_to_rgb(idx: u8, is_dark_theme: bool) -> eframe::egui::Color32 {
-        // Standard 16 colors
-        let base_colors: [(u8, u8, u8); 16] = if is_dark_theme {
-            [
-                (0, 0, 0),       // 0: Black
-                (205, 49, 49),   // 1: Red
-                (13, 188, 121),  // 2: Green
-                (229, 229, 16),  // 3: Yellow
-                (36, 114, 200),  // 4: Blue
-                (188, 63, 188),  // 5: Magenta
-                (17, 168, 205),  // 6: Cyan
-                (229, 229, 229), // 7: White
-                (102, 102, 102), // 8: Bright Black
-                (241, 76, 76),   // 9: Bright Red
-                (35, 209, 139),  // 10: Bright Green
-                (245, 245, 67),  // 11: Bright Yellow
-                (59, 142, 234),  // 12: Bright Blue
-                (214, 112, 214), // 13: Bright Magenta
-                (41, 184, 219),  // 14: Bright Cyan
-                (255, 255, 255), // 15: Bright White
-            ]
-        } else {
-            [
-                (0, 0, 0),       // 0: Black
-                (194, 54, 33),   // 1: Red
-                (37, 188, 36),   // 2: Green
-                (173, 173, 39),  // 3: Yellow
-                (73, 46, 225),   // 4: Blue
-                (211, 56, 211),  // 5: Magenta
-                (51, 187, 200),  // 6: Cyan
-                (203, 204, 205), // 7: White
-                (129, 131, 131), // 8: Bright Black
-                (252, 57, 31),   // 9: Bright Red
-                (49, 231, 34),   // 10: Bright Green
-                (234, 236, 35),  // 11: Bright Yellow
-                (88, 51, 255),   // 12: Bright Blue
-                (249, 53, 248),  // 13: Bright Magenta
-                (20, 240, 240),  // 14: Bright Cyan
-                (233, 235, 235), // 15: Bright White
-            ]
-        };
-
+    fn indexed_to_rgb(idx: u8, ansi_colors: &[eframe::egui::Color32; 16]) -> eframe::egui::Color32 {
         if idx < 16 {
-            let (r, g, b) = base_colors[idx as usize];
-            return eframe::egui::Color32::from_rgb(r, g, b);
+            return ansi_colors[idx as usize];
         }
 
         // 216 color cube (16-231)
@@ -234,16 +188,18 @@ pub struct TerminalScreen {
     auto_wrap: bool,
     /// Pending wrap (cursor at end of line, next char wraps)
     pending_wrap: bool,
+    /// Text selection (start, end) as absolute coordinates ((col, row), (col, row))
+    selection: Option<((usize, usize), (usize, usize))>,
 }
 
 impl TerminalScreen {
-    /// Create a new terminal screen with the given dimensions.
-    pub fn new(cols: u16, rows: u16) -> Self {
+    /// Create a new terminal screen with the given dimensions and scrollback limit.
+    pub fn new(cols: u16, rows: u16, max_scrollback: usize) -> Self {
         let cells = vec![vec![Cell::default(); cols as usize]; rows as usize];
         Self {
             cells,
             scrollback: VecDeque::new(),
-            max_scrollback: 10000,
+            max_scrollback,
             cols,
             rows,
             cursor: CursorPosition::default(),
@@ -257,6 +213,7 @@ impl TerminalScreen {
             origin_mode: false,
             auto_wrap: true,
             pending_wrap: false,
+            selection: None,
         }
     }
 
@@ -694,6 +651,100 @@ impl TerminalScreen {
         self.scrollback.clear();
     }
 
+    /// Set the text selection.
+    pub fn set_selection(&mut self, start: (usize, usize), end: (usize, usize)) {
+        self.selection = Some((start, end));
+    }
+
+    /// Clear the text selection.
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
+    /// Get the text selection.
+    pub fn selection(&self) -> Option<((usize, usize), (usize, usize))> {
+        self.selection
+    }
+
+    /// Get the selected text.
+    pub fn get_selected_text(&self) -> Option<String> {
+        let (start, end) = self.selection?;
+        
+        // Normalize coordinates (start should be before end)
+        let (start, end) = if start.1 < end.1 || (start.1 == end.1 && start.0 <= end.0) {
+            (start, end)
+        } else {
+            (end, start)
+        };
+
+        let mut text = String::new();
+        let scrollback_len = self.scrollback_len();
+
+        for row_idx in start.1..=end.1 {
+            let row = if row_idx < scrollback_len {
+                self.scrollback.get(row_idx)
+            } else {
+                self.cells.get(row_idx - scrollback_len)
+            };
+
+            if let Some(row) = row {
+                let start_col = if row_idx == start.1 { start.0 } else { 0 };
+                let end_col = if row_idx == end.1 { end.0.min(row.len().saturating_sub(1)) } else { row.len().saturating_sub(1) };
+                
+                if start_col <= end_col && start_col < row.len() {
+                    for cell in &row[start_col..=end_col] {
+                        text.push(cell.character);
+                    }
+                }
+                
+                if row_idx < end.1 {
+                    text.push('\n');
+                }
+            }
+        }
+        
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+
+    /// Get the text content of a specific row.
+    pub fn get_row_text(&self, row: usize) -> String {
+        if row < self.cells.len() {
+            self.cells[row].iter().map(|c| c.character).collect::<String>().trim_end().to_string()
+        } else {
+            String::new()
+        }
+    }
+
+    /// Get the text content of the row where the cursor is.
+    pub fn get_cursor_line_text(&self) -> String {
+        self.get_row_text(self.cursor.row as usize)
+    }
+
+    /// Check if any visible row contains the given text (case-insensitive).
+    pub fn screen_contains(&self, needle: &str) -> bool {
+        let needle_lower = needle.to_lowercase();
+        for row in &self.cells {
+            let line: String = row.iter().map(|c| c.character).collect();
+            if line.to_lowercase().contains(&needle_lower) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Get all visible screen content as a single string.
+    pub fn get_visible_text(&self) -> String {
+        self.cells
+            .iter()
+            .map(|row| row.iter().map(|c| c.character).collect::<String>().trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// Reset the terminal to initial state.
     pub fn reset(&mut self) {
         self.cells = vec![vec![Cell::default(); self.cols as usize]; self.rows as usize];
@@ -708,5 +759,88 @@ impl TerminalScreen {
         self.origin_mode = false;
         self.auto_wrap = true;
         self.pending_wrap = false;
+        self.selection = None;
+    }
+
+    /// Export the terminal content as HTML.
+    pub fn export_html(&self, ansi_colors: &[eframe::egui::Color32; 16], default_fg: eframe::egui::Color32, default_bg: eframe::egui::Color32) -> String {
+        let mut html = String::from("<pre style=\"font-family: monospace; line-height: 1.2; background-color: ");
+        
+        let bg_hex = format!("#{:02x}{:02x}{:02x}", default_bg.r(), default_bg.g(), default_bg.b());
+        let fg_hex = format!("#{:02x}{:02x}{:02x}", default_fg.r(), default_fg.g(), default_fg.b());
+        
+        html.push_str(&bg_hex);
+        html.push_str("; color: ");
+        html.push_str(&fg_hex);
+        html.push_str("\">\n");
+
+        let process_line = |row: &Vec<Cell>, html: &mut String| {
+            let mut current_fg = Color::Default;
+            let mut current_bg = Color::Default;
+            let mut current_attrs = CellAttributes::default();
+            let mut span_open = false;
+
+            for cell in row {
+                let style_changed = cell.fg != current_fg || cell.bg != current_bg || cell.attrs != current_attrs;
+                
+                if style_changed {
+                    if span_open {
+                        html.push_str("</span>");
+                        span_open = false;
+                    }
+
+                    // Only open span if style is not default
+                    if cell.fg != Color::Default || cell.bg != Color::Default || cell.attrs != CellAttributes::default() {
+                        html.push_str("<span style=\"");
+                        
+                        // FG
+                        let fg = cell.fg.to_egui(true, ansi_colors, default_fg, default_bg);
+                        if fg != default_fg {
+                            html.push_str(&format!("color: #{:02x}{:02x}{:02x}; ", fg.r(), fg.g(), fg.b()));
+                        }
+
+                        // BG
+                        let bg = cell.bg.to_egui(false, ansi_colors, default_fg, default_bg);
+                        if bg != eframe::egui::Color32::TRANSPARENT && bg != default_bg {
+                            html.push_str(&format!("background-color: #{:02x}{:02x}{:02x}; ", bg.r(), bg.g(), bg.b()));
+                        }
+
+                        if cell.attrs.bold { html.push_str("font-weight: bold; "); }
+                        if cell.attrs.italic { html.push_str("font-style: italic; "); }
+                        if cell.attrs.underline { html.push_str("text-decoration: underline; "); }
+                        
+                        html.push_str("\">");
+                        span_open = true;
+                    }
+
+                    current_fg = cell.fg;
+                    current_bg = cell.bg;
+                    current_attrs = cell.attrs;
+                }
+
+                match cell.character {
+                    '<' => html.push_str("&lt;"),
+                    '>' => html.push_str("&gt;"),
+                    '&' => html.push_str("&amp;"),
+                    '"' => html.push_str("&quot;"),
+                    c => html.push(c),
+                }
+            }
+
+            if span_open {
+                html.push_str("</span>");
+            }
+            html.push('\n');
+        };
+
+        for row in &self.scrollback {
+            process_line(row, &mut html);
+        }
+        for row in &self.cells {
+            process_line(row, &mut html);
+        }
+
+        html.push_str("</pre>");
+        html
     }
 }

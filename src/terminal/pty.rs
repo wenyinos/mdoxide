@@ -8,6 +8,21 @@ use std::io::{Read, Write};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
+use serde::{Deserialize, Serialize};
+
+/// Shell type for terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShellType {
+    /// PowerShell (Windows)
+    PowerShell,
+    /// Command Prompt (Windows)
+    Cmd,
+    /// Windows Subsystem for Linux
+    Wsl,
+    /// Default system shell (Unix)
+    Default,
+}
+
 /// PTY wrapper for terminal communication.
 pub struct TerminalPty {
     /// Writer to send data to the PTY
@@ -20,11 +35,13 @@ pub struct TerminalPty {
     pty_pair: PtyPair,
     /// Whether the child process is still running
     child_running: bool,
+    /// Child process handle
+    child: Box<dyn portable_pty::Child + Send>,
 }
 
 impl TerminalPty {
-    /// Create a new PTY with the given size and optional working directory.
-    pub fn new(cols: u16, rows: u16, working_dir: Option<std::path::PathBuf>) -> Result<Self, String> {
+    /// Create a new PTY with the given size, shell type, and optional working directory.
+    pub fn new(cols: u16, rows: u16, shell_type: ShellType, working_dir: Option<std::path::PathBuf>) -> Result<Self, String> {
         // Get the native PTY system
         let pty_system = native_pty_system();
 
@@ -38,11 +55,11 @@ impl TerminalPty {
             })
             .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-        // Build the shell command based on platform
-        let cmd = Self::build_shell_command(working_dir);
+        // Build the shell command based on platform and type
+        let cmd = Self::build_shell_command(shell_type, working_dir);
 
         // Spawn the shell process
-        let _child = pair
+        let child = pair
             .slave
             .spawn_command(cmd)
             .map_err(|e| format!("Failed to spawn shell: {}", e))?;
@@ -100,20 +117,39 @@ impl TerminalPty {
             _stop_tx: stop_tx,
             pty_pair: pair,
             child_running: true,
+            child,
         })
     }
 
-    /// Build the shell command for the current platform.
-    fn build_shell_command(working_dir: Option<std::path::PathBuf>) -> CommandBuilder {
-        let mut cmd = if cfg!(windows) {
-            // On Windows, prefer PowerShell, fall back to cmd
-            let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+    /// Get the process ID of the child process.
+    pub fn pid(&self) -> u32 {
+        self.child.process_id().unwrap_or(0)
+    }
 
-            // Check if PowerShell is available
-            if std::path::Path::new("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").exists() {
-                CommandBuilder::new("powershell.exe")
-            } else {
-                CommandBuilder::new(shell)
+    /// Build the shell command for the specified shell type.
+    fn build_shell_command(shell_type: ShellType, working_dir: Option<std::path::PathBuf>) -> CommandBuilder {
+        let mut cmd = if cfg!(windows) {
+            match shell_type {
+                ShellType::PowerShell => {
+                    CommandBuilder::new("powershell.exe")
+                }
+                ShellType::Cmd => {
+                    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+                    CommandBuilder::new(shell)
+                }
+                ShellType::Wsl => {
+                    // Launch WSL with default distribution
+                    CommandBuilder::new("wsl.exe")
+                }
+                ShellType::Default => {
+                    // Default to PowerShell on Windows
+                    if std::path::Path::new("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").exists() {
+                        CommandBuilder::new("powershell.exe")
+                    } else {
+                        let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+                        CommandBuilder::new(shell)
+                    }
+                }
             }
         } else {
             // On Unix, use SHELL environment variable or fall back to /bin/sh
