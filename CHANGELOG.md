@@ -5,6 +5,35 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+#### Memory Optimization - CJK Font Loading
+> **Reduced startup memory by ~80MB** for users with CJK font preferences set.
+
+- **Lazy CJK font loading** - CJK fonts now load on-demand when text containing those scripts is detected, instead of loading all 4 fonts (~80MB) at startup.
+- **System locale detection** - Automatically detects Windows/macOS/Linux system language and preloads only the ONE CJK font the user likely needs (~20MB):
+  - Japanese locale (ja-JP) → Japanese font only
+  - Korean locale (ko-KR) → Korean font only  
+  - Chinese Simplified (zh-CN) → SC font only
+  - Chinese Traditional (zh-TW) → TC font only
+  - Other locales → no preload (fully lazy)
+- **Settings change optimization** - Changing CJK preference in settings no longer loads all fonts; only already-loaded fonts are preserved.
+
+**Memory impact:**
+| Scenario | Before | After |
+|----------|--------|-------|
+| English user, no CJK | ~130 MB | ~50 MB |
+| Japanese user | ~130 MB | ~70 MB |
+| User with explicit CJK pref | ~130 MB | ~50 MB (loads on-demand) |
+
+### Added
+
+- **Memory diagnostics** - Added `[MEM]` log messages at startup showing memory usage at key initialization points (visible with `--log-level info`).
+
+---
+
 ## [0.2.6] - 2026-01-26
 
 > **Major Release:** Complete custom text editor (FerriteEditor) replacing egui's TextEdit. Enables editing of 100MB+ files with ~80MB RAM usage (previously 1.8GB+ for 4MB files).

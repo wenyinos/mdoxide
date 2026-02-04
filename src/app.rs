@@ -290,6 +290,7 @@ impl FerriteApp {
         use crate::config::{create_lock_file, load_session_state, SessionSaveThrottle};
 
         info!("Initializing Ferrite");
+        crate::log_memory("App::new() start");
 
         // Create lock file to detect crashes on next startup
         create_lock_file();
@@ -297,6 +298,7 @@ impl FerriteApp {
         // Set up custom fonts with lazy CJK loading for faster startup
         // CJK fonts will be loaded on-demand when CJK text is detected
         fonts::setup_fonts_lazy(&cc.egui_ctx);
+        crate::log_memory("After fonts setup");
 
         // Set snappy/instant animations (default is ~83ms, we want instant)
         let mut style = (*cc.egui_ctx.style()).clone();
@@ -315,7 +317,9 @@ impl FerriteApp {
         let needs_recovery_dialog = recovery_result.is_crash_recovery 
             && recovery_result.session.as_ref().map(|s| s.has_unsaved_changes()).unwrap_or(false);
 
+        crate::log_memory("Before AppState::new()");
         let mut state = AppState::new();
+        crate::log_memory("After AppState::new()");
 
         // If we have a valid session to restore (but no crash with unsaved changes),
         // restore it silently - but only if restore_session is enabled in settings
@@ -323,6 +327,7 @@ impl FerriteApp {
             if state.restore_from_session_result(&recovery_result) {
                 info!("Session restored successfully");
             }
+            crate::log_memory("After session restore");
         }
 
         // Initialize theme manager with saved theme preference
@@ -332,17 +337,30 @@ impl FerriteApp {
         theme_manager.apply(&cc.egui_ctx);
         info!("Applied initial theme: {:?}", state.settings.theme);
 
-        // Reload fonts with saved settings if different from defaults
+        // Reload fonts only if a CUSTOM font is specified (not for CJK preference alone)
+        // CJK fonts are loaded lazily when CJK text is detected, not at startup.
+        // This saves ~60-80 MB of RAM by not preloading all 4 CJK font files.
         let custom_font = state.settings.font_family.custom_name().map(|s| s.to_string());
-        if custom_font.is_some() || state.settings.cjk_font_preference != CjkFontPreference::Auto {
+        if custom_font.is_some() {
             fonts::reload_fonts(
                 &cc.egui_ctx,
                 custom_font.as_deref(),
                 state.settings.cjk_font_preference,
             );
-            info!("Loaded custom font settings: font={:?}, cjk_preference={:?}",
-                  state.settings.font_family, state.settings.cjk_font_preference);
+            info!("Loaded custom font: {:?}", state.settings.font_family);
+        } else {
+            // No custom font - check if we should preload based on system locale
+            // This loads only ONE CJK font (~20MB) based on OS language setting
+            if fonts::preload_system_locale_cjk_font(&cc.egui_ctx, state.settings.cjk_font_preference) {
+                info!("Preloaded CJK font for system locale");
+            } else if state.settings.cjk_font_preference != CjkFontPreference::Auto {
+                // User has explicit preference but system locale didn't match
+                // Fonts will load lazily when CJK text is detected
+                info!("CJK font preference set to {:?} (fonts load on-demand)", 
+                      state.settings.cjk_font_preference);
+            }
         }
+        crate::log_memory("After font configuration");
 
         // Initialize outline panel with saved settings
         let outline_panel = OutlinePanel::new()
@@ -385,6 +403,16 @@ impl FerriteApp {
             info!("Loaded app logo texture for title bar");
         }
 
+        crate::log_memory("Before creating panels");
+        
+        // Create terminal panel components
+        let terminal_panel = TerminalPanel::new();
+        crate::log_memory("After TerminalPanel::new()");
+        let terminal_panel_state = TerminalPanelState::new();
+        crate::log_memory("After TerminalPanelState::new()");
+        let productivity_panel = ProductivityPanel::new();
+        crate::log_memory("After ProductivityPanel::new()");
+
         let mut app = Self {
             state,
             theme_manager,
@@ -417,9 +445,9 @@ impl FerriteApp {
             pending_recovery,
             pending_auto_save_recovery: None,
             snippet_manager,
-            terminal_panel: TerminalPanel::new(),
-            terminal_panel_state: TerminalPanelState::new(),
-            productivity_panel: ProductivityPanel::new(),
+            terminal_panel,
+            terminal_panel_state,
+            productivity_panel,
             #[cfg(debug_assertions)]
             frame_count: 0,
             #[cfg(debug_assertions)]
@@ -439,6 +467,7 @@ impl FerriteApp {
             app.restore_csv_delimiters(&session);
         }
 
+        crate::log_memory("App::new() complete");
         app
     }
 
