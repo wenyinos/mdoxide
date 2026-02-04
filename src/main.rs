@@ -42,9 +42,12 @@ mod platform;
 mod preview;
 mod state;
 mod string_utils;
+mod terminal;
 mod theme;
 mod ui;
 mod vcs;
+#[cfg(feature = "async-workers")]
+mod workers;
 mod workspaces;
 
 use app::FerriteApp;
@@ -96,6 +99,12 @@ fn parse_log_level(s: &str) -> Result<LogLevel, String> {
 const APP_NAME: &str = "Ferrite";
 
 fn main() -> eframe::Result<()> {
+    // Set up Ctrl+C handler to prevent the app from closing when running from console.
+    // We handle Ctrl+C internally in the integrated terminal.
+    let _ = ctrlc::set_handler(|| {
+        log::debug!("Ctrl+C received in console, ignoring to prevent app exit");
+    });
+
     // Initialize macOS app delegate FIRST, before anything else
     // This must happen very early to catch Apple Events for "Open With" functionality
     #[cfg(target_os = "macos")]

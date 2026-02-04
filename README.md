@@ -140,6 +140,15 @@ Native rendering of 11 diagram types directly in the preview:
 - **Git Integration** - Visual status indicators (modified, added, untracked, ignored) with auto-refresh on save, focus, and file changes
 - **Session Persistence** - Restore open tabs, cursor positions, and scroll offsets on restart
 
+### Terminal Workspace
+- **Integrated Terminal** - Multiple instances with shell selection (PowerShell, CMD, WSL, bash)
+- **Tiling & Splitting** - Create complex 2D grids with horizontal and vertical splits
+- **Smart Maximize** - Temporarily maximize any pane to focus on work (Ctrl+Shift+M)
+- **Layout Persistence** - Save and load your favorite terminal arrangements to JSON files
+- **Theming & Transparency** - Custom color schemes (Dracula, etc.) and background opacity
+- **Drag-and-Drop Tabs** - Reorder terminals with visual feedback
+- **AI-Ready** - Visual "breathing" indicator when terminal is waiting for input (perfect for AI agents)
+
 ### Additional Features
 - **Light & Dark Themes** - Beautiful themes with runtime switching
 - **Document Outline & Statistics** - Navigate with outline panel; tabbed statistics showing word count, reading time, heading/link/image counts
@@ -402,6 +411,22 @@ Toggle between modes using the toolbar buttons or keyboard shortcuts.
 | `Ctrl+,` | Open settings |
 | `Ctrl+Shift+[` | Fold all |
 | `Ctrl+Shift+]` | Unfold all |
+
+### Terminal Workspace
+
+Terminal shortcuts are **context-aware**; they work when the terminal panel is focused.
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle through terminal tabs |
+| `Ctrl+1-9` | Switch to specific terminal tab |
+| `Ctrl+Arrow Keys` | Move focus between split panes |
+| `Ctrl+Shift+M` | Toggle **Maximize Pane** (Zoom) |
+| `Ctrl+L` | Clear terminal screen |
+| `Ctrl+Shift+C` | Copy selection / screen |
+| `Ctrl+Shift+V` | Paste to terminal |
+| `Ctrl+W` / `Ctrl+F4` | Close focused pane (auto-collapses splits) |
+| `Double-click Tab` | Rename terminal |
 
 </details>
 

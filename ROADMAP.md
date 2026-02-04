@@ -1,6 +1,6 @@
 # Ferrite Roadmap
 
-## Next Up (Immediate Focus) 
+## Next Up (Immediate Focus)
 
 ### v0.2.6.1 (Planned) - Patch & Stability
 **Focus:** Critical bug fixes, code signing, and stability improvements following the major editor rewrite.
