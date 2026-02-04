@@ -4,23 +4,23 @@
 
 # Application metadata
 app:
-  name: ""
+  name: "Ferrite"
 
 # Menu bar items
 menu:
   file:
-    label: ""
-    open: ""
-    save: ""
-    save_as: ""
-    recent: ""
-    export: ""
-    export_html: ""
-    export_clipboard: ""
+    label: "Arquivo"
+    open: "Abrir..."
+    save: "Salvar"
+    save_as: "Salvar Como..."
+    recent: "Arquivos Recentes"
+    export: "Exportar"
+    export_html: "Exportar para HTML..."
+    export_clipboard: "Copiar como HTML"
   edit:
-    label: ""
+    label: "Editar"
   format:
-    label: ""
+    label: "Formatar"
   tools:
     label: ""
 
