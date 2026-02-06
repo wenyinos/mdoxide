@@ -134,6 +134,33 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Git Integration](./technical/files/git-integration.md) | Branch display in status bar, file tree Git status badges, git2 integration |
 | [Git Auto-Refresh](./technical/files/git-auto-refresh.md) | Automatic git status refresh on save, focus, and periodic intervals |
 
+### Terminal Emulator
+
+| Document | Description |
+|----------|-------------|
+| [Terminal Architecture](./technical/terminal/terminal-architecture.md) | Integrated terminal with PTY (portable-pty), VTE parsing, screen buffer, ANSI color support |
+| [Terminal UI](./technical/terminal/terminal-ui.md) | Terminal panel with tabs, split panes, floating windows, drag-and-drop, maximize pane |
+| [Terminal Themes](./technical/terminal/terminal-themes.md) | Terminal color schemes (Solarized, Dracula, Monokai, Nord, etc.) |
+| [Terminal Layout](./technical/terminal/terminal-layout.md) | Split pane layouts (horizontal/vertical), grid creation, layout save/load |
+
+*Note: Technical docs for terminal are planned. See PR [#74](https://github.com/OlaProeis/Ferrite/pull/74) for feature details.*
+
+### Productivity Hub
+
+| Document | Description |
+|----------|-------------|
+| [Productivity Panel](./technical/productivity/productivity-panel.md) | Task management, Pomodoro timer, quick notes with workspace-scoped persistence |
+
+*Note: Technical docs for productivity hub are planned. See PR [#74](https://github.com/OlaProeis/Ferrite/pull/74) for feature details.*
+
+### Async Workers
+
+| Document | Description |
+|----------|-------------|
+| [Worker Infrastructure](./technical/workers/worker-infrastructure.md) | Background tokio runtime, channel-based UI communication, worker pattern |
+
+*Note: Technical docs for workers are planned. Feature-gated behind `async-workers`.*
+
 ### Platform-Specific
 
 | Document | Description |
@@ -196,6 +223,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [egui Memory Cleanup](./technical/planning/egui-memory-cleanup.md) | Clean up rendered editor temp data in egui memory on tab close |
 | [Viewer State Cleanup](./technical/planning/viewer-state-cleanup.md) | Memory leak fix: cleanup viewer state HashMaps on tab close |
 | [Dead Code Cleanup](./technical/planning/dead-code-cleanup.md) | Task 39 cleanup summary, removed code, module changes |
+| **[app.rs Refactoring Plan](./technical/planning/app-rs-refactoring-plan.md)** | **Split 7,634-line app.rs into ~15 focused modules under src/app/** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
 
@@ -227,15 +255,19 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 ```
 ferrite/
 ├── src/
-│   ├── main.rs           # Entry point, eframe setup
+│   ├── main.rs           # Entry point, eframe setup, memory allocators
 │   ├── app.rs            # Main App struct, update loop, custom title bar
 │   ├── state.rs          # AppState, Tab, UiState, event handling
 │   ├── error.rs          # Error types and handling
-│   ├── fonts.rs          # Custom font loading and family selection
+│   ├── fonts.rs          # Custom font loading, lazy CJK, family selection
+│   ├── path_utils.rs     # Windows path normalization (\\?\ prefix stripping)
+│   ├── string_utils.rs   # String utility functions
 │   ├── config/           # Settings and persistence
 │   │   ├── mod.rs        # Module exports
-│   │   ├── settings.rs   # Settings struct, TabInfo, validation
-│   │   └── persistence.rs # Config file load/save
+│   │   ├── settings.rs   # Settings struct, TabInfo, shortcuts, validation
+│   │   ├── persistence.rs # Config file load/save
+│   │   ├── session.rs    # Session persistence, crash recovery, lock files
+│   │   └── snippets.rs   # Text expansion snippets (;date, ;time, custom)
 │   ├── editor/           # Text editor widgets
 │   │   ├── mod.rs        # Module exports
 │   │   ├── ferrite/      # FerriteEditor custom widget (modular)
@@ -246,12 +278,20 @@ ferrite/
 │   │   │   ├── history.rs # EditHistory - operation-based undo/redo
 │   │   │   ├── view.rs   # ViewState - viewport tracking
 │   │   │   ├── line_cache.rs # LineCache - galley caching
-│   │   │   ├── input/    # Input handling (keyboard, mouse)
-│   │   │   └── rendering/ # Rendering (gutter, text, cursor)
+│   │   │   ├── input/    # Input handling (keyboard, mouse wheel)
+│   │   │   ├── rendering/ # Rendering (gutter, text, cursor)
+│   │   │   ├── mouse.rs  # Mouse position → cursor conversion
+│   │   │   ├── selection.rs # Selection handling
+│   │   │   ├── search.rs # Search integration
+│   │   │   ├── find_replace.rs # Find/replace within editor
+│   │   │   └── highlights.rs # Highlight rendering
 │   │   ├── widget.rs     # EditorWidget with line numbers, search highlights
 │   │   ├── line_numbers.rs # Line counting utilities
 │   │   ├── stats.rs      # Text statistics (words, chars, lines)
 │   │   ├── find_replace.rs # Find/replace panel and search logic
+│   │   ├── folding.rs    # Code folding logic
+│   │   ├── matching.rs   # Bracket matching
+│   │   ├── minimap.rs    # Semantic minimap
 │   │   └── outline.rs    # Document outline extraction
 │   ├── files/            # File operations
 │   │   ├── mod.rs        # Module exports
@@ -265,7 +305,17 @@ ferrite/
 │   │   ├── ast_ops.rs    # AST operations and manipulation
 │   │   ├── formatting.rs # Markdown formatting commands
 │   │   ├── toc.rs        # Table of Contents generation
+│   │   ├── csv_viewer.rs # CSV/TSV table viewer
 │   │   └── tree_viewer.rs # JSON/YAML/TOML tree viewer widget
+│   ├── terminal/         # Integrated terminal emulator
+│   │   ├── mod.rs        # Terminal, TerminalManager, monitor detection
+│   │   ├── pty.rs        # Cross-platform PTY (portable-pty)
+│   │   ├── screen.rs     # Screen buffer, ANSI color cells
+│   │   ├── handler.rs    # VTE event handler (escape sequences)
+│   │   ├── widget.rs     # Terminal rendering widget
+│   │   ├── layout.rs     # Split pane layouts (H/V, grid)
+│   │   ├── theme.rs      # Terminal color schemes
+│   │   └── sound.rs      # Notification sounds
 │   ├── preview/          # Preview and sync scrolling
 │   │   ├── mod.rs        # Module exports
 │   │   └── sync_scroll.rs # Bidirectional scroll synchronization
@@ -290,13 +340,21 @@ ferrite/
 │   │   ├── quick_switcher.rs # Quick file switcher (Ctrl+P)
 │   │   ├── search.rs     # Search in files (Ctrl+Shift+F)
 │   │   ├── pipeline.rs   # Live Pipeline panel (JSON/YAML command piping)
+│   │   ├── terminal_panel.rs # Terminal panel (tabs, splits, floating windows)
+│   │   ├── productivity_panel.rs # Productivity hub (tasks, Pomodoro, notes)
 │   │   ├── dialogs.rs    # File operation dialogs
 │   │   ├── nav_buttons.rs # Document navigation buttons overlay
 │   │   ├── view_segment.rs # Title bar view mode segment, buttons
 │   │   └── window.rs     # Custom window resize for borderless windows
+│   ├── platform/         # Platform-specific code
+│   │   ├── mod.rs        # Module exports, Apple Event paths
+│   │   └── macos.rs      # macOS app delegate, Open With support
 │   ├── vcs/              # Version control integration
 │   │   ├── mod.rs        # Module exports
 │   │   └── git.rs        # GitService, status tracking (git2)
+│   ├── workers/          # Async worker infrastructure (feature-gated)
+│   │   ├── mod.rs        # WorkerHandle, WorkerCommand, WorkerResponse
+│   │   └── echo_worker.rs # Echo worker template (async-workers feature)
 │   └── workspaces/       # Workspace/folder management
 │       ├── mod.rs        # AppMode, Workspace, module exports
 │       ├── file_tree.rs  # FileTreeNode, directory scanning
@@ -334,10 +392,12 @@ ferrite/
 | Language | Rust | 1.70+ |
 | GUI | egui + eframe | 0.28 |
 | Markdown | comrak | 0.22 |
-| Syntax Highlighting | syntect | 5.1 |
+| Syntax Highlighting | syntect + two-face | 5.1, 0.5 |
+| Text Buffer | ropey | 1.6 |
 | Serialization | serde + serde_json | 1.x |
 | YAML Parsing | serde_yaml | 0.9 |
 | TOML Parsing | toml | 0.8 |
+| CSV Parsing | csv | 1.3 |
 | File Dialogs | rfd | 0.14 |
 | Platform Paths | dirs | 5 |
 | URL Opening | open | 5 |
@@ -346,12 +406,22 @@ ferrite/
 | Regex | regex | 1.x |
 | Clipboard | arboard | 3 |
 | File Watcher | notify | 6 |
+| Directory Walking | walkdir | 2 |
 | Fuzzy Matching | fuzzy-matcher | 0.3 |
 | Icon Loading | image | 0.25 |
+| Font Enumeration | font-kit | 0.14 |
 | Windows Icon | embed-resource | 2.4 |
 | Git Integration | git2 | 0.19 |
 | Hashing | blake3 | 1.5 |
 | Slugification | slug | 0.1 |
+| Date/Time | chrono | 0.4 |
+| Color Palette | palette | 0.7 |
+| Encoding | encoding_rs + chardetng | 0.8, 0.1 |
+| Internationalization | rust-i18n + sys-locale | 3, 0.3 |
+| Terminal PTY | portable-pty | 0.8 |
+| Terminal ANSI Parser | vte | 0.13 |
+| Memory Allocator (Win) | mimalloc | 0.1 |
+| Memory Allocator (Unix) | tikv-jemallocator | 0.6 |
 
 ---
 

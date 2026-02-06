@@ -312,7 +312,13 @@ pub fn parse_markdown_with_options(
 
     // Convert comrak AST to our own structure
     let mut front_matter = None;
-    let converted_root = convert_node(root, &mut front_matter)?;
+    let mut converted_root = convert_node(root, &mut front_matter)?;
+
+    // Merge consecutive blockquote siblings into a single blockquote node.
+    // This handles the case where the user separates blockquote paragraphs with
+    // blank lines, which comrak parses as separate BlockQuote nodes. Merging
+    // them produces a single continuous blockquote with a single border.
+    merge_consecutive_blockquotes(&mut converted_root);
 
     // FIX: Comrak returns line numbers as if frontmatter doesn't exist.
     // When frontmatter is present, we need to calculate the offset and adjust all line numbers.
@@ -328,6 +334,50 @@ pub fn parse_markdown_with_options(
         source: markdown.to_string(),
         front_matter,
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-Processing Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Merge consecutive `BlockQuote` siblings into a single blockquote node.
+///
+/// When the user writes blockquote paragraphs separated by blank lines:
+/// ```markdown
+/// > Line 1
+///
+/// > Line 2
+/// ```
+/// Comrak parses these as two separate `BlockQuote` nodes. This function
+/// merges them into a single continuous blockquote so the renderer draws
+/// one border instead of two.
+fn merge_consecutive_blockquotes(node: &mut MarkdownNode) {
+    // First, recursively process all children (depth-first)
+    for child in &mut node.children {
+        merge_consecutive_blockquotes(child);
+    }
+
+    // Then merge consecutive blockquote siblings at this level
+    if node.children.len() < 2 {
+        return;
+    }
+
+    let mut i = 0;
+    while i < node.children.len().saturating_sub(1) {
+        let is_current_bq = matches!(node.children[i].node_type, MarkdownNodeType::BlockQuote);
+        let is_next_bq = matches!(node.children[i + 1].node_type, MarkdownNodeType::BlockQuote);
+
+        if is_current_bq && is_next_bq {
+            // Merge: move children from the next blockquote into the current one
+            let next = node.children.remove(i + 1);
+            let current = &mut node.children[i];
+            current.end_line = next.end_line;
+            current.children.extend(next.children);
+            // Don't increment i — check if the following sibling is also a blockquote
+        } else {
+            i += 1;
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

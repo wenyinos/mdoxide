@@ -1498,11 +1498,27 @@ fn render_paragraph_with_structural_keys(
             ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if para_edit_state.editing {
-                // EDIT MODE: Add CJK indent (applies to all lines - egui TextEdit limitation)
-                if cjk_indent > 0.0 {
-                    ui.add_space(cjk_indent);
-                }
-                // Show TextEdit with raw markdown
+                // EDIT MODE: Custom layouter for CJK first-line indent.
+                // LayoutJob::append() leading_space adds space before the first character
+                // only; wrapped lines start flush left — true first-line indent in TextEdit.
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent; // 0.0 when Off — no-op
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -1510,7 +1526,8 @@ fn render_paragraph_with_structural_keys(
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
-                    .desired_rows(1);
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
                 // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
@@ -1662,19 +1679,39 @@ fn render_paragraph_with_structural_keys(
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
         ui.horizontal(|ui| {
-            // Base indent + list indent + CJK paragraph indent
-            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+            ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
-                let response = ui.add(
-                    TextEdit::multiline(&mut editable.text)
-                        .font(FontId::new(font_size, font_family.clone()))
-                        .text_color(colors.text)
-                        .frame(false)
-                        .margin(egui::vec2(0.0, 0.0))
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(1),
-                );
+                // Custom layouter for CJK first-line indent via LayoutJob leading_space.
+                // When cjk_indent is 0.0 the leading_space is a no-op.
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut editable.text)
+                    .font(FontId::new(font_size, font_family.clone()))
+                    .text_color(colors.text)
+                    .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
+
+                let response = ui.add(text_edit);
 
                 // Note: Structural key handling disabled for now
                 let _ = structural_state;
@@ -1703,16 +1740,15 @@ fn render_blockquote_with_structural_keys(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
     
-    ui.horizontal(|ui| {
-        // Base indent first
-        ui.add_space(BASE_INDENT);
-        
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, colors.quote_border);
-
-        ui.add_space(8.0);
+    // Render content first, then paint the border using the actual measured height.
+    // Previously, the border was allocated with ui.available_height() before content
+    // was laid out, which could produce an incorrectly-sized border.
+    let group_response = ui.horizontal(|ui| {
+        // Reserve space for indent + border + gap, content follows
+        ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
         ui.vertical(|ui| {
             for child in &node.children {
@@ -1733,6 +1769,14 @@ fn render_blockquote_with_structural_keys(
             }
         });
     });
+
+    // Paint the quote border using the actual rendered content height
+    let rect = group_response.response.rect;
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
 }
 
 /// Render a list with structural key support for items.
@@ -2231,12 +2275,30 @@ fn render_paragraph(
         let widget_id = formatted_para_id.with("text_edit");
 
         if para_edit_state.editing {
-            // EDIT MODE: Use horizontal layout with TextEdit
+            // EDIT MODE: Custom layouter for CJK first-line indent.
+            // LayoutJob::append() leading_space adds space before the first character
+            // only; wrapped lines start flush left — true first-line indent in TextEdit.
             ui.horizontal(|ui| {
-                // Base indent + list indent + CJK indent (all lines - egui limitation)
-                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+                ui.add_space(4.0 + indent_level as f32 * 20.0);
 
-                // Show TextEdit with raw markdown
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent; // 0.0 when Off — no-op
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -2244,7 +2306,8 @@ fn render_paragraph(
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
-                    .desired_rows(1);
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
                 // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
@@ -2411,17 +2474,37 @@ fn render_paragraph(
 
         let (has_focus, selection, changed, new_text) = ui
             .horizontal(|ui| {
-                // Add base left indent + list indent + CJK paragraph indent
-                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+                ui.add_space(4.0 + indent_level as f32 * 20.0);
 
                 if let Some(editable) = edit_state.get_node_mut(node_id) {
+                    // Custom layouter for CJK first-line indent via LayoutJob leading_space.
+                    // When cjk_indent is 0.0 the leading_space is a no-op.
+                    let font_family_clone = font_family.clone();
+                    let text_color = colors.text;
+                    let cjk_leading = cjk_indent;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                cjk_leading,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_clone.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
                     let text_edit = TextEdit::multiline(&mut editable.text)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .margin(egui::vec2(0.0, 0.0))
                         .desired_width(f32::INFINITY)
-                        .desired_rows(1);
+                        .desired_rows(1)
+                        .layouter(&mut layouter);
 
                     let output = text_edit.show(ui);
 
@@ -3056,20 +3139,18 @@ fn render_blockquote(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
     
     // Create a stable ID for this blockquote's scroll area
     let blockquote_id = egui::Id::new(("blockquote", node.start_line));
     
-    ui.horizontal(|ui| {
-        // Base indent first
-        ui.add_space(BASE_INDENT);
-        
-        // Quote border
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, colors.quote_border);
-
-        ui.add_space(8.0);
+    // Render content first, then paint the border using the actual measured height.
+    // Previously, the border was allocated with ui.available_height() before content
+    // was laid out, which could produce an incorrectly-sized border.
+    let group_response = ui.horizontal(|ui| {
+        // Reserve space for indent + border + gap, content follows
+        ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
         // Wrap blockquote content in horizontal scroll area to prevent width overflow.
         // This ensures long content scrolls horizontally instead of expanding
@@ -3096,6 +3177,14 @@ fn render_blockquote(
                 });
             });
     });
+
+    // Paint the quote border using the actual rendered content height
+    let rect = group_response.response.rect;
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
 }
 
 /// Render a list (ordered or unordered).

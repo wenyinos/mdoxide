@@ -417,6 +417,8 @@ pub enum ShortcutCommand {
     ToggleOutline,
     ToggleFileTree,
     TogglePipeline,
+    ToggleTerminal,
+    ToggleProductivityHub,
     // Edit
     Undo,
     Redo,
@@ -468,7 +470,7 @@ impl ShortcutCommand {
             // Navigation
             NextTab, PrevTab, GoToLine, QuickOpen,
             // View
-            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline,
+            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal, ToggleProductivityHub,
             // Edit
             Undo, Redo, DeleteLine, DuplicateLine, MoveLineUp, MoveLineDown, SelectNextOccurrence,
             // Search
@@ -507,6 +509,8 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleOutline => "Toggle Outline",
             ShortcutCommand::ToggleFileTree => "Toggle File Tree",
             ShortcutCommand::TogglePipeline => "Toggle Pipeline",
+            ShortcutCommand::ToggleTerminal => "Toggle Terminal",
+            ShortcutCommand::ToggleProductivityHub => "Toggle Productivity Hub",
             // Edit
             ShortcutCommand::Undo => "Undo",
             ShortcutCommand::Redo => "Redo",
@@ -559,8 +563,9 @@ impl ShortcutCommand {
             | ShortcutCommand::QuickOpen => "Navigation",
 
             ShortcutCommand::ToggleViewMode | ShortcutCommand::CycleTheme | ShortcutCommand::ToggleZenMode
-            | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree 
-            | ShortcutCommand::TogglePipeline => "View",
+            | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree
+            | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal
+            | ShortcutCommand::ToggleProductivityHub => "View",
 
             ShortcutCommand::Undo | ShortcutCommand::Redo | ShortcutCommand::DeleteLine
             | ShortcutCommand::DuplicateLine | ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown
@@ -607,6 +612,8 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleOutline => KeyBinding::new(M::ctrl_shift(), O),
             ShortcutCommand::ToggleFileTree => KeyBinding::new(M::ctrl_shift(), E),
             ShortcutCommand::TogglePipeline => KeyBinding::new(M::ctrl_shift(), L),
+            ShortcutCommand::ToggleTerminal => KeyBinding::new(M::ctrl(), Backtick),
+            ShortcutCommand::ToggleProductivityHub => KeyBinding::new(M::ctrl_shift(), H),
             // Edit
             ShortcutCommand::Undo => KeyBinding::new(M::ctrl(), Z),
             ShortcutCommand::Redo => KeyBinding::new(M::ctrl(), Y),
@@ -624,7 +631,7 @@ impl ShortcutCommand {
             // Formatting
             ShortcutCommand::FormatBold => KeyBinding::new(M::ctrl(), B),
             ShortcutCommand::FormatItalic => KeyBinding::new(M::ctrl(), I),
-            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl(), Backtick),
+            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl_shift(), Backtick),
             ShortcutCommand::FormatCodeBlock => KeyBinding::new(M::ctrl_shift(), C),
             ShortcutCommand::FormatLink => KeyBinding::new(M::ctrl(), K),
             ShortcutCommand::FormatImage => KeyBinding::new(M::ctrl_shift(), K),
@@ -644,7 +651,7 @@ impl ShortcutCommand {
             // Other
             ShortcutCommand::OpenSettings => KeyBinding::new(M::ctrl(), Comma),
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
-            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), E),
+            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
             ShortcutCommand::InsertToc => KeyBinding::new(M::ctrl_shift(), U),
         }
     }
@@ -1489,6 +1496,11 @@ impl Default for TabInfo {
 // Main Settings Struct
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Helper function for serde default that returns true
+fn default_true() -> bool {
+    true
+}
+
 /// User preferences and application settings.
 ///
 /// This struct is serialized to JSON and persisted to the user's config directory.
@@ -1772,6 +1784,86 @@ pub struct Settings {
     /// Only stores non-default bindings; defaults are used for unset commands.
     /// Reference: GitHub Issue #25
     pub keyboard_shortcuts: KeyboardShortcuts,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Terminal Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether the integrated terminal feature is enabled
+    pub terminal_enabled: bool,
+
+    /// Default height of the terminal panel in pixels
+    pub terminal_panel_height: f32,
+
+    /// Terminal font size in pixels
+    pub terminal_font_size: f32,
+
+    /// Maximum scrollback lines for the terminal
+    pub terminal_scrollback_lines: usize,
+
+    /// Whether to automatically copy text to clipboard on selection
+    pub terminal_copy_on_select: bool,
+
+    /// Name of the terminal color theme
+    pub terminal_theme_name: String,
+
+    /// Terminal background opacity (0.0 to 1.0)
+    pub terminal_opacity: f32,
+
+    /// Command to run automatically when a new terminal is created
+    pub terminal_startup_command: String,
+
+    /// Custom regex patterns for prompt detection
+    pub terminal_prompt_patterns: Vec<String>,
+
+    /// Color for the breathing animation when waiting for input
+    pub terminal_breathing_color: egui::Color32,
+
+    /// Whether to automatically load terminal layout from project root
+    pub terminal_auto_load_layout: bool,
+
+    /// Whether to automatically save terminal layout to project root on close/switch
+    #[serde(default = "default_true")]
+    pub terminal_auto_save_layout: bool,
+
+    /// Saved terminal macros
+    pub terminal_macros: std::collections::HashMap<String, String>,
+
+    /// Whether to play a sound when terminal prompt is detected (waiting for input)
+    #[serde(default)]
+    pub terminal_sound_enabled: bool,
+
+    /// Optional custom sound file path (None = system beep)
+    #[serde(default)]
+    pub terminal_sound_file: Option<String>,
+
+    /// Whether to automatically focus a terminal when it starts waiting for input
+    /// (transitions from running to prompt). Only triggers once per run cycle.
+    #[serde(default)]
+    pub terminal_focus_on_detect: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Panel Visibility (Future Features)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Whether the AI assistant panel is visible
+    #[serde(default)]
+    pub ai_panel_visible: bool,
+
+    /// Whether the database tools panel is visible
+    #[serde(default)]
+    pub database_panel_visible: bool,
+
+    /// Whether the SSH sessions panel is visible
+    #[serde(default)]
+    pub ssh_panel_visible: bool,
+
+    /// Whether the productivity hub (tasks/pomodoro/notes) panel is visible
+    #[serde(default)]
+    pub productivity_panel_visible: bool,
+
+    /// Whether the productivity hub is docked in the outline panel (true) or floating (false)
+    #[serde(default = "default_true")]
+    pub productivity_panel_docked: bool,
 }
 
 impl Default for Settings {
@@ -1878,6 +1970,37 @@ impl Default for Settings {
 
             // Keyboard Shortcuts Settings
             keyboard_shortcuts: KeyboardShortcuts::default(),
+
+            // Terminal Settings
+            terminal_enabled: true,           // Terminal feature enabled by default
+            terminal_panel_height: 300.0,     // Default panel height
+            terminal_font_size: 14.0,         // Default terminal font size
+            terminal_scrollback_lines: 10000, // Default scrollback buffer size
+            terminal_copy_on_select: false,   // Manual copy by default
+            terminal_theme_name: String::from("Ferrite Dark"), // Default theme
+            terminal_opacity: 1.0, // Opaque by default
+            terminal_startup_command: String::new(),
+            terminal_prompt_patterns: vec![
+                r"^>\s*$".to_string(),
+                r"^\$\s*$".to_string(),
+                r"^#\s*$".to_string(),
+                r"^>>>\s*$".to_string(),
+                r"PS.*>\s*$".to_string(),
+            ],
+            terminal_breathing_color: egui::Color32::from_rgb(100, 149, 237),
+            terminal_auto_load_layout: true,
+            terminal_auto_save_layout: true,
+            terminal_macros: std::collections::HashMap::new(),
+            terminal_sound_enabled: false, // Sound notification disabled by default
+            terminal_sound_file: None,     // Use system beep by default
+            terminal_focus_on_detect: false, // Auto-focus on prompt disabled by default
+
+            // Panel Visibility
+            ai_panel_visible: false,
+            database_panel_visible: false,
+            ssh_panel_visible: false,
+            productivity_panel_visible: false,
+            productivity_panel_docked: true,
         }
     }
 }
@@ -3445,20 +3568,59 @@ mod tests {
     #[test]
     fn test_commands_by_category() {
         let categories = KeyboardShortcuts::commands_by_category();
-        
+
         // Should have multiple categories
         assert!(!categories.is_empty());
-        
+
         // Each category should have at least one command
         for (name, commands) in &categories {
             assert!(!name.is_empty());
             assert!(!commands.is_empty());
         }
-        
+
         // Find "File" category
         let file_cat = categories.iter().find(|(name, _)| *name == "File");
         assert!(file_cat.is_some());
         let (_, file_commands) = file_cat.unwrap();
         assert!(file_commands.contains(&ShortcutCommand::Save));
+    }
+
+    #[test]
+    fn test_panel_visibility_defaults() {
+        let settings = Settings::default();
+        assert_eq!(settings.ai_panel_visible, false);
+        assert_eq!(settings.database_panel_visible, false);
+        assert_eq!(settings.ssh_panel_visible, false);
+        assert_eq!(settings.productivity_panel_visible, false);
+        assert_eq!(settings.productivity_panel_docked, true);
+    }
+
+    #[test]
+    fn test_settings_migration_old_config() {
+        // Simulate old config without panel visibility fields
+        let old_config = r#"{
+            "theme": "dark",
+            "font_size": 14.0
+        }"#;
+
+        let settings: Settings = serde_json::from_str(old_config).unwrap();
+        // New fields should default to false
+        assert_eq!(settings.ai_panel_visible, false);
+    }
+
+    #[test]
+    fn test_settings_roundtrip() {
+        let mut settings = Settings::default();
+        settings.ai_panel_visible = true;
+        settings.database_panel_visible = true;
+
+        // Serialize
+        let json = serde_json::to_string(&settings).unwrap();
+
+        // Deserialize
+        let loaded: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.ai_panel_visible, true);
+        assert_eq!(loaded.database_panel_visible, true);
+        assert_eq!(loaded.ssh_panel_visible, false);
     }
 }

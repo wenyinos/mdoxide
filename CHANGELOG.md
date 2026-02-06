@@ -5,6 +5,84 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+---
+
+## [0.2.6.1] - 2026-02-06
+
+> **Patch release:** First code-signed release. Integrated terminal workspace, productivity hub, major app.rs refactoring into ~15 modules, and numerous bug fixes.
+
+### Added
+
+#### Integrated Terminal Workspace 🎉
+- **Multiple terminal instances** - Create and manage multiple terminal sessions with tabs and shell selection (PowerShell, CMD, WSL, bash)
+- **Tiling & splitting** - Create complex 2D grids with horizontal and vertical splits
+- **Smart maximize** - Temporarily maximize any pane to focus on work (Ctrl+Shift+M)
+- **Layout persistence** - Save and load your favorite terminal arrangements to JSON files
+- **Theming & transparency** - Custom color schemes (Dracula, etc.) and background opacity
+- **Drag-and-drop tabs** - Reorder terminals with visual feedback
+- **AI-ready indicator** - Visual "breathing" animation when terminal is waiting for input (perfect for AI agents)
+
+#### Productivity Hub
+- **Productivity panel** - Quick-access panel for common editing, navigation, and workflow tasks
+
+#### Editor Improvements
+- **Tab drag reorder** - Tabs can now be reordered by dragging with visual drop target indicator and `swap_tabs()` state method
+- **File watcher auto-reload** - Externally modified files are now automatically reloaded when the tab has no unsaved changes; shows toast notification. If tab has unsaved changes, shows a warning instead
+- **Undo after text formatting** - Bold, italic, and other formatting operations now create discrete undo entries via `break_group()` calls; Ctrl+Z reliably reverses only the format
+- **Multiline blockquote rendering** - Consecutive blockquotes separated by blank lines are now merged into a single continuous block with one border
+- **CJK first-line paragraph indentation** ([#20](https://github.com/OlaProeis/Ferrite/issues/20), [#26](https://github.com/OlaProeis/Ferrite/issues/26)) - Fixed first-line-only indentation for Chinese (2em) and Japanese (1em) paragraphs in rendered mode using egui `LayoutJob` with `leading_space`
+
+#### Security
+- **Code signing** - Windows artifacts (exe, MSI, portable zip) are now digitally signed via [SignPath.io](https://signpath.io/) with a production certificate from [SignPath Foundation](https://signpath.org). No more "Unknown publisher" warnings from Windows SmartScreen.
+
+#### Memory Optimization
+- **Memory diagnostics** - Added `[MEM]` log messages at startup showing memory usage at key initialization points (visible with `--log-level info`)
+
+### Changed
+
+#### App.rs Refactoring
+> **Major restructure:** Split the monolithic 7,600+ line `app.rs` into ~15 focused modules under `src/app/`.
+
+- New modules: `mod.rs`, `title_bar.rs`, `central_panel.rs`, `keyboard.rs`, `input_handling.rs`, `line_ops.rs`, `file_ops.rs`, `formatting.rs`, `navigation.rs`, `find_replace.rs`, `export.rs`, `dialogs.rs`, `status_bar.rs`, `helpers.rs`, `types.rs`
+- See [refactoring plan](docs/technical/planning/app-rs-refactoring-plan.md)
+
+### Fixed
+
+#### Bug Fixes
+- **Duplicate Line (Ctrl+Shift+D) wrong position** - Rewrote `handle_duplicate_line()` to use `cursor_position` (line, col) synced from FerriteEditor instead of stale `tab.cursors` char index
+- **Keyboard shortcut conflict: Ctrl+Shift+E** ([#46](https://github.com/OlaProeis/Ferrite/issues/46)) - `ToggleFileTree` and `ExportHtml` were both bound to `Ctrl+Shift+E`. Changed `ExportHtml` to `Ctrl+Shift+X`
+- **Maximize/restore button icon** - Button icon disappeared on hover because text was painted under the hover background. Rewrote to use custom painter drawing
+- **Drag-drop image inserts at wrong position** - Image markdown link was inserted at stale `tab.cursors` position instead of actual editor cursor. Now uses `cursor_position` (line, col)
+- **Smart paste not working** - Selection state was read from stale `tab.cursors` instead of FerriteEditor. Now queries FerriteEditor directly via `get_ferrite_editor_mut()`
+- **Auto-save toggle inconsistency** - Title bar toggle directly flipped `auto_save_enabled` field instead of calling `toggle_auto_save()` which also clears `last_edit_time`
+- **Rendered mode raw editor stuttering** - Switching from Rendered to Raw mode caused full FerriteEditor recreation, losing viewport/syntax state. Added `set_content()` method for in-place buffer replacement
+- **Keyboard shortcut conflict: Ctrl+Backtick** - `FormatInlineCode` and `ToggleTerminal` both bound to same key. Changed `FormatInlineCode` to `Ctrl+Shift+Backtick`
+- **CJK font crash on startup** ([#63](https://github.com/OlaProeis/Ferrite/issues/63)) - Fixed crash when a non-Auto CJK preference is persisted but the font cannot be loaded. Fonts now return `None` gracefully. Minor: tofu (□) may appear in settings labels when no CJK documents are open (fonts load lazily)
+- **Portable Windows startup crash** ([#57](https://github.com/OlaProeis/Ferrite/issues/57)) - Validate persisted window position values on load. Corrupted values (NaN, infinity, out-of-bounds) are reset so the OS selects a safe default. Portable ZIP now always includes the `portable/` folder
+
+#### Memory Optimization - CJK Font Loading
+> **Reduced startup memory by ~80MB** for users with CJK font preferences set.
+
+- **Lazy CJK font loading** - CJK fonts now load on-demand when text containing those scripts is detected, instead of loading all 4 fonts (~80MB) at startup
+- **System locale detection** - Automatically detects system language and preloads only the ONE CJK font the user likely needs (~20MB):
+  - Japanese locale (ja-JP) → Japanese font only
+  - Korean locale (ko-KR) → Korean font only
+  - Chinese Simplified (zh-CN) → SC font only
+  - Chinese Traditional (zh-TW) → TC font only
+  - Other locales → no preload (fully lazy)
+- **Settings change optimization** - Changing CJK preference in settings no longer loads all fonts; only already-loaded fonts are preserved
+
+**Memory impact:**
+| Scenario | Before | After |
+|----------|--------|-------|
+| English user, no CJK | ~130 MB | ~50 MB |
+| Japanese user | ~130 MB | ~70 MB |
+| User with explicit CJK pref | ~130 MB | ~50 MB (loads on-demand) |
+
+---
+
 ## [0.2.6] - 2026-01-26
 
 > **Major Release:** Complete custom text editor (FerriteEditor) replacing egui's TextEdit. Enables editing of 100MB+ files with ~80MB RAM usage (previously 1.8GB+ for 4MB files).
@@ -551,6 +629,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
+- **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix
 - **0.2.5.2** - Delete Line shortcut, Move Line Up/Down, macOS file associations, Windows portable build, MSI installer, Linux RPM package, Linux window drag fix, I18n cleanup, new language support
@@ -562,6 +641,7 @@ Complete ground-up reimplementation of the text editor:
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
+[0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6-hotfix.1
 [0.2.6]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.3...v0.2.6
 [0.2.5.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.2...v0.2.5-hotfix.3
 [0.2.5.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.1...v0.2.5-hotfix.2

@@ -106,6 +106,14 @@ pub enum RibbonAction {
     // Ribbon control
     /// Toggle ribbon collapsed state
     ToggleCollapse,
+
+    // Terminal
+    /// Toggle terminal panel visibility
+    ToggleTerminal,
+
+    // Productivity
+    /// Toggle productivity hub visibility
+    ToggleProductivity,
 }
 
 /// Ribbon UI state and rendering.
@@ -636,6 +644,42 @@ impl Ribbon {
                                 .on_hover_text(t!("ribbon.coming_soon").to_string());
                         });
                     });
+            }
+
+            ui.add_space(4.0);
+            vertical_separator(ui, separator_color, self.height() - 8.0);
+            ui.add_space(4.0);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // Terminal Button
+            // ═══════════════════════════════════════════════════════════════════
+            if icon_button(
+                ui,
+                ">_",
+                &format!("Toggle Terminal ({}+`)", modifier_symbol()),
+                true,
+                is_dark,
+            )
+            .clicked()
+            {
+                action = Some(RibbonAction::ToggleTerminal);
+            }
+
+            ui.add_space(2.0);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // Productivity Hub Button
+            // ═══════════════════════════════════════════════════════════════════
+            if icon_button(
+                ui,
+                "📋",
+                &format!("Toggle Productivity Hub ({}+Shift+H)", modifier_symbol()),
+                true,
+                is_dark,
+            )
+            .clicked()
+            {
+                action = Some(RibbonAction::ToggleProductivity);
             }
 
             // Note: Settings Group removed - controls moved to title bar and Settings panel
