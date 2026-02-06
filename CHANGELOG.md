@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Integrated Terminal Workspace 🎉
+> Contributed by [@wolverin0](https://github.com/wolverin0) in [PR #74](https://github.com/OlaProeis/Ferrite/pull/74) — first major community contribution!
+
 - **Multiple terminal instances** - Create and manage multiple terminal sessions with tabs and shell selection (PowerShell, CMD, WSL, bash)
 - **Tiling & splitting** - Create complex 2D grids with horizontal and vertical splits
 - **Smart maximize** - Temporarily maximize any pane to focus on work (Ctrl+Shift+M)
@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI-ready indicator** - Visual "breathing" animation when terminal is waiting for input (perfect for AI agents)
 
 #### Productivity Hub
+> Also contributed by [@wolverin0](https://github.com/wolverin0) in [PR #74](https://github.com/OlaProeis/Ferrite/pull/74)
+
 - **Productivity panel** - Quick-access panel for common editing, navigation, and workflow tasks
 
 #### Editor Improvements

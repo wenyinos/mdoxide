@@ -239,6 +239,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Recently Completed ✅
 
+### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
+**First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.
+
 ### v0.2.6 (Released Jan 2026) - Custom Text Editor
 **The critical rewrite.** Replaced the default egui editor with a custom-built virtual scrolling editor engine.
 

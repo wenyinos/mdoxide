@@ -541,6 +541,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Cursor](https://cursor.com) - AI-powered code editor
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) - AI task management for development workflows
 
+### Contributors
+- [@wolverin0](https://github.com/wolverin0) — Integrated Terminal Workspace & Productivity Hub ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) 🎉
+- [@abcd-ca](https://github.com/abcd-ca) — Delete Line, Move Line, macOS file associations ([PR #29](https://github.com/OlaProeis/Ferrite/pull/29), [#30](https://github.com/OlaProeis/Ferrite/pull/30))
+- [@SteelCrab](https://github.com/SteelCrab) — CJK character rendering ([PR #8](https://github.com/OlaProeis/Ferrite/pull/8))
+
 </details>
 
 ## Sponsors
