@@ -1904,21 +1904,23 @@ mod tests {
 
     #[test]
     fn test_cjk_load_spec_han_only_uses_preference() {
-        // Han only with Korean preference
+        // Han-only always loads a Chinese font for Han character coverage,
+        // since Korean/Japanese fonts don't contain all Han characters.
+        // The preference determines WHICH Chinese variant to load.
         let detection = CjkScriptDetection {
             has_korean: false,
             has_japanese: false,
             has_han: true,
             has_any_cjk: true,
         };
-        let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Korean);
-        assert!(spec.load_korean);
-        assert!(!spec.load_japanese);
 
-        // Han only with Japanese preference
+        // Han only with Korean preference → loads Chinese SC for Han coverage
+        let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Korean);
+        assert!(spec.load_chinese_sc, "Korean pref + Han should load Chinese SC for Han coverage");
+
+        // Han only with Japanese preference → loads Chinese SC for Han coverage
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Japanese);
-        assert!(spec.load_japanese);
-        assert!(!spec.load_korean);
+        assert!(spec.load_chinese_sc, "Japanese pref + Han should load Chinese SC for Han coverage");
 
         // Han only with Simplified Chinese preference
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::SimplifiedChinese);

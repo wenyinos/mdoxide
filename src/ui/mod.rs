@@ -23,7 +23,7 @@ pub use dialogs::{FileOperationDialog, FileOperationResult, GoToLineDialog, GoTo
 pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::{get_app_icon, load_app_logo_texture};
 pub use nav_buttons::{render_nav_buttons, NavAction};
-pub use outline_panel::OutlinePanel;
+pub use outline_panel::{OutlinePanel, OutlinePanelTab};
 pub use pipeline::{PipelinePanel, TabPipelineState};
 pub use productivity_panel::{AutoSave, PomodoroTimer, ProductivityPanel, Task};
 pub use quick_switcher::QuickSwitcher;

@@ -1900,6 +1900,16 @@ impl Tab {
         self.redo_stack.len()
     }
 
+    /// Break the current undo group, ensuring the next edit starts a new undo entry.
+    ///
+    /// This resets the time-based grouping so that the next `record_edit()` call
+    /// will always create a separate undo entry instead of merging with the previous one.
+    /// Used after formatting operations and other discrete actions that should be
+    /// independently undoable.
+    pub fn break_undo_group(&mut self) {
+        self.last_undo_time = None;
+    }
+
     /// Get the content version counter.
     ///
     /// This counter is incremented whenever content is modified externally
@@ -2838,6 +2848,23 @@ impl AppState {
     /// Find a tab by file path.
     pub fn find_tab_by_path(&self, path: &PathBuf) -> Option<usize> {
         self.tabs.iter().position(|t| t.path.as_ref() == Some(path))
+    }
+
+    /// Swap two tabs by their indices, updating the active tab index if needed.
+    ///
+    /// Returns `true` if the swap was performed.
+    pub fn swap_tabs(&mut self, a: usize, b: usize) -> bool {
+        if a == b || a >= self.tabs.len() || b >= self.tabs.len() {
+            return false;
+        }
+        self.tabs.swap(a, b);
+        // Update active tab index to follow the moved tab
+        if self.active_tab_index == a {
+            self.active_tab_index = b;
+        } else if self.active_tab_index == b {
+            self.active_tab_index = a;
+        }
+        true
     }
 
     /// Set the active tab by index.
@@ -4057,6 +4084,10 @@ mod tests {
 
         assert!(tab.can_undo());
         assert_eq!(tab.undo_count(), 1);
+
+        // Break the undo group so the next edit is a separate undo entry
+        // (without this, rapid edits within 500ms are merged into one group)
+        tab.break_undo_group();
 
         // Simulate another edit
         let old_content = tab.content.clone();

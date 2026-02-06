@@ -110,6 +110,10 @@ pub enum RibbonAction {
     // Terminal
     /// Toggle terminal panel visibility
     ToggleTerminal,
+
+    // Productivity
+    /// Toggle productivity hub visibility
+    ToggleProductivity,
 }
 
 /// Ribbon UI state and rendering.
@@ -659,6 +663,23 @@ impl Ribbon {
             .clicked()
             {
                 action = Some(RibbonAction::ToggleTerminal);
+            }
+
+            ui.add_space(2.0);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // Productivity Hub Button
+            // ═══════════════════════════════════════════════════════════════════
+            if icon_button(
+                ui,
+                "📋",
+                &format!("Toggle Productivity Hub ({}+Shift+H)", modifier_symbol()),
+                true,
+                is_dark,
+            )
+            .clicked()
+            {
+                action = Some(RibbonAction::ToggleProductivity);
             }
 
             // Note: Settings Group removed - controls moved to title bar and Settings panel

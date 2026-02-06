@@ -1805,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite"
-version = "0.2.6"
+version = "0.2.6-hotfix.1"
 dependencies = [
  "arboard",
  "blake3",

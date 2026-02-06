@@ -52,15 +52,15 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/split-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6-hotfix.1/assets/screenshots/split-dark.png</image>
       <caption>Ferrite in dark mode with split view showing markdown editing and live preview</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/raw-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6-hotfix.1/assets/screenshots/raw-dark.png</image>
       <caption>Raw editing mode with syntax highlighting</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6/assets/screenshots/zen-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6-hotfix.1/assets/screenshots/zen-dark.png</image>
       <caption>Zen mode for distraction-free writing</caption>
     </screenshot>
   </screenshots>
@@ -68,6 +68,22 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.6.1" date="2026-02-06">
+      <description>
+        <p>First code-signed release with integrated terminal, productivity hub, and bug fixes</p>
+        <ul>
+          <li>Integrated terminal workspace with tiling, splitting, and layout persistence</li>
+          <li>Productivity hub panel for quick-access editing tasks</li>
+          <li>Windows code signing via SignPath Foundation (no more SmartScreen warnings)</li>
+          <li>App.rs refactored into ~15 focused modules</li>
+          <li>Tab drag reorder and file watcher auto-reload</li>
+          <li>CJK font lazy loading reduces startup memory by ~80MB</li>
+          <li>Fixed CJK font crash on startup and portable Windows startup crash</li>
+          <li>Fixed duplicate line, smart paste, drag-drop positioning, and 5+ other bugs</li>
+          <li>CJK first-line paragraph indentation for Chinese and Japanese</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.6" date="2026-01-26">
       <description>
         <p>Major release: Custom text editor (FerriteEditor) replacing egui's TextEdit</p>

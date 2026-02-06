@@ -93,6 +93,10 @@ pub struct TerminalPanelState {
     pub last_auto_save: Option<std::time::Instant>,
     /// Sound notifier for prompt detection
     pub sound_notifier: SoundNotifier,
+    /// Pending error message to display as toast (consumed by app after show())
+    pub pending_error: Option<String>,
+    /// IDs of terminals that have been reported as exited (to avoid duplicate toasts)
+    exited_terminal_ids: std::collections::HashSet<usize>,
 }
 
 impl Default for TerminalPanelState {
@@ -119,6 +123,8 @@ impl Default for TerminalPanelState {
             workspace_layout_loaded: false,
             last_auto_save: None,
             sound_notifier: SoundNotifier::new(),
+            pending_error: None,
+            exited_terminal_ids: std::collections::HashSet::new(),
         }
     }
 }
@@ -155,6 +161,52 @@ impl TerminalPanelState {
         self.visible = false;
     }
 
+    /// Take the pending error message (if any), clearing it.
+    /// Call this after show() to display errors via toast.
+    pub fn take_error(&mut self) -> Option<String> {
+        self.pending_error.take()
+    }
+
+    /// Set an error message with a user-friendly recovery hint.
+    fn report_error(&mut self, operation: &str, error: &str) {
+        let hint = Self::recovery_hint(error);
+        let user_msg = format!("Terminal: {} — {}", operation, hint);
+        log::error!("{}: {}", operation, error);
+        self.pending_error = Some(user_msg);
+    }
+
+    /// Generate a user-friendly recovery hint based on the error message.
+    fn recovery_hint(error: &str) -> &'static str {
+        let error_lower = error.to_lowercase();
+        if error_lower.contains("spawn") || error_lower.contains("not found") || error_lower.contains("no such file") {
+            "Check that the shell is installed and the path is correct"
+        } else if error_lower.contains("pty") || error_lower.contains("pseudo") {
+            "PTY allocation failed. Try closing other terminals or restarting the app"
+        } else if error_lower.contains("permission") || error_lower.contains("access denied") {
+            "Permission denied. Check that you have access to run the shell"
+        } else if error_lower.contains("writer") || error_lower.contains("reader") {
+            "Terminal I/O failed. Try closing and reopening the terminal"
+        } else if error_lower.contains("layout") || error_lower.contains("split") {
+            "Failed to modify terminal layout"
+        } else {
+            "An unexpected error occurred. Try restarting the terminal"
+        }
+    }
+
+    /// Check for terminals that have exited and return their info for notification.
+    /// Call this periodically (e.g., after poll_all) to detect dead terminals.
+    pub fn check_exited_terminals(&mut self) -> Vec<String> {
+        let mut exited = Vec::new();
+
+        for (id, is_running, title) in self.manager.terminal_statuses() {
+            if !is_running && !self.exited_terminal_ids.contains(&id) {
+                self.exited_terminal_ids.insert(id);
+                exited.push(format!("Terminal '{}' process exited", title));
+            }
+        }
+        exited
+    }
+
     /// Initialize the first terminal if needed.
     /// First tries to load workspace layout from .ferrite/terminal-layout.json,
     /// otherwise creates a new default terminal.
@@ -175,7 +227,7 @@ impl TerminalPanelState {
                     log::info!("Terminal initialized in {:?}", self.working_dir);
                 }
                 Err(e) => {
-                    log::error!("Failed to initialize terminal: {}", e);
+                    self.report_error("Failed to start terminal", &e);
                 }
             }
         }
@@ -1282,7 +1334,7 @@ fn handle_shortcuts(
                                             }
                                             state.terminal_has_focus = true;
                                         }
-                                        Err(e) => log::error!("Failed to duplicate terminal: {}", e),
+                                        Err(e) => state.report_error("Failed to create terminal", &e),
                                     }
                                     ui.close_menu();
                                 }
@@ -1301,7 +1353,7 @@ fn handle_shortcuts(
                                 if ui.button("Split Horizontal").clicked() {
                                     use crate::terminal::{ShellType, Direction};
                                     if let Err(e) = state.manager.split_pane(Direction::Horizontal, ShellType::Default, state.working_dir.clone()) {
-                                        log::error!("Failed to split horizontal: {}", e);
+                                        state.report_error("Failed to split pane", &e);
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
@@ -1310,7 +1362,7 @@ fn handle_shortcuts(
                                 if ui.button("Split Vertical").clicked() {
                                     use crate::terminal::{ShellType, Direction};
                                     if let Err(e) = state.manager.split_pane(Direction::Vertical, ShellType::Default, state.working_dir.clone()) {
-                                        log::error!("Failed to split vertical: {}", e);
+                                        state.report_error("Failed to split pane", &e);
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
@@ -1516,7 +1568,7 @@ fn handle_shortcuts(
                             }
                             state.terminal_has_focus = true; // Auto-focus new terminal
                         }
-                        Err(e) => log::error!("Failed to create PowerShell terminal: {}", e),
+                        Err(e) => state.report_error("Failed to create terminal", &e),
                     }
                 }
 
@@ -1533,7 +1585,7 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create PowerShell terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create PowerShell terminal", &e),
                         }
                         ui.close_menu();
                     }
@@ -1548,7 +1600,7 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create CMD terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create CMD terminal", &e),
                         }
                         ui.close_menu();
                     }
@@ -1563,7 +1615,7 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create WSL terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create WSL terminal", &e),
                         }
                         ui.close_menu();
                     }
@@ -1571,7 +1623,7 @@ fn handle_shortcuts(
                     ui.menu_button("Layouts", |ui| {
                         if ui.button("2 Columns").clicked() {
                             if let Err(e) = state.manager.create_grid_layout(1, 2, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
@@ -1579,7 +1631,7 @@ fn handle_shortcuts(
                         }
                         if ui.button("2 Rows").clicked() {
                             if let Err(e) = state.manager.create_grid_layout(2, 1, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
@@ -1587,7 +1639,7 @@ fn handle_shortcuts(
                         }
                         if ui.button("2x2 Grid").clicked() {
                             if let Err(e) = state.manager.create_grid_layout(2, 2, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
@@ -1616,7 +1668,7 @@ fn handle_shortcuts(
                                 if let Ok(json) = std::fs::read_to_string(path) {
                                     if let Ok(saved) = serde_json::from_str::<crate::terminal::SavedLayout>(&json) {
                                         if let Err(e) = state.manager.load_layout(saved) {
-                                            log::error!("Failed to load layout: {}", e);
+                                            state.report_error("Failed to load terminal layout", &e);
                                         } else {
                                             state.terminal_has_focus = true;
                                         }
@@ -1737,7 +1789,7 @@ fn handle_shortcuts(
                                                     }
                                                     state.terminal_has_focus = true;
                                                 }
-                                                Err(e) => log::error!("Failed to load workspace: {}", e),
+                                                Err(e) => state.report_error("Failed to load workspace layout", &e),
                                             }
                                         }
                                     }

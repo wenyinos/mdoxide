@@ -228,6 +228,19 @@ impl TerminalPty {
 impl Drop for TerminalPty {
     fn drop(&mut self) {
         // Stop signal is sent automatically when _stop_tx is dropped
-        log::debug!("TerminalPty dropped");
+        // Attempt graceful child process cleanup
+        if self.child_running {
+            match self.child.kill() {
+                Ok(()) => log::debug!("Terminal child process killed on drop"),
+                Err(e) => log::debug!("Terminal child process may have already exited: {}", e),
+            }
+        }
+        // Wait briefly for child to clean up (non-blocking check)
+        match self.child.try_wait() {
+            Ok(Some(status)) => log::debug!("Terminal child exited with status: {:?}", status),
+            Ok(None) => log::debug!("Terminal child still running after kill, will be cleaned up by OS"),
+            Err(e) => log::debug!("Could not check terminal child status: {}", e),
+        }
+        log::debug!("TerminalPty dropped, resources released");
     }
 }

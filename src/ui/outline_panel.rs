@@ -6,6 +6,7 @@
 
 use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
+use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, Response, RichText, ScrollArea, Sense, Ui, Vec2};
 use rust_i18n::t;
 
@@ -18,6 +19,12 @@ const MIN_PANEL_WIDTH: f32 = 120.0;
 
 /// Maximum width for the outline panel.
 const MAX_PANEL_WIDTH: f32 = 400.0;
+
+/// Minimum width for the outline panel when showing productivity tab.
+const MIN_PANEL_WIDTH_PRODUCTIVITY: f32 = 280.0;
+
+/// Maximum width for the outline panel when showing productivity tab.
+const MAX_PANEL_WIDTH_PRODUCTIVITY: f32 = 500.0;
 
 /// Indentation per heading level.
 const INDENT_PER_LEVEL: f32 = 16.0;
@@ -40,6 +47,8 @@ pub enum OutlinePanelTab {
     Outline,
     /// Document statistics view
     Statistics,
+    /// Productivity hub (tasks, pomodoro, notes)
+    Productivity,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +72,10 @@ pub struct OutlinePanelOutput {
     pub close_requested: bool,
     /// New panel width if resized
     pub new_width: Option<f32>,
+    /// Whether the productivity panel requested to be detached (undocked)
+    pub detach_productivity: bool,
+    /// Whether the productivity panel needs a repaint (e.g. timer active)
+    pub needs_repaint: bool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,6 +173,7 @@ impl OutlinePanel {
     /// * `outline` - The document outline to display
     /// * `doc_stats` - Optional document statistics (for markdown files)
     /// * `is_dark` - Whether using dark theme
+    /// * `productivity_panel` - Optional productivity panel to render in the Productivity tab
     ///
     /// # Returns
     ///
@@ -170,6 +184,7 @@ impl OutlinePanel {
         outline: &DocumentOutline,
         doc_stats: Option<&DocumentStats>,
         is_dark: bool,
+        productivity_panel: Option<&mut ProductivityPanel>,
     ) -> OutlinePanelOutput {
         let mut output = OutlinePanelOutput::default();
 
@@ -210,6 +225,12 @@ impl OutlinePanel {
             Color32::from_rgb(235, 235, 240)
         };
 
+        // Use wider panel when on Productivity tab
+        let is_productivity = self.active_tab == OutlinePanelTab::Productivity;
+        let min_w = if is_productivity { MIN_PANEL_WIDTH_PRODUCTIVITY } else { MIN_PANEL_WIDTH };
+        let max_w = if is_productivity { MAX_PANEL_WIDTH_PRODUCTIVITY } else { MAX_PANEL_WIDTH };
+        let default_w = if is_productivity { self.width.max(MIN_PANEL_WIDTH_PRODUCTIVITY) } else { self.width };
+
         // Create the side panel
         let panel = match self.side {
             OutlinePanelSide::Left => egui::SidePanel::left("outline_panel"),
@@ -218,9 +239,9 @@ impl OutlinePanel {
 
         panel
             .resizable(true)
-            .default_width(self.width)
-            .min_width(MIN_PANEL_WIDTH)
-            .max_width(MAX_PANEL_WIDTH)
+            .default_width(default_w)
+            .min_width(min_w)
+            .max_width(max_w)
             .frame(
                 egui::Frame::none()
                     .fill(panel_bg)
@@ -239,12 +260,16 @@ impl OutlinePanel {
                 // Header section with close button
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
-                    let header_text = match &outline.outline_type {
-                        OutlineType::Markdown => t!("outline.panel_title"),
-                        OutlineType::Structured(_) => t!("outline.statistics"),
+                    let header_text = if is_productivity {
+                        "Productivity Hub".into()
+                    } else {
+                        match &outline.outline_type {
+                            OutlineType::Markdown => t!("outline.panel_title").to_string(),
+                            OutlineType::Structured(_) => t!("outline.statistics").to_string(),
+                        }
                     };
                     ui.label(
-                        RichText::new(header_text.to_string())
+                        RichText::new(header_text)
                             .size(12.0)
                             .strong()
                             .color(text_color),
@@ -268,157 +293,203 @@ impl OutlinePanel {
 
                 ui.add_space(2.0);
 
-                // For markdown files, show tabs; for structured files, show stats directly
-                match &outline.outline_type {
-                    OutlineType::Markdown => {
-                        // Tab bar for Markdown documents
-                        self.render_tab_bar(ui, text_color, muted_color, highlight_bg, is_dark);
-                        ui.add_space(4.0);
-                    }
-                    OutlineType::Structured(_) => {
-                        // No tabs for structured files - they just show stats
-                    }
-                }
+                // Always show tab bar (Outline/Stats tabs + Productivity tab)
+                self.render_tab_bar(ui, text_color, muted_color, highlight_bg, is_dark);
+                ui.add_space(4.0);
 
-                // Different content based on outline type and active tab
-                match &outline.outline_type {
-                    OutlineType::Structured(stats) => {
-                        // Show format name as subtitle
+                // Render content based on active tab
+                if self.active_tab == OutlinePanelTab::Productivity {
+                    // Productivity Hub content
+                    if let Some(panel) = productivity_panel {
+                        // Detach button
                         ui.horizontal(|ui| {
-                            ui.add_space(8.0);
-                            ui.label(
-                                RichText::new(&stats.format_name)
-                                    .size(10.0)
-                                    .color(muted_color),
-                            );
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.add_space(4.0);
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new("Detach")
+                                                .size(10.0)
+                                                .color(muted_color),
+                                        )
+                                        .frame(false),
+                                    )
+                                    .on_hover_text("Detach to floating window")
+                                    .clicked()
+                                {
+                                    output.detach_productivity = true;
+                                }
+                            });
                         });
-                        ui.add_space(4.0);
+
                         ui.separator();
 
-                        // Show statistics
+                        // Render productivity content inline with padding
                         ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                self.render_structured_stats(
-                                    ui,
-                                    stats,
-                                    text_color,
-                                    muted_color,
-                                    is_dark,
+                                egui::Frame::none()
+                                    .inner_margin(egui::Margin::symmetric(4.0, 3.0))
+                                    .show(ui, |ui| {
+                                        let repaint = panel.show_content(ui, ctx);
+                                        output.needs_repaint = repaint;
+                                    });
+                            });
+                    } else {
+                        ui.add_space(20.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                RichText::new("Productivity Hub unavailable")
+                                    .size(11.0)
+                                    .color(muted_color)
+                                    .italics(),
+                            );
+                        });
+                    }
+                } else {
+                    // Original outline/statistics content
+                    match &outline.outline_type {
+                        OutlineType::Structured(stats) => {
+                            // Show format name as subtitle
+                            ui.horizontal(|ui| {
+                                ui.add_space(8.0);
+                                ui.label(
+                                    RichText::new(&stats.format_name)
+                                        .size(10.0)
+                                        .color(muted_color),
                                 );
                             });
-                    }
-                    OutlineType::Markdown => {
-                        match self.active_tab {
-                            OutlinePanelTab::Outline => {
-                                // Summary stats for markdown
-                                if !outline.is_empty() {
-                                    let summary = t!(
-                                        "outline.summary",
-                                        headings = outline.heading_count,
-                                        minutes = outline.estimated_read_time
+                            ui.add_space(4.0);
+                            ui.separator();
+
+                            // Show statistics
+                            ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    self.render_structured_stats(
+                                        ui,
+                                        stats,
+                                        text_color,
+                                        muted_color,
+                                        is_dark,
                                     );
+                                });
+                        }
+                        OutlineType::Markdown => {
+                            match self.active_tab {
+                                OutlinePanelTab::Outline => {
+                                    // Summary stats for markdown
+                                    if !outline.is_empty() {
+                                        let summary = t!(
+                                            "outline.summary",
+                                            headings = outline.heading_count,
+                                            minutes = outline.estimated_read_time
+                                        );
 
-                                    ui.horizontal(|ui| {
-                                        ui.add_space(8.0);
-                                        ui.label(RichText::new(summary).size(10.0).color(muted_color));
-                                    });
-                                    ui.add_space(4.0);
-                                }
+                                        ui.horizontal(|ui| {
+                                            ui.add_space(8.0);
+                                            ui.label(RichText::new(summary).size(10.0).color(muted_color));
+                                        });
+                                        ui.add_space(4.0);
+                                    }
 
-                                ui.separator();
+                                    ui.separator();
 
-                                // Scrollable heading list
-                                ScrollArea::vertical()
-                                    .auto_shrink([false, false])
-                                    .show(ui, |ui| {
-                                        if outline.is_empty() {
-                                            ui.add_space(20.0);
-                                            ui.vertical_centered(|ui| {
-                                                ui.label(
-                                                    RichText::new(t!("outline.no_headings"))
-                                                        .size(11.0)
-                                                        .color(muted_color)
-                                                        .italics(),
-                                                );
-                                                ui.add_space(8.0);
-                                                ui.label(
-                                                    RichText::new(t!("outline.add_headings_hint"))
-                                                        .size(10.0)
-                                                        .color(muted_color),
-                                                );
-                                            });
-                                        } else {
-                                            ui.add_space(4.0);
+                                    // Scrollable heading list
+                                    ScrollArea::vertical()
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+                                            if outline.is_empty() {
+                                                ui.add_space(20.0);
+                                                ui.vertical_centered(|ui| {
+                                                    ui.label(
+                                                        RichText::new(t!("outline.no_headings"))
+                                                            .size(11.0)
+                                                            .color(muted_color)
+                                                            .italics(),
+                                                    );
+                                                    ui.add_space(8.0);
+                                                    ui.label(
+                                                        RichText::new(t!("outline.add_headings_hint"))
+                                                            .size(10.0)
+                                                            .color(muted_color),
+                                                    );
+                                                });
+                                            } else {
+                                                ui.add_space(4.0);
 
-                                            for (index, item) in outline.items.iter().enumerate() {
-                                                // Check visibility (respects collapsed parents)
-                                                if !outline.is_visible(index) {
-                                                    continue;
+                                                for (index, item) in outline.items.iter().enumerate() {
+                                                    // Check visibility (respects collapsed parents)
+                                                    if !outline.is_visible(index) {
+                                                        continue;
+                                                    }
+
+                                                    let is_current = self.current_section == Some(index);
+                                                    let has_children = outline.has_children(index);
+
+                                                    let response = self.render_outline_item(
+                                                        ui,
+                                                        item,
+                                                        is_current,
+                                                        has_children,
+                                                        text_color,
+                                                        muted_color,
+                                                        highlight_bg,
+                                                        hover_bg,
+                                                        is_dark,
+                                                    );
+
+                                                    if response.clicked() {
+                                                        log::debug!(
+                                                            "Outline: clicked heading '{}' at line {}",
+                                                            item.title,
+                                                            item.line
+                                                        );
+                                                        output.scroll_to_line = Some(item.line);
+                                                        output.scroll_to_char = Some(item.char_offset);
+                                                        output.scroll_to_title = Some(item.title.clone());
+                                                        output.scroll_to_level = Some(item.level);
+                                                    }
+
+                                                    // Handle collapse/expand toggle (double-click or icon click)
+                                                    if has_children && response.double_clicked() {
+                                                        output.toggled_id = Some(item.id.clone());
+                                                    }
                                                 }
 
-                                                let is_current = self.current_section == Some(index);
-                                                let has_children = outline.has_children(index);
-
-                                                let response = self.render_outline_item(
+                                                ui.add_space(8.0);
+                                            }
+                                        });
+                                }
+                                OutlinePanelTab::Statistics => {
+                                    ui.separator();
+                                    ScrollArea::vertical()
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+                                            if let Some(stats) = doc_stats {
+                                                self.render_document_stats(
                                                     ui,
-                                                    item,
-                                                    is_current,
-                                                    has_children,
+                                                    stats,
                                                     text_color,
                                                     muted_color,
-                                                    highlight_bg,
-                                                    hover_bg,
                                                     is_dark,
                                                 );
-
-                                                if response.clicked() {
-                                                    log::debug!(
-                                                        "Outline: clicked heading '{}' at line {}",
-                                                        item.title,
-                                                        item.line
+                                            } else {
+                                                ui.add_space(20.0);
+                                                ui.vertical_centered(|ui| {
+                                                    ui.label(
+                                                        RichText::new(t!("stats.no_data"))
+                                                            .size(11.0)
+                                                            .color(muted_color)
+                                                            .italics(),
                                                     );
-                                                    output.scroll_to_line = Some(item.line);
-                                                    output.scroll_to_char = Some(item.char_offset);
-                                                    output.scroll_to_title = Some(item.title.clone());
-                                                    output.scroll_to_level = Some(item.level);
-                                                }
-
-                                                // Handle collapse/expand toggle (double-click or icon click)
-                                                if has_children && response.double_clicked() {
-                                                    output.toggled_id = Some(item.id.clone());
-                                                }
+                                                });
                                             }
-
-                                            ui.add_space(8.0);
-                                        }
-                                    });
-                            }
-                            OutlinePanelTab::Statistics => {
-                                ui.separator();
-                                ScrollArea::vertical()
-                                    .auto_shrink([false, false])
-                                    .show(ui, |ui| {
-                                        if let Some(stats) = doc_stats {
-                                            self.render_document_stats(
-                                                ui,
-                                                stats,
-                                                text_color,
-                                                muted_color,
-                                                is_dark,
-                                            );
-                                        } else {
-                                            ui.add_space(20.0);
-                                            ui.vertical_centered(|ui| {
-                                                ui.label(
-                                                    RichText::new(t!("stats.no_data"))
-                                                        .size(11.0)
-                                                        .color(muted_color)
-                                                        .italics(),
-                                                );
-                                            });
-                                        }
-                                    });
+                                        });
+                                }
+                                OutlinePanelTab::Productivity => {
+                                    // Already handled above, shouldn't reach here
+                                }
                             }
                         }
                     }
@@ -571,7 +642,7 @@ impl OutlinePanel {
         });
     }
 
-    /// Render the tab bar for switching between Outline and Statistics.
+    /// Render the tab bar for switching between Outline, Statistics, and Productivity.
     fn render_tab_bar(
         &mut self,
         ui: &mut Ui,
@@ -592,90 +663,76 @@ impl OutlinePanel {
             Color32::from_rgb(255, 255, 255)
         };
 
+        // Tab definitions: (tab enum, icon, label)
+        let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
+            (OutlinePanelTab::Outline, "📑", t!("outline.tab_outline").to_string()),
+            (OutlinePanelTab::Statistics, "📊", t!("outline.tab_statistics").to_string()),
+            (OutlinePanelTab::Productivity, "📋", "Hub".to_string()),
+        ];
+
         ui.horizontal(|ui| {
             ui.add_space(4.0);
 
-            // Calculate tab width to fit both tabs
-            let available_width = ui.available_width() - 8.0;
-            let tab_width = (available_width / 2.0).min(100.0);
+            // Calculate tab width to fit all tabs
+            let num_tabs = tabs.len() as f32;
+            let gap = 2.0 * (num_tabs - 1.0);
+            let available_width = ui.available_width() - 8.0 - gap;
+            let tab_width = (available_width / num_tabs).min(100.0);
 
-            // Outline tab
-            let outline_active = self.active_tab == OutlinePanelTab::Outline;
-            let (outline_rect, outline_response) = ui.allocate_exact_size(
-                Vec2::new(tab_width, TAB_HEIGHT),
-                Sense::click(),
-            );
+            let mut active_rect_opt: Option<egui::Rect> = None;
 
-            let outline_bg = if outline_active { active_tab_bg } else { tab_bg };
-            ui.painter().rect_filled(
-                outline_rect,
-                egui::Rounding {
-                    nw: 4.0,
-                    ne: 4.0,
-                    sw: 0.0,
-                    se: 0.0,
-                },
-                outline_bg,
-            );
+            for (i, (tab, icon, label)) in tabs.iter().enumerate() {
+                if i > 0 {
+                    ui.add_space(2.0);
+                }
 
-            let outline_text_color = if outline_active { text_color } else { muted_color };
-            ui.painter().text(
-                outline_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("📑 {}", t!("outline.tab_outline")),
-                egui::FontId::proportional(10.0),
-                outline_text_color,
-            );
+                let is_active = self.active_tab == *tab;
+                let (rect, response) = ui.allocate_exact_size(
+                    Vec2::new(tab_width, TAB_HEIGHT),
+                    Sense::click(),
+                );
 
-            if outline_response.clicked() {
-                self.active_tab = OutlinePanelTab::Outline;
-            }
+                let bg = if is_active { active_tab_bg } else { tab_bg };
+                ui.painter().rect_filled(
+                    rect,
+                    egui::Rounding {
+                        nw: 4.0,
+                        ne: 4.0,
+                        sw: 0.0,
+                        se: 0.0,
+                    },
+                    bg,
+                );
 
-            // Small gap between tabs
-            ui.add_space(2.0);
+                let tab_text_color = if is_active { text_color } else { muted_color };
+                ui.painter().text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{} {}", icon, label),
+                    egui::FontId::proportional(10.0),
+                    tab_text_color,
+                );
 
-            // Statistics tab
-            let stats_active = self.active_tab == OutlinePanelTab::Statistics;
-            let (stats_rect, stats_response) = ui.allocate_exact_size(
-                Vec2::new(tab_width, TAB_HEIGHT),
-                Sense::click(),
-            );
+                if response.clicked() {
+                    self.active_tab = *tab;
+                }
 
-            let stats_bg = if stats_active { active_tab_bg } else { tab_bg };
-            ui.painter().rect_filled(
-                stats_rect,
-                egui::Rounding {
-                    nw: 4.0,
-                    ne: 4.0,
-                    sw: 0.0,
-                    se: 0.0,
-                },
-                stats_bg,
-            );
-
-            let stats_text_color = if stats_active { text_color } else { muted_color };
-            ui.painter().text(
-                stats_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("📊 {}", t!("outline.tab_statistics")),
-                egui::FontId::proportional(10.0),
-                stats_text_color,
-            );
-
-            if stats_response.clicked() {
-                self.active_tab = OutlinePanelTab::Statistics;
+                if is_active {
+                    active_rect_opt = Some(rect);
+                }
             }
 
             // Draw underline for active tab
-            let active_rect = if outline_active { outline_rect } else { stats_rect };
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(active_rect.min.x, active_rect.max.y - 2.0),
-                    Vec2::new(active_rect.width(), 2.0),
-                ),
-                0.0,
-                highlight_bg,
-            );
+            if let Some(active_rect) = active_rect_opt {
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(
+                        egui::pos2(active_rect.min.x, active_rect.max.y - 2.0),
+                        Vec2::new(active_rect.width(), 2.0),
+                    ),
+                    0.0,
+                    highlight_bg,
+                );
+            }
         });
     }
 

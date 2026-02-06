@@ -265,6 +265,20 @@ menu:
     open: "Open..."
 ```
 
+## Release Process (Maintainers)
+
+Releases are automated via GitHub Actions when a version tag is pushed (`git tag v0.x.x && git push --tags`).
+
+### Code Signing (Windows)
+
+Windows binaries (`ferrite.exe` and `.msi` installer) are signed via [SignPath.io](https://signpath.io) with a certificate from [SignPath Foundation](https://signpath.org).
+
+**Required GitHub repository secrets:**
+- `SIGNPATH_API_TOKEN` — API token from SignPath.io dashboard (user must have submitter permissions)
+- `SIGNPATH_ORGANIZATION_ID` — Organization ID from SignPath.io dashboard
+
+The signing configuration is defined in `.signpath/artifact-configuration.xml`.
+
 ## Getting Help
 
 - **Documentation:** Check [docs/](docs/) for technical details

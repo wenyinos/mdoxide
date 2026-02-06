@@ -631,7 +631,7 @@ impl ShortcutCommand {
             // Formatting
             ShortcutCommand::FormatBold => KeyBinding::new(M::ctrl(), B),
             ShortcutCommand::FormatItalic => KeyBinding::new(M::ctrl(), I),
-            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl(), Backtick),
+            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl_shift(), Backtick),
             ShortcutCommand::FormatCodeBlock => KeyBinding::new(M::ctrl_shift(), C),
             ShortcutCommand::FormatLink => KeyBinding::new(M::ctrl(), K),
             ShortcutCommand::FormatImage => KeyBinding::new(M::ctrl_shift(), K),
@@ -651,7 +651,7 @@ impl ShortcutCommand {
             // Other
             ShortcutCommand::OpenSettings => KeyBinding::new(M::ctrl(), Comma),
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
-            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), E),
+            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
             ShortcutCommand::InsertToc => KeyBinding::new(M::ctrl_shift(), U),
         }
     }
@@ -1860,6 +1860,10 @@ pub struct Settings {
     /// Whether the productivity hub (tasks/pomodoro/notes) panel is visible
     #[serde(default)]
     pub productivity_panel_visible: bool,
+
+    /// Whether the productivity hub is docked in the outline panel (true) or floating (false)
+    #[serde(default = "default_true")]
+    pub productivity_panel_docked: bool,
 }
 
 impl Default for Settings {
@@ -1996,6 +2000,7 @@ impl Default for Settings {
             database_panel_visible: false,
             ssh_panel_visible: false,
             productivity_panel_visible: false,
+            productivity_panel_docked: true,
         }
     }
 }
@@ -3587,6 +3592,7 @@ mod tests {
         assert_eq!(settings.database_panel_visible, false);
         assert_eq!(settings.ssh_panel_visible, false);
         assert_eq!(settings.productivity_panel_visible, false);
+        assert_eq!(settings.productivity_panel_docked, true);
     }
 
     #[test]
