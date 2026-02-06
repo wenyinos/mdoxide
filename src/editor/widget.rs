@@ -526,30 +526,38 @@ impl<'a> EditorWidget<'a> {
                 // Don't recreate the editor - just update the stored hash (happens at end of frame)
             } else {
                 // Content actually differs - perform sync
+                // Use set_content() to update buffer in-place, preserving view state,
+                // syntax highlighting, and other editor configuration. This avoids
+                // visual glitching that occurs when fully recreating the editor.
                 debug!(
                     "Syncing Tab content to FerriteEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
                     tab_id, self.tab.content.len(), self.tab.scroll_offset, 
                     self.tab.cursor_position.0, self.tab.cursor_position.1
                 );
-                editor = FerriteEditor::from_string(&self.tab.content);
+                editor.set_content(&self.tab.content);
 
-                // Restore cursor position from Tab if possible
+                // Restore cursor position from Tab
                 let cursor_line = self.tab.cursor_position.0;
                 let cursor_col = self.tab.cursor_position.1;
                 editor.set_cursor(super::ferrite::Cursor::new(cursor_line, cursor_col));
 
-                // Restore viewport/scroll position from Tab
-                // This prevents viewport jitter when the editor is recreated
+                // Restore viewport/scroll position from Tab if the view was reset
+                // The set_content() method preserves ViewState, so only restore
+                // if the current viewport seems wrong (e.g., editor was just created)
                 let line_height = editor.view().line_height();
                 if line_height > 0.0 && self.tab.scroll_offset > 0.0 {
-                    let target_line = (self.tab.scroll_offset / line_height) as usize;
-                    let total_lines = editor.buffer().line_count();
-                    let clamped_line = target_line.min(total_lines.saturating_sub(1));
-                    editor.view_mut().scroll_to_line(clamped_line);
-                    debug!(
-                        "Restored viewport to line {} (scroll_offset={:.1}, line_height={:.1})",
-                        clamped_line, self.tab.scroll_offset, line_height
-                    );
+                    let current_first_line = editor.view().first_visible_line();
+                    let expected_first_line = (self.tab.scroll_offset / line_height) as usize;
+                    // Only restore if significantly off (more than 5 lines)
+                    if current_first_line.abs_diff(expected_first_line) > 5 {
+                        let total_lines = editor.buffer().line_count();
+                        let clamped_line = expected_first_line.min(total_lines.saturating_sub(1));
+                        editor.view_mut().scroll_to_line(clamped_line);
+                        debug!(
+                            "Restored viewport to line {} (scroll_offset={:.1}, line_height={:.1})",
+                            clamped_line, self.tab.scroll_offset, line_height
+                        );
+                    }
                 }
             }
         }

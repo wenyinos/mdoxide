@@ -328,6 +328,40 @@ impl FerriteEditor {
         }
     }
 
+    /// Replace the buffer content while preserving editor state (view, syntax, etc.).
+    ///
+    /// This is used when external changes (e.g., WYSIWYG editing, file reload) modify
+    /// tab.content and the FerriteEditor needs to be updated without full recreation.
+    /// Unlike `from_string()`, this preserves:
+    /// - ViewState (scroll position, viewport)
+    /// - Syntax highlighting configuration
+    /// - Font settings
+    /// - Fold state configuration (folds are cleared since content changed)
+    /// - Search state
+    ///
+    /// The cursor is clamped to valid bounds after content replacement.
+    pub fn set_content(&mut self, content: &str) {
+        self.buffer = TextBuffer::from_string(content);
+        self.history = EditHistory::new();
+        self.line_cache.invalidate();
+        self.content_dirty = true;
+        self.fold_state = FoldState::new();
+        // Clamp all selections to valid bounds
+        let max_line = self.buffer.line_count().saturating_sub(1);
+        for sel in &mut self.selections {
+            sel.anchor.line = sel.anchor.line.min(max_line);
+            sel.head.line = sel.head.line.min(max_line);
+            let anchor_line_len = self.buffer.get_line(sel.anchor.line)
+                .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
+                .unwrap_or(0);
+            sel.anchor.column = sel.anchor.column.min(anchor_line_len);
+            let head_line_len = self.buffer.get_line(sel.head.line)
+                .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
+                .unwrap_or(0);
+            sel.head.column = sel.head.column.min(head_line_len);
+        }
+    }
+
     /// Sets the font size for rendering.
     ///
     /// # Arguments
@@ -790,6 +824,10 @@ impl FerriteEditor {
             return false;
         }
 
+        // Force a new undo group so formatting is always a discrete undo entry,
+        // separate from any prior typing within the 500ms grouping window.
+        self.history.break_group();
+
         // Record the entire text replacement as a single undo operation
         // This captures the full before/after state for proper undo
         self.history.record_operation(EditOperation::Delete {
@@ -800,6 +838,9 @@ impl FerriteEditor {
             pos: 0,
             text: result.text.clone(),
         });
+
+        // Close the formatting undo group so subsequent typing starts a new group
+        self.history.break_group();
 
         // Replace buffer content
         // Clear existing content and insert new
@@ -885,6 +926,10 @@ impl FerriteEditor {
             return false;
         }
 
+        // Force a new undo group so formatting is always a discrete undo entry,
+        // separate from any prior typing within the 500ms grouping window.
+        self.history.break_group();
+
         // Record the entire text replacement as a single undo operation
         self.history.record_operation(EditOperation::Delete {
             pos: 0,
@@ -894,6 +939,9 @@ impl FerriteEditor {
             pos: 0,
             text: result.text.clone(),
         });
+
+        // Close the formatting undo group so subsequent typing starts a new group
+        self.history.break_group();
 
         // Replace buffer content
         let old_len = self.buffer.len();

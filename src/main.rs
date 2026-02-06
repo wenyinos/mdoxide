@@ -42,9 +42,12 @@ mod platform;
 mod preview;
 mod state;
 mod string_utils;
+mod terminal;
 mod theme;
 mod ui;
 mod vcs;
+#[cfg(feature = "async-workers")]
+mod workers;
 mod workspaces;
 
 use app::FerriteApp;
@@ -54,6 +57,67 @@ use log::info;
 use rust_i18n::{set_locale, t};
 use std::path::PathBuf;
 use ui::get_app_icon;
+
+/// Get current process memory usage in MB (for diagnostics).
+/// Returns (working_set_mb, private_bytes_mb) on Windows.
+#[cfg(target_os = "windows")]
+pub fn get_memory_usage_mb() -> (f64, f64) {
+    use std::mem::MaybeUninit;
+    
+    #[repr(C)]
+    struct ProcessMemoryCounters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    
+    #[link(name = "psapi")]
+    extern "system" {
+        fn GetProcessMemoryInfo(
+            process: *mut std::ffi::c_void,
+            pmc: *mut ProcessMemoryCounters,
+            cb: u32,
+        ) -> i32;
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+    }
+    
+    unsafe {
+        let mut pmc = MaybeUninit::<ProcessMemoryCounters>::uninit();
+        (*pmc.as_mut_ptr()).cb = std::mem::size_of::<ProcessMemoryCounters>() as u32;
+        
+        if GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            pmc.as_mut_ptr(),
+            std::mem::size_of::<ProcessMemoryCounters>() as u32,
+        ) != 0 {
+            let pmc = pmc.assume_init();
+            let working_set_mb = pmc.working_set_size as f64 / (1024.0 * 1024.0);
+            let private_mb = pmc.pagefile_usage as f64 / (1024.0 * 1024.0);
+            (working_set_mb, private_mb)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_memory_usage_mb() -> (f64, f64) {
+    // On non-Windows, return 0 (could implement /proc/self/status parsing for Linux)
+    (0.0, 0.0)
+}
+
+/// Log current memory usage with a label.
+pub fn log_memory(label: &str) {
+    let (working_set, private) = get_memory_usage_mb();
+    info!("[MEM] {}: {:.1} MB (working set), {:.1} MB (private)", label, working_set, private);
+}
 
 /// Ferrite - A fast, lightweight text editor for Markdown, JSON, and more.
 #[derive(Parser, Debug)]
@@ -96,6 +160,12 @@ fn parse_log_level(s: &str) -> Result<LogLevel, String> {
 const APP_NAME: &str = "Ferrite";
 
 fn main() -> eframe::Result<()> {
+    // Set up Ctrl+C handler to prevent the app from closing when running from console.
+    // We handle Ctrl+C internally in the integrated terminal.
+    let _ = ctrlc::set_handler(|| {
+        log::debug!("Ctrl+C received in console, ignoring to prevent app exit");
+    });
+
     // Initialize macOS app delegate FIRST, before anything else
     // This must happen very early to catch Apple Events for "Open With" functionality
     #[cfg(target_os = "macos")]
@@ -119,6 +189,7 @@ fn main() -> eframe::Result<()> {
         .init();
 
     info!("Starting {}", APP_NAME);
+    log_memory("After logging init");
     info!(
         "Language: {} ({})",
         settings.language.native_name(),
@@ -196,6 +267,8 @@ fn main() -> eframe::Result<()> {
         initial_paths.extend(apple_event_paths);
     }
 
+    log_memory("Before eframe::run_native");
+    
     // Run the application
     eframe::run_native(
         APP_NAME,
@@ -207,6 +280,8 @@ fn main() -> eframe::Result<()> {
 
             // Open files/directories from CLI arguments and Apple Events
             app.open_initial_paths(initial_paths);
+            
+            log_memory("After app creation and initial paths");
 
             Ok(Box::new(app))
         }),

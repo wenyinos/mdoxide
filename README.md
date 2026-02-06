@@ -18,24 +18,26 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 > ⚠️ **Platform Note:** Ferrite is developed and tested on **Windows** and **Linux**. macOS support is experimental. If you encounter issues, please [report them](https://github.com/OlaProeis/Ferrite/issues).
 
 <details>
-<summary><strong>🛡️ Antivirus False Positives</strong></summary>
+<summary><strong>🛡️ Code Signing & Antivirus</strong></summary>
 
-Some antivirus software (particularly Windows Defender) may flag Ferrite as suspicious. **This is a false positive.** Here's why it happens and what we've done about it:
+Starting with v0.2.6.1, **all Windows releases are digitally signed** with a certificate from [SignPath Foundation](https://signpath.org). This means:
 
-### Why This Happens
-- **Live Pipeline feature**: Ferrite's pipeline feature lets you pipe document content through shell commands (like `jq` or `grep`). This uses `cmd.exe /C` on Windows, which ML-based antivirus detection can mistake for trojan behavior.
-- **Rust compilation patterns**: Rust binaries can trigger heuristic detections due to their unique compilation characteristics.
+- **Windows SmartScreen** recognizes the publisher — no more "Unknown publisher" warnings
+- **Antivirus false positives** are significantly reduced thanks to the trusted code signature
+- **Integrity verification** — you can verify that the binary hasn't been tampered with
 
-### What We've Done
-- **Reported to Microsoft**: We've submitted Ferrite to Microsoft's Security Intelligence portal as a false positive (January 2026).
-- **Adjusted build settings**: We've modified our release profile to avoid patterns that trigger ML detection (disabled symbol stripping, switched from size to speed optimization).
-- **Open source transparency**: All code is publicly auditable at [github.com/OlaProeis/Ferrite](https://github.com/OlaProeis/Ferrite).
+### Previous False Positives
+Older unsigned builds may still trigger antivirus detections. This was caused by:
+- **Live Pipeline feature**: Uses `cmd.exe /C` on Windows for shell commands, which ML-based detection can misidentify
+- **Rust compilation patterns**: Rust binaries can trigger heuristic detections due to unique characteristics
 
-### If You're Affected
+We've addressed this through code signing, build profile adjustments (disabled symbol stripping, speed optimization), and reporting to Microsoft's Security Intelligence portal.
+
+### If You're Still Affected
 If Windows Defender quarantines Ferrite:
-1. **Verify the source**: Only download from [official GitHub releases](https://github.com/OlaProeis/Ferrite/releases)
-2. **Add an exclusion**: Windows Security → Virus & threat protection → Exclusions → Add the Ferrite executable
-3. **Check VirusTotal**: Upload the file to [VirusTotal](https://www.virustotal.com) - legitimate Ferrite builds should show clean or near-clean results from most scanners
+1. **Upgrade**: Download the latest signed release from [GitHub Releases](https://github.com/OlaProeis/Ferrite/releases)
+2. **Verify the signature**: Right-click `ferrite.exe` → Properties → Digital Signatures → should show "SignPath Foundation"
+3. **Check VirusTotal**: Upload the file to [VirusTotal](https://www.virustotal.com) — signed builds should show clean results
 
 Ferrite does **NOT** access passwords, browser data, or make network connections. The application is fully offline and only accesses files you explicitly open.
 
@@ -84,9 +86,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.6 Released:** **New Custom Editor Engine** with massive performance improvements for large files (80MB file uses ~80MB RAM, was 460MB+), **Multi-Cursor Editing** (Ctrl+Click to add cursors), **Code Folding** with content hiding (click ▶/▼ indicators), improved IME/CJK input, and cursor blink/auto-focus fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.6.1 Released:** First **code-signed** release! **Integrated Terminal Workspace** with tiling, splitting, and layout persistence. **Productivity Hub** panel. Major **app.rs refactoring** into ~15 modules. 8+ bug fixes including duplicate line, smart paste, and drag-drop positioning. **CJK memory optimization** (-80MB). See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 📦 **v0.2.5.3 Highlights:** View Mode Segmented Control, 100+ syntax languages, 25+ syntax themes, Flathub submission.
+> 📦 **v0.2.6 Highlights:** New Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
 ## Features
 
@@ -104,7 +106,7 @@ This transparency is intentional — I want others to learn from (and improve up
 - **Zen Mode** - Distraction-free writing with centered text column
 
 ### Editor Features
-- **Syntax Highlighting** - Full-file syntax highlighting for 40+ languages (Rust, Python, JavaScript, Go, etc.)
+- **Syntax Highlighting** - Full-file syntax highlighting for 100+ languages (Rust, Python, JavaScript, Go, TypeScript, PowerShell, and more)
 - **Code Folding** - Fold/unfold regions with gutter indicators (▶/▼) for headings, code blocks, and lists; collapsed content is hidden
 - **Semantic Minimap** - Navigation panel with clickable header labels, content type indicators, and text density bars (switchable to VS Code-style pixel view)
 - **Multi-Cursor Editing** - Ctrl+Click to add multiple cursors; type, delete, and navigate at all positions simultaneously
@@ -139,6 +141,15 @@ Native rendering of 11 diagram types directly in the preview:
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
 - **Git Integration** - Visual status indicators (modified, added, untracked, ignored) with auto-refresh on save, focus, and file changes
 - **Session Persistence** - Restore open tabs, cursor positions, and scroll offsets on restart
+
+### Terminal Workspace
+- **Integrated Terminal** - Multiple instances with shell selection (PowerShell, CMD, WSL, bash)
+- **Tiling & Splitting** - Create complex 2D grids with horizontal and vertical splits
+- **Smart Maximize** - Temporarily maximize any pane to focus on work (Ctrl+Shift+M)
+- **Layout Persistence** - Save and load your favorite terminal arrangements to JSON files
+- **Theming & Transparency** - Custom color schemes (Dracula, etc.) and background opacity
+- **Drag-and-Drop Tabs** - Reorder terminals with visual feedback
+- **AI-Ready** - Visual "breathing" indicator when terminal is waiting for input (perfect for AI agents)
 
 ### Additional Features
 - **Light & Dark Themes** - Beautiful themes with runtime switching
@@ -403,6 +414,22 @@ Toggle between modes using the toolbar buttons or keyboard shortcuts.
 | `Ctrl+Shift+[` | Fold all |
 | `Ctrl+Shift+]` | Unfold all |
 
+### Terminal Workspace
+
+Terminal shortcuts are **context-aware**; they work when the terminal panel is focused.
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle through terminal tabs |
+| `Ctrl+1-9` | Switch to specific terminal tab |
+| `Ctrl+Arrow Keys` | Move focus between split panes |
+| `Ctrl+Shift+M` | Toggle **Maximize Pane** (Zoom) |
+| `Ctrl+L` | Clear terminal screen |
+| `Ctrl+Shift+C` | Copy selection / screen |
+| `Ctrl+Shift+V` | Paste to terminal |
+| `Ctrl+W` / `Ctrl+F4` | Close focused pane (auto-collapses splits) |
+| `Double-click Tab` | Rename terminal |
+
 </details>
 
 ## Configuration
@@ -515,6 +542,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) - AI task management for development workflows
 
 </details>
+
+## Sponsors
+
+<table>
+  <tr>
+    <td>
+      <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite" target="_blank"><img src="https://signpath.org/assets/favicon-50x50.png" alt="SignPath" width="50" height="50" /></a>
+    </td>
+    <td>
+      Free code signing on Windows provided by <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath.io</a>, certificate by <a href="https://signpath.org/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath Foundation</a>
+    </td>
+  </tr>
+</table>
 
 ---
 

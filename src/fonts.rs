@@ -51,6 +51,161 @@ static JAPANESE_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
 static CHINESE_SC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
 static CHINESE_TC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// System Locale Detection for CJK Font Preloading
+// ─────────────────────────────────────────────────────────────────────────────
+
+use crate::config::CjkFontPreference;
+
+/// Detect the system locale and return the appropriate CJK font to preload.
+///
+/// This checks the Windows system locale and returns the CJK preference that
+/// matches the user's system language. This enables preloading only the ONE
+/// CJK font the user likely needs (~20MB) instead of all four (~80MB).
+///
+/// Returns `None` for non-CJK locales (font loading remains fully lazy).
+#[cfg(target_os = "windows")]
+pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
+    // Try Windows API first via GetUserDefaultLocaleName
+    // Locale names follow BCP-47 format: "ja-JP", "ko-KR", "zh-CN", "zh-TW", etc.
+    
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetUserDefaultLocaleName(
+            locale_name: *mut u16,
+            locale_name_len: i32,
+        ) -> i32;
+    }
+    
+    let mut buffer = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
+    let len = unsafe {
+        GetUserDefaultLocaleName(buffer.as_mut_ptr(), buffer.len() as i32)
+    };
+    
+    if len > 0 {
+        let locale = String::from_utf16_lossy(&buffer[..(len as usize - 1)]);
+        let locale_lower = locale.to_lowercase();
+        
+        info!("Detected system locale: {}", locale);
+        
+        // Check for CJK locales
+        if locale_lower.starts_with("ja") {
+            info!("System locale is Japanese - will preload Japanese font");
+            return Some(CjkFontPreference::Japanese);
+        } else if locale_lower.starts_with("ko") {
+            info!("System locale is Korean - will preload Korean font");
+            return Some(CjkFontPreference::Korean);
+        } else if locale_lower.starts_with("zh-cn") 
+            || locale_lower.starts_with("zh-hans")
+            || locale_lower.starts_with("zh-sg") 
+        {
+            info!("System locale is Simplified Chinese - will preload SC font");
+            return Some(CjkFontPreference::SimplifiedChinese);
+        } else if locale_lower.starts_with("zh-tw") 
+            || locale_lower.starts_with("zh-hant")
+            || locale_lower.starts_with("zh-hk")
+            || locale_lower.starts_with("zh-mo")
+        {
+            info!("System locale is Traditional Chinese - will preload TC font");
+            return Some(CjkFontPreference::TraditionalChinese);
+        }
+    }
+    
+    info!("System locale is not CJK - fonts will load on-demand");
+    None
+}
+
+#[cfg(target_os = "macos")]
+pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
+    // On macOS, check LANG environment variable or use defaults read
+    if let Ok(lang) = std::env::var("LANG") {
+        let lang_lower = lang.to_lowercase();
+        if lang_lower.starts_with("ja") {
+            return Some(CjkFontPreference::Japanese);
+        } else if lang_lower.starts_with("ko") {
+            return Some(CjkFontPreference::Korean);
+        } else if lang_lower.contains("zh_cn") || lang_lower.contains("zh-hans") {
+            return Some(CjkFontPreference::SimplifiedChinese);
+        } else if lang_lower.contains("zh_tw") || lang_lower.contains("zh-hant") {
+            return Some(CjkFontPreference::TraditionalChinese);
+        }
+    }
+    None
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
+    // On Linux, check LANG or LC_ALL environment variables
+    let lang = std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LANG"))
+        .unwrap_or_default()
+        .to_lowercase();
+    
+    if lang.starts_with("ja") {
+        Some(CjkFontPreference::Japanese)
+    } else if lang.starts_with("ko") {
+        Some(CjkFontPreference::Korean)
+    } else if lang.contains("zh_cn") || lang.contains("zh.") {
+        Some(CjkFontPreference::SimplifiedChinese)
+    } else if lang.contains("zh_tw") || lang.contains("zh_hk") {
+        Some(CjkFontPreference::TraditionalChinese)
+    } else {
+        None
+    }
+}
+
+/// Preload the CJK font for the system locale if detected.
+///
+/// This should be called early in app initialization to preload the user's
+/// likely-needed CJK font based on their system language setting.
+/// Only preloads if `cjk_preference` is Auto (user hasn't explicitly chosen).
+///
+/// Returns `true` if a font was preloaded, `false` otherwise.
+pub fn preload_system_locale_cjk_font(
+    ctx: &egui::Context,
+    cjk_preference: CjkFontPreference,
+) -> bool {
+    // Only preload based on system locale if user preference is Auto
+    if cjk_preference != CjkFontPreference::Auto {
+        info!("User has explicit CJK preference {:?} - skipping system locale preload", cjk_preference);
+        return false;
+    }
+    
+    if let Some(detected) = detect_system_cjk_locale() {
+        // Build a spec that loads only the detected locale's font
+        let spec = match detected {
+            CjkFontPreference::Japanese => CjkLoadSpec {
+                load_japanese: true,
+                ..Default::default()
+            },
+            CjkFontPreference::Korean => CjkLoadSpec {
+                load_korean: true,
+                ..Default::default()
+            },
+            CjkFontPreference::SimplifiedChinese => CjkLoadSpec {
+                load_chinese_sc: true,
+                ..Default::default()
+            },
+            CjkFontPreference::TraditionalChinese => CjkLoadSpec {
+                load_chinese_tc: true,
+                ..Default::default()
+            },
+            CjkFontPreference::Auto => return false,
+        };
+        
+        info!("Preloading CJK font for system locale: {:?}", detected);
+        let fonts = create_font_definitions_with_cjk_spec(None, detected, &spec);
+        ctx.set_fonts(fonts);
+        bump_font_generation();
+        configure_text_styles(ctx);
+        schedule_prewarm();
+        
+        return true;
+    }
+    
+    false
+}
+
 /// Font generation counter - increments whenever fonts are set up or changed.
 /// Used to invalidate galley caches that may have been built with missing glyphs
 /// before the font atlas was fully populated.
@@ -418,8 +573,6 @@ const FONT_CUSTOM: &str = "Custom";
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Loading
 // ─────────────────────────────────────────────────────────────────────────────
-
-use crate::config::CjkFontPreference;
 
 /// Track which CJK fonts were successfully loaded.
 #[derive(Default, Clone)]
@@ -1239,6 +1392,9 @@ fn configure_text_styles(ctx: &egui::Context) {
 /// Reload fonts at runtime with new settings.
 ///
 /// This can be called when font settings change in the UI.
+/// IMPORTANT: This only reloads CJK fonts that are ALREADY loaded to avoid
+/// loading all 4 CJK fonts (~80MB) just because the preference changed.
+/// New CJK fonts are loaded lazily when text containing those scripts is detected.
 pub fn reload_fonts(
     ctx: &egui::Context,
     custom_font: Option<&str>,
@@ -1249,24 +1405,23 @@ pub fn reload_fonts(
         custom_font, cjk_preference
     );
 
-    let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
-
-    let has_any_cjk_font = fonts.font_data.contains_key("CJK_KR")
-        || fonts.font_data.contains_key("CJK_JP")
-        || fonts.font_data.contains_key("CJK_SC")
-        || fonts.font_data.contains_key("CJK_TC");
-
-    let final_fonts = if cjk_preference != CjkFontPreference::Auto && !has_any_cjk_font {
-        warn!(
-            "CJK preference {:?} produced no CJK fonts; falling back to Auto",
-            cjk_preference
-        );
-        create_font_definitions_with_settings(custom_font, CjkFontPreference::Auto, true)
-    } else {
-        fonts
+    // Build a CjkLoadSpec from what's ALREADY loaded - don't load new ones
+    // This preserves memory by not eagerly loading all CJK fonts
+    let spec = CjkLoadSpec {
+        load_korean: KOREAN_FONTS_LOADED.load(Ordering::Relaxed),
+        load_japanese: JAPANESE_FONTS_LOADED.load(Ordering::Relaxed),
+        load_chinese_sc: CHINESE_SC_FONTS_LOADED.load(Ordering::Relaxed),
+        load_chinese_tc: CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed),
     };
 
-    ctx.set_fonts(final_fonts);
+    info!(
+        "Reloading with already-loaded CJK fonts: KR={}, JP={}, SC={}, TC={}",
+        spec.load_korean, spec.load_japanese, spec.load_chinese_sc, spec.load_chinese_tc
+    );
+
+    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
+
+    ctx.set_fonts(fonts);
 
     bump_font_generation();
     configure_text_styles(ctx);
@@ -1749,21 +1904,23 @@ mod tests {
 
     #[test]
     fn test_cjk_load_spec_han_only_uses_preference() {
-        // Han only with Korean preference
+        // Han-only always loads a Chinese font for Han character coverage,
+        // since Korean/Japanese fonts don't contain all Han characters.
+        // The preference determines WHICH Chinese variant to load.
         let detection = CjkScriptDetection {
             has_korean: false,
             has_japanese: false,
             has_han: true,
             has_any_cjk: true,
         };
-        let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Korean);
-        assert!(spec.load_korean);
-        assert!(!spec.load_japanese);
 
-        // Han only with Japanese preference
+        // Han only with Korean preference → loads Chinese SC for Han coverage
+        let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Korean);
+        assert!(spec.load_chinese_sc, "Korean pref + Han should load Chinese SC for Han coverage");
+
+        // Han only with Japanese preference → loads Chinese SC for Han coverage
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Japanese);
-        assert!(spec.load_japanese);
-        assert!(!spec.load_korean);
+        assert!(spec.load_chinese_sc, "Japanese pref + Han should load Chinese SC for Han coverage");
 
         // Han only with Simplified Chinese preference
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::SimplifiedChinese);

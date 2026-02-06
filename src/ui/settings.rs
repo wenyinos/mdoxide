@@ -4,6 +4,7 @@
 //! appearance, editor behavior, and file handling options with live preview.
 
 use crate::config::{CjkFontPreference, EditorFont, KeyBinding, KeyboardShortcuts, KeyCode, KeyModifiers, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme, ViewMode};
+use crate::terminal::MonitorInfo;
 use crate::fonts;
 use crate::markdown::syntax::get_available_themes;
 use eframe::egui::{self, Color32, RichText, Ui};
@@ -115,6 +116,8 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::OpenAbout => t!("shortcuts.commands.open_about").to_string(),
         ShortcutCommand::ExportHtml => t!("shortcuts.commands.export_html").to_string(),
         ShortcutCommand::InsertToc => t!("shortcuts.commands.insert_toc").to_string(),
+        ShortcutCommand::ToggleTerminal => t!("shortcuts.commands.toggle_terminal").to_string(),
+        ShortcutCommand::ToggleProductivityHub => t!("shortcuts.commands.toggle_productivity_hub").to_string(),
     }
 }
 
@@ -126,6 +129,7 @@ pub enum SettingsSection {
     Editor,
     Files,
     Keyboard,
+    Terminal,
 }
 
 impl SettingsSection {
@@ -136,6 +140,7 @@ impl SettingsSection {
             SettingsSection::Editor => t!("settings.editor.title"),
             SettingsSection::Files => t!("settings.files.title"),
             SettingsSection::Keyboard => t!("settings.keyboard.title"),
+            SettingsSection::Terminal => std::borrow::Cow::Borrowed("Terminal"), // TODO: i18n
         }
         .to_string()
     }
@@ -147,6 +152,7 @@ impl SettingsSection {
             SettingsSection::Editor => "📝",
             SettingsSection::Files => "📁",
             SettingsSection::Keyboard => "⌨",
+            SettingsSection::Terminal => ">_",
         }
     }
 }
@@ -184,6 +190,8 @@ pub struct SettingsPanel {
     keyboard_filter: String,
     /// Conflict warning message (if any)
     conflict_warning: Option<(ShortcutCommand, String)>,
+    /// Cached monitor info
+    cached_monitor_info: Option<Vec<MonitorInfo>>,
 }
 
 impl Default for SettingsPanel {
@@ -200,6 +208,7 @@ impl SettingsPanel {
             key_capture: None,
             keyboard_filter: String::new(),
             conflict_warning: None,
+            cached_monitor_info: None,
         }
     }
 
@@ -272,6 +281,7 @@ impl SettingsPanel {
                             SettingsSection::Editor,
                             SettingsSection::Files,
                             SettingsSection::Keyboard,
+                            SettingsSection::Terminal,
                         ] {
                             let selected = self.active_section == section;
                             let text = format!("{} {}", section.icon(), section.label());
@@ -331,6 +341,11 @@ impl SettingsPanel {
                                             output.changed = true;
                                         }
                                     }
+                                    SettingsSection::Terminal => {
+                                        if self.show_terminal_section(ui, settings) {
+                                            output.changed = true;
+                                        }
+                                    }
                                 }
                             });
                     });
@@ -363,6 +378,243 @@ impl SettingsPanel {
             });
 
         output
+    }
+
+    /// Show the Terminal settings section.
+    ///
+    /// Returns true if any setting was changed.
+    fn show_terminal_section(&mut self, ui: &mut Ui, settings: &mut Settings) -> bool {
+        let mut changed = false;
+
+        ui.heading("Terminal"); // TODO: i18n
+        ui.add_space(8.0);
+
+        // Terminal Enabled
+        if ui
+            .checkbox(&mut settings.terminal_enabled, "Enable Integrated Terminal") // TODO: i18n
+            .changed()
+        {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Terminal Font Size
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Font Size").strong()); // TODO: i18n
+            ui.add_space(8.0);
+            ui.label(format!("{}px", settings.terminal_font_size as u32));
+        });
+        ui.add_space(4.0);
+
+        let font_slider = ui.add(
+            egui::Slider::new(
+                &mut settings.terminal_font_size,
+                10.0..=32.0,
+            )
+            .show_value(false)
+            .step_by(1.0),
+        );
+        if font_slider.changed() {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Scrollback Lines
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Scrollback Lines").strong()); // TODO: i18n
+            ui.add_space(8.0);
+            ui.label(format!("{}", settings.terminal_scrollback_lines));
+        });
+        ui.add_space(4.0);
+
+        let mut scrollback_val = settings.terminal_scrollback_lines as f64;
+        let scrollback_slider = ui.add(
+            egui::Slider::new(
+                &mut scrollback_val,
+                1000.0..=50000.0,
+            )
+            .show_value(false)
+            .step_by(1000.0),
+        );
+        if scrollback_slider.changed() {
+            settings.terminal_scrollback_lines = scrollback_val as usize;
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Copy on Select
+        if ui
+            .checkbox(&mut settings.terminal_copy_on_select, "Copy Selection Automatically") // TODO: i18n
+            .on_hover_text("Automatically copy text to clipboard when selecting with mouse")
+            .changed()
+        {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Terminal Theme
+        ui.label(RichText::new("Terminal Theme").strong());
+        ui.add_space(4.0);
+        
+        egui::ComboBox::from_id_source("terminal_theme_combo")
+            .selected_text(&settings.terminal_theme_name)
+            .show_ui(ui, |ui| {
+                for theme in crate::terminal::TerminalTheme::all() {
+                    if ui.selectable_value(&mut settings.terminal_theme_name, theme.name.clone(), &theme.name).changed() {
+                        changed = true;
+                    }
+                }
+            });
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Terminal Opacity
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Background Opacity").strong());
+            ui.add_space(8.0);
+            ui.label(format!("{:.0}%", settings.terminal_opacity * 100.0));
+        });
+        ui.add_space(4.0);
+        
+        if ui.add(egui::Slider::new(&mut settings.terminal_opacity, 0.1..=1.0).show_value(false)).changed() {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Terminal Startup Command
+        ui.label(RichText::new("Startup Command").strong());
+        ui.label(RichText::new("Command to run when opening a new terminal (e.g. 'echo Hello')").small().weak());
+        ui.add_space(4.0);
+        
+        if ui.add(egui::TextEdit::singleline(&mut settings.terminal_startup_command).hint_text("Optional")).changed() {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Monitor Information
+        ui.label(RichText::new("Detected Monitors").strong());
+        ui.label(RichText::new("Detected display layout for window distribution").small().weak());
+        ui.add_space(4.0);
+        
+        if self.cached_monitor_info.is_none() {
+            self.cached_monitor_info = Some(crate::terminal::detect_monitors());
+        }
+        let monitors = self.cached_monitor_info.as_ref().unwrap();
+        
+        egui::Frame::none()
+            .fill(ui.visuals().faint_bg_color)
+            .rounding(4.0)
+            .inner_margin(8.0)
+            .show(ui, |ui| {
+                for (i, m) in monitors.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("Monitor {}:", i + 1));
+                        ui.label(RichText::new(&m.name).strong());
+                        ui.label(format!("({}x{} at {},{})", m.width as u32, m.height as u32, m.x as i32, m.y as i32));
+                    });
+                }
+            });
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Breathing color
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Breathing Indicator Color").strong());
+            ui.add_space(8.0);
+            if ui.color_edit_button_srgba(&mut settings.terminal_breathing_color).changed() {
+                changed = true;
+            }
+        });
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Prompt patterns
+        ui.label(RichText::new("Custom Prompt Patterns").strong());
+        ui.label(RichText::new("Regex patterns to detect terminal prompt (one per line)").small().weak());
+        ui.add_space(4.0);
+        
+        let mut patterns_text = settings.terminal_prompt_patterns.join("\n");
+        if ui.add(egui::TextEdit::multiline(&mut patterns_text).desired_rows(3).hint_text("e.g. ^\\w+@\\w+:")).changed() {
+            settings.terminal_prompt_patterns = patterns_text.lines().map(|s| s.to_string()).filter(|s| !s.is_empty()).collect();
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Auto-load
+        if ui.checkbox(&mut settings.terminal_auto_load_layout, "Auto-load Layout").on_hover_text("Automatically load 'terminal_layout.json' from project root").changed() {
+            changed = true;
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Sound Notification
+        ui.label(RichText::new("Sound Notification").strong());
+        ui.label(RichText::new("Play a sound when terminal is waiting for input").small().weak());
+        ui.add_space(4.0);
+
+        if ui.checkbox(&mut settings.terminal_sound_enabled, "Enable Sound on Prompt").on_hover_text("Play a notification sound when terminal detects a prompt (waiting for input)").changed() {
+            changed = true;
+        }
+
+        if settings.terminal_sound_enabled {
+            ui.add_space(4.0);
+            ui.indent("sound_file_settings", |ui| {
+                ui.label(RichText::new("Custom Sound File (optional)").small());
+                let mut sound_path = settings.terminal_sound_file.clone().unwrap_or_default();
+                if ui.add(egui::TextEdit::singleline(&mut sound_path).hint_text("Leave empty for system beep")).changed() {
+                    settings.terminal_sound_file = if sound_path.is_empty() {
+                        None
+                    } else {
+                        Some(sound_path)
+                    };
+                    changed = true;
+                }
+            });
+        }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Focus on Detect
+        ui.label(RichText::new("Auto-Focus on Input").strong());
+        ui.label(RichText::new("Automatically switch to terminal when it starts waiting for input").small().weak());
+        ui.add_space(4.0);
+
+        if ui.checkbox(&mut settings.terminal_focus_on_detect, "Focus Terminal on Prompt").on_hover_text("Automatically focus a terminal when it transitions from running to waiting for input").changed() {
+            changed = true;
+        }
+
+        changed
     }
 
     /// Show the Appearance settings section.
@@ -1411,6 +1663,7 @@ mod tests {
         assert_eq!(SettingsSection::Appearance.label(), "Appearance");
         assert_eq!(SettingsSection::Editor.label(), "Editor");
         assert_eq!(SettingsSection::Files.label(), "Files");
+        assert_eq!(SettingsSection::Terminal.label(), "Terminal");
     }
 
     #[test]
@@ -1418,6 +1671,7 @@ mod tests {
         assert_eq!(SettingsSection::Appearance.icon(), "🎨");
         assert_eq!(SettingsSection::Editor.icon(), "📝");
         assert_eq!(SettingsSection::Files.icon(), "📁");
+        assert_eq!(SettingsSection::Terminal.icon(), ">_");
     }
 
     #[test]

@@ -1,23 +1,37 @@
 # Ferrite Roadmap
 
-## Next Up (Immediate Focus) 
+## Next Up (Immediate Focus)
 
-### v0.2.6.1 (Planned) - Patch & Stability
-**Focus:** Critical bug fixes, code signing, and stability improvements following the major editor rewrite.
+### v0.2.6.1 (Planned) - Patch, Refactoring & Stability
+**Focus:** app.rs refactoring, critical bug fixes, code signing, and stability improvements following the major editor rewrite.
 
-- [ ] **Code Signing** - Windows artifacts (exe, MSI) will be code signed via SignPath.io (pending approval).
-- [ ] **CJK Font Crash on Startup** ([#63](https://github.com/OlaProeis/Ferrite/issues/63))  
-  Fix crash caused by invalid persisted CJK font configuration when a non-Auto CJK preference is selected but the corresponding system font cannot be loaded. Startup will defensively validate persisted font/CJK settings and fall back to *Auto* instead of crashing. Also resolves missing glyphs (tofu □) in settings UI.
-- [ ] **Portable Windows Startup Crash** ([#57](https://github.com/OlaProeis/Ferrite/issues/57))  
+#### App.rs Refactoring (Completed)
+- [x] **App.rs split into ~15 focused modules** - Split the 7,600+ line `app.rs` into modular files under `src/app/`: `mod.rs`, `title_bar.rs`, `central_panel.rs`, `keyboard.rs`, `input_handling.rs`, `line_ops.rs`, `file_ops.rs`, `formatting.rs`, `navigation.rs`, `find_replace.rs`, `export.rs`, `dialogs.rs`, `status_bar.rs`, `helpers.rs`, `types.rs`. See [refactoring plan](docs/technical/planning/app-rs-refactoring-plan.md).
+
+#### Bug Fixes
+- [x] **Duplicate Line (Ctrl+Shift+D) wrong position** - Rewrote `handle_duplicate_line()` to use `cursor_position` (line, col) synced from FerriteEditor instead of stale `tab.cursors` char index. Duplicate now reliably appears below the current line.
+- [x] **Keyboard shortcut conflict: Ctrl+Shift+E** ([#46](https://github.com/OlaProeis/Ferrite/issues/46)) - `ToggleFileTree` and `ExportHtml` were both bound to `Ctrl+Shift+E`. Changed `ExportHtml` to `Ctrl+Shift+X`. `ToggleFileTree` keeps `Ctrl+Shift+E` (VS Code standard).
+- [x] **Maximize/restore button icon** - Button icon disappeared on hover because text was painted under the hover background. Rewrote to use custom painter drawing (consistent with minimize/fullscreen buttons). Now shows proper restore icon (overlapping rectangles) when maximized.
+- [x] **Drag-drop image inserts at wrong position** - Image markdown link was inserted at stale `tab.cursors` position instead of actual editor cursor. Rewrote to use `cursor_position` (line, col) for correct placement.
+- [x] **Smart paste not working** - Selection state was read from `tab.cursors` (stale) instead of FerriteEditor. Now queries FerriteEditor directly via `get_ferrite_editor_mut()` for authoritative selection state. Select text + paste URL now correctly creates `[text](url)`.
+- [x] **Auto-save toggle inconsistency** - Title bar toggle directly flipped `auto_save_enabled` field instead of calling `toggle_auto_save()` which also clears `last_edit_time`. Fixed to use proper method.
+- [x] **Rendered mode raw editor stuttering** - Switching from Rendered to Raw mode caused full FerriteEditor recreation, losing viewport/syntax state and causing visual glitching. Added `set_content()` method for in-place buffer replacement preserving editor state. Smarter viewport restoration only adjusts if significantly off.
+
+#### New Features
+- [x] **Tab drag reorder** - Tabs can now be reordered by dragging. Added `click_and_drag` sensing, `DragAndDrop` payload, visual drop target indicator, and `swap_tabs()` state method.
+- [x] **File watcher auto-reload** - Externally modified files are now automatically reloaded when the tab has no unsaved changes. Shows toast notification. If tab has unsaved changes, shows a warning instead.
+
+#### Pending
+- [x] **Code Signing** - Windows artifacts (exe, MSI) are code signed via SignPath.io with a production certificate from SignPath Foundation.
+- [x] **Keyboard shortcut audit** - Fixed `FormatInlineCode` and `ToggleTerminal` both bound to `Ctrl+Backtick`. Changed `FormatInlineCode` to `Ctrl+Shift+Backtick`. Audited all shortcuts; fixed stale doc comments in `types.rs`.
+- [x] **Undo after text formatting** - Formatting operations (bold, italic, etc.) now create discrete undo entries. Added `break_group()` calls before and after formatting so Ctrl+Z reliably reverses only the format, not prior typing.
+- [x] **Multiline blockquote rendering** - Consecutive blockquotes separated by blank lines are now merged into a single continuous block with one border. Fixed blockquote border height calculation (was allocated before content was measured, causing incorrect sizing).
+- [x] **CJK Font Crash on Startup** ([#63](https://github.com/OlaProeis/Ferrite/issues/63))  
+  Fixed crash when a non-Auto CJK preference is selected but the corresponding system font cannot be loaded. Fonts now return `None` gracefully instead of crashing. Minor cosmetic: tofu (□) may appear in settings dropdown labels when no CJK documents are open (fonts load lazily on-demand — once a CJK document is opened, glyphs render correctly).
+- [x] **Portable Windows Startup Crash** ([#57](https://github.com/OlaProeis/Ferrite/issues/57))  
   Validate persisted window position values on load. Corrupted values (NaN, infinity, or out-of-bounds) are reset so the OS selects a safe default. Portable ZIP now always includes the `portable/` folder with a placeholder file.
-- [ ] **Duplicate Keyboard Shortcut (Ctrl+B)** ([#46](https://github.com/OlaProeis/Ferrite/issues/46))  
-  Remove duplicate keybinding assignment so Ctrl+B is mapped to a single, consistent action.
-- [ ] **Chinese Paragraph Indentation (Rendered & Editor Views)**  
-  Improve paragraph indentation handling for Chinese text in both editor and rendered modes. This pulls forward fixes originally planned for v0.2.7:
-  - [#26](https://github.com/OlaProeis/Ferrite/issues/26) – Feedback on paragraph indentation, rendered mode, and multi-tab behavior  
-  - [#20](https://github.com/OlaProeis/Ferrite/issues/20) – Adding paragraph indentation in Chinese editing renderings
-- [ ] **Raw Mode Viewport / Text Jitter Fix**  
-  Fixed periodic visual glitches during typing in Raw mode caused by spurious editor recreation and aggressive scroll clamping. Added viewport restoration, scroll clamp tolerance, and spurious sync detection.
+- [x] **CJK First-Line Paragraph Indentation** ([#20](https://github.com/OlaProeis/Ferrite/issues/20), [#26](https://github.com/OlaProeis/Ferrite/issues/26))  
+  Fixed first-line-only indentation for Chinese (2em) and Japanese (1em) paragraphs in rendered mode. Uses egui `LayoutJob` with `leading_space` in a custom TextEdit layouter — gives true first-line indent without click-to-edit or display/edit mode split. Works for both simple and formatted paragraphs.
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6 release.
 
 ---
@@ -58,9 +72,8 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index for massive CSVs.
 
 #### Refactoring & Quality
-- [ ] **Flowchart Refactoring** - Modularize the 3500+ line `flowchart.rs`.
-- [ ] **App.rs Refactoring** - Split the 8000+ line `app.rs` into focused modules.
-- [ ] **Window Controls** - Redesign minimize/maximize/close icons; native feel for macOS.
+- [ ] **Flowchart Refactoring** - Modularize the 3200+ line `flowchart.rs`.
+- [ ] **Window Controls** - Native-feel window controls for macOS; further icon polish.
 
 #### Executable Code Blocks
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
@@ -146,16 +159,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 **macOS**
 - [ ] App signing & notarization
 
-#### Mermaid Authoring Improvements
+#### 6. Mermaid Authoring Improvements
 - [ ] **Mermaid authoring hints** ([#4](https://github.com/OlaProeis/Ferrite/issues/4))  
   Inline hints and validation feedback when editing Mermaid diagrams to catch syntax errors and common mistakes early.
-
-#### 1. Mermaid Crate Extraction
-- [ ] **Standalone crate** - Backend-agnostic architecture with SVG, PNG, and egui outputs.
-- [ ] **Public API** - `parse()`, `layout()`, `render()` pipeline.
-
-#### 2. Markdown Enhancements
-- [ ] **GitHub-style HTML** - Render `<div align>`, `<details>`, `<kbd>`, etc.
 
 ---
 
@@ -196,9 +202,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] Delimiter matcher included
 - [ ] Documentation and examples
 
-- [ ] **Math Rendering Engine** - Parse and render `$inline$` and `$$display$$` LaTeX math.
-- [ ] **Office Document Support** - Read-only view for DOCX and XLSX files (rendered as flowing text/tables, not paginated).
-
 ---
 
 ## Future & Long-Term Vision 
@@ -231,11 +234,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] Advanced text layout integration (e.g., Parley)
 
 **Note:** These are ideas under consideration.
-
-- **Persistent Undo History:** Save undo stack to disk.
-- **Plugin System:** Lua or WASM based extensions.
-- **Headless Editor Library:** Extract `FerriteEditor` as a standalone Rust crate.
-- **Additional Formats:** Jupyter Notebooks (`.ipynb`), EPUB, LaTeX source (`.tex`).
 
 ---
 

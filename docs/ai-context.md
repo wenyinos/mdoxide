@@ -13,7 +13,13 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI, no retained
 | `markdown/editor.rs` | WYSIWYG rendered editing |
 | `markdown/mermaid/` | Native mermaid diagram rendering |
 | `ui/` | UI panels (ribbon, settings, file_tree, etc.) |
+| `terminal/` | Integrated terminal emulator (PTY, VTE, screen buffer, themes, layouts) |
+| `ui/terminal_panel.rs` | Terminal panel UI (tabs, splits, floating windows, drag-and-drop) |
+| `ui/productivity_panel.rs` | Productivity hub (task management, Pomodoro timer, quick notes) |
+| `workers/` | Async worker infrastructure (feature-gated `async-workers`) |
 | `config/settings.rs` | Persistent settings |
+| `config/snippets.rs` | Text expansion snippets system |
+| `config/session.rs` | Session persistence and crash recovery |
 | `theme/` | Light/dark theme management |
 
 ## FerriteEditor (v0.2.6 - Complete)
@@ -98,7 +104,37 @@ cargo clippy         # Lint
 cargo test           # Run tests
 ```
 
+## Terminal Emulator (PR #74 - Integrated)
+
+Full integrated terminal at `src/terminal/`. Uses `portable-pty` for cross-platform PTY and `vte` for ANSI parsing.
+
+**Key files:** `mod.rs` (Terminal, TerminalManager), `screen.rs` (buffer), `pty.rs` (shell), `widget.rs` (rendering), `layout.rs` (splits), `theme.rs` (color schemes), `handler.rs` (VTE handler), `sound.rs` (notifications)
+
+**Features:** Multiple tabs, split panes (H/V), floating windows, drag-and-drop tab reorder, 16/256/truecolor ANSI, themes (Dracula, Nord, etc.), prompt detection, layout save/load, shell selection (PowerShell/CMD/WSL/bash).
+
+**UI:** `ui/terminal_panel.rs` manages the bottom panel with tabs, split rendering, context menus, maximize pane (Ctrl+Shift+M).
+
+## Productivity Hub (PR #74 - Integrated)
+
+`ui/productivity_panel.rs` - Workspace-scoped productivity tools (Ctrl+Shift+H):
+- **Tasks:** Markdown checkbox syntax (`- [ ]`), priority (`!`/`!!`), persistent in `.ferrite/tasks.json`
+- **Pomodoro:** 25/5 work/break timer with sound notifications
+- **Quick Notes:** Auto-save per workspace in `.ferrite/notes/`
+
+## Async Workers (Feature-gated)
+
+`src/workers/` - Background tokio runtime for non-blocking operations. Feature-gated behind `async-workers`. Currently has echo worker template for future AI/DB panels.
+
 ## Recently Changed
+
+**v0.2.6.1 (Feb 2026 - in progress):** Bug fixes, code signing, terminal & productivity integration
+- Fixed keyboard shortcut conflicts (FormatInlineCode/ToggleTerminal Ctrl+Backtick collision)
+- Undo after formatting now creates discrete undo entries (break_group before/after format ops)
+- Consecutive blockquotes merged in parser; blockquote border height fixed (paint-after-measure)
+- Lazy CJK font loading reduces startup memory by ~80MB
+- Integrated terminal emulator with splits, themes, floating windows
+- Productivity hub with tasks, Pomodoro timer, quick notes
+- Windows code signing via SignPath.io (production certificate)
 
 **v0.2.6 (Jan 2026):** Complete FerriteEditor custom text editor
 - Replaced egui TextEdit with rope-based editor for large file performance

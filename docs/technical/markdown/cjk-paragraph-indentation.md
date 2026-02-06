@@ -35,15 +35,19 @@ Methods:
 
 ### Rendered View (`src/markdown/editor.rs`)
 
-Indentation is applied in `render_paragraph()`:
+Indentation is applied in `render_paragraph()` and `render_paragraph_with_structural_keys()`:
 
 1. Calculate indentation: `paragraph_indent.to_pixels(font_size)`
 2. Only apply to top-level paragraphs (`indent_level == 0`)
-3. For **formatted paragraphs** (with bold/italic/links):
-   - Display mode: `ui.add_space(cjk_indent)` inside `horizontal_wrapped` (first-line only)
-   - Edit mode: `ui.add_space(cjk_indent)` before TextEdit (all lines - egui limitation)
-4. For **simple paragraphs** (plain text):
-   - Uses TextEdit directly, indentation applies to all lines
+3. A custom **LayoutJob layouter** is used for all paragraph TextEdits:
+   - `LayoutJob::append(text, leading_space, format)` — the `leading_space` parameter adds space before the first character only; subsequent wrapped lines start flush left
+   - This gives **true first-line-only indentation** directly inside `egui::TextEdit`
+   - When `cjk_indent` is `0.0`, the leading space is a no-op (identical to default behavior)
+4. For **formatted paragraphs** (with bold/italic/links):
+   - Display mode: `ui.add_space(cjk_indent)` inside `horizontal_wrapped` (first-line only via multiple inline widgets)
+   - Edit mode: Custom layouter with `leading_space` on TextEdit (first-line only)
+5. For **simple paragraphs** (plain text):
+   - Custom layouter with `leading_space` on TextEdit (first-line only, always editable)
 
 ### HTML Export (`src/export/html.rs`)
 
@@ -57,9 +61,10 @@ p { text-indent: 1em; } /* Japanese */
 
 | Mode | First-line indent | All-lines indent | Notes |
 |------|-------------------|------------------|-------|
-| Display (formatted) | ✓ | - | Uses `horizontal_wrapped` |
-| Edit (formatted) | - | ✓ | egui TextEdit limitation |
-| Simple paragraph | - | ✓ | egui TextEdit limitation |
+| Display (formatted) | ✓ | - | `horizontal_wrapped` + spacer |
+| Edit (formatted) | ✓ | - | LayoutJob `leading_space` in TextEdit |
+| Simple paragraph | ✓ | - | LayoutJob `leading_space` in TextEdit |
+| No CJK indent | N/A | N/A | `leading_space: 0.0` — no-op (unchanged) |
 | HTML export | ✓ | - | CSS `text-indent` |
 
 ## Testing
@@ -76,9 +81,9 @@ Test file: `test_md/test_korean.md`
 
 ## Known Limitations
 
-1. **TextEdit all-lines indent**: Due to egui's TextEdit widget design, when editing text (either in edit mode for formatted paragraphs or for simple paragraphs), the indentation applies to ALL lines, not just the first line.
+1. **LayoutJob overrides default TextEdit layout**: The custom layouter replaces egui's default text layout for paragraphs. This is transparent when `cjk_indent` is `0.0` (the `leading_space` is a no-op), but means paragraph TextEdits always go through a custom LayoutJob rather than the built-in layouter.
 
-2. **Simple paragraphs**: Paragraphs without any inline formatting (bold, italic, links) always use TextEdit and cannot have first-line-only indentation.
+2. **Formatted paragraph display mode** still uses `horizontal_wrapped` with multiple inline widgets — this works correctly for first-line indent because the spacer widget only occupies the first row.
 
 ## Configuration
 
