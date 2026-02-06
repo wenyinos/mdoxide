@@ -487,7 +487,7 @@ recovery:
     restore: ""
     start_fresh: ""
     restore_tooltip: ""
-    start_fresh_tooltip: "Letzte Sitzung beenden und Editor ohne  geladene Datei starten"
+    start_fresh_tooltip: "Letzte Sitzung beenden und Editor ohne geladene Datei starten"
   untitled: "Dokument ohne Namen"
 
 # Common buttons and actions
