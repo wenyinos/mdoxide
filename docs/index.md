@@ -246,6 +246,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | Guide | Description |
 |-------|-------------|
 | [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
+| [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n (post v0.2.6.1), for Weblate extraction |
 | *More coming soon* | Usage guides will be added as the app develops |
 
 ---

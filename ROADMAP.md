@@ -2,59 +2,12 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.2.6.1 (Planned) - Patch, Refactoring & Stability
-**Focus:** app.rs refactoring, critical bug fixes, code signing, and stability improvements following the major editor rewrite.
-
-#### App.rs Refactoring (Completed)
-- [x] **App.rs split into ~15 focused modules** - Split the 7,600+ line `app.rs` into modular files under `src/app/`: `mod.rs`, `title_bar.rs`, `central_panel.rs`, `keyboard.rs`, `input_handling.rs`, `line_ops.rs`, `file_ops.rs`, `formatting.rs`, `navigation.rs`, `find_replace.rs`, `export.rs`, `dialogs.rs`, `status_bar.rs`, `helpers.rs`, `types.rs`. See [refactoring plan](docs/technical/planning/app-rs-refactoring-plan.md).
+### v0.2.7 (Planned) - Performance, Features & Polish
+**Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
 
 #### Bug Fixes
-- [x] **Duplicate Line (Ctrl+Shift+D) wrong position** - Rewrote `handle_duplicate_line()` to use `cursor_position` (line, col) synced from FerriteEditor instead of stale `tab.cursors` char index. Duplicate now reliably appears below the current line.
-- [x] **Keyboard shortcut conflict: Ctrl+Shift+E** ([#46](https://github.com/OlaProeis/Ferrite/issues/46)) - `ToggleFileTree` and `ExportHtml` were both bound to `Ctrl+Shift+E`. Changed `ExportHtml` to `Ctrl+Shift+X`. `ToggleFileTree` keeps `Ctrl+Shift+E` (VS Code standard).
-- [x] **Maximize/restore button icon** - Button icon disappeared on hover because text was painted under the hover background. Rewrote to use custom painter drawing (consistent with minimize/fullscreen buttons). Now shows proper restore icon (overlapping rectangles) when maximized.
-- [x] **Drag-drop image inserts at wrong position** - Image markdown link was inserted at stale `tab.cursors` position instead of actual editor cursor. Rewrote to use `cursor_position` (line, col) for correct placement.
-- [x] **Smart paste not working** - Selection state was read from `tab.cursors` (stale) instead of FerriteEditor. Now queries FerriteEditor directly via `get_ferrite_editor_mut()` for authoritative selection state. Select text + paste URL now correctly creates `[text](url)`.
-- [x] **Auto-save toggle inconsistency** - Title bar toggle directly flipped `auto_save_enabled` field instead of calling `toggle_auto_save()` which also clears `last_edit_time`. Fixed to use proper method.
-- [x] **Rendered mode raw editor stuttering** - Switching from Rendered to Raw mode caused full FerriteEditor recreation, losing viewport/syntax state and causing visual glitching. Added `set_content()` method for in-place buffer replacement preserving editor state. Smarter viewport restoration only adjusts if significantly off.
-
-#### New Features
-- [x] **Tab drag reorder** - Tabs can now be reordered by dragging. Added `click_and_drag` sensing, `DragAndDrop` payload, visual drop target indicator, and `swap_tabs()` state method.
-- [x] **File watcher auto-reload** - Externally modified files are now automatically reloaded when the tab has no unsaved changes. Shows toast notification. If tab has unsaved changes, shows a warning instead.
-
-#### Pending
-- [x] **Code Signing** - Windows artifacts (exe, MSI) are code signed via SignPath.io with a production certificate from SignPath Foundation.
-- [x] **Keyboard shortcut audit** - Fixed `FormatInlineCode` and `ToggleTerminal` both bound to `Ctrl+Backtick`. Changed `FormatInlineCode` to `Ctrl+Shift+Backtick`. Audited all shortcuts; fixed stale doc comments in `types.rs`.
-- [x] **Undo after text formatting** - Formatting operations (bold, italic, etc.) now create discrete undo entries. Added `break_group()` calls before and after formatting so Ctrl+Z reliably reverses only the format, not prior typing.
-- [x] **Multiline blockquote rendering** - Consecutive blockquotes separated by blank lines are now merged into a single continuous block with one border. Fixed blockquote border height calculation (was allocated before content was measured, causing incorrect sizing).
-- [x] **CJK Font Crash on Startup** ([#63](https://github.com/OlaProeis/Ferrite/issues/63))  
-  Fixed crash when a non-Auto CJK preference is selected but the corresponding system font cannot be loaded. Fonts now return `None` gracefully instead of crashing. Minor cosmetic: tofu (□) may appear in settings dropdown labels when no CJK documents are open (fonts load lazily on-demand — once a CJK document is opened, glyphs render correctly).
-- [x] **Portable Windows Startup Crash** ([#57](https://github.com/OlaProeis/Ferrite/issues/57))  
-  Validate persisted window position values on load. Corrupted values (NaN, infinity, or out-of-bounds) are reset so the OS selects a safe default. Portable ZIP now always includes the `portable/` folder with a placeholder file.
-- [x] **CJK First-Line Paragraph Indentation** ([#20](https://github.com/OlaProeis/Ferrite/issues/20), [#26](https://github.com/OlaProeis/Ferrite/issues/26))  
-  Fixed first-line-only indentation for Chinese (2em) and Japanese (1em) paragraphs in rendered mode. Uses egui `LayoutJob` with `leading_space` in a custom TextEdit layouter — gives true first-line indent without click-to-edit or display/edit mode split. Works for both simple and formatted paragraphs.
-- [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6 release.
-
----
-
-## Known Issues 
-
-### FerriteEditor Limitations
-With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
-
-- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
-
-### Deferred to v0.2.7
-- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
-
-### Rendered View Limitations
-- [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
-
----
-
-## Planned Features 
-
-### v0.2.7 - Performance, Features & Polish
-**Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
+- [ ] **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - When "Which CJK font to prioritize" is set to a non-Auto value and the app restarts, Chinese can render as tofu in restored tabs because we only lazy-load CJK for the active tab and don't preload the user's preferred font at startup. Fix: preload the single preferred CJK font at startup when preference is explicit (same approach as Auto + system locale), so restored documents render correctly regardless of which tab is active.
+- [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
 #### Markdown Linking
 - [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax.
@@ -90,6 +43,23 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Collapsible callouts** - `> [!NOTE]-` syntax for collapsed-by-default blocks.
 
 ---
+
+## Known Issues 
+
+### FerriteEditor Limitations
+With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
+
+- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
+
+### Deferred to v0.2.7
+- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
+
+### Rendered View Limitations
+- [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
+
+---
+
+## Planned Features 
 
 ### v0.2.8 - UI & Accessibility
 
