@@ -477,7 +477,7 @@ recovery:
     title: ""
     backup_found: ""
     restore_question: ""
-    restore: ""
+    restore: "Wiederherstellen"
     discard: ""
     time_label: ""
   session:
