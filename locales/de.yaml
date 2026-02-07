@@ -13,7 +13,7 @@ menu:
     open: "Datei Öffnen..."
     save: "Datei Speichern"
     save_as: "Datei Speichern unter..."
-    recent: "Jüngste Dateien"
+    recent: "Kürzlich verwendete Dateien"
     export: "Exportieren"
     export_html: "Exportieren als HTML..."
     export_clipboard: "Kopieren als HTML"
