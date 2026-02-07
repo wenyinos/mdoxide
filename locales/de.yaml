@@ -269,18 +269,19 @@ stats:
 
 # Quick switcher
 quick_switcher:
-  placeholder: ""
-  no_results: ""
-  recent_tooltip: ""
-  keyboard_hints: ""
+  placeholder: "Dateien suchen..."
+  no_results: "Keine passenden Dateien"
+  recent_tooltip: "Zuletzt geöffnet"
+  keyboard_hints: "↑↓ Navigieren  ⏎ Öffnen  Esc Schließen"
 
 # Search in files
 search:
   title: "Suche in Dateien"
   label: "Suchen:"
-  placeholder: ""
+  placeholder: "Suchbegriffe eingeben..."
   more_matches: ""
-  keyboard_hints: ""
+  keyboard_hints: "Enter drücken zum Suchen • Ergebnis anklicken zum Öffnen • Esc
+    zum Schließen"
 
 # About dialog
 about:
@@ -476,7 +477,7 @@ recovery:
     title: ""
     backup_found: ""
     restore_question: ""
-    restore: ""
+    restore: "Wiederherstellen"
     discard: ""
     time_label: ""
   session:
@@ -486,7 +487,7 @@ recovery:
     restore: ""
     start_fresh: ""
     restore_tooltip: ""
-    start_fresh_tooltip: ""
+    start_fresh_tooltip: "Letzte Sitzung beenden und Editor ohne geladene Datei starten"
   untitled: "Dokument ohne Namen"
 
 # Common buttons and actions
