@@ -10,9 +10,9 @@ app:
 menu:
   file:
     label: "Datei"
-    open: "Datei Öffnen..."
-    save: "Datei Speichern"
-    save_as: "Datei Speichern unter..."
+    open: "Datei öffnen..."
+    save: "Datei speichern"
+    save_as: "Datei speichern unter..."
     recent: "Kürzlich verwendet"
     export: "Exportieren"
     export_html: "Exportieren als HTML..."
