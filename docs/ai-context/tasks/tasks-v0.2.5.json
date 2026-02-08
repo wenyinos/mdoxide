@@ -1,0 +1,930 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Add rust-i18n dependency and setup locales directory structure",
+        "description": "Integrate rust-i18n crate v4.0.7 (latest stable as of 2026) and create locales directory with en.yaml as base language",
+        "details": "Add to Cargo.toml: rust-i18n = \"4.0.7\". Create locales/en.yaml with initial empty structure. Configure rust-i18n with fallback to English. Enable hot-reload for development using rust-i18n::set_or_add_fallbacks(). Create locales/ directory in project root. Use rust-i18n::i18n! macro setup with locales path.",
+        "testStrategy": "Verify i18n crate compiles without warnings. Test hot-reload by editing en.yaml and checking UI refresh. Confirm English strings load correctly as fallback.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-12T15:50:56.024Z"
+      },
+      {
+        "id": "2",
+        "title": "Extract all UI strings to i18n keys",
+        "description": "Replace ~300-400 hardcoded UI strings with rust-i18n translation keys using consistent naming convention",
+        "details": "Use key format: 'menu.file.open', 'dialog.save.title'. Replace all user-visible strings with i18n!(\"key\"). Create comprehensive extraction script using grep/sed or rust-i18n CLI tools. Document process in CONTRIBUTING.md. Audit for missed strings using string search.",
+        "testStrategy": "Run UI tests to ensure no missing translation keys (fallback to English). Verify all menu items, dialogs, tooltips display correctly. Test with missing keys to confirm graceful fallback.",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down extraction of 300-400 UI strings into phases: 1) Create extraction script and process menus/status bar first, 2) Extract dialog and settings strings, 3) Audit tooltips/error messages and document conventions. Include regression testing strategy for each phase.",
+        "updatedAt": "2026-01-12T16:52:15.446Z"
+      },
+      {
+        "id": "3",
+        "title": "Implement language selector in Settings",
+        "description": "Add dropdown in Settings → Appearance to choose UI language with immediate application",
+        "details": "Use iced::widget::PickList for language selector. Store selection in config.json under 'language'. Implement rust-i18n::set_locale() on selection change. Show native names: '简体中文', 'English'. Persist via config serialization. Apply without app restart using global i18n refresh.",
+        "testStrategy": "Test switching languages shows correct UI immediately. Verify persistence across restarts. Test invalid language falls back to English. Check all UI elements translate correctly.",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "2"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Separate UI widget creation from config persistence and i18n refresh logic. First implement PickList UI and config storage, then add runtime locale switching with global refresh."
+      },
+      {
+        "id": "4",
+        "title": "Add system locale detection on first launch",
+        "description": "Auto-detect system language and set as default if translation available",
+        "details": "Use sys_locale::get_locale() crate (v0.3.1) to read system locale. Map to available languages (en, zh-CN). Set only on first run or missing config. Never override explicit user choice. Fallback chain: system → English.",
+        "testStrategy": "Mock system locales and verify correct language selection. Test first-run vs existing config behavior. Confirm user override persists over system changes.",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "3"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-14T22:33:31.873Z"
+      },
+      {
+        "id": "5",
+        "title": "Fix session restore reliability for workspace folders",
+        "description": "Audit and fix workspace folder persistence across app restarts",
+        "details": "Audit session.json serialization logic. Ensure workspace path saved immediately on folder open. Add error handling for invalid paths. Implement atomic file writes. Add debug logging with log::debug!(). Remove unnecessary recovery dialogs.",
+        "testStrategy": "Open workspace, restart app 10x, verify folder restores correctly. Test with moved/deleted folders. Check logs for save/load events.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Split into 1) Audit existing serialization and add atomic writes/error handling, 2) Implement immediate save on folder open with debug logging and recovery improvements.",
+        "updatedAt": "2026-01-14T23:07:22.130Z"
+      },
+      {
+        "id": "6",
+        "title": "Fix recent files persistence across builds",
+        "description": "Ensure recent files list saves immediately and survives app updates",
+        "details": "Save recent files on every open (not just exit). Limit to 20 entries, prune stale paths. Use atomic writes to config.json. Add file existence check on load. Test across different build versions.",
+        "testStrategy": "Open 25 files, restart multiple times, verify exactly 20 recent files persist. Test with deleted files. Verify across clean installs/updates.",
+        "priority": "high",
+        "dependencies": [
+          "5"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Separate immediate save logic and list pruning from cross-build persistence testing and atomic write implementation.",
+        "updatedAt": "2026-01-14T23:15:06.912Z"
+      },
+      {
+        "id": "7",
+        "title": "Implement Git status auto-refresh",
+        "description": "Add automatic git status refresh on save, focus, and periodic intervals",
+        "details": "Use tokio::spawn for background refresh task. Refresh on: file save, window focus, every 10s when workspace open. Implement debounce (500ms). Use git2 crate v0.19.0 for status checks. Cache results to avoid excessive calls.",
+        "testStrategy": "Modify files in git repo, verify indicators update within 10s. Test debounce prevents spam. Verify performance impact <5% CPU.",
+        "priority": "high",
+        "dependencies": [
+          "5"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 8,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Break down into: 1) Background tokio task setup, 2) Event triggers (save/focus) with debounce, 3) git2 integration and caching, 4) Performance testing and UI indicator updates.",
+        "updatedAt": "2026-01-14T23:24:03.909Z"
+      },
+      {
+        "id": "8",
+        "title": "Implement Mermaid YAML frontmatter parsing",
+        "description": "Parse --- YAML blocks in mermaid code blocks and apply title/config metadata",
+        "details": "Use yaml-rust v0.4.5 to parse frontmatter between --- blocks. Extract 'title' for diagram label, 'config' for theme. Ignore unknown keys. Integrate with existing mermaid.rs parser. Graceful fallback for non-YAML diagrams.",
+        "testStrategy": "Test parsing valid YAML frontmatter examples. Verify title displays correctly. Test invalid YAML ignores gracefully. Test existing diagrams unchanged.",
+        "priority": "low",
+        "dependencies": [
+          "44"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Implement yaml-rust frontmatter extraction between --- blocks, 2) Integrate with existing mermaid parser and apply title/config to rendering with graceful fallbacks.",
+        "updatedAt": "2026-01-15T22:58:28.396Z"
+      },
+      {
+        "id": "9",
+        "title": "Add Mermaid parallel edge operator support (&)",
+        "description": "Parse A --> B & C & D syntax for multiple edges from single source",
+        "details": "Extend mermaid.rs parser to handle '&' operator in edge definitions. Support flowchart, sequence, state diagrams. Preserve per-edge styling/labels. Update AST generation for multiple target nodes.",
+        "testStrategy": "Test all example syntaxes render correctly. Verify styling applies per-segment. Test mixed syntax with single edges. Regression test existing diagrams.",
+        "priority": "low",
+        "dependencies": [
+          "44"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Extend parser grammar for '&' operator across diagram types, 2) Update AST generation and rendering for multiple targets with per-edge styling preservation.",
+        "updatedAt": "2026-01-15T15:58:49.910Z"
+      },
+      {
+        "id": "10",
+        "title": "Optimize Mermaid rendering performance with AST caching",
+        "description": "Cache parsed AST and layout for unchanged diagrams, re-render only on source changes",
+        "details": "Implement content-addressable cache using BLAKE3 hash of source (blake3 v1.5.3). Cache mermaid::AST and layout results. Compare hash before re-parse. Target <100ms cached render. Measure 50+ node diagrams.",
+        "testStrategy": "Benchmark render times before/after. Verify cache hit rate >90% during typing. Test 50-node diagrams <100ms cached. Verify cache invalidates on source change.",
+        "priority": "medium",
+        "dependencies": [
+          "44"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "1) Implement BLAKE3 content hashing, 2) Cache AST/layout results with invalidation logic, 3) Performance benchmarking for 50+ node diagrams targeting <100ms cached renders.",
+        "updatedAt": "2026-01-15T23:05:48.905Z"
+      },
+      {
+        "id": "11",
+        "title": "Add CSV file detection and tree viewer",
+        "description": "Detect .csv/.tsv files and display as fixed-width table with scrolling",
+        "details": "Add csv crate v1.3.0 to Cargo.toml. On file open, detect extension and parse first 1000 rows for preview. Use iced::widget::Scroll for horizontal/vertical scrolling. Fixed column widths based on content. Click cell shows full content in tooltip.",
+        "testStrategy": "Open various CSV/TSV files, verify table renders correctly. Test horizontal/vertical scroll. Test cell click shows full content. Verify non-CSV files use normal editor.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) File detection and csv crate integration with 1000-row preview parsing, 2) Implement Iced scrollable table widget with fixed column widths and cell tooltips.",
+        "updatedAt": "2026-01-15T23:31:08.025Z"
+      },
+      {
+        "id": "12",
+        "title": "Implement CSV delimiter detection and manual override",
+        "description": "Auto-detect comma/tab/semicolon/pipe delimiters, provide manual override UI",
+        "details": "Analyze first 10 lines using csv::Reader with candidate delimiters. Score by parse success rate. Default TSV to tab. Add status bar delimiter picker for override. Store per-file in session.json.",
+        "testStrategy": "Test all delimiter types auto-detect correctly. Test mixed delimiter edge cases. Verify manual override persists and works. Test TSV defaults to tab.",
+        "priority": "medium",
+        "dependencies": [
+          "11"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Implement delimiter scoring algorithm using csv::Reader on first 10 lines, status bar picker UI, and per-file session storage.",
+        "updatedAt": "2026-01-15T23:31:08.030Z"
+      },
+      {
+        "id": "13",
+        "title": "Add CSV header row detection with sticky headers",
+        "description": "Style first row as headers with toggle and sticky header on scroll",
+        "details": "Heuristic: first row shorter/more unique values = headers. Style with bold + background. Toggle in status bar. Implement sticky headers using iced::widget::Container with scroll offset tracking.",
+        "testStrategy": "Test auto-detection on various CSV formats. Verify toggle switches header/data view. Test sticky headers remain visible on scroll. Test performance with 1000+ rows.",
+        "priority": "medium",
+        "dependencies": [
+          "11",
+          "12"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Header detection heuristic and styling, 2) Implement sticky headers with scroll offset tracking using Iced Container.",
+        "updatedAt": "2026-01-16T00:11:47.916Z"
+      },
+      {
+        "id": "14",
+        "title": "Implement CSV rainbow column coloring",
+        "description": "Apply subtle alternating column colors that work in light/dark themes",
+        "details": "Generate 12-color palette using HSL with theme-aware lightness (OkLch color space via palette crate v0.7.3). Subtle saturation (10-20%). Toggle in settings. Apply to column backgrounds.",
+        "testStrategy": "Verify colors readable in both themes. Test toggle works. Confirm 12+ columns cycle correctly. Check accessibility contrast ratios >3:1.",
+        "priority": "medium",
+        "dependencies": [
+          "11",
+          "13"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T00:10:28.925Z"
+      },
+      {
+        "id": "15",
+        "title": "Add CSV virtual scrolling for large files",
+        "description": "Implement virtual scrolling to handle 10,000+ row files smoothly",
+        "details": "Parse full CSV once, store row data in Vec. Render only visible rows (calculate from scroll offset). Use iced::widget::Lazy for row widgets. Show total row count. Target <2s open for 100MB files using csv::Reader::from_path with buffered reading.",
+        "testStrategy": "Test 10k+ row files open <2s, scroll smoothly 60fps. Verify row count accurate. Test memory usage <500MB for 100MB files. Benchmark various file sizes.",
+        "priority": "high",
+        "dependencies": [
+          "11",
+          "12",
+          "13",
+          "14"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 9,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Break into: 1) Buffered full-file parsing with memory targets, 2) Virtual row calculation from scroll offset, 3) Iced Lazy widget integration, 4) Performance benchmarking for 100MB files <2s open.",
+        "updatedAt": "2026-01-16T00:17:59.268Z"
+      },
+      {
+        "id": "16",
+        "title": "Implement semantic minimap header labels",
+        "description": "Replace pixel minimap with H1/H2/H3 text labels that are clickable for navigation",
+        "details": "Parse markdown AST using pulldown-cmark v0.11.4 to extract headers. Store Vec<(offset, level, text)> on document change. Render as scrollable list with font-size by level. Click jumps to header offset. Truncate text at 30 chars.",
+        "testStrategy": "Verify all headers detected and clickable. Test hierarchy visualization (size/indent). Test navigation accuracy. Performance: <50ms update on type.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 8,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "1) pulldown-cmark header extraction to Vec<(offset,level,text)>, 2) Scrollable hierarchical list rendering with truncation, 3) Click navigation with performance optimization <50ms.",
+        "updatedAt": "2026-01-16T08:12:39.948Z"
+      },
+      {
+        "id": "17",
+        "title": "Add semantic minimap content type indicators",
+        "description": "Visual markers for code blocks, Mermaid, tables, images, blockquotes",
+        "details": "Extend markdown parser to detect: code blocks (`[```]`), Mermaid (`[📊]`), tables (`[⊞]`), images (`[🖼]`), blockquotes (`[>]`). Theme-aware colors. Consistent 1-line height.",
+        "testStrategy": "Test document with all content types shows correct icons. Verify theme switching. Test click navigation to content blocks.",
+        "priority": "medium",
+        "dependencies": [
+          "16"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Extend markdown parser for content type detection with theme-aware icon rendering and click navigation.",
+        "updatedAt": "2026-01-16T08:23:13.087Z"
+      },
+      {
+        "id": "18",
+        "title": "Implement semantic minimap density visualization",
+        "description": "Horizontal bars between headers showing relative text density",
+        "details": "Calculate line count between headers. Map to bar width (1-20px) and opacity (0.2-0.8). Darker = more text. Smooth gradient bars using iced::widget::Canvas.",
+        "testStrategy": "Test varying paragraph lengths show proportional bars. Verify smooth scrolling. Performance test with 100+ sections.",
+        "priority": "medium",
+        "dependencies": [
+          "16",
+          "17"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Calculate relative text density between headers, 2) Implement smooth gradient bars using Iced Canvas with opacity mapping.",
+        "updatedAt": "2026-01-16T08:46:14.974Z"
+      },
+      {
+        "id": "19",
+        "title": "Add semantic minimap mode toggle in settings",
+        "description": "Settings option to switch Visual | Semantic minimap, default by file type",
+        "details": "Add enum MinimapMode to config.json. Default: Semantic for .md, Visual for code. Per-file-type preference. Toggle updates immediately.",
+        "testStrategy": "Test toggle switches modes correctly. Verify defaults by file type. Test persistence across files/sessions.",
+        "priority": "medium",
+        "dependencies": [
+          "16"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T08:46:14.976Z"
+      },
+      {
+        "id": "20",
+        "title": "Implement drag & drop image support",
+        "description": "Drop images into editor to auto-save to assets/ and insert markdown link",
+        "details": "Handle iced::Event::DragDrop. Copy PNG/JPG/GIF/WebP to ./assets/ (create dir). Generate unique filename with timestamp. Insert `![](assets/filename.ext)` at cursor. Handle external files.",
+        "testStrategy": "Test all supported formats copy correctly. Verify link insertion at cursor. Test assets/ dir creation. Test duplicate filename handling.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) iced::DragDrop event handling and asset directory creation, 2) Image format validation, unique naming, and markdown link insertion at cursor.",
+        "updatedAt": "2026-01-16T08:46:54.150Z"
+      },
+      {
+        "id": "21",
+        "title": "Implement Table of Contents generation",
+        "description": "Insert/update <!-- TOC --> block with auto-generated heading links",
+        "details": "Parse headings with pulldown-cmark. Generate `- [Heading](#slug)` format. Find/replace existing TOC block or insert at cursor. Toolbar button + optional auto-update on save. Slugify with slug crate v0.1.5.",
+        "testStrategy": "Test TOC generation accuracy. Verify update existing block. Test depth filtering. Test special chars in headings.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) pulldown-cmark heading parsing and slug generation, 2) TOC block find/replace/insert logic with toolbar integration and auto-update.",
+        "updatedAt": "2026-01-16T08:54:20.811Z"
+      },
+      {
+        "id": "22",
+        "title": "Add document statistics panel",
+        "description": "Tabbed Statistics panel showing word/line counts, headings, links, reading time",
+        "details": "Extend markdown parser for stats: word_count, char_count, headings_by_level, link_count, image_count, code_blocks. Calculate reading time (250 WPM). Live update on change using debounce(300ms).",
+        "testStrategy": "Test all metrics accurate vs manual count. Verify live updates. Test various document types. Performance <50ms update.",
+        "priority": "medium",
+        "dependencies": [
+          "16"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Extend markdown parser for comprehensive metrics collection, 2) Tabbed Iced panel with debounced live updates <50ms.",
+        "updatedAt": "2026-01-16T09:45:13.110Z"
+      },
+      {
+        "id": "23",
+        "title": "Implement snippets/abbreviation system",
+        "description": "User-defined text expansions with built-in date/time snippets",
+        "details": "Load ~/.config/ferrite/snippets.json. On space/tab after trigger, replace with expansion. Built-in: ;date → YYYY-MM-DD, ;time → HH:MM, ;datetime. Multi-line support. Settings UI to edit.",
+        "testStrategy": "Test all built-in snippets expand correctly. Test custom snippets load/save. Test multi-line expansion. Verify trigger + space/tab behavior.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 8,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "1) Config file loading and built-in snippet definitions, 2) Real-time trigger detection on space/tab with multi-line replacement, 3) Settings UI for user snippet editing.",
+        "updatedAt": "2026-01-16T09:36:05.222Z"
+      },
+      {
+        "id": "24",
+        "title": "Add recent folders to status bar menu",
+        "description": "Extend recent files menu to include recent workspace folders",
+        "details": "Status bar click → split menu: left=files (20), right=folders (10). Prune non-existent paths. Click folder opens as workspace.",
+        "testStrategy": "Test folder persistence across restarts. Verify pruning of deleted folders. Test menu layout and click handling.",
+        "priority": "low",
+        "dependencies": [
+          "6"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T09:59:11.229Z"
+      },
+      {
+        "id": "25",
+        "title": "Implement keyboard shortcut customization",
+        "description": "Settings panel to rebind shortcuts with conflict detection",
+        "details": "New Settings → Keyboard Shortcuts section. List all commands with current keys. Click → capture new key combo. Detect/prevent conflicts. Store in config.json. Reset button.",
+        "testStrategy": "Test rebinding common shortcuts. Verify conflict detection. Test reset to defaults. Verify persistence across restarts.",
+        "priority": "medium",
+        "dependencies": [
+          "3"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 8,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "1) Settings panel listing all commands with current bindings, 2) Key capture with conflict detection/prevention, 3) Config persistence and reset functionality.",
+        "updatedAt": "2026-01-16T10:09:36.162Z"
+      },
+      {
+        "id": "26",
+        "title": "Fix quick switcher mouse support",
+        "description": "Add mouse hover/click support to quick switcher",
+        "details": "Handle mouse events in iced list widget. Hover highlight, click select/open. Prevent flickering with stable widget IDs. Preserve keyboard navigation.",
+        "testStrategy": "Test hover highlights correctly. Test click opens files/folders. Verify no flicker. Test keyboard still works.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Implement mouse hover/click handling in Iced list with stable IDs while preserving keyboard navigation.",
+        "updatedAt": "2026-01-16T10:40:39.386Z"
+      },
+      {
+        "id": "27",
+        "title": "Fix table editing cursor loss in rendered mode",
+        "description": "Maintain cursor focus during table cell editing with tab/enter navigation",
+        "details": "Fix focus loss on input events. Implement tab→next cell, enter→next row, escape→exit. Track current cell position in rendered table state.",
+        "testStrategy": "Test typing maintains focus. Test tab/enter navigation. Test escape exits editing. Verify across table sizes.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "1) Fix focus loss on input events, 2) Implement tab/enter/escape navigation with cell position tracking.",
+        "updatedAt": "2026-01-16T10:46:20.412Z"
+      },
+      {
+        "id": "28",
+        "title": "Fix Zen mode centering in rendered/split views",
+        "description": "Center content in all view modes when Zen mode active",
+        "details": "Extend existing raw mode centering to rendered/split. Use iced::widget::Center with flexible spacing. Consistent across all view modes.",
+        "testStrategy": "Test all view modes (raw, rendered, split) center correctly in Zen. Verify toggle works. Test various document lengths.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T11:29:20.596Z"
+      },
+      {
+        "id": "29",
+        "title": "Add Mermaid diagram insertion toolbar",
+        "description": "Toolbar button with diagram type picker and template insertion",
+        "details": "Add button to formatting toolbar → PickList with 11 diagram types. Insert template code block at cursor. Templates include basic syntax + YAML frontmatter example.",
+        "testStrategy": "Test all 11 diagram types insert correct templates. Verify cursor position respected. Test YAML frontmatter included.",
+        "priority": "low",
+        "dependencies": [
+          "8"
+        ],
+        "status": "deferred",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T11:33:09.358Z"
+      },
+      {
+        "id": "30",
+        "title": "Add Mermaid syntax hints to Help menu",
+        "description": "Help panel documenting supported diagram types with examples",
+        "details": "Help menu → Mermaid Diagrams section. List all supported types with syntax examples. Link to MermaidJS docs. Use i18n keys.",
+        "testStrategy": "Verify all diagram types documented. Test examples render correctly. Verify i18n translation.",
+        "priority": "low",
+        "dependencies": [
+          "2",
+          "29"
+        ],
+        "status": "deferred",
+        "subtasks": [],
+        "complexity": 2,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T11:33:10.005Z"
+      },
+      {
+        "id": "31",
+        "title": "Create Simplified Chinese translation file",
+        "description": "Complete zh-CN.yaml translation covering all UI strings",
+        "details": "Translate all keys from en.yaml to zh-CN.yaml. Native speaker review. Credit translator in About dialog. Submit to Weblate project.",
+        "testStrategy": "Test full UI in Chinese displays correctly. Verify no missing translations. Test bidirectional with English fallback.",
+        "priority": "medium",
+        "dependencies": [
+          "2"
+        ],
+        "status": "deferred",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T11:36:56.517Z"
+      },
+      {
+        "id": "32",
+        "title": "Mermaid code cleanup and documentation",
+        "description": "Eliminate warnings and improve mermaid module organization/documentation",
+        "details": "cargo clippy --fix on mermaid module. Remove dead code. Reorganize into submodules (parser, render, cache). Add comprehensive docs.rs documentation.",
+        "testStrategy": "Verify zero clippy warnings. Test all existing functionality unchanged. Check docs build successfully.",
+        "priority": "low",
+        "dependencies": [
+          "10"
+        ],
+        "status": "deferred",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-01-16T11:42:27.256Z"
+      },
+      {
+        "id": "33",
+        "title": "Setup Weblate integration for community translations",
+        "description": "Create Weblate project with GitHub sync and contribution docs",
+        "details": "Create hosted.weblate.org project linked to repo. Configure auto PR sync. Document in CONTRIBUTING.md. Add 'Help Translate' to Help menu.",
+        "testStrategy": "Verify Weblate syncs with repo. Test translation workflow creates PRs. Verify Help menu link works.",
+        "priority": "low",
+        "dependencies": [
+          "3",
+          "31"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "1) Create Weblate project with GitHub sync configuration, 2) Update CONTRIBUTING.md and add Help menu link.",
+        "updatedAt": "2026-01-16T12:31:31.431Z"
+      },
+      {
+        "id": "34",
+        "title": "Implement CJK paragraph indentation",
+        "description": "Add first-line paragraph indentation for Chinese/Japanese writing conventions (Issue #20)",
+        "details": "Add paragraph indentation setting in Settings with options: Off, Chinese (2 full-width chars), Japanese (1 full-width char), Custom. Apply text-indent CSS styling to paragraphs in rendered/preview mode. Include indentation in HTML export. Support per-document YAML frontmatter override key (e.g., paragraph_indent: chinese).",
+        "testStrategy": "Test all indentation modes render correctly in preview. Verify HTML export includes indentation. Test YAML frontmatter override works. Test mixed CJK/English paragraphs.",
+        "status": "done",
+        "dependencies": [
+          "2"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T12:31:14.276Z"
+      },
+      {
+        "id": "35",
+        "title": "Fix config.json persistence issues",
+        "description": "Fix settings that reset on restart: recent files count, maximize state, window size after drag-to-open (Issue #15)",
+        "details": "Audit config.json save/load timing. Ensure settings persist immediately on change, not just on exit. Fix recent files count reverting to default 10. Fix maximize state not being restored. Fix window size reverting after drag-to-open workflow. Use atomic writes for config.json.",
+        "testStrategy": "Change recent files limit, restart, verify persists. Maximize window, restart, verify maximized. Resize window by dragging, restart, verify size. Test drag-to-open workflow preserves size.",
+        "status": "done",
+        "dependencies": [
+          "5"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T12:39:00.071Z"
+      },
+      {
+        "id": "36",
+        "title": "Fix line width in rendered/split view",
+        "description": "Fix line width setting not respecting pane boundaries in rendered view (Issue #15)",
+        "details": "Line width setting should constrain text width within the available pane space. When line width exceeds available pane width, text should wrap at pane edge instead of overflowing. Fix for both rendered-only and split view modes. Ensure setting works correctly when resizing split divider.",
+        "testStrategy": "Set line width to 120 chars, make window narrow, verify text wraps at pane edge. Test in split view with various divider positions. Test rendered-only view. Resize window and verify responsive behavior.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T12:44:58.135Z"
+      },
+      {
+        "id": "37",
+        "title": "Fix macOS Intel issues",
+        "description": "Fix issues specific to Intel Macs (x86_64): high CPU, broken sync scroll, wrong window icons (Issue #24)",
+        "details": "1) High CPU usage: Investigate egui repaint loop not properly idling on Intel Macs, add frame rate limiting or request_repaint optimization. 2) Sync scrolling broken: Debug bidirectional scroll sync between Raw/Rendered views on Intel, may be timing or threading issue. 3) Window controls: Detect macOS and show native traffic light icons instead of Windows-style close/min/max buttons.",
+        "testStrategy": "Test on Intel Mac (x86_64 build): verify CPU idle <5% when not typing, verify scroll sync works in split view, verify native macOS window controls display. Requires Intel Mac hardware for testing.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:26:05.831Z"
+      },
+      {
+        "id": "38",
+        "title": "Fix Windows borderless window issues",
+        "description": "Fix resize from top edge and add fullscreen toggle for Windows borderless window (Issue #15)",
+        "details": "1) Window resize from top edge: Currently can only resize height by dragging bottom edge. Implement top edge resize detection and handling in WindowResizeState. 2) Fullscreen toggle: Add dedicated fullscreen button in title bar or menu. F11 is Zen mode, need separate OS-level fullscreen. Use egui::ViewportCommand::Fullscreen.",
+        "testStrategy": "Test dragging top edge resizes window height. Test fullscreen button enters OS fullscreen (not Zen mode). Test escape or button exits fullscreen. Test on Windows 10 and 11.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:33:00.535Z"
+      },
+      {
+        "id": "39",
+        "title": "Add custom font selection",
+        "description": "Allow users to select preferred font for editor and UI, important for CJK regional glyph preferences (Issue #15)",
+        "details": "Add Settings section for font selection. List available system fonts using font-kit. Separate options for: editor font, UI font, monospace font. Important for CJK users who need specific regional variants (Simplified Chinese vs Traditional Chinese vs Japanese vs Korean glyphs). Store selections in config.json. Apply font changes immediately without restart.",
+        "testStrategy": "Test font picker shows system fonts. Test changing editor font applies to editor. Test CJK fonts render correct regional glyphs. Test persistence across restart.",
+        "status": "done",
+        "dependencies": [
+          "3"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:47:07.768Z"
+      },
+      {
+        "id": "40",
+        "title": "Implement executable code blocks",
+        "description": "Run code snippets directly in rendered preview, inspired by Jupyter notebooks",
+        "details": "Add Run button to fenced code blocks in rendered/split view. Execute shell/bash scripts via std::process::Command, display stdout/stderr below block. Detect python/python3 and run with system interpreter. Option to keep output visible or clear on re-run. Kill long-running scripts after configurable timeout (default 30s). First-run security warning dialog about code execution risks, require opt-in in settings. Feature disabled by default for security.",
+        "testStrategy": "Test Run button appears on code blocks. Test shell script execution shows output. Test Python execution works. Test timeout kills long scripts. Test security warning on first use. Test opt-in setting persists.",
+        "status": "deferred",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:38:24.736Z"
+      },
+      {
+        "id": "41",
+        "title": "Implement content blocks (callouts/admonitions)",
+        "description": "Styled callout blocks for notes, warnings, tips - common in technical docs (Obsidian, Notion, GitHub)",
+        "details": "Support GitHub-style syntax: > [!NOTE], > [!TIP], > [!WARNING], > [!CAUTION], > [!IMPORTANT]. Support custom titles: > [!NOTE] Custom Title. Render as color-coded blocks with icons (info, lightbulb, warning, stop, exclamation) in rendered view. Support collapsible variant: > [!NOTE]- Collapsed by default. Allow nesting content blocks inside other blocks and lists.",
+        "testStrategy": "Test all 5 callout types render with correct colors/icons. Test custom titles display. Test collapsible blocks expand/collapse. Test nesting inside lists and other blocks. Test raw mode shows correct syntax.",
+        "status": "deferred",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:38:24.733Z"
+      },
+      {
+        "id": "42",
+        "title": "Fix Mermaid flowchart edge parsing bugs",
+        "description": "Parser fails to correctly parse edge definitions, showing raw syntax as node text instead of creating proper edges",
+        "details": "Current bugs: 1) Edge syntax like 'a[Chapter 1] --> b[Chapter 2]' is parsed incorrectly, showing raw text as nodes. 2) Node IDs with brackets not extracted properly. 3) Edge labels not parsed correctly. Fix the edge parsing regex in mermaid.rs to handle: node definitions with brackets [text], edge operators (-->, --->, -.->, etc.), edge labels |text|. Ensure all nodes are created before edges reference them.",
+        "testStrategy": "Test simple A-->B edges parse correctly. Test node definitions with brackets [text] and (text) and {text}. Test edge labels |label| display on edges. Test chained edges A-->B-->C. Compare output with mermaid.live reference renders.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "complexity": 7,
+        "updatedAt": "2026-01-15T14:42:45.538Z"
+      },
+      {
+        "id": "43",
+        "title": "Fix Mermaid flowchart layout direction (LR/TB/RL/BT)",
+        "description": "Flowchart direction keywords (LR, TB, RL, BT) are ignored - diagrams always render vertically regardless of specified direction",
+        "details": "The flowchart direction (LR=left-to-right, TB=top-to-bottom, RL=right-to-left, BT=bottom-to-top) must be respected in layout. Currently 'flowchart LR' renders vertically like TB. Fix the layout algorithm in mermaid.rs to: 1) Parse direction from 'flowchart XX' or 'graph XX' line. 2) Swap x/y coordinates for LR/RL directions. 3) Reverse node order for RL/BT directions. 4) Adjust edge anchor points based on direction.",
+        "testStrategy": "Test flowchart LR renders left-to-right. Test flowchart TB renders top-to-bottom. Test flowchart RL renders right-to-left. Test flowchart BT renders bottom-to-top. Test with branching diagrams in each direction.",
+        "status": "done",
+        "dependencies": [
+          "42",
+          "45"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "complexity": 6,
+        "updatedAt": "2026-01-15T15:32:40.751Z"
+      },
+      {
+        "id": "44",
+        "title": "Fix Mermaid flowchart missing nodes and broken branching",
+        "description": "Complex flowcharts have missing nodes and incorrect branch layout - Yes/No branches inverted, some nodes not rendered",
+        "details": "Issues observed: 1) Some nodes are completely missing from render (not all nodes in source appear in output). 2) Decision diamond branches (Yes/No) appear on wrong sides. 3) Edge routing crosses incorrectly. Fix by: 1) Ensuring ALL parsed nodes are added to layout. 2) Fixing branch direction logic for decision nodes. 3) Implementing proper tree layout algorithm (Sugiyama or similar) for hierarchical graphs. 4) Correct edge anchor point selection based on branch direction.",
+        "testStrategy": "Test coffee machine diagram renders all 6 nodes. Test Yes/No branches appear on correct sides of diamonds. Test chapter diagram with branches renders all nodes connected. Compare with mermaid.live reference renders.",
+        "status": "done",
+        "dependencies": [
+          "42",
+          "43",
+          "45",
+          "46"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "complexity": 8,
+        "updatedAt": "2026-01-15T15:44:51.413Z"
+      },
+      {
+        "id": "45",
+        "title": "Refactor mermaid.rs into modular structure",
+        "description": "Split the 7000+ line mermaid.rs file into a modular directory structure with separate files per diagram type. This improves maintainability, compilation times, and makes the codebase easier to work with.",
+        "details": "Create src/markdown/mermaid/ directory structure:\n\n1. mod.rs - Public API, re-exports, render_mermaid_diagram() main entry\n2. text.rs - TextSize, TextMeasurer trait, EguiTextMeasurer, EstimatedTextMeasurer\n3. flowchart.rs - FlowDirection, NodeShape, FlowNode, FlowEdge, Flowchart, parse/layout/render\n4. sequence.rs - Participant, Message, SequenceDiagram, parse/render\n5. pie.rs - PieSlice, PieChart, parse/render\n6. state.rs - State, Transition, StateDiagram, parse/render\n7. mindmap.rs - MindmapNode, Mindmap, parse/render\n8. class_diagram.rs - Class, ClassRelation, ClassDiagram, parse/render\n9. er_diagram.rs - Entity, ERRelation, ERDiagram, parse/render\n10. git_graph.rs - GitCommit, GitBranch, GitGraph, parse/render\n11. gantt.rs - GanttTask, GanttChart, parse/render\n12. timeline.rs - TimelinePeriod, Timeline, parse/render\n13. journey.rs - JourneyTask, UserJourney, parse/render\n\nUpdate imports in editor.rs and any other files that use mermaid types.\nMaintain all existing tests.",
+        "testStrategy": "1. Run cargo check after each module extraction\n2. Run cargo test mermaid::tests after complete refactor\n3. Verify all 12 existing mermaid tests pass\n4. Manual visual test of each diagram type in the app",
+        "status": "done",
+        "dependencies": [
+          "42"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T15:23:49.798Z"
+      },
+      {
+        "id": "46",
+        "title": "Fix flowchart parsing for semicolons and ampersand syntax",
+        "description": "The flowchart parser does not handle two common Mermaid syntaxes: (1) Semicolons as line terminators (e.g., A-->B;) where the semicolon is incorrectly included in node IDs, and (2) Ampersand syntax (A & B --> C & D) which creates multiple edges at once but currently fails to parse nodes B and D.",
+        "details": "Two parsing issues need to be fixed:\n\n1. **Semicolon stripping**: Lines like `A-->B;` should strip the trailing semicolon. Currently 'B;' becomes the node ID instead of 'B'. Solution: Strip trailing semicolons from lines and node IDs during parsing.\n\n2. **Ampersand syntax**: `A & B --> C & D` should create 4 edges (A→C, A→D, B→C, B→D). Currently only A and C are parsed. Solution: Detect `&` in node positions and expand into multiple edges.\n\nKey function to modify: `parse_edge_line_full()` in flowchart.rs",
+        "testStrategy": "Test cases:\n- `A-->B;` should create nodes A and B (not 'B;')\n- `graph TD;` header with semicolon should parse correctly\n- `A & B --> C` should create edges A→C and B→C\n- `A --> B & C` should create edges A→B and A→C\n- `A & B --> C & D` should create 4 edges and 4 nodes",
+        "status": "done",
+        "dependencies": [
+          "42",
+          "45"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T15:52:05.698Z"
+      },
+      {
+        "id": "47",
+        "title": "Implement classDef/class node styling for Mermaid flowcharts",
+        "description": "Parse and apply classDef style definitions and class assignments to flowchart nodes. Currently these directives are skipped/ignored, so nodes render with default colors instead of custom styling.",
+        "details": "Implementation steps:\n\n1. **Parse classDef directives**: Extract style name and CSS-like properties from lines like `classDef green fill:#9f6,stroke:#333,stroke-width:2px`. Store in a HashMap<String, NodeStyle> on Flowchart struct.\n\n2. **Parse class directives**: Map node IDs to style names from lines like `class sq,e green`. Store in HashMap<String, String> (node_id -> class_name).\n\n3. **Create NodeStyle struct**: Fields for fill (Color32), stroke (Color32), stroke_width (f32). Parse hex colors (#9f6 -> Color32).\n\n4. **Apply during rendering**: In draw_node(), look up node's class, get NodeStyle, use custom colors instead of FlowchartColors defaults.\n\n5. **Handle edge cases**: Multiple classes per node, undefined class references, malformed color values.\n\nKey files: src/markdown/mermaid/flowchart.rs",
+        "testStrategy": "Test cases:\n- `classDef green fill:#9f6; class A green; A-->B` - A should have green fill\n- `classDef red fill:#f00,stroke:#000,stroke-width:4px` - parse all properties\n- `class A,B,C green` - multiple nodes get same style\n- Invalid class reference should use default colors\n- Hex color parsing: #fff, #ffffff, rgb values",
+        "status": "done",
+        "dependencies": [
+          "46"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T16:56:39.781Z"
+      },
+      {
+        "id": "48",
+        "title": "Implement linkStyle edge styling for Mermaid flowcharts",
+        "description": "Parse and apply linkStyle directives to style individual edges by index. Currently linkStyle directives are skipped, so all edges render with default stroke color/width.",
+        "details": "Implementation steps:\n\n1. **Parse linkStyle directives**: Extract edge index and CSS properties from lines like `linkStyle 0 stroke:#f00,stroke-width:2px` or `linkStyle default stroke:#333`.\n\n2. **Create EdgeStyle struct**: Fields for stroke (Color32), stroke_width (f32), stroke_dasharray (Option for dotted lines).\n\n3. **Store link styles**: Add Vec<Option<EdgeStyle>> or HashMap<usize, EdgeStyle> to Flowchart struct, indexed by edge declaration order.\n\n4. **Apply during rendering**: In draw_edge(), check if edge index has custom style, use custom colors/width instead of defaults.\n\n5. **Handle 'default' keyword**: Apply to all edges without explicit style.\n\nKey files: src/markdown/mermaid/flowchart.rs",
+        "testStrategy": "Test cases:\n- `A-->B; linkStyle 0 stroke:red` - first edge should be red\n- `A-->B-->C; linkStyle 1 stroke:#00f` - second edge blue\n- `linkStyle default stroke:#333` - all edges get style\n- Invalid index should be ignored gracefully",
+        "status": "done",
+        "dependencies": [
+          "46"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T22:49:04.886Z"
+      },
+      {
+        "id": "49",
+        "title": "Subgraph-aware layer assignment in flowchart layout",
+        "description": "Modify the Sugiyama layout algorithm to keep subgraph nodes together during layer assignment. Currently nodes are laid out globally ignoring subgraph membership, causing subgraph contents to scatter across the diagram.",
+        "details": "The current layout assigns layers to all nodes globally, ignoring subgraph membership. This causes nodes that should be grouped together inside a subgraph to scatter.\n\nImplementation steps:\n1. Before layer assignment, identify all subgraph node sets\n2. Modify assign_layers() to treat subgraph nodes as a cluster - they should be assigned to consecutive layers\n3. Add a 'subgraph_id' field to track which subgraph (if any) each node belongs to\n4. During topological sort, process subgraph nodes together\n5. Ensure subgraph entry/exit edges connect at subgraph boundaries\n\nKey files: src/markdown/mermaid/flowchart.rs\nKey functions: assign_layers(), SugiyamaLayout::compute()",
+        "testStrategy": "Test cases:\n- Subgraph with 3 nodes should keep all 3 nodes in adjacent layers\n- Nested subgraphs should maintain hierarchy\n- Edges entering/exiting subgraph should connect properly\n- Compare with mermaid.live reference renders",
+        "status": "done",
+        "dependencies": [
+          "47"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T16:34:41.904Z"
+      },
+      {
+        "id": "50",
+        "title": "Subgraph internal layout and positioning",
+        "description": "Layout nodes within each subgraph as a self-contained unit, then position the entire subgraph in the global layout. This ensures subgraph contents stay together and the subgraph acts as a single 'super-node' in the parent graph.",
+        "details": "After layer assignment groups subgraph nodes (Task 49), this task handles positioning:\n\n1. Create SubgraphLayoutEngine that layouts subgraph contents independently\n2. For each subgraph:\n   - Extract its nodes and internal edges\n   - Run a mini-layout algorithm on just those nodes\n   - Compute the subgraph's bounding box\n3. In global layout, treat each subgraph as a single large node\n4. After global positioning, offset subgraph contents to their final positions\n5. Update compute_subgraph_layouts() to use pre-computed bounds instead of post-hoc calculation\n\nKey insight: Subgraphs should be laid out inside-out (innermost first), then composed.\n\nKey files: src/markdown/mermaid/flowchart.rs\nKey functions: layout_flowchart(), SugiyamaLayout, new SubgraphLayoutEngine",
+        "testStrategy": "Test cases:\n- Subgraph 'A' in test diagram should render as visible container with nodes inside\n- Subgraph bounding box should tightly fit its contents with padding\n- Nested subgraphs should render correctly\n- Visual comparison with mermaid.live",
+        "status": "done",
+        "dependencies": [
+          "49"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T16:46:22.893Z"
+      },
+      {
+        "id": "51",
+        "title": "Improve subgraph visual styling and visibility",
+        "description": "Make subgraph containers more visible with distinct background colors like Mermaid's cream/yellow. Current subgraph fill has very low alpha (40-60) making it nearly invisible.",
+        "details": "Current subgraph styling is too subtle:\n- Dark mode: rgba(60, 70, 90, 40) - nearly invisible\n- Light mode: rgba(200, 210, 230, 60) - barely visible\n\nImplementation:\n1. Increase subgraph_fill alpha significantly (150-200 range)\n2. Use warmer colors like Mermaid's cream/yellow: #ffffde or similar\n3. Add subgraph_fill_alt for nested subgraphs (different shade)\n4. Increase subgraph_stroke width from 1.5 to 2.0\n5. Make subgraph title more prominent (larger font, bolder)\n6. Consider adding subtle gradient or shadow for depth\n\nKey files: src/markdown/mermaid/flowchart.rs\nKey functions: FlowchartColors::dark(), FlowchartColors::light(), draw_subgraph()",
+        "testStrategy": "Test cases:\n- Subgraph background should be clearly visible against diagram background\n- Title 'A' should be readable at top of subgraph\n- Nested subgraphs should have distinguishable colors\n- Works well in both light and dark themes",
+        "status": "done",
+        "dependencies": [
+          "47"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T16:56:40.495Z"
+      },
+      {
+        "id": "52",
+        "title": "Edge routing for subgraph boundaries",
+        "description": "Implement proper edge routing when edges cross subgraph boundaries. Edges should connect cleanly at subgraph borders rather than crossing through the container arbitrarily.",
+        "details": "Current edge routing ignores subgraph boundaries, causing visual confusion:\n\n1. Edges from outside to inside subgraph should:\n   - Enter at the subgraph border (not through center)\n   - Route to the target node inside\n\n2. Edges from inside to outside should:\n   - Exit at the subgraph border\n   - Route to the external target\n\n3. Implementation approach:\n   - In draw_edge(), detect if edge crosses a subgraph boundary\n   - Calculate intersection point with subgraph bounding box\n   - Use intermediate control points for cleaner routing\n   - Consider orthogonal routing (right angles) for cleaner appearance\n\nKey files: src/markdown/mermaid/flowchart.rs\nKey functions: draw_edge(), may need new route_edge_through_subgraph()",
+        "testStrategy": "Test cases:\n- Edge from sq to ci (outside subgraph) should route cleanly\n- Edges within subgraph A should stay inside\n- Edge from 'a' to 'od3' (outside to node) should enter cleanly\n- No edge-node overlaps at subgraph borders",
+        "status": "done",
+        "dependencies": [
+          "50"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T16:53:59.905Z"
+      },
+      {
+        "id": "53",
+        "title": "Fix asymmetric/odd shape rendering in flowcharts",
+        "description": "Verify and fix the asymmetric 'flag' shape (>text]) rendering. This shape appears in the test diagram but may not be rendering correctly.",
+        "details": "The asymmetric shape syntax >text] creates a flag-like shape pointing left. Current implementation exists but needs verification:\n\n1. Verify parse_node_from_text() correctly identifies >text] syntax\n2. Check NodeShape::Asymmetric variant is being used\n3. Review draw_node() rendering for Asymmetric shape:\n   - Should have pointed left side\n   - Flat right side\n   - Current implementation uses a 5-point polygon\n\n4. Compare with Mermaid reference:\n   - Shape should look like a flag/banner pointing left\n   - Text should be centered in the shape\n\n5. Fix any issues found:\n   - Shape proportions\n   - Point direction\n   - Text alignment\n\nKey files: src/markdown/mermaid/flowchart.rs\nKey functions: parse_node_from_text(), draw_node() NodeShape::Asymmetric case",
+        "testStrategy": "Test cases:\n- >Odd shape] should render as left-pointing flag\n- >Really long text] should size appropriately\n- Shape should match mermaid.live rendering\n- Text should be readable and centered",
+        "status": "done",
+        "dependencies": [
+          "47"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T17:04:17.768Z"
+      },
+      {
+        "id": "54",
+        "title": "Fix asymmetric shape parsing for >text] syntax",
+        "description": "The asymmetric shape syntax (>text]) is not being detected correctly during parsing. Nodes like 'od>Odd shape]' render as rectangles instead of the flag/banner shape.",
+        "details": "The root cause is the Mermaid '-- text -->' edge label syntax. When parsing 'od>Odd shape]-- Two line --> ro', the parser finds '-->' at the end, so node_text becomes 'od>Odd shape]-- Two line...' which includes edge label text. This polluted string fails to match the asymmetric pattern. Need to: 1) Add support for '-- label -->' edge syntax by detecting it before extracting node text, 2) Extract the node portion ('od>Odd shape]') separately from the edge label portion ('Two line'), 3) Add debug logging to trace parsing flow. Key files: src/markdown/mermaid/flowchart.rs - parse_edge_line_full(), parse_node_from_text(), find_arrow_pattern()",
+        "testStrategy": "Test with: 'od>Odd shape]', 'A>Flag]-- label --> B', 'e>Really long text]'. Verify asymmetric shapes render as left-pointing flags, not rectangles.",
+        "status": "done",
+        "dependencies": [
+          "53"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T21:13:16.287Z"
+      },
+      {
+        "id": "55",
+        "title": "Fix subgraph title truncation in flowcharts",
+        "description": "Subgraph titles are being cut off/truncated in the rendered flowchart output. 'Outer Group' displays as 'Outer Grou...' and 'Inner Group' shows similar truncation.",
+        "details": "Issues observed: 1) Subgraph titles are truncated when they exceed available width, 2) In nested subgraph test, 'First' and 'Second' titles are barely visible or cut off, 3) The bounding box calculation doesn't account for title text width. Fix needed: 1) Measure title text width before computing subgraph bounds, 2) Ensure subgraph width is at least as wide as title + padding, 3) Position title so it's fully visible above subgraph content, 4) Consider adding ellipsis or text wrapping for very long titles. Key files: src/markdown/mermaid/flowchart.rs - draw_subgraph(), SubgraphLayout, layout computation functions",
+        "testStrategy": "Test with subgraphs having: short titles ('A'), medium titles ('Outer Group'), long titles ('Very Long Subgraph Title Here'). Verify all titles are fully visible and not truncated.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T21:22:20.867Z"
+      },
+      {
+        "id": "56",
+        "title": "Fix nested subgraph layout issues",
+        "description": "Nested subgraphs have layout issues where internal content and titles overlap or are misaligned. When subgraphs contain other subgraphs, the layout doesn't properly nest them.",
+        "details": "Issues observed: 1) When subgraphs are nested, internal layout is inconsistent, 2) The 'direction LR' directive inside subgraphs may not be properly respected, 3) Title positioning doesn't account for nested depth, 4) Padding/margins between nested subgraphs need adjustment, 5) Edge connections between nodes in different nested levels may route incorrectly. Fix needed: 1) Review SubgraphLayoutEngine for proper nested handling, 2) Ensure internal direction directives override parent direction, 3) Add proper margin/padding between nested subgraph boundaries, 4) Test edge routing through multiple nested levels. Key files: src/markdown/mermaid/flowchart.rs - SubgraphLayoutEngine, compute_internal_positions(), subgraph layout functions",
+        "testStrategy": "Test with: single subgraph, two sibling subgraphs, nested subgraphs (2 levels), nested with direction override. Verify proper spacing, title visibility, and edge routing at all nesting levels.",
+        "status": "done",
+        "dependencies": [
+          "55"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T21:31:27.034Z"
+      },
+      {
+        "id": "57",
+        "title": "Fix flowchart rendering viewport clipping for nested subgraphs",
+        "description": "Fix viewport clipping issue where nested subgraphs with titles or deep nesting extend beyond the computed total_size and get clipped outside the visible area.",
+        "details": "The core issue is in compute_subgraph_layouts() where layout.total_size fails to account for all subgraph bounds, especially subgraph titles and deeply nested content. Implementation steps:\n\n1. **Audit total_size computation**: Review how layout.total_size is calculated in compute_subgraph_layouts(). Currently it underestimates bounds when:\n   - Subgraph titles extend above the content area\n   - Nested subgraphs push content beyond parent bounds\n   - Padding/margins aren't properly accumulated\n\n2. **Implement recursive bounds calculation**: Modify compute_subgraph_layouts() to:\n   ```rust\n   fn compute_subgraph_bounds(layout: &mut Layout, subgraph: &Subgraph) {\n       // Compute internal content bounds first\n       let content_bounds = compute_internal_bounds(subgraph);\n       \n       // Add title height (including padding)\n       let title_height = measure_title(subgraph.title.as_ref()) + TITLE_PADDING;\n       let full_height = content_bounds.height + title_height;\n       \n       // Recursively compute nested subgraph bounds\n       for nested in &subgraph.nested {\n           compute_subgraph_bounds(layout, nested);\n           // Update parent bounds to include nested extents\n           layout.total_size.max_with(nested.layout.total_size.offset_by(nested.position));\n       }\n       \n       // Update this subgraph's total bounds\n       subgraph.layout.total_size = Rect::from_size(content_bounds.size + title_height);\n       layout.total_size.max_with(subgraph.layout.total_size.offset_by(subgraph.position));\n   }\n   ```\n\n3. **Fix title positioning**: Ensure subgraph titles are positioned at top:0 with proper padding, and their height is included in parent bounds calculation.\n\n4. **Add conservative padding**: Increase default subgraph padding by 20% (from 10px to 12px) to account for edge labels and minor overflows.\n\n5. **Viewport scaling**: After final layout, ensure SVG viewport matches layout.total_size exactly:\n   ```rust\n   svg.set_viewbox(0, 0, layout.total_size.width.ceil(), layout.total_size.height.ceil());\n   ```\n\n6. **Debug visualization**: Temporarily render subgraph bounds as stroke rectangles to verify calculations during development.\n\nKey functions to modify: compute_subgraph_layouts(), finalize_layout(), render_svg_viewport().",
+        "testStrategy": "Create comprehensive test cases covering all clipping scenarios:\n\n1. **Title overflow test**: Subgraph with long title that extends bounds\n   ```mermaid\ngraph TD\n  subgraph long [\"This is a very long subgraph title that should extend beyond normal content bounds\"]\n    A --> B\n  end\n  ```\n   Verify: Title fully visible, no clipping, total_size includes title height\n\n2. **Deep nesting test** (3 levels):\n   ```mermaid\ngraph TD\n    subgraph lvl1 [\"Level 1\"]\n      subgraph lvl2 [\"Level 2\"]\n        subgraph lvl3 [\"Level 3 with long content\"]\n          C1 --> C2 --> C3\n        end\n      end\n    end\n   ```\n   Verify: All 3 levels visible without clipping\n\n3. **Sibling subgraphs with varying heights**:\n   ```mermaid\ngraph LR\n     subgraph tall [Many nodes... 10 lines]\n     subgraph short [A --> B]\n     end\n   ```\n   Verify: Both subgraphs fully visible, viewport sized for tallest\n\n4. **Compare with mermaid.live**: Render identical diagrams on mermaid.live, screenshot compare bounding boxes and content visibility\n\n5. **Regression tests**: Re-test all Task 56 diagrams plus simple flowcharts ensure no new clipping introduced\n\n6. **Edge cases**: Empty subgraphs, subgraphs with only titles, maximum nesting depth (5 levels)\n\nSuccess criteria: Zero clipping reported in VSCode preview at 100% zoom across all test cases.",
+        "status": "done",
+        "dependencies": [
+          "56",
+          "50"
+        ],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T22:49:04.893Z"
+      },
+      {
+        "id": "58",
+        "title": "Analyze and Plan Refactoring of flowchart.rs into Modular Structure",
+        "description": "Create a comprehensive analysis document of flowchart.rs (~3400 lines) and propose a detailed refactoring plan to split it into focused modules: Parsing, Layout, Render, and Types/utilities.",
+        "details": "Conduct thorough code analysis of flowchart.rs to identify concerns and dependencies, then create a planning document with:\n\n1. **Current Structure Analysis**:\n   - Line count breakdown by function/section\n   - Identify all public APIs and their dependencies\n   - Map data flow between parsing→layout→rendering\n   - Document current issues (e.g. tight coupling, god functions)\n   - List all types/structs and their usage patterns\n\n2. **Proposed Module Breakdown**:\n   - **parsing/mod.rs**: AST types (Node, Edge, Subgraph, Direction), parser functions (parse_flowchart, parse_edge_line_full, parse_subgraph, handle semicolons/ampersands)\n   - **layout/mod.rs**: SugiyamaLayout, SubgraphLayoutEngine, layer assignment, direction handling (LR/TB/RL/BT), compute_subgraph_layouts\n   - **render/mod.rs**: draw_node, draw_edge, draw_subgraph, viewport calculations, clipping logic\n   - **types/mod.rs**: Shared types, utilities, constants, error types\n\n3. **Refactoring Strategy**:\n   - Use `_legacy` suffix pattern for safe parallel development\n   - Define clear module boundaries and public APIs\n   - Plan data structures passed between modules (e.g. LayoutInput/Output structs)\n   - Migration plan with incremental extraction (parsing first, then layout, etc.)\n   - Dependency graph showing inter-module relationships\n   - Risk assessment for recent fixes (Tasks 43,44,46,57)\n\n4. **Implementation Roadmap**:\n   - Phase 1: Extract parsing module (safest, least layout dependencies)\n   - Phase 2: Extract types/utilities\n   - Phase 3: Extract layout (most complex, direction/subgraph logic)\n   - Phase 4: Extract render + main integration\n\n5. **Technical Considerations**:\n   - Preserve all existing functionality (direction fixes, semicolon parsing, subgraph clipping fixes)\n   - Maintain performance characteristics\n   - Ensure test coverage migration plan\n   - Document pub re-exports in lib.rs\n\nOutput as `docs/flowchart-refactor-plan.md` with clear sections, code examples, and diagrams.",
+        "testStrategy": "Verification steps for planning task completion:\n\n1. **Document Completeness**: Checklist confirming all 4 analysis sections present with specific line counts, function lists, and dependency maps\n2. **Module Boundary Validation**: Verify proposed modules cover 100% of flowchart.rs functions without overlap/duplication\n3. **Risk Assessment**: Confirm plan addresses recent fixes (Tasks 43,44,46,57) with migration strategies\n4. **API Stability**: Document shows preserved public interfaces with example usage\n5. **Peer Review Readiness**: Plan includes concrete next steps for implementation tasks\n6. **File Creation**: Confirm `docs/flowchart-refactor-plan.md` created and committed with rendered Markdown preview\n7. **Coverage Analysis**: Verify plan accounts for all known flowchart features (subgraphs, directions, semicolons, ampersands, viewport clipping)\n\nSuccess criteria: Plan enables implementation team to execute refactoring with zero information gaps.",
+        "status": "done",
+        "dependencies": [
+          "43",
+          "44",
+          "46",
+          "57"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-01-15T21:51:14.818Z"
+      },
+      {
+        "id": "59",
+        "title": "Settings Menu UI Cleanup and Consistency",
+        "description": "Refactor the settings dialog to use a fixed height with scrollable content areas, stable tab navigation, and collapsible sections in the Editor tab to eliminate layout shifts and crowding.",
+        "status": "done",
+        "dependencies": [
+          "25",
+          "19",
+          "3",
+          "35"
+        ],
+        "priority": "medium",
+        "details": "1. Set a **fixed minimum height** for the settings dialog container that accommodates the tallest tab content (measure Editor tab as baseline). Use `iced::widget::Container` with `max_height` or flex constraints.\n2. Make each tab's **content area scrollable** using `iced::widget::Scroll` wrapped in a fixed-height container. Ensure scrollbars appear only when needed.\n3. **Editor tab reorganization** into collapsible sections using `iced::widget::Collapsible` or custom accordion pattern with **two-column grid layout** for toggles to optimize horizontal space usage and minimize vertical scrolling:\n   - **General** (two-column grid): Row 1: [Word Wrap] [Show Line Numbers]\n   - **Minimap** (two-column grid): Row 1: [Show Minimap] [Sync Scroll]; Row 2: **Minimap Mode selector** (full width, integrate with Task 19 enum)\n   - **Code Features** (two-column grid): Row 1: [Highlight Matching Brackets] [Auto-close Brackets & Quotes]; Row 2: [Syntax Highlighting]; Row 3: **Code Folding toggle** (full width)\n   - **Indentation** (two-column grid): Row 1: [Use Spaces for Indentation]; Row 2: **Tab Size slider** (full width)\n   - **Display** (full width): **Maximum Line Width dropdown**\n   - **Snippets**: **Snippets section** (full width); **Paragraph Indentation dropdown** (full width)\n   - **Layout rules**: Use `iced::widget::Row` with equal-width columns for toggles/checkboxes. Keep sliders, dropdowns, and snippet sections full-width. Goal: fit all Editor settings without scrolling when sections collapsed.\n4. **Keep left sidebar tabs fixed**: Use `iced::widget::Row` layout with fixed-width sidebar (150-200px) and flexible content area. Apply `clip` to prevent overflow.\n5. **Preserve all existing functionality**: Ensure config.json integration works (Task 35), keyboard shortcuts section remains functional (Task 25), language selector intact (Task 3).\n6. **Visual polish**: Add subtle dividers between sections, consistent padding (16px), hover states on collapsible headers, smooth expand/collapse animations using `iced::animation`.\n7. **Responsive considerations**: On smaller windows, ensure scrollable areas work; test with window resize (Task 38).",
+        "testStrategy": "1. **Layout stability**: Open settings dialog, switch between all tabs (Appearance, Editor, Files, Keyboard) 10+ times - verify dialog height/width and tab positions remain identical (no jumps/shifts). Screenshot each tab for visual diff.\n2. **Editor organization**: Verify all 6 collapsible sections present with correct two-column layouts. Test expand/collapse all sections independently. Confirm toggles display side-by-side in grid rows and full-width items span correctly.\n3. **Two-column layout**: Verify specific pairings - Row 1: Word Wrap + Line Numbers; Row 2: Show Minimap + Sync Scroll; etc. Confirm no vertical scrolling needed when sections collapsed.\n4. **Scroll behavior**: Populate Editor tab with all sections expanded, verify smooth scrolling. Test keyboard navigation (arrow keys, Page Up/Down).\n5. **Functionality preservation**: Change settings in each tab (language Task 3, minimap Task 19, shortcuts Task 25), close/reopen dialog, verify values persist. Restart app, verify persistence (Task 35).\n6. **Edge cases**: Test with very small window (Task 38), maximized window, Zen mode toggle (Task 28). Verify no crashes on rapid tab switching or resize.\n7. **Visual regression**: Compare before/after screenshots of all tabs, focusing on Editor tab grid layout. Test dark/light themes if applicable.",
+        "subtasks": [],
+        "updatedAt": "2026-01-16T13:51:41.276Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-01-16T13:51:41.277Z",
+      "taskCount": 59,
+      "completedCount": 53,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

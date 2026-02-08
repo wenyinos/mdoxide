@@ -1552,17 +1552,29 @@ impl FerriteEditor {
                 if self.wrap_enabled {
                     let galley = if use_syntax {
                         // Syntax-highlighted wrapped galley
-                        let lang = self.syntax_language.as_deref().unwrap();
-                        let segments = self.highlight_line(display_content, lang);
-                        self.line_cache.get_galley_highlighted(
+                        // Check cache first to avoid expensive highlighting on every frame
+                        let wrap_width_opt = Some(effective_wrap_width);
+                        if let Some(cached) = self.line_cache.get_cached_highlighted_galley(
                             display_content,
-                            &segments,
-                            &painter,
-                            font_id.clone(),
+                            &font_id,
                             text_color,
                             self.syntax_theme_hash,
-                            Some(effective_wrap_width),
-                        )
+                            wrap_width_opt,
+                        ) {
+                            cached
+                        } else {
+                            let lang = self.syntax_language.as_deref().unwrap();
+                            let segments = self.highlight_line(display_content, lang);
+                            self.line_cache.get_galley_highlighted(
+                                display_content,
+                                &segments,
+                                &painter,
+                                font_id.clone(),
+                                text_color,
+                                self.syntax_theme_hash,
+                                wrap_width_opt,
+                            )
+                        }
                     } else {
                         // Plain wrapped galley
                         self.line_cache.get_galley_wrapped(
@@ -1591,17 +1603,28 @@ impl FerriteEditor {
 
                     if use_syntax {
                         // Syntax-highlighted non-wrapped galley
-                        let lang = self.syntax_language.as_deref().unwrap();
-                        let segments = self.highlight_line(display_content, lang);
-                        let galley = self.line_cache.get_galley_highlighted(
+                        // Check cache first to avoid expensive highlighting on every frame
+                        let galley = if let Some(cached) = self.line_cache.get_cached_highlighted_galley(
                             display_content,
-                            &segments,
-                            &painter,
-                            font_id.clone(),
+                            &font_id,
                             text_color,
                             self.syntax_theme_hash,
-                            None, // No wrap
-                        );
+                            None,
+                        ) {
+                            cached
+                        } else {
+                            let lang = self.syntax_language.as_deref().unwrap();
+                            let segments = self.highlight_line(display_content, lang);
+                            self.line_cache.get_galley_highlighted(
+                                display_content,
+                                &segments,
+                                &painter,
+                                font_id.clone(),
+                                text_color,
+                                self.syntax_theme_hash,
+                                None, // No wrap
+                            )
+                        };
                         // Track max line width for horizontal scrollbar
                         max_line_width = max_line_width.max(galley.size().x);
                         painter.galley(egui::Pos2::new(x, y), galley, text_color);
@@ -1623,9 +1646,11 @@ impl FerriteEditor {
             }
         }
 
-        // Rebuild height cache after updating wrap info
+        // Rebuild height cache after updating wrap info (only when wrap_info changed)
+        // and advance scrollbar smoothing every frame for smooth transitions
         if self.wrap_enabled {
             self.view.rebuild_height_cache(total_lines);
+            self.view.advance_scrollbar_smoothing(total_lines);
         }
 
         // Render selection backgrounds (before cursors) - handles all selections
@@ -2279,13 +2304,20 @@ impl FerriteEditor {
         // Scrollbars fade out completely when mouse leaves the editor area
         // ═══════════════════════════════════════════════════════════════════════
         let viewport_height = self.view.viewport_height();
-        let content_height = self.view.total_content_height(total_lines);
+        // Use smoothed content height for scrollbar to prevent jumping
+        let scrollbar_height = self.view.scrollbar_content_height(total_lines);
+        
+        // Request repaint while scrollbar height is still smoothing toward target
+        let actual_height = self.view.total_content_height(total_lines);
+        if (scrollbar_height - actual_height).abs() > 1.0 {
+            ui.ctx().request_repaint();
+        }
         
         // Check if mouse is over the editor area (for scrollbar visibility)
         let mouse_over_editor = ui.rect_contains_pointer(rect);
         
         // Only show vertical scrollbar if content exceeds viewport
-        if content_height > viewport_height && viewport_height > 0.0 {
+        if scrollbar_height > viewport_height && viewport_height > 0.0 {
             Self::render_scrollbar(
                 ui,
                 &painter,
@@ -2294,15 +2326,11 @@ impl FerriteEditor {
                 true, // vertical
                 gutter_width + gutter_padding,
                 viewport_height,
-                content_height,
-                self.view.first_visible_line() as f32 * self.view.line_height() + self.view.scroll_offset_y(),
+                scrollbar_height,
+                self.view.current_scroll_y(),
                 mouse_over_editor,
                 |target_scroll| {
-                    let line_height = self.view.line_height();
-                    if line_height > 0.0 {
-                        let target_line = (target_scroll / line_height) as usize;
-                        self.view.scroll_to_line(target_line);
-                    }
+                    self.view.scroll_to_absolute(target_scroll, total_lines);
                 },
             );
         }

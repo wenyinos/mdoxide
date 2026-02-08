@@ -1,4 +1,4 @@
-# Handover: v0.2.6 Bug Fixes
+# Handover: v0.2.7 Features & Polish
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file - only update when explicitly requested
@@ -7,52 +7,61 @@
 - Use Context7 MCP tool to fetch library documentation when needed
 - Document by feature (e.g., memory-optimization.md), not by task
 - Update docs/index.md when adding new documentation
-- **Branch**: `feature/ferrite-editor`
+- **Branch**: `master`
 
 ---
 
 ## Current Task
 
-**Task 55: Fix Ctrl+G Go to Line Not Working**
+**Task 12: Implement GitHub-style callouts parsing and rendering**
+- **Priority**: High
+- **Dependencies**: None
+- **Status**: Pending
 
-Ctrl+G keyboard shortcut for Go to Line dialog doesn't work. Need to verify shortcut is registered and dialog appears.
+### Description
+Add support for GitHub-style admonition blocks like `> [!NOTE]` with color-coded rendering and optional collapsible state.
 
-### Problem
-- Pressing Ctrl+G does nothing
-- Should open a Go to Line dialog
-
-### Investigation Areas
-1. Check if GoToLine shortcut is registered in `settings.rs`
-2. Check if `KeyboardAction::GoToLine` is handled
-3. Verify the Go to Line dialog exists and is wired up
-4. May need to implement the dialog if missing
-
-### Dialog Requirements
-- Open small input dialog
-- Accept line number
-- Navigate to that line on Enter
-- Handle invalid input gracefully (out of range, non-numeric)
+### Implementation Details
+1. **Parser** (`src/markdown/parser.rs`): Extend to recognize `> [!TYPE]` and `> [!TYPE] Custom Title` syntax. Store type, title, and collapsed state in AST.
+2. **Renderer** (`src/markdown/widgets.rs`): Render styled blocks with icons and colors:
+   - NOTE = blue
+   - TIP = green
+   - WARNING = orange
+   - CAUTION = yellow
+   - IMPORTANT = red
+3. **Collapsible**: Support `> [!NOTE]-` for collapsed-by-default blocks.
+4. **Interaction**: Add toggle interaction preserving state per block.
 
 ### Test Strategy
-1. Press Ctrl+G - dialog should appear
-2. Enter line number - should navigate to that line
-3. Enter invalid number - should show error or clamp
-4. Escape should close dialog
+1. Parse/render `> [!NOTE]\n> Content` -> blue note block
+2. `> [!WARNING] Custom Title` -> orange with custom title
+3. `> [!NOTE]-` -> collapsed by default, expands on click
+4. Verify all 5 types render correctly with proper colors and icons
 
 ---
 
-## Key Files for Task 55
+## Key Files for Task 12
 
 | File | Purpose |
 |------|---------|
-| `src/config/settings.rs` | Keyboard shortcuts registration |
-| `src/app.rs` | Main app, keyboard action handling |
-| `src/ui/dialogs.rs` | Dialog implementations |
+| `src/markdown/parser.rs` | Markdown parser - extend for callout syntax |
+| `src/markdown/widgets.rs` | Markdown rendering widgets - add styled callout blocks |
+| `src/markdown/editor.rs` | WYSIWYG rendered editing |
+| `src/markdown/mod.rs` | Markdown module exports |
 
-### Areas to Investigate
-- Search for `GoToLine` or `go_to_line` in codebase
-- Check `KeyboardAction` enum for existing action
-- Look at how other dialogs (Find, Replace) are triggered and displayed
+### Reference
+- Look at how blockquotes are currently parsed and rendered
+- GitHub callout spec: `> [!TYPE]` where TYPE is NOTE, TIP, WARNING, CAUTION, IMPORTANT
+- Optional custom title: `> [!TYPE] Custom Title`
+- Collapsed-by-default: `> [!TYPE]-`
+
+---
+
+## Recently Completed (This Session)
+
+- **Task 11**: Preload explicit CJK font at startup for restored tabs (DONE)
+  - Added `preload_explicit_cjk_font()` in `src/fonts.rs`
+  - Updated startup flow in `src/app/mod.rs` to call it before system-locale preload
 
 ---
 
@@ -61,5 +70,6 @@ Ctrl+G keyboard shortcut for Go to Line dialog doesn't work. Need to verify shor
 - **Project**: Ferrite (Markdown editor)
 - **Language**: Rust
 - **GUI Framework**: egui 0.28
-- **Branch**: `feature/ferrite-editor`
+- **Branch**: `master`
 - **Build**: `cargo build`
+- **Version**: v0.2.7 (in progress)

@@ -234,15 +234,14 @@ impl FerriteApp {
             );
             info!("Loaded custom font: {:?}", state.settings.font_family);
         } else {
-            // No custom font - check if we should preload based on system locale
-            // This loads only ONE CJK font (~20MB) based on OS language setting
-            if fonts::preload_system_locale_cjk_font(&cc.egui_ctx, state.settings.cjk_font_preference) {
+            // No custom font - check if we should preload CJK font
+            // This loads only ONE CJK font (~20MB) based on preference or OS language
+            if fonts::preload_explicit_cjk_font(&cc.egui_ctx, state.settings.cjk_font_preference) {
+                // User has explicit CJK preference - preload that font so restored tabs render correctly
+                info!("Preloaded CJK font for explicit preference: {:?}", state.settings.cjk_font_preference);
+            } else if fonts::preload_system_locale_cjk_font(&cc.egui_ctx, state.settings.cjk_font_preference) {
+                // Auto mode - preload based on system locale detection
                 info!("Preloaded CJK font for system locale");
-            } else if state.settings.cjk_font_preference != CjkFontPreference::Auto {
-                // User has explicit preference but system locale didn't match
-                // Fonts will load lazily when CJK text is detected
-                info!("CJK font preference set to {:?} (fonts load on-demand)", 
-                      state.settings.cjk_font_preference);
             }
         }
         crate::log_memory("After font configuration");

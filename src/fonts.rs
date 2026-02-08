@@ -206,6 +206,52 @@ pub fn preload_system_locale_cjk_font(
     false
 }
 
+/// Preload the CJK font for an explicit user preference.
+///
+/// When the user has explicitly chosen a CJK font preference (non-Auto),
+/// preload that single font at startup so restored tabs render correctly
+/// without waiting for lazy detection.
+///
+/// Returns `true` if a font was preloaded, `false` otherwise.
+pub fn preload_explicit_cjk_font(
+    ctx: &egui::Context,
+    cjk_preference: CjkFontPreference,
+) -> bool {
+    // Only preload for explicit preferences (not Auto)
+    if cjk_preference == CjkFontPreference::Auto {
+        return false;
+    }
+
+    let spec = match cjk_preference {
+        CjkFontPreference::Japanese => CjkLoadSpec {
+            load_japanese: true,
+            ..Default::default()
+        },
+        CjkFontPreference::Korean => CjkLoadSpec {
+            load_korean: true,
+            ..Default::default()
+        },
+        CjkFontPreference::SimplifiedChinese => CjkLoadSpec {
+            load_chinese_sc: true,
+            ..Default::default()
+        },
+        CjkFontPreference::TraditionalChinese => CjkLoadSpec {
+            load_chinese_tc: true,
+            ..Default::default()
+        },
+        CjkFontPreference::Auto => return false,
+    };
+
+    info!("Preloading CJK font for explicit preference: {:?}", cjk_preference);
+    let fonts = create_font_definitions_with_cjk_spec(None, cjk_preference, &spec);
+    ctx.set_fonts(fonts);
+    bump_font_generation();
+    configure_text_styles(ctx);
+    schedule_prewarm();
+
+    true
+}
+
 /// Font generation counter - increments whenever fonts are set up or changed.
 /// Used to invalidate galley caches that may have been built with missing glyphs
 /// before the font atlas was fully populated.
