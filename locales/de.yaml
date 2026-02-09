@@ -10,13 +10,13 @@ app:
 menu:
   file:
     label: "Datei"
-    open: "Datei Öffnen..."
-    save: "Datei Speichern"
-    save_as: "Datei Speichern unter..."
-    recent: "Jüngste Dateien"
+    open: "Datei öffnen..."
+    save: "Datei speichern"
+    save_as: "Datei speichern unter..."
+    recent: "Kürzlich verwendete Dateien"
     export: "Exportieren"
     export_html: "Exportieren als HTML..."
-    export_clipboard: "Kopieren als HTML"
+    export_clipboard: "Als HTML kopieren"
   edit:
     label: "Bearbeiten"
   format:
@@ -141,7 +141,7 @@ settings:
     use_spaces: "Leerzeichen für Einrückungen verwenden"
     use_spaces_tooltip: "Leerzeichen anstelle von Tabulatoren für Einrückungen verwenden"
     max_line_width: "Maximale Zeilenbreite"
-    custom_width: "Individuell - Pixelbreite eingeben:"
+    custom_width: "Individuelle - Pixelbreite angeben"
     code_folding: "Einklappbarer Programcode"
     enable_folding: "Programmcode einklappbar machen"
     folding_tooltip: "Abschnitte des Dokuments einklappbar machen (Ctrl+Hochstelltaste+[
@@ -221,12 +221,12 @@ find:
   replace_all: "Alle ersetzen"
   no_results: "nichts gefunden"
   title: "Suchen und Ersetzen"
-  title_replace: "Weiter (F3 oder Eingabetaste)"
+  title_replace: "Suchen und Ersetzen"
   title_find: "Suchen"
   close_tooltip: "Schließen (Escape)"
   hide_replace: "Suchen+Ersetzen verstecken (Ctrl-H)"
   show_replace: "Suchen+Ersetzen (Ctrl-H)"
-  prev_tooltip: "Zurück (SHift-F3)"
+  prev_tooltip: "Zurück (Shift-F3)"
   next_tooltip: "Weiter (F3 oder Eingabetaste)"
   replace_tooltip: "Aktuelles Suchergebnis ersetzen"
   replace_all_tooltip: "Alle Suchergebnisse ersetzen"
@@ -279,7 +279,7 @@ search:
   title: "Suche in Dateien"
   label: "Suchen:"
   placeholder: "Suchbegriffe eingeben..."
-  more_matches: ""
+  more_matches: "    ... weitere Suchergebnisse werden nicht angezeigt"
   keyboard_hints: "Enter drücken zum Suchen • Ergebnis anklicken zum Öffnen • Esc
     zum Schließen"
 
@@ -345,16 +345,16 @@ shortcuts:
     toggle_zen_mode: "Zen-Modus ein-/ausschalten"
     toggle_fullscreen: "Vollbildmodus ein-/ausschalten"
     toggle_outline: "Gliederungsansicht ein-/ausschalten"
-    toggle_file_tree: ""
-    toggle_pipeline: ""
+    toggle_file_tree: "Dateibaumanzeige an/aus"
+    toggle_pipeline: "Pipeline an-/ausschalten"
     # Edit
-    undo: ""
-    redo: ""
+    undo: "rückgängig"
+    redo: "nochmal machen"
     delete_line: "Zeile löschen"
     duplicate_line: "Zeile duplizieren"
     move_line_up: "Zeile nach oben"
     move_line_down: "Zeile nach unten"
-    select_next_occurrence: ""
+    select_next_occurrence: "Nächstes Suchergebnis auswählen"
     # Search
     find: "Suchen"
     find_replace: "Suchen und Ersetzen"
@@ -364,13 +364,13 @@ shortcuts:
     # Formatting
     bold: "fett"
     italic: "kursiv"
-    inline_code: ""
-    code_block: ""
+    inline_code: "Inline-Code"
+    code_block: "Codeblock"
     link: "Link"
     image: "Bild"
     blockquote: "Zitat"
     bullet_list: "Punktaufzählung"
-    numbered_list: ""
+    numbered_list: "Nummerierte Aufzählung"
     heading_1: "Überschrift 1"
     heading_2: "Überschrift 2"
     heading_3: "Überschrift 3"
@@ -382,8 +382,8 @@ shortcuts:
     unfold_all: "Alles aufklappen"
     toggle_fold: "An aktueller Zeile ein-/ausklappen"
     # Other
-    open_settings: ""
-    open_about: ""
+    open_settings: "Einstellungs-Fenster öffnen"
+    open_about: "Info / Hilfe"
     export_html: "Als HTML exportieren"
     insert_toc: "Inhaltsverzeichnis einfügen"
   # File shortcuts (for help panel)
@@ -392,31 +392,31 @@ shortcuts:
     open: "Datei öffnen"
     save: "Speichern"
     save_as: "Speichern als"
-    close_tab: ""
+    close_tab: "Tab schließen"
   # Edit shortcuts
   edit:
-    undo: ""
-    redo: ""
+    undo: "Rückgängig machen"
+    redo: "Rückgängigmachung rückgängig machen"
     find: "Suchen"
     find_replace: "Suchen und Ersetzen"
     select_all: "Alles auswählen"
     copy: "Kopieren"
-    cut: ""
+    cut: "Ausschneiden"
     paste: "einfügen"
     delete_line: "Zeile löschen"
-    duplicate_line: ""
+    duplicate_line: "Zeile duplizieren"
     move_line_up: "eine Zeile nach oben"
     move_line_down: "eine Zeile nach unten"
-    select_next_occurrence: ""
+    select_next_occurrence: "Nächstes Suchergebnis auswählen"
   # View shortcuts
   view:
     toggle_view: "Dokumentansicht wechseln"
-    toggle_outline: ""
+    toggle_outline: "Übersicht ein/aus"
     zoom_in: "Vergrößern"
     zoom_out: "Verkleinern"
     reset_zoom: "normale Vergrößerung"
     settings: "Einstellungen"
-    about: ""
+    about: "Info / Hilfe"
   # Formatting shortcuts
   format:
     bold: "fett"
@@ -426,13 +426,13 @@ shortcuts:
     code: "Code-Formatierung im laufenden Text"
   # Workspace shortcuts
   workspace:
-    quick_switcher: ""
+    quick_switcher: "Schnell zwischen Dateien umschalten"
     search_files: "Suche in Dateien"
     toggle_tree: "Arbeitsordner-Ansicht ein/aus"
   # Navigation shortcuts
   nav:
-    next_tab: ""
-    prev_tab: ""
+    next_tab: "Nächster Tab"
+    prev_tab: "Vorheriger Tab"
     go_to_line: "Gehe zu Zeile"
     find_next: "Weitersuchen"
     find_prev: "rückwärts Weitersuchen"
@@ -441,8 +441,8 @@ shortcuts:
 
 # Notifications / Toasts
 notification:
-  restored_auto_save: ""
-  auto_save_discarded: ""
+  restored_auto_save: "Aus automatischer Sicherung wiederhergestellt"
+  auto_save_discarded: "Automatische Sicherung verworfen"
   session_restored: "Sitzung ist wiederhergestellt"
 
 # Tree viewer (JSON/YAML/TOML)
@@ -451,7 +451,7 @@ tree_viewer:
   expand_all: "▼ Alles aufklappen"
   copy_path: "📋 Pfad kopieren"
   show_raw: "Rohtext anzeigen"
-  parse_error: ""
+  parse_error: "⚠ Parsing-Fehler:"
   large_file_warning: "Große Datei (%{size} MB). Rohtext wird angezeigt."
 
 # Git integration
@@ -474,19 +474,20 @@ a11y:
 # Recovery and session dialogs
 recovery:
   auto_save:
-    title: ""
-    backup_found: ""
-    restore_question: ""
+    title: "Wiederherstellung mit Auto-Save-Dateien"
+    backup_found: "Automatisch gespeichterte Sicherheitskopie für diese Datei gefunden."
+    restore_question: "Inhalt mit automatisch erstellter Sicherheitskopie wiederherstellen?"
     restore: "Wiederherstellen"
-    discard: ""
-    time_label: ""
+    discard: "Verwerfen"
+    time_label: "Letzte Änderung: %{time}"
   session:
-    title: ""
-    crash_detected: ""
-    restore_question: ""
-    restore: ""
-    start_fresh: ""
-    restore_tooltip: ""
+    title: "Sitzung wiederherstellen"
+    crash_detected: "Ferrite hat erkannt, dass die vorherige Sitzung nicht richtig
+      beendet wurde."
+    restore_question: "Letzte Sitzung wiederherstellen?"
+    restore: "Sitzung wiederherstellen"
+    start_fresh: "Neu anfangen"
+    restore_tooltip: "Alle Tabs von letzter Sitzung wiederherstellen"
     start_fresh_tooltip: "Letzte Sitzung beenden und Editor ohne geladene Datei starten"
   untitled: "Dokument ohne Namen"
 
@@ -501,8 +502,8 @@ common:
 widgets:
   code_block:
     copy_tooltip: "In Zwischenablage kopieren"
-    finish_tooltip: ""
-    edit_tooltip: ""
+    finish_tooltip: "Bearbeitung beenden"
+    edit_tooltip: "Code bearbeiten"
   table:
     add_row: "+ Zeile"
     add_column: "+ Spalte"
@@ -541,25 +542,28 @@ pipeline:
   no_output: "(keine Ausgabe)"
   running: "Läuft..."
   truncated: "(gekürzt)"
-  close_tooltip: ""
+  close_tooltip: "Pipeline-Fenster schließen"
   cancel_tooltip: "Ausführung beenden"
   run_tooltip: "Befehl ausführen (Eingabetaste)"
   stdout: "stdout"
   stderr: "stderr"
-  hint: ""
+  hint: "Oben Befehl eingeben, durch den das Dokument durchgelitet wird.\nBeispiele:\n\
+    • jq '.'                       - JSON formatieren\n• jq '.items[]'        - JSON-Array-Inhalt
+    extrahieren\n• yq '.data'            - YAML-Field extrahieren\n• grep 'pattern'\
+    \  - Muster suchen"
   no_output_success: "(Befehl hat keine Ausgabe erzeugt)"
 
 # Encoding
 
 # Tab context menu
 tab:
-  reveal_in_explorer: ""
+  reveal_in_explorer: "Im Dateimanager anzeigen"
 
 # Mermaid diagrams
 mermaid:
   badge: "Mermaid"
   empty: "(leeres Diagramm)"
-  rendering_error: ""
+  rendering_error: "Fehler bei der Wiedergabe: %{error}"
 
 # Table of Contents
 
@@ -569,16 +573,16 @@ mermaid:
 workspace:
   close_folder: "Arbeitsordner schließen"
   new_file: "Neue Datei"
-  new_folder: ""
+  new_folder: "Neuer Dateiordner"
   rename: "Umbenennen"
   delete: "Löschen"
-  refresh: ""
-  recent_folders: ""
+  refresh: "Aktualisieren"
+  recent_folders: "📁 Letzte Dateiordner"
 
 # Zen mode
 zen:
-  enter: ""
-  exit: ""
+  enter: "Zen-Modus"
+  exit: "Zen-Modus verlassen"
 
 # Log levels (for settings)
 
@@ -593,23 +597,24 @@ time:
 
 # Tooltips
 tooltip:
-  fullscreen_exit: ""
-  fullscreen_enter: ""
+  fullscreen_exit: "Vollbildmodus verlassen (F10 oder Esc)"
+  fullscreen_enter: "Vollbildmodus (F10)"
   settings: "Einstellungen (Ctrl+,)"
-  recent_items: ""
-  about_help: ""
-  git_branch: ""
-  new_tab: ""
+  recent_items: "Klicken für kürzliche Daten und Ordner\nShift-Klick zum Öffnen im
+    Hintergrund"
+  about_help: "Info / Hilfe (F1)"
+  git_branch: "Aktueller GIT-Zweig"
+  new_tab: "Neuer Tab"
 
 # Ribbon toolbar additions
 ribbon:
-  format_document: ""
-  validate_syntax: ""
-  pipeline: ""
-  hide_info_panel: ""
-  show_info_panel: ""
+  format_document: "Dokument schön formatieren"
+  validate_syntax: "Syntax validieren"
+  pipeline: "Live Pipeline..."
+  hide_info_panel: "Info-Fenster ausblenden"
+  show_info_panel: "Infofenster anzeigen"
   toggle_outline: "Übersicht ein/aus"
-  copy_html_tooltip: ""
-  export_pdf: ""
-  coming_soon: ""
+  copy_html_tooltip: "HTML-Darstellung in die Zwischenablage kopieren"
+  export_pdf: "📄 Als PDF exportieren"
+  coming_soon: "Bald verfügbar"
   heading_level: "Überschrift %{level}"
