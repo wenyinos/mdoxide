@@ -5,12 +5,15 @@
 ### v0.2.7 (Planned) - Performance, Features & Polish
 **Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
 
-#### Bug Fixes
+#### Bug Fixes & UX
+- [ ] **Open file in current window as tab** - When double-clicking a file (in file tree or from OS/Explorer), open it as a new tab in the current Ferrite window instead of launching a new window. May require single-instance handling or passing paths to existing instance on Windows/Linux.
+- [ ] **Images not displaying in rendered mode** - Markdown image syntax `![](path)` does not show images in rendered/split view; fix path resolution (relative to document), image loading, and egui rendering so images display correctly.
 - [x] **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - When "Which CJK font to prioritize" is set to a non-Auto value and the app restarts, Chinese can render as tofu in restored tabs because we only lazy-load CJK for the active tab and don't preload the user's preferred font at startup. Fix: preload the single preferred CJK font at startup when preference is explicit (same approach as Auto + system locale), so restored documents render correctly regardless of which tab is active.
 - [x] **Syntax highlighting per-frame re-parsing** - `highlight_line()` was called on every frame for every visible line *before* checking the galley cache, causing severe lag on files with long lines (e.g. dense markdown with inline formatting). Fixed by checking the cache first and only running syntect regex parsing on cache misses.
 - [x] **Scrollbar position incorrect with word wrap** - Scrollbar thumb position was calculated using uniform `first_visible_line * line_height`, ignoring actual wrapped line heights. Fixed to use cumulative y-offsets from the height cache, so the scrollbar accurately reflects scroll position and reaches the bottom.
 - [x] **Scrollbar drag used wrong reverse mapping** - Dragging the scrollbar converted pixel position to a line number using uniform division, causing inaccurate jumps with word wrap. Fixed to use `y_offset_to_line()` binary search with sub-line precision.
 - [x] **Scrollbar jumping as new wrap info discovered** - `rebuild_height_cache` ran every frame (O(N)) and `total_content_height` changed abruptly as previously-unseen wrapped lines were measured during scrolling. Fixed with a dirty flag (only rebuild when wrap info changes) and smoothed scrollbar height that lerps toward the actual value.
+- [x] **Crash on large selection delete with word wrap** - Selecting a large block of text top-down and pressing Backspace caused an instant crash (`capacity overflow` panic). Root cause: after deletion, `first_visible_line` remained past the now-shorter document due to stale `wrap_info`/`cumulative_heights`, causing `get_visible_line_range()` to return `start > end` and `Vec::with_capacity(end - start)` to underflow. Fixed with 4 layers: (1) `saturating_sub` on the Vec allocation, (2) hard-clamp `first_visible_line` to `total_lines-1` in `clamp_scroll_position`, (3) clamp `cursor_to_char_pos` result to `buffer.len()`, (4) new `truncate_wrap_info()` to trim stale entries instead of full-clearing (avoids flickering).
 - [ ] **Wrapped line scroll stuttering** - Scrolling through documents with many word-wrapped lines still shows micro-stuttering. Likely related to per-line galley layout cost or height cache granularity. Needs further investigation.
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
@@ -29,6 +32,13 @@
 #### Large File Performance
 - [ ] **Large file detection** - Auto-detect files > 10MB on open, show warning toast.
 - [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index for massive CSVs.
+
+#### Welcome View
+- [ ] **Welcome view on first run** - Modal or full-view welcome screen with basic settings: word wrap, default view (Raw / Rendered / Split), optionally theme/font. "Do not show again" checkbox; preference stored in settings. Re-show via Help or Settings if desired.
+
+#### Installer & Localization
+- [ ] **Windows MSI: optional file associations** - During install, ask user whether to set Ferrite as default for .md, .txt, .json, .yaml, .toml (e.g. "Set as default for all" or per-extension); do not force associations without consent. WiX: `wix/main.wxs`.
+- [ ] **German and Japanese in Settings** - Locale files `locales/de.yaml` and `locales/ja.yaml` exist; add German and Japanese to the `Language` enum in settings so users can select them from Settings → Appearance.
 
 #### Refactoring & Quality
 - [ ] **Flowchart Refactoring** - Modularize the 3200+ line `flowchart.rs`.
@@ -61,6 +71,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
 
 ### Rendered View Limitations
+- [ ] **Images not displaying** - `![](path)` images do not show in rendered/split view; needs path resolution and image rendering (see v0.2.7 task).
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
 
 ---

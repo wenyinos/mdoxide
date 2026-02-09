@@ -127,7 +127,10 @@ Full integrated terminal at `src/terminal/`. Uses `portable-pty` for cross-platf
 
 ## Recently Changed
 
-**v0.2.6.1 (Feb 2026 - in progress):** Bug fixes, code signing, terminal & productivity integration
+**v0.2.7 (Feb 2026 - in progress):** Performance, features & polish
+- **CRASH FIX:** Large selection delete with word wrap caused `capacity overflow` panic. Stale `wrap_info`/`first_visible_line` after deletion → `Vec::with_capacity(usize underflow)`. Fixed: hard-clamp `first_visible_line` in `clamp_scroll_position`, `saturating_sub` in allocation, clamp `cursor_to_char_pos` to `buffer.len()`, new `truncate_wrap_info()` (trims stale entries without flickering).
+
+**v0.2.6.1 (Feb 2026):** Bug fixes, code signing, terminal & productivity integration
 - Fixed keyboard shortcut conflicts (FormatInlineCode/ToggleTerminal Ctrl+Backtick collision)
 - Undo after formatting now creates discrete undo entries (break_group before/after format ops)
 - Consecutive blockquotes merged in parser; blockquote border height fixed (paint-after-measure)

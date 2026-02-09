@@ -135,6 +135,8 @@ impl InputHandler {
     /// Converts cursor (line, column) to character position in buffer.
     /// 
     /// Handles out-of-bounds cursors gracefully by clamping to valid ranges.
+    /// The result is always clamped to `[0, buffer.len()]` to prevent panics
+    /// in downstream rope operations (slice, remove).
     pub fn cursor_to_char_pos(buffer: &TextBuffer, cursor: &Cursor) -> usize {
         // Clamp line to valid range to prevent panics
         let line_count = buffer.line_count();
@@ -142,7 +144,10 @@ impl InputHandler {
         
         // Use try_line_to_char for safety, fallback to buffer end
         let line_start = buffer.try_line_to_char(clamped_line).unwrap_or(buffer.len());
-        line_start + cursor.column
+        
+        // Clamp final position to buffer length to prevent rope slice/remove panics.
+        // cursor.column could exceed line length after deletions or with stale cursors.
+        (line_start + cursor.column).min(buffer.len())
     }
 
     /// Returns the length of a line (excluding newline characters).

@@ -463,6 +463,17 @@ impl ViewState {
             return;
         }
 
+        // CRITICAL: Hard-clamp first_visible_line to valid range FIRST.
+        // After large deletions, first_visible_line can be beyond the new buffer,
+        // and stale wrap_info/cumulative_heights would let it pass through the
+        // tolerance-based clamping below. This prevents downstream panics
+        // (e.g., get_visible_line_range returning start > end → Vec capacity overflow).
+        let max_first_visible = total_lines.saturating_sub(1);
+        if self.first_visible_line > max_first_visible {
+            self.first_visible_line = max_first_visible;
+            self.scroll_offset_y = 0.0;
+        }
+
         // Calculate max scroll correctly: content_height - viewport_height
         // This ensures the last line is fully visible at maximum scroll.
         // Use total_content_height() which accounts for word wrap heights when enabled.
@@ -978,6 +989,27 @@ impl ViewState {
         self.total_content_height = 0.0;
         self.scrollbar_content_height = 0.0;
         self.wrap_info_dirty = false;
+    }
+
+    /// Truncates wrap info to match the current line count.
+    ///
+    /// After large deletions, `wrap_info` can have stale entries for lines that
+    /// no longer exist. This removes those entries and marks heights as dirty so
+    /// `rebuild_height_cache` will recompute cumulative heights on the next call.
+    ///
+    /// Unlike `clear_wrap_info()`, this preserves valid entries for lines that
+    /// still exist, avoiding the flickering caused by a full clear.
+    pub fn truncate_wrap_info(&mut self, total_lines: usize) {
+        if self.wrap_info.len() > total_lines {
+            self.wrap_info.truncate(total_lines);
+            self.wrap_info_dirty = true;
+        }
+        // Also truncate cumulative_heights since it's indexed by line
+        if self.cumulative_heights.len() > total_lines + 1 {
+            self.cumulative_heights.truncate(total_lines + 1);
+            // Recompute total_content_height from truncated data
+            self.total_content_height = self.cumulative_heights.last().copied().unwrap_or(0.0);
+        }
     }
 
     /// Returns wrap info for debugging/testing.

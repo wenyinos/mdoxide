@@ -1317,14 +1317,16 @@ impl FerriteEditor {
         }
         
         // Clear cache if content changed
-        // NOTE: We only invalidate the line cache, NOT the wrap_info.
+        // NOTE: We only invalidate the line cache, NOT the full wrap_info.
         // Clearing wrap_info causes flickering because y-position calculations
         // alternate between two different methods on consecutive frames.
-        // The wrap_info will be updated as we render each line anyway.
+        // Instead, we TRUNCATE wrap_info to match the current line count, which
+        // removes stale entries for deleted lines while preserving valid ones.
         if self.content_dirty {
             self.line_cache.invalidate();
-            // Don't clear wrap_info here - it causes flickering!
-            // self.view.clear_wrap_info();
+            // Truncate stale wrap_info entries (don't full-clear to avoid flickering)
+            let current_lines = self.buffer.line_count();
+            self.view.truncate_wrap_info(current_lines);
             self.content_dirty = false;
         }
 
@@ -1443,7 +1445,7 @@ impl FerriteEditor {
         
         // Build a map of y-positions for all lines we need to render
         // This ensures consistent positioning regardless of cached state
-        let mut line_y_positions: Vec<f32> = Vec::with_capacity(end_line - start_line);
+        let mut line_y_positions: Vec<f32> = Vec::with_capacity(end_line.saturating_sub(start_line));
         
         // Calculate y for lines from start_line to end_line
         // First, calculate cumulative heights from first_visible backwards to start_line
