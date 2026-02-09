@@ -13,55 +13,60 @@
 
 ## Current Task
 
-**Task 12: Implement GitHub-style callouts parsing and rendering**
+**Task 15: Implement wikilinks parsing, resolution, and navigation**
 - **Priority**: High
-- **Dependencies**: None
+- **Dependencies**: Task 12 (callouts — DONE)
 - **Status**: Pending
+- **Task Master ID**: 15
 
 ### Description
-Add support for GitHub-style admonition blocks like `> [!NOTE]` with color-coded rendering and optional collapsible state.
+Add `[[wikilinks]]` and `[[target|display]]` syntax support with file resolution, spaces in filenames, and click-to-navigate in rendered/split view.
 
 ### Implementation Details
-1. **Parser** (`src/markdown/parser.rs`): Extend to recognize `> [!TYPE]` and `> [!TYPE] Custom Title` syntax. Store type, title, and collapsed state in AST.
-2. **Renderer** (`src/markdown/widgets.rs`): Render styled blocks with icons and colors:
-   - NOTE = blue
-   - TIP = green
-   - WARNING = orange
-   - CAUTION = yellow
-   - IMPORTANT = red
-3. **Collapsible**: Support `> [!NOTE]-` for collapsed-by-default blocks.
-4. **Interaction**: Add toggle interaction preserving state per block.
+1. **Parser** (`src/markdown/parser.rs`): Extend to parse `[[target]]` and `[[target|display text]]` syntax. Store as a new AST node (similar to how callouts were added in Task 12).
+2. **Resolution**: Resolve wikilink targets to actual files:
+   - Relative to current file's directory first
+   - Then workspace root
+   - Tie-breaker: same-folder-first → shortest path → prompt if ambiguous
+   - Support spaces: `[[My Note]]` → `My Note.md`
+3. **Rendering** (`src/markdown/editor.rs`): Render wikilinks as clickable links in rendered/split view. Show display text if provided, otherwise the target name.
+4. **Navigation**: Click opens the target file in a new tab (or switches to existing tab).
+5. **Broken links**: Handle gracefully — style differently (red/dimmed) or show tooltip.
 
-### Test Strategy
-1. Parse/render `> [!NOTE]\n> Content` -> blue note block
-2. `> [!WARNING] Custom Title` -> orange with custom title
-3. `> [!NOTE]-` -> collapsed by default, expands on click
-4. Verify all 5 types render correctly with proper colors and icons
-
----
-
-## Key Files for Task 12
+### Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/markdown/parser.rs` | Markdown parser - extend for callout syntax |
-| `src/markdown/widgets.rs` | Markdown rendering widgets - add styled callout blocks |
-| `src/markdown/editor.rs` | WYSIWYG rendered editing |
-| `src/markdown/mod.rs` | Markdown module exports |
+| `src/markdown/parser.rs` | Add wikilink parsing to AST |
+| `src/markdown/editor.rs` | Render wikilinks as clickable links |
+| `src/markdown/widgets.rs` | Wikilink widget serialization |
+| `src/state.rs` | File navigation / tab opening |
+| `src/app/file_ops.rs` | Open file in tab |
 
 ### Reference
-- Look at how blockquotes are currently parsed and rendered
-- GitHub callout spec: `> [!TYPE]` where TYPE is NOTE, TIP, WARNING, CAUTION, IMPORTANT
-- Optional custom title: `> [!TYPE] Custom Title`
-- Collapsed-by-default: `> [!TYPE]-`
+- Task 12 (callouts) added `CalloutType` enum and `Callout` AST node — follow the same pattern for wikilinks
+- Existing link rendering in `editor.rs` — look at how `[text](url)` links are handled for click behavior
+- GitHub issue: [#1](https://github.com/OlaProeis/Ferrite/issues/1)
+
+### Test Strategy
+1. `[[note-b]]` → renders as clickable, clicking opens `note-b.md`
+2. `[[note-b|Custom Text]]` → shows "Custom Text", navigates to `note-b.md`
+3. `[[My Document]]` with spaces → resolves to `My Document.md`
+4. Ambiguous targets → prompt user to choose
+5. Broken/missing links → handled gracefully (visual indicator, no crash)
 
 ---
 
 ## Recently Completed (This Session)
 
-- **Task 11**: Preload explicit CJK font at startup for restored tabs (DONE)
-  - Added `preload_explicit_cjk_font()` in `src/fonts.rs`
-  - Updated startup flow in `src/app/mod.rs` to call it before system-locale preload
+- **Task 13**: Manual "Check for Updates" button in Settings (DONE)
+  - New module `src/update.rs` with GitHub API check, version comparison, URL validation
+  - Added `ureq` dependency (lightweight blocking HTTP with rustls TLS)
+  - New "About" section in Settings panel with inline update state display
+  - Security: URL prefix validation, pure-Rust TLS
+  - Technical doc: `docs/technical/ui/check-for-updates.md`
+
+- **Task 12**: GitHub-style callouts parsing and rendering (DONE)
 
 ---
 

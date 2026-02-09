@@ -198,6 +198,24 @@ settings:
     apply: "Apply"
     conflict_with: "Conflicts with"
     click_to_change: "Click to change shortcut"
+  about:
+    title: "About"
+    description: "A fast, lightweight text editor for Markdown, JSON, and more"
+    updates: "Updates"
+    check_for_updates: "Check for Updates"
+    checking: "Checking for updates..."
+    up_to_date: "You're on the latest version!"
+    check_again: "Check Again"
+    update_available: "New Version Available!"
+    new_version: "Version"
+    view_release: "View Release & Download"
+    check_failed: "Could not check for updates"
+    try_again: "Try Again"
+    links: "Links"
+    all_releases: "All Releases"
+    report_issue: "Report an Issue"
+    source_code: "Source Code"
+    license: "Licensed under MIT"
 
 # Find and Replace panel
 find:

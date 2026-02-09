@@ -5,10 +5,12 @@
 
 use crate::config::{CjkFontPreference, EditorFont, KeyBinding, KeyboardShortcuts, KeyCode, KeyModifiers, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme, ViewMode};
 use crate::terminal::MonitorInfo;
+use crate::update::{self, UpdateCheckResult, UpdateState};
 use crate::fonts;
 use crate::markdown::syntax::get_available_themes;
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
+use std::sync::mpsc;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Localized Display Helpers
@@ -130,6 +132,7 @@ pub enum SettingsSection {
     Files,
     Keyboard,
     Terminal,
+    About,
 }
 
 impl SettingsSection {
@@ -141,6 +144,7 @@ impl SettingsSection {
             SettingsSection::Files => t!("settings.files.title"),
             SettingsSection::Keyboard => t!("settings.keyboard.title"),
             SettingsSection::Terminal => std::borrow::Cow::Borrowed("Terminal"), // TODO: i18n
+            SettingsSection::About => t!("settings.about.title"),
         }
         .to_string()
     }
@@ -153,6 +157,7 @@ impl SettingsSection {
             SettingsSection::Files => "📁",
             SettingsSection::Keyboard => "⌨",
             SettingsSection::Terminal => ">_",
+            SettingsSection::About => "ℹ",
         }
     }
 }
@@ -180,7 +185,7 @@ pub struct KeyCaptureState {
 }
 
 /// Settings panel state and rendering.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SettingsPanel {
     /// Currently active settings section.
     active_section: SettingsSection,
@@ -192,6 +197,10 @@ pub struct SettingsPanel {
     conflict_warning: Option<(ShortcutCommand, String)>,
     /// Cached monitor info
     cached_monitor_info: Option<Vec<MonitorInfo>>,
+    /// Current update check state
+    update_state: UpdateState,
+    /// Receiver for background update check result
+    update_check_rx: Option<mpsc::Receiver<UpdateCheckResult>>,
 }
 
 impl Default for SettingsPanel {
@@ -209,6 +218,8 @@ impl SettingsPanel {
             keyboard_filter: String::new(),
             conflict_warning: None,
             cached_monitor_info: None,
+            update_state: UpdateState::default(),
+            update_check_rx: None,
         }
     }
 
@@ -282,6 +293,7 @@ impl SettingsPanel {
                             SettingsSection::Files,
                             SettingsSection::Keyboard,
                             SettingsSection::Terminal,
+                            SettingsSection::About,
                         ] {
                             let selected = self.active_section == section;
                             let text = format!("{} {}", section.icon(), section.label());
@@ -345,6 +357,9 @@ impl SettingsPanel {
                                         if self.show_terminal_section(ui, settings) {
                                             output.changed = true;
                                         }
+                                    }
+                                    SettingsSection::About => {
+                                        self.show_about_section(ui, ctx);
                                     }
                                 }
                             });
@@ -615,6 +630,196 @@ impl SettingsPanel {
         }
 
         changed
+    }
+
+    /// Show the About section with version info and update check.
+    fn show_about_section(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        // Poll for update check result if we have a pending check
+        if let Some(rx) = &self.update_check_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    UpdateCheckResult::UpToDate => {
+                        self.update_state = UpdateState::UpToDate;
+                    }
+                    UpdateCheckResult::UpdateAvailable {
+                        version,
+                        release_url,
+                        ..
+                    } => {
+                        self.update_state = UpdateState::UpdateAvailable {
+                            version,
+                            release_url,
+                        };
+                    }
+                    UpdateCheckResult::Error(msg) => {
+                        self.update_state = UpdateState::Error(msg);
+                    }
+                }
+                self.update_check_rx = None;
+            }
+        }
+
+        // Request repaint while checking so we poll the channel
+        if matches!(self.update_state, UpdateState::Checking) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+
+        ui.heading(t!("settings.about.title"));
+        ui.add_space(8.0);
+
+        // Application info
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Ferrite").strong().size(16.0));
+            ui.label(
+                RichText::new(format!("v{}", update::current_version()))
+                    .monospace()
+                    .size(14.0),
+            );
+        });
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!("settings.about.description"))
+                .weak()
+                .small(),
+        );
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Check for Updates section
+        ui.label(RichText::new(t!("settings.about.updates")).strong());
+        ui.add_space(8.0);
+
+        match &self.update_state {
+            UpdateState::Idle => {
+                if ui
+                    .button(format!("🔄 {}", t!("settings.about.check_for_updates")))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::Checking => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(t!("settings.about.checking"));
+                });
+            }
+            UpdateState::UpToDate => {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("✓ {}", t!("settings.about.up_to_date")))
+                            .color(Color32::from_rgb(80, 180, 80)),
+                    );
+                });
+                ui.add_space(8.0);
+                if ui
+                    .small_button(t!("settings.about.check_again"))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::UpdateAvailable {
+                version,
+                release_url,
+            } => {
+                let version = version.clone();
+                let url = release_url.clone();
+
+                egui::Frame::none()
+                    .fill(ui.visuals().faint_bg_color)
+                    .rounding(6.0)
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(format!("🎉 {}", t!("settings.about.update_available")))
+                                .strong()
+                                .size(14.0),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(format!(
+                            "{}: v{} → v{}",
+                            t!("settings.about.new_version"),
+                            update::current_version(),
+                            version
+                        ));
+                        ui.add_space(8.0);
+                        if ui
+                            .button(format!("🌐 {}", t!("settings.about.view_release")))
+                            .clicked()
+                        {
+                            let _ = open::that(&url);
+                        }
+                    });
+                ui.add_space(8.0);
+                if ui
+                    .small_button(t!("settings.about.check_again"))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::Error(msg) => {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("⚠ {}", t!("settings.about.check_failed")))
+                            .color(Color32::from_rgb(220, 80, 80)),
+                    );
+                });
+                ui.label(RichText::new(msg).small().weak());
+                ui.add_space(8.0);
+                if ui
+                    .button(format!("🔄 {}", t!("settings.about.try_again")))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Links
+        ui.label(RichText::new(t!("settings.about.links")).strong());
+        ui.add_space(4.0);
+
+        if ui
+            .link(format!("📦 {}", t!("settings.about.all_releases")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite/releases");
+        }
+        if ui
+            .link(format!("🐛 {}", t!("settings.about.report_issue")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite/issues");
+        }
+        if ui
+            .link(format!("📖 {}", t!("settings.about.source_code")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite");
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // License
+        ui.label(
+            RichText::new(t!("settings.about.license"))
+                .small()
+                .weak(),
+        );
     }
 
     /// Show the Appearance settings section.
@@ -1664,6 +1869,7 @@ mod tests {
         assert_eq!(SettingsSection::Editor.label(), "Editor");
         assert_eq!(SettingsSection::Files.label(), "Files");
         assert_eq!(SettingsSection::Terminal.label(), "Terminal");
+        assert_eq!(SettingsSection::About.label(), "About");
     }
 
     #[test]
@@ -1672,6 +1878,7 @@ mod tests {
         assert_eq!(SettingsSection::Editor.icon(), "📝");
         assert_eq!(SettingsSection::Files.icon(), "📁");
         assert_eq!(SettingsSection::Terminal.icon(), ">_");
+        assert_eq!(SettingsSection::About.icon(), "ℹ");
     }
 
     #[test]

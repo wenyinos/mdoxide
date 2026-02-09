@@ -45,6 +45,7 @@ mod string_utils;
 mod terminal;
 mod theme;
 mod ui;
+mod update;
 mod vcs;
 #[cfg(feature = "async-workers")]
 mod workers;

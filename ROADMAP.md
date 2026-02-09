@@ -22,8 +22,9 @@
 - [ ] **Vim Mode** - Optional Vim-style modal editing (Normal / Insert / Visual modes).
 
 #### Check for Updates
-- [ ] **Check for Updates button** - Settings panel button that checks GitHub and prompts to install if update found.
-- [ ] **Manual Trigger Only** - No automatic background checking (offline-first philosophy).
+- [x] **Check for Updates button** - Settings → About section with button that checks GitHub Releases API and shows result inline (up-to-date, update available with link, or error). Uses `ureq` (lightweight blocking HTTP) on a background thread with `mpsc` channel for non-blocking UI.
+- [x] **Manual Trigger Only** - No automatic or background checking. Strictly user-initiated (offline-first philosophy).
+- [x] **Security hardening** - Response URL validated against `https://github.com/OlaProeis/Ferrite/releases/` prefix; malformed URLs are replaced with a constructed safe URL. TLS via `rustls` (pure Rust, no OpenSSL).
 
 #### Large File Performance
 - [ ] **Large file detection** - Auto-detect files > 10MB on open, show warning toast.
@@ -42,10 +43,10 @@
   *Security note: Code execution is opt‑in and disabled by default.*
 
 #### Content Blocks / Callouts
-- [ ] **GitHub-style callouts** - Support `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]`.
-- [ ] **Custom titles** - `> [!NOTE] Custom Title`.
-- [ ] **Styled rendering** - Color-coded blocks with icons in rendered view.
-- [ ] **Collapsible callouts** - `> [!NOTE]-` syntax for collapsed-by-default blocks.
+- [x] **GitHub-style callouts** - Support `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]`.
+- [x] **Custom titles** - `> [!NOTE] Custom Title`.
+- [x] **Styled rendering** - Color-coded blocks with icons in rendered view.
+- [x] **Collapsible callouts** - `> [!NOTE]-` syntax for collapsed-by-default blocks.
 
 ---
 

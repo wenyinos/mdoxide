@@ -87,6 +87,9 @@ portable-pty = "0.8"
 vte = "0.13"
 ctrlc = "3.5.1"
 
+# HTTP client for update checking (lightweight, blocking)
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+
 # Async runtime for background workers (optional, feature-gated)
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync", "time"], optional = true }
 poll-promise = { version = "0.3", optional = true }

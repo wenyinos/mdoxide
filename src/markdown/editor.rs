@@ -53,7 +53,7 @@ use crate::markdown::ast_ops::{
     outdent_list_item, split_list_item, split_paragraph, EditContext, EditNodeType, StructuralEdit,
 };
 use crate::markdown::parser::{
-    parse_markdown, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
+    parse_markdown, CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
 use crate::markdown::widgets::{
     CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
@@ -977,6 +977,27 @@ fn render_node_with_structural_keys(
                 paragraph_indent,
             );
         }
+        MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } => {
+            render_callout_with_structural_keys(
+                ui,
+                node,
+                source,
+                edit_state,
+                structural_state,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                *callout_type,
+                title.as_deref(),
+                *collapsed,
+            );
+        }
         MarkdownNodeType::List { list_type, .. } => {
             render_list_with_structural_keys(
                 ui,
@@ -1135,6 +1156,26 @@ fn render_node(
                 editor_font,
                 indent_level,
                 paragraph_indent,
+            );
+        }
+        MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } => {
+            render_callout(
+                ui,
+                node,
+                source,
+                edit_state,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                *callout_type,
+                title.as_deref(),
+                *collapsed,
             );
         }
         MarkdownNodeType::List { list_type, .. } => {
@@ -1777,6 +1818,206 @@ fn render_blockquote_with_structural_keys(
         Vec2::new(BORDER_WIDTH, rect.height()),
     );
     ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+}
+
+/// Get the color scheme for a callout type.
+/// Returns (border_color, background_color, icon_color) for both dark and light themes.
+fn callout_colors(callout_type: CalloutType, is_dark: bool) -> (Color32, Color32, Color32) {
+    // Background uses from_rgba_unmultiplied for correct subtle tinting.
+    // Alpha ~25 out of 255 gives a gentle wash behind the content.
+    match callout_type {
+        CalloutType::Note => {
+            if is_dark {
+                (
+                    Color32::from_rgb(56, 132, 244),   // border
+                    Color32::from_rgba_unmultiplied(56, 132, 244, 25),  // bg
+                    Color32::from_rgb(88, 166, 255),   // icon/title
+                )
+            } else {
+                (
+                    Color32::from_rgb(9, 105, 218),
+                    Color32::from_rgba_unmultiplied(9, 105, 218, 20),
+                    Color32::from_rgb(9, 105, 218),
+                )
+            }
+        }
+        CalloutType::Tip => {
+            if is_dark {
+                (
+                    Color32::from_rgb(63, 185, 80),
+                    Color32::from_rgba_unmultiplied(63, 185, 80, 25),
+                    Color32::from_rgb(63, 185, 80),
+                )
+            } else {
+                (
+                    Color32::from_rgb(26, 127, 55),
+                    Color32::from_rgba_unmultiplied(26, 127, 55, 20),
+                    Color32::from_rgb(26, 127, 55),
+                )
+            }
+        }
+        CalloutType::Warning => {
+            if is_dark {
+                (
+                    Color32::from_rgb(210, 153, 34),
+                    Color32::from_rgba_unmultiplied(210, 153, 34, 25),
+                    Color32::from_rgb(210, 153, 34),
+                )
+            } else {
+                (
+                    Color32::from_rgb(154, 103, 0),
+                    Color32::from_rgba_unmultiplied(154, 103, 0, 20),
+                    Color32::from_rgb(154, 103, 0),
+                )
+            }
+        }
+        CalloutType::Caution => {
+            if is_dark {
+                (
+                    Color32::from_rgb(218, 190, 36),
+                    Color32::from_rgba_unmultiplied(218, 190, 36, 25),
+                    Color32::from_rgb(218, 190, 36),
+                )
+            } else {
+                (
+                    Color32::from_rgb(155, 130, 10),
+                    Color32::from_rgba_unmultiplied(155, 130, 10, 20),
+                    Color32::from_rgb(155, 130, 10),
+                )
+            }
+        }
+        CalloutType::Important => {
+            if is_dark {
+                (
+                    Color32::from_rgb(219, 97, 109),
+                    Color32::from_rgba_unmultiplied(219, 97, 109, 25),
+                    Color32::from_rgb(219, 97, 109),
+                )
+            } else {
+                (
+                    Color32::from_rgb(191, 57, 67),
+                    Color32::from_rgba_unmultiplied(191, 57, 67, 20),
+                    Color32::from_rgb(191, 57, 67),
+                )
+            }
+        }
+    }
+}
+
+/// Render a callout (GitHub-style admonition) with structural key support.
+fn render_callout_with_structural_keys(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    structural_state: &mut StructuralEditState,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    callout_type: CalloutType,
+    custom_title: Option<&str>,
+    default_collapsed: bool,
+) {
+    const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
+
+    let is_dark = colors.background.r() < 128;
+    let (border_color, bg_color, title_color) = callout_colors(callout_type, is_dark);
+
+    // Scope all child widget IDs under a unique ID to prevent collisions
+    // between multiple callouts. Using (start_line, end_line) for uniqueness.
+    let scope_id = ("callout_struct", node.start_line, node.end_line);
+
+    let group_response = ui.push_id(scope_id, |ui| {
+        let callout_id = ui.make_persistent_id("collapsed");
+        let is_collapsed = ui.data_mut(|d| {
+            *d.get_persisted_mut_or(callout_id, default_collapsed)
+        });
+
+        let title_text = custom_title.unwrap_or(callout_type.display_name());
+        let icon = callout_type.icon();
+
+        let inner = ui.horizontal(|ui| {
+            ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
+
+            ui.vertical(|ui| {
+                // Title row with icon and collapse toggle
+                let title_row = ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(icon)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size)),
+                    );
+
+                    let arrow = if is_collapsed { "▶" } else { "▼" };
+                    ui.label(
+                        RichText::new(arrow)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size * 0.7)),
+                    );
+
+                    ui.label(
+                        RichText::new(title_text)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size))
+                            .strong(),
+                    );
+                });
+
+                // Place a clickable rect over the title row for collapse toggle
+                let title_rect = title_row.response.rect;
+                let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
+                if click_response.clicked() {
+                    ui.data_mut(|d| {
+                        let val = d.get_persisted_mut_or(callout_id, default_collapsed);
+                        *val = !*val;
+                    });
+                }
+                // Show pointer cursor on hover
+                if click_response.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+
+                if !is_collapsed {
+                    ui.add_space(2.0);
+                    for child in &node.children {
+                        render_node_with_structural_keys(
+                            ui,
+                            child,
+                            source,
+                            edit_state,
+                            structural_state,
+                            colors,
+                            font_size,
+                            editor_font,
+                            indent_level + 1,
+                            None,
+                            None,
+                            paragraph_indent,
+                        );
+                    }
+                }
+            });
+        });
+        inner.response
+    });
+
+    // Paint styled background and left border
+    let rect = group_response.response.rect;
+    let content_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    );
+    ui.painter().rect_filled(content_rect, 4.0, bg_color);
+
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list with structural key support for items.
@@ -3185,6 +3426,123 @@ fn render_blockquote(
         Vec2::new(BORDER_WIDTH, rect.height()),
     );
     ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+}
+
+/// Render a callout (GitHub-style admonition) in non-structural mode.
+fn render_callout(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    callout_type: CalloutType,
+    custom_title: Option<&str>,
+    default_collapsed: bool,
+) {
+    const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
+
+    let is_dark = colors.background.r() < 128;
+    let (border_color, bg_color, title_color) = callout_colors(callout_type, is_dark);
+
+    // Scope all child widget IDs under a unique ID to prevent collisions
+    let scope_id = ("callout_render", node.start_line, node.end_line);
+
+    let group_response = ui.push_id(scope_id, |ui| {
+        let callout_id = ui.make_persistent_id("collapsed");
+        let is_collapsed = ui.data_mut(|d| {
+            *d.get_persisted_mut_or(callout_id, default_collapsed)
+        });
+
+        let title_text = custom_title.unwrap_or(callout_type.display_name());
+        let icon = callout_type.icon();
+
+        let inner = ui.horizontal(|ui| {
+            ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
+
+            // Wrap callout content in horizontal scroll area (like blockquotes)
+            egui::ScrollArea::horizontal()
+                .id_source("scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        // Title row with icon and collapse toggle
+                        let title_row = ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(icon)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size)),
+                            );
+
+                            let arrow = if is_collapsed { "▶" } else { "▼" };
+                            ui.label(
+                                RichText::new(arrow)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size * 0.7)),
+                            );
+
+                            ui.label(
+                                RichText::new(title_text)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size))
+                                    .strong(),
+                            );
+                        });
+
+                        // Place a clickable rect over the title row for collapse toggle
+                        let title_rect = title_row.response.rect;
+                        let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
+                        if click_response.clicked() {
+                            ui.data_mut(|d| {
+                                let val = d.get_persisted_mut_or(callout_id, default_collapsed);
+                                *val = !*val;
+                            });
+                        }
+                        // Show pointer cursor on hover
+                        if click_response.hovered() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+
+                        if !is_collapsed {
+                            ui.add_space(2.0);
+                            for child in &node.children {
+                                render_node(
+                                    ui,
+                                    child,
+                                    source,
+                                    edit_state,
+                                    colors,
+                                    font_size,
+                                    editor_font,
+                                    indent_level + 1,
+                                    paragraph_indent,
+                                );
+                            }
+                        }
+                    });
+                });
+        });
+        inner.response
+    });
+
+    // Paint styled background and left border
+    let rect = group_response.response.rect;
+    let content_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    );
+    ui.painter().rect_filled(content_rect, 4.0, bg_color);
+
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list (ordered or unordered).

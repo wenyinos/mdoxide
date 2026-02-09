@@ -85,6 +85,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Theme System](./technical/ui/theme-system.md) | Unified theming with ThemeColors, ThemeManager, light/dark themes, runtime switching |
 | [Adaptive Toolbar](./technical/ui/adaptive-toolbar.md) | File-type aware toolbar, conditional buttons for Markdown vs JSON/YAML/TOML |
 | [Navigation Buttons](./technical/ui/nav-buttons.md) | Document navigation overlay for quick jumping to top, middle, or bottom |
+| [Check for Updates](./technical/ui/check-for-updates.md) | Manual update checker via GitHub Releases API, security model, URL validation |
 
 ### Markdown & WYSIWYG
 
@@ -108,6 +109,7 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 | [Image Drag & Drop](./technical/markdown/image-drag-drop.md) | Drag images into editor, auto-save to assets/, insert markdown link at cursor |
 | [CJK Paragraph Indentation](./technical/markdown/cjk-paragraph-indentation.md) | First-line paragraph indentation for Chinese (2em) and Japanese (1em) typography conventions |
 | [Block Element Alignment](./technical/markdown/block-element-alignment.md) | Consistent 4px left indent for tables, code blocks, blockquotes, and other block elements |
+| [GitHub-Style Callouts](./technical/markdown/github-callouts.md) | GitHub-style callouts (`> [!NOTE]`, `> [!TIP]`, etc.) with color-coded rendering, collapse toggle |
 
 ### Data Viewers
 
@@ -325,6 +327,7 @@ ferrite/
 │   │   ├── html.rs       # HTML generation with theme CSS
 │   │   ├── clipboard.rs  # Clipboard operations (arboard)
 │   │   └── options.rs    # Export options and settings
+│   ├── update.rs         # Update checker (GitHub Releases API, version comparison)
 │   ├── theme/            # Theming system
 │   │   ├── mod.rs        # ThemeColors struct
 │   │   ├── light.rs      # Light theme egui::Visuals
@@ -421,6 +424,7 @@ ferrite/
 | Internationalization | rust-i18n + sys-locale | 3, 0.3 |
 | Terminal PTY | portable-pty | 0.8 |
 | Terminal ANSI Parser | vte | 0.13 |
+| HTTP Client | ureq (+ rustls) | 2.x |
 | Memory Allocator (Win) | mimalloc | 0.1 |
 | Memory Allocator (Unix) | tikv-jemallocator | 0.6 |
 

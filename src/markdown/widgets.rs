@@ -15,7 +15,7 @@
 #![allow(dead_code)]
 
 use crate::config::Theme;
-use crate::markdown::parser::{HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
+use crate::markdown::parser::{CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
 use eframe::egui::{self, Color32, FontId, Key, RichText, TextEdit, Ui};
 use rust_i18n::t;
 
@@ -711,6 +711,45 @@ pub fn serialize_node(node: &MarkdownNode) -> String {
                 .map(|line| format!("> {}", line))
                 .collect::<Vec<_>>()
                 .join("\n")
+        }
+
+        MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } => {
+            // Reconstruct the callout marker line
+            let type_name = match callout_type {
+                CalloutType::Note => "NOTE",
+                CalloutType::Tip => "TIP",
+                CalloutType::Warning => "WARNING",
+                CalloutType::Caution => "CAUTION",
+                CalloutType::Important => "IMPORTANT",
+            };
+            let collapse_marker = if *collapsed { "-" } else { "" };
+            let title_part = match title {
+                Some(t) => format!(" {}", t),
+                None => String::new(),
+            };
+            let marker_line = format!("> [!{}]{}{}", type_name, collapse_marker, title_part);
+
+            let inner = node
+                .children
+                .iter()
+                .map(serialize_node)
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if inner.is_empty() {
+                marker_line
+            } else {
+                let content_lines = inner
+                    .lines()
+                    .map(|line| format!("> {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("{}\n{}", marker_line, content_lines)
+            }
         }
 
         MarkdownNodeType::List { list_type, .. } => {
