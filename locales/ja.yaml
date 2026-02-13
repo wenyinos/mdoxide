@@ -200,6 +200,24 @@ settings:
     click_to_change: "クリックしてショートカットを変更"
 
 # Find and Replace panel
+  about:
+    title: Ferrite について
+    description: Markdown,JSON などに対応した高速で軽量なテキスト エディタ
+    updates: アップデート
+    check_for_updates: 更新の確認
+    checking: 更新の確認中...
+    up_to_date: 最新バージョンを使用しています!
+    check_again: 再確認
+    update_available: 新しいバージョンが利用可能です!
+    new_version: バージョン
+    view_release: リリースを表示してダウンロード
+    check_failed: 更新を確認できませんでした
+    try_again: 再試行
+    links: リンク
+    all_releases: すべてのリリース
+    report_issue: 問題の報告
+    source_code: ソースコード
+    license: MITライセンス
 find:
   placeholder: "検索..."
   replace_placeholder: "置換後..."
