@@ -2,12 +2,15 @@
 
 ## Overview
 
-The About/Help panel provides application information and a comprehensive keyboard shortcuts reference. It's accessible via F1 or the `?` button in the status bar.
+The About/Help panel provides application information and a comprehensive keyboard shortcuts reference. It's accessible via F1.
+
+Since v0.2.7, the About/Help panel opens as a **special tab** in the main tab bar (like Cursor/VS Code), replacing the previous modal window approach. See [Special Tabs](./special-tabs.md) for the underlying system.
 
 ## Key Files
 
-- `src/ui/about.rs` - About panel implementation with sections and shortcuts
-- `src/app.rs` - F1 shortcut handling and panel toggle
+- `src/ui/about.rs` - About panel implementation with sections, shortcuts, and `show_inline()` method
+- `src/app/keyboard.rs` - F1 shortcut handling
+- `src/state.rs` - `toggle_about()` opens/closes the About special tab
 
 ## Features
 

@@ -42,6 +42,9 @@ impl FerriteApp {
 
                 // Get state needed for title bar controls
                 let has_editor = self.state.active_tab().is_some();
+                let is_special_tab = self.state.active_tab()
+                    .map(|t| t.is_special())
+                    .unwrap_or(false);
                 let auto_save_enabled = self.state.active_tab()
                     .map(|t| t.auto_save_enabled)
                     .unwrap_or(false);
@@ -81,8 +84,8 @@ impl FerriteApp {
                     let title = self.window_title();
                     ui.add(egui::Label::new(egui::RichText::new(title).size(12.0).color(text_color)).selectable(false));
 
-                    // Auto-save indicator (after filename) - only show if there's an active editor
-                    if has_editor {
+                    // Auto-save indicator (after filename) - only show for document tabs
+                    if has_editor && !is_special_tab {
                         ui.add_space(8.0);
                         if TitleBarButton::show_auto_save(ui, auto_save_enabled, is_dark).clicked() {
                             title_bar_toggle_auto_save = true;
@@ -313,8 +316,8 @@ impl FerriteApp {
 
                         ui.add_space(4.0);
 
-                        // View Mode segmented control (only if there's an active editor with renderable content)
-                        if has_editor && (current_file_type.is_markdown() || current_file_type.is_structured() || current_file_type.is_tabular()) {
+                        // View Mode segmented control (only for document tabs with renderable content)
+                        if has_editor && !is_special_tab && (current_file_type.is_markdown() || current_file_type.is_structured() || current_file_type.is_tabular()) {
                             // Show the segmented pill control for view mode selection
                             let segment = ViewModeSegment::new();
                             
@@ -347,8 +350,8 @@ impl FerriteApp {
                     debug!("Title bar: Toggle Zen Mode");
                 }
                 if title_bar_open_settings {
-                    self.state.ui.show_settings = true;
-                    debug!("Title bar: Open Settings");
+                    self.state.open_settings_tab();
+                    debug!("Title bar: Open Settings tab");
                 }
                 if let Some(view_action) = title_bar_view_action {
                     if let Some(tab) = self.state.active_tab_mut() {

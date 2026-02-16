@@ -1,26 +1,22 @@
 # Settings Panel
 
-The Settings Panel provides a modal interface for configuring application preferences with live preview. All changes are applied immediately and saved automatically.
+The Settings Panel provides an interface for configuring application preferences with live preview. All changes are applied immediately and saved automatically.
+
+Since v0.2.7, the Settings Panel opens as a **special tab** in the main tab bar (like Cursor/VS Code), replacing the previous modal window approach. See [Special Tabs](./special-tabs.md) for the underlying system.
 
 ## Features
 
-- **Modal overlay** - Semi-transparent backdrop prevents interaction with main window
-- **Section navigation** - Tabbed interface with Appearance, Editor, and Files sections
+- **Tab-based UI** - Opens as a tab alongside documents, using full editor space
+- **Single instance** - Only one Settings tab can exist at a time; re-opening focuses it
+- **Section navigation** - Sidebar with Appearance, Editor, Files, Keyboard, Terminal, About
 - **Live preview** - Changes apply immediately without requiring a save action
 - **Auto-save** - Settings are persisted automatically when modified
 - **Reset to defaults** - One-click option to restore all settings to defaults
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+,` | Open/close settings panel |
-| `Escape` | Close settings panel |
-
 ## Access Methods
 
-1. **Keyboard**: Press `Ctrl+,` from anywhere in the application
-2. **Ribbon**: Click the gear icon (⚙) in the Settings group
+1. **Title bar**: Click the gear icon (⚙) in the title bar
+2. Settings tab appears in the tab bar and can be closed like any tab
 
 ## Sections
 
@@ -85,34 +81,29 @@ App handles:
 
 ### Integration Points
 
-1. **AppState.ui.show_settings** - Boolean flag to show/hide panel
-2. **AppState.settings** - Direct mutation for live preview
-3. **ThemeManager** - Theme changes applied immediately via `set_theme()` and `apply()`
-4. **mark_settings_dirty()** - Triggers persistence on next save interval
+1. **AppState::open_settings_tab()** - Opens or focuses the Settings special tab
+2. **TabKind::Special(SpecialTabKind::Settings)** - Tab kind identifier
+3. **SettingsPanel::show_inline()** - Renders settings directly in a `Ui` (tab content area)
+4. **AppState.settings** - Direct mutation for live preview
+5. **ThemeManager** - Theme changes applied immediately via `set_theme()` and `apply()`
+6. **mark_settings_dirty()** - Triggers persistence on next save interval
 
 ## Implementation Details
 
-### Modal Behavior
+### Tab-Based Rendering (v0.2.7+)
 
-The panel uses a layered approach:
-1. **Overlay Area** (Order::Middle) - Captures clicks outside the window
-2. **Settings Window** (Order::Foreground) - The actual panel
+Settings is rendered as a special tab via `render_special_tab_content()` in `central_panel.rs`:
 
 ```rust
-// Overlay captures outside clicks
-egui::Area::new("settings_overlay")
-    .order(egui::Order::Middle)
-    .show(ctx, |ui| {
-        if response.clicked() {
-            output.close_requested = true;
-        }
-    });
-
-// Window is on top
-egui::Window::new("⚙ Settings")
-    .order(egui::Order::Foreground)
-    .show(ctx, |ui| { ... });
+// In central_panel.rs
+if let TabKind::Special(special_kind) = active_tab_kind {
+    self.render_special_tab_content(ui, special_kind);
+} else {
+    // Normal editor rendering...
+}
 ```
+
+The `show_inline()` method renders a sidebar + content layout that fills the entire tab area.
 
 ### Live Preview
 

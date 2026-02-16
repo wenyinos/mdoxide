@@ -19,7 +19,7 @@ use crate::markdown::{
 };
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
-use crate::state::{FileType, PendingAction, Selection};
+use crate::state::{FileType, PendingAction, Selection, SpecialTabKind, TabKind};
 use crate::theme::ThemeColors;
 use crate::ui::{FileOperationResult, GoToLineResult};
 use eframe::egui;
@@ -317,6 +317,16 @@ impl FerriteApp {
             }
             ui.add_space(3.0);
             } // End of tab bar (hidden in Zen Mode)
+
+            // Check if active tab is a special tab (settings, about, etc.)
+            // If so, render the special tab content instead of the editor
+            let active_tab_kind = self.state.active_tab()
+                .map(|t| t.kind.clone())
+                .unwrap_or(TabKind::Document);
+
+            if let TabKind::Special(special_kind) = active_tab_kind {
+                self.render_special_tab_content(ui, special_kind);
+            } else {
 
             // Editor widget - extract settings values to avoid borrow conflicts
             let font_size = self.state.settings.font_size;
@@ -1381,6 +1391,7 @@ impl FerriteApp {
                     }
                 }
             }
+            } // End of else block (document tab rendering)
         });
 
         // Render dialogs
@@ -1501,5 +1512,60 @@ impl FerriteApp {
         // Return deferred format action to be handled after editor has captured selection
 
         deferred_format_action
+    }
+
+    /// Render the content for a special (non-editable) tab.
+    ///
+    /// This renders settings, about/help, or other special panel content
+    /// directly in the central editor area instead of the document editor.
+    fn render_special_tab_content(&mut self, ui: &mut egui::Ui, kind: SpecialTabKind) {
+        match kind {
+            SpecialTabKind::Settings => {
+                let is_dark = ui.visuals().dark_mode;
+                let prev_font_family = self.state.settings.font_family.clone();
+                let prev_cjk_preference = self.state.settings.cjk_font_preference;
+
+                let output = self
+                    .settings_panel
+                    .show_inline(ui, &mut self.state.settings, is_dark);
+
+                if output.changed {
+                    self.theme_manager.set_theme(self.state.settings.theme);
+                    self.theme_manager.apply(ui.ctx());
+                    self.state.mark_settings_dirty();
+
+                    let font_changed = prev_font_family != self.state.settings.font_family
+                        || prev_cjk_preference != self.state.settings.cjk_font_preference;
+
+                    if font_changed {
+                        let custom_font = self.state.settings.font_family.custom_name().map(|s| s.to_string());
+                        crate::fonts::reload_fonts(
+                            ui.ctx(),
+                            custom_font.as_deref(),
+                            self.state.settings.cjk_font_preference,
+                        );
+                        info!("Font settings changed, reloaded fonts");
+                    }
+                }
+
+                if output.reset_requested {
+                    let default_settings = crate::config::Settings::default();
+                    self.state.settings = default_settings;
+                    self.theme_manager.set_theme(self.state.settings.theme);
+                    self.theme_manager.apply(ui.ctx());
+                    self.state.mark_settings_dirty();
+
+                    crate::fonts::reload_fonts(ui.ctx(), None, crate::config::CjkFontPreference::Auto);
+
+                    let time = self.get_app_time();
+                    self.state
+                        .show_toast("Settings reset to defaults", time, 2.0);
+                }
+            }
+            SpecialTabKind::About => {
+                let is_dark = ui.visuals().dark_mode;
+                self.about_panel.show_inline(ui, is_dark);
+            }
+        }
     }
 }

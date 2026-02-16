@@ -73,6 +73,11 @@ impl FerriteApp {
     /// Saves the current document to its existing file path.
     /// If the document has no path, triggers "Save As" instead.
     pub(crate) fn handle_save_file(&mut self) {
+        // Special tabs (settings, about) cannot be saved
+        if self.state.active_tab().map(|t| t.is_special()).unwrap_or(false) {
+            return;
+        }
+
         // Check if the active tab has a path
         let has_path = self
             .state

@@ -500,7 +500,7 @@ git push origin feature/your-feature
 
 ## Tech Stack
 
-Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, and syntect for syntax highlighting.
+Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, ropey for rope-based text editing, and syntect for syntax highlighting.
 
 <details>
 <summary><strong>Full tech stack</strong></summary>
@@ -509,14 +509,27 @@ Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, and syn
 |-----------|------------|
 | Language | Rust 1.70+ |
 | GUI Framework | egui 0.28 + eframe 0.28 |
+| Text Buffer | ropey 1.6 (rope data structure) |
 | Markdown Parser | comrak 0.22 |
-| Syntax Highlighting | syntect 5.1 |
+| Syntax Highlighting | syntect 5.1 + two-face 0.5 |
 | Git Integration | git2 0.19 |
+| Terminal PTY | portable-pty 0.8 |
+| Terminal ANSI Parser | vte 0.13 |
+| Encoding Detection | encoding_rs 0.8 + chardetng 0.1 |
+| Internationalization | rust-i18n 3 + sys-locale 0.3 |
 | CLI Parsing | clap 4 |
 | File Dialogs | rfd 0.14 |
 | Clipboard | arboard 3 |
 | File Watching | notify 6 |
 | Fuzzy Matching | fuzzy-matcher 0.3 |
+| HTTP Client | ureq 2 (update checker) |
+| Hashing | blake3 1.5 (Mermaid caching) |
+| Date/Time | chrono 0.4 |
+| CSV Parsing | csv 1.3 |
+| Color Palette | palette 0.7 |
+| Font Enumeration | font-kit 0.14 |
+| Allocator (Windows) | mimalloc 0.1 |
+| Allocator (Unix) | tikv-jemallocator 0.6 |
 
 </details>
 
