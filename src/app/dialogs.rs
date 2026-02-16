@@ -1,16 +1,19 @@
 //! Dialog rendering for the Ferrite application.
 //!
 //! This module contains the rendering of modal dialogs: go-to-line,
-//! close confirmation, file operation dialogs, and settings panel.
+//! close confirmation, file operation dialogs, and find/replace panel.
+//!
+//! Note: Settings and About/Help panels are now rendered as special tabs
+//! in the central panel (see central_panel.rs).
 
 use super::FerriteApp;
+#[allow(unused_imports)]
 use super::helpers::modifier_symbol;
-use crate::config::{CjkFontPreference, Settings, ViewMode};
-use crate::fonts;
+use crate::config::ViewMode;
 use crate::state::{FileType, PendingAction};
 use crate::ui::{FileOperationResult, GoToLineResult};
 use eframe::egui;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use rust_i18n::t;
 
 impl FerriteApp {
@@ -120,69 +123,8 @@ impl FerriteApp {
                 });
         }
 
-        // About/Help panel
-        if self.state.ui.show_about {
-            let is_dark = ctx.style().visuals.dark_mode;
-            let output = self.about_panel.show(ctx, is_dark);
-
-            if output.close_requested {
-                self.state.ui.show_about = false;
-            }
-        }
-
-        // Settings panel
-        if self.state.ui.show_settings {
-            let is_dark = ctx.style().visuals.dark_mode;
-            
-            // Capture font settings before showing panel
-            let prev_font_family = self.state.settings.font_family.clone();
-            let prev_cjk_preference = self.state.settings.cjk_font_preference;
-            
-            let output = self
-                .settings_panel
-                .show(ctx, &mut self.state.settings, is_dark);
-
-            if output.changed {
-                // Apply theme changes immediately
-                self.theme_manager.set_theme(self.state.settings.theme);
-                self.theme_manager.apply(ctx);
-                self.state.mark_settings_dirty();
-                
-                // Reload fonts if font settings changed
-                let font_changed = prev_font_family != self.state.settings.font_family
-                    || prev_cjk_preference != self.state.settings.cjk_font_preference;
-                
-                if font_changed {
-                    let custom_font = self.state.settings.font_family.custom_name().map(|s| s.to_string());
-                    fonts::reload_fonts(
-                        ctx,
-                        custom_font.as_deref(),
-                        self.state.settings.cjk_font_preference,
-                    );
-                    info!("Font settings changed, reloaded fonts");
-                }
-            }
-
-            if output.reset_requested {
-                // Reset to defaults
-                let default_settings = Settings::default();
-                self.state.settings = default_settings;
-                self.theme_manager.set_theme(self.state.settings.theme);
-                self.theme_manager.apply(ctx);
-                self.state.mark_settings_dirty();
-                
-                // Reload fonts with defaults
-                fonts::reload_fonts(ctx, None, CjkFontPreference::Auto);
-
-                let time = self.get_app_time();
-                self.state
-                    .show_toast("Settings reset to defaults", time, 2.0);
-            }
-
-            if output.close_requested {
-                self.state.ui.show_settings = false;
-            }
-        }
+        // Note: About/Help and Settings panels are now rendered as special tabs
+        // in the central panel (see central_panel.rs render_special_tab_content).
 
         // Find/Replace panel
         if self.state.ui.show_find_replace {

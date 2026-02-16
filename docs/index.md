@@ -13,6 +13,20 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 
 ---
 
+## Visual Architecture Guide
+
+These diagrams provide a quick visual overview for new contributors.
+
+### Layered Architecture
+
+![Ferrite Architecture Overview](./ferrite-architecture-overview.png)
+
+### Data Flow & Module Interactions
+
+![Ferrite Developer Guide - Where Things Connect](./ferrite-developer-guide-flow.png)
+
+---
+
 ## Technical Documentation
 
 ### Configuration & Setup
@@ -71,10 +85,11 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 |----------|-------------|
 | [Ribbon UI](./technical/ui/ribbon-ui.md) | Modern ribbon interface replacing menu bar, icon-based controls |
 | [Ribbon Redesign](./technical/ui/ribbon-redesign.md) | Design C streamlined ribbon, title bar integration, dropdown menus |
-| [Settings Panel](./technical/ui/settings-panel.md) | Modal settings UI with live preview, appearance/editor/files sections |
+| **[Special Tabs](./technical/ui/special-tabs.md)** | **Tab-based UI panels (Settings, About/Help) replacing modal windows, extensible for future panels** |
+| [Settings Panel](./technical/ui/settings-panel.md) | Settings UI in a special tab, live preview, appearance/editor/files/keyboard/terminal sections |
 | [Outline Panel](./technical/ui/outline-panel.md) | Document outline side panel, heading extraction, statistics for structured files |
 | [Status Bar](./technical/ui/status-bar.md) | Bottom status bar with file path, stats, toast messages |
-| [About/Help Panel](./technical/ui/about-help.md) | About dialog with version info, Help panel with keyboard shortcuts reference |
+| [About/Help Panel](./technical/ui/about-help.md) | About/Help in a special tab, version info, keyboard shortcuts reference |
 | [Zen Mode](./technical/ui/zen-mode.md) | Distraction-free writing mode, centered text column, chrome hiding, F11 toggle |
 | [Split View](./technical/ui/split-view.md) | Side-by-side raw editor + rendered preview, draggable splitter, independent scrolling |
 | [Search Panel Viewport](./technical/ui/search-panel-viewport.md) | Viewport constraints for Search panel, DPI handling, resize behavior |
@@ -258,133 +273,170 @@ A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust an
 ```
 ferrite/
 ├── src/
-│   ├── main.rs           # Entry point, eframe setup, memory allocators
-│   ├── app.rs            # Main App struct, update loop, custom title bar
-│   ├── state.rs          # AppState, Tab, UiState, event handling
-│   ├── error.rs          # Error types and handling
-│   ├── fonts.rs          # Custom font loading, lazy CJK, family selection
-│   ├── path_utils.rs     # Windows path normalization (\\?\ prefix stripping)
-│   ├── string_utils.rs   # String utility functions
-│   ├── config/           # Settings and persistence
-│   │   ├── mod.rs        # Module exports
-│   │   ├── settings.rs   # Settings struct, TabInfo, shortcuts, validation
-│   │   ├── persistence.rs # Config file load/save
-│   │   ├── session.rs    # Session persistence, crash recovery, lock files
-│   │   └── snippets.rs   # Text expansion snippets (;date, ;time, custom)
-│   ├── editor/           # Text editor widgets
-│   │   ├── mod.rs        # Module exports
-│   │   ├── ferrite/      # FerriteEditor custom widget (modular)
-│   │   │   ├── mod.rs    # Re-exports
-│   │   │   ├── editor.rs # Main FerriteEditor widget
-│   │   │   ├── buffer.rs # TextBuffer - rope-based text storage
-│   │   │   ├── cursor.rs # Cursor position tracking
-│   │   │   ├── history.rs # EditHistory - operation-based undo/redo
-│   │   │   ├── view.rs   # ViewState - viewport tracking
-│   │   │   ├── line_cache.rs # LineCache - galley caching
-│   │   │   ├── input/    # Input handling (keyboard, mouse wheel)
-│   │   │   ├── rendering/ # Rendering (gutter, text, cursor)
-│   │   │   ├── mouse.rs  # Mouse position → cursor conversion
+│   ├── main.rs              # Entry point, eframe setup, memory allocators
+│   ├── app/                 # Main application (refactored from app.rs into ~15 modules)
+│   │   ├── mod.rs           # FerriteApp struct, update loop coordination
+│   │   ├── keyboard.rs      # Keyboard shortcut handling
+│   │   ├── input_handling.rs # Input processing
+│   │   ├── file_ops.rs      # File operations (open, save, close)
+│   │   ├── formatting.rs    # Text formatting commands
+│   │   ├── line_ops.rs      # Line operations (duplicate, move)
+│   │   ├── navigation.rs    # Tab and cursor navigation
+│   │   ├── find_replace.rs  # Find/replace integration
+│   │   ├── export.rs        # Export operations
+│   │   ├── dialogs.rs       # Dialog handling
+│   │   ├── title_bar.rs     # Custom title bar rendering
+│   │   ├── status_bar.rs    # Status bar rendering
+│   │   ├── central_panel.rs # Central editor panel rendering
+│   │   ├── helpers.rs       # Helper utilities
+│   │   └── types.rs         # Shared type definitions
+│   ├── state.rs             # AppState, Tab, TabState, FileType, event handling
+│   ├── error.rs             # Error types and handling
+│   ├── fonts.rs             # Custom font loading, lazy CJK, family selection
+│   ├── path_utils.rs        # Windows path normalization (\\?\ prefix stripping)
+│   ├── string_utils.rs      # String utility functions
+│   ├── update.rs            # Update checker (GitHub Releases API, version comparison)
+│   ├── config/              # Settings and persistence
+│   │   ├── mod.rs           # Module exports
+│   │   ├── settings.rs      # Settings struct, TabInfo, shortcuts, validation
+│   │   ├── persistence.rs   # Config file load/save
+│   │   ├── session.rs       # Session persistence, crash recovery, lock files
+│   │   └── snippets.rs      # Text expansion snippets (;date, ;time, custom)
+│   ├── editor/              # Text editor widgets
+│   │   ├── mod.rs           # Module exports
+│   │   ├── ferrite/         # FerriteEditor custom widget (modular)
+│   │   │   ├── mod.rs       # Re-exports
+│   │   │   ├── editor.rs    # Main FerriteEditor widget
+│   │   │   ├── buffer.rs    # TextBuffer - rope-based text storage
+│   │   │   ├── cursor.rs    # Cursor position tracking
 │   │   │   ├── selection.rs # Selection handling
-│   │   │   ├── search.rs # Search integration
+│   │   │   ├── history.rs   # EditHistory - operation-based undo/redo
+│   │   │   ├── view.rs      # ViewState - viewport tracking
+│   │   │   ├── line_cache.rs # LineCache - galley caching
+│   │   │   ├── highlights.rs # Highlight rendering
+│   │   │   ├── search.rs    # Search integration
 │   │   │   ├── find_replace.rs # Find/replace within editor
-│   │   │   └── highlights.rs # Highlight rendering
-│   │   ├── widget.rs     # EditorWidget with line numbers, search highlights
-│   │   ├── line_numbers.rs # Line counting utilities
-│   │   ├── stats.rs      # Text statistics (words, chars, lines)
-│   │   ├── find_replace.rs # Find/replace panel and search logic
-│   │   ├── folding.rs    # Code folding logic
-│   │   ├── matching.rs   # Bracket matching
-│   │   ├── minimap.rs    # Semantic minimap
-│   │   └── outline.rs    # Document outline extraction
-│   ├── files/            # File operations
-│   │   ├── mod.rs        # Module exports
-│   │   └── dialogs.rs    # Native file dialogs (rfd)
-│   ├── markdown/         # Parser and WYSIWYG editor
-│   │   ├── mod.rs        # Module exports
-│   │   ├── parser.rs     # Comrak integration, AST parsing
-│   │   ├── editor.rs     # WYSIWYG markdown editor
-│   │   ├── widgets.rs    # Editable heading/list/table widgets
-│   │   ├── syntax.rs     # Syntax highlighting (syntect)
-│   │   ├── ast_ops.rs    # AST operations and manipulation
-│   │   ├── formatting.rs # Markdown formatting commands
-│   │   ├── toc.rs        # Table of Contents generation
-│   │   ├── csv_viewer.rs # CSV/TSV table viewer
-│   │   └── tree_viewer.rs # JSON/YAML/TOML tree viewer widget
-│   ├── terminal/         # Integrated terminal emulator
-│   │   ├── mod.rs        # Terminal, TerminalManager, monitor detection
-│   │   ├── pty.rs        # Cross-platform PTY (portable-pty)
-│   │   ├── screen.rs     # Screen buffer, ANSI color cells
-│   │   ├── handler.rs    # VTE event handler (escape sequences)
-│   │   ├── widget.rs     # Terminal rendering widget
-│   │   ├── layout.rs     # Split pane layouts (H/V, grid)
-│   │   ├── theme.rs      # Terminal color schemes
-│   │   └── sound.rs      # Notification sounds
-│   ├── preview/          # Preview and sync scrolling
-│   │   ├── mod.rs        # Module exports
-│   │   └── sync_scroll.rs # Bidirectional scroll synchronization
-│   ├── export/           # Document export
-│   │   ├── mod.rs        # Module exports
-│   │   ├── html.rs       # HTML generation with theme CSS
-│   │   ├── clipboard.rs  # Clipboard operations (arboard)
-│   │   └── options.rs    # Export options and settings
-│   ├── update.rs         # Update checker (GitHub Releases API, version comparison)
-│   ├── theme/            # Theming system
-│   │   ├── mod.rs        # ThemeColors struct
-│   │   ├── light.rs      # Light theme egui::Visuals
-│   │   ├── dark.rs       # Dark theme egui::Visuals
-│   │   └── manager.rs    # ThemeManager for runtime switching
-│   ├── ui/               # UI components
-│   │   ├── mod.rs        # Module exports
-│   │   ├── about.rs      # About/Help panel with shortcuts reference
-│   │   ├── icons.rs      # Icon loading for window/taskbar icons
-│   │   ├── ribbon.rs     # Ribbon interface (replaces menu bar)
-│   │   ├── settings.rs   # Settings panel modal
+│   │   │   ├── mouse.rs     # Mouse position → cursor conversion
+│   │   │   ├── input/       # Input handling submodule
+│   │   │   │   ├── keyboard.rs # Keyboard input
+│   │   │   │   └── mouse.rs   # Mouse/scroll input
+│   │   │   └── rendering/   # Rendering submodule
+│   │   │       ├── text.rs    # Text rendering
+│   │   │       ├── cursor.rs  # Cursor rendering
+│   │   │       └── gutter.rs  # Gutter/line numbers rendering
+│   │   ├── widget.rs        # EditorWidget with line numbers, search highlights
+│   │   ├── line_numbers.rs  # Line counting utilities
+│   │   ├── stats.rs         # Text statistics (words, chars, lines)
+│   │   ├── find_replace.rs  # Find/replace panel and search logic
+│   │   ├── folding.rs       # Code folding logic
+│   │   ├── matching.rs      # Bracket matching
+│   │   ├── minimap.rs       # Semantic minimap
+│   │   └── outline.rs       # Document outline extraction
+│   ├── files/               # File operations
+│   │   ├── mod.rs           # Module exports
+│   │   └── dialogs.rs       # Native file dialogs (rfd)
+│   ├── markdown/            # Parser and WYSIWYG editor
+│   │   ├── mod.rs           # Module exports
+│   │   ├── parser.rs        # Comrak integration, AST parsing
+│   │   ├── editor.rs        # WYSIWYG markdown editor
+│   │   ├── widgets.rs       # Editable heading/list/table widgets
+│   │   ├── syntax.rs        # Syntax highlighting (syntect)
+│   │   ├── ast_ops.rs       # AST operations and manipulation
+│   │   ├── formatting.rs    # Markdown formatting commands
+│   │   ├── toc.rs           # Table of Contents generation
+│   │   ├── csv_viewer.rs    # CSV/TSV table viewer
+│   │   ├── tree_viewer.rs   # JSON/YAML/TOML tree viewer widget
+│   │   └── mermaid/         # Native Mermaid diagram rendering (11 types)
+│   │       ├── mod.rs       # MermaidRenderer, caching (blake3)
+│   │       ├── flowchart.rs # Flowchart diagrams
+│   │       ├── sequence.rs  # Sequence diagrams
+│   │       ├── pie.rs       # Pie charts
+│   │       ├── state.rs     # State diagrams
+│   │       ├── mindmap.rs   # Mindmaps
+│   │       ├── gantt.rs     # Gantt charts
+│   │       ├── timeline.rs  # Timelines
+│   │       ├── journey.rs   # User journey maps
+│   │       ├── git_graph.rs # Git graph diagrams
+│   │       ├── frontmatter.rs # YAML frontmatter support
+│   │       ├── text.rs      # Text measurement
+│   │       └── utils.rs     # Shared utilities
+│   ├── terminal/            # Integrated terminal emulator
+│   │   ├── mod.rs           # Terminal, TerminalManager, monitor detection
+│   │   ├── pty.rs           # Cross-platform PTY (portable-pty)
+│   │   ├── screen.rs        # Screen buffer, ANSI color cells
+│   │   ├── handler.rs       # VTE event handler (escape sequences)
+│   │   ├── widget.rs        # Terminal rendering widget
+│   │   ├── layout.rs        # Split pane layouts (H/V, grid)
+│   │   ├── theme.rs         # Terminal color schemes
+│   │   └── sound.rs         # Notification sounds
+│   ├── preview/             # Preview and sync scrolling
+│   │   ├── mod.rs           # Module exports
+│   │   └── sync_scroll.rs   # Bidirectional scroll synchronization
+│   ├── export/              # Document export
+│   │   ├── mod.rs           # Module exports
+│   │   ├── html.rs          # HTML generation with theme CSS
+│   │   ├── clipboard.rs     # Clipboard operations (arboard)
+│   │   └── options.rs       # Export options and settings
+│   ├── theme/               # Theming system
+│   │   ├── mod.rs           # ThemeColors struct
+│   │   ├── light.rs         # Light theme egui::Visuals
+│   │   ├── dark.rs          # Dark theme egui::Visuals
+│   │   └── manager.rs       # ThemeManager for runtime switching
+│   ├── ui/                  # UI components
+│   │   ├── mod.rs           # Module exports
+│   │   ├── about.rs         # About/Help panel with shortcuts reference
+│   │   ├── icons.rs         # Icon loading for window/taskbar icons
+│   │   ├── ribbon.rs        # Ribbon interface (replaces menu bar)
+│   │   ├── settings.rs      # Settings panel modal
 │   │   ├── outline_panel.rs # Document outline side panel
-│   │   ├── file_tree.rs  # File tree sidebar panel
+│   │   ├── file_tree.rs     # File tree sidebar panel
 │   │   ├── quick_switcher.rs # Quick file switcher (Ctrl+P)
-│   │   ├── search.rs     # Search in files (Ctrl+Shift+F)
-│   │   ├── pipeline.rs   # Live Pipeline panel (JSON/YAML command piping)
+│   │   ├── search.rs        # Search in files (Ctrl+Shift+F)
+│   │   ├── pipeline.rs      # Live Pipeline panel (JSON/YAML command piping)
 │   │   ├── terminal_panel.rs # Terminal panel (tabs, splits, floating windows)
 │   │   ├── productivity_panel.rs # Productivity hub (tasks, Pomodoro, notes)
-│   │   ├── dialogs.rs    # File operation dialogs
-│   │   ├── nav_buttons.rs # Document navigation buttons overlay
-│   │   ├── view_segment.rs # Title bar view mode segment, buttons
-│   │   └── window.rs     # Custom window resize for borderless windows
-│   ├── platform/         # Platform-specific code
-│   │   ├── mod.rs        # Module exports, Apple Event paths
-│   │   └── macos.rs      # macOS app delegate, Open With support
-│   ├── vcs/              # Version control integration
-│   │   ├── mod.rs        # Module exports
-│   │   └── git.rs        # GitService, status tracking (git2)
-│   ├── workers/          # Async worker infrastructure (feature-gated)
-│   │   ├── mod.rs        # WorkerHandle, WorkerCommand, WorkerResponse
-│   │   └── echo_worker.rs # Echo worker template (async-workers feature)
-│   └── workspaces/       # Workspace/folder management
-│       ├── mod.rs        # AppMode, Workspace, module exports
-│       ├── file_tree.rs  # FileTreeNode, directory scanning
-│       ├── settings.rs   # WorkspaceSettings persistence
-│       ├── persistence.rs # WorkspaceState persistence
-│       └── watcher.rs    # File system watcher (notify)
-├── assets/               # Static assets
-│   ├── fonts/            # TTF fonts (Inter, JetBrains Mono)
-│   ├── icons/            # Application icons
-│   │   ├── icon_*.png    # PNG icons (16-512px)
-│   │   ├── windows/      # Windows .ico and .rc files
-│   │   └── linux/        # Linux icons and .desktop file
-│   └── web/              # Web favicon assets
-├── build.rs              # Build script for Windows icon embedding
-├── docs/                 # Documentation
-│   └── technical/        # Technical documentation
-│       ├── config/       # Configuration & setup docs
-│       ├── editor/       # Editor core docs
-│       ├── ui/           # UI component docs
-│       ├── markdown/     # Markdown & WYSIWYG docs
-│       ├── viewers/      # Data viewer docs
-│       ├── files/        # File operations docs
-│       ├── platform/     # Platform-specific docs
-│       ├── mermaid/      # Mermaid diagram docs
-│       └── planning/     # Planning & roadmap docs
-└── .taskmaster/          # Task management
+│   │   ├── dialogs.rs       # File operation dialogs
+│   │   ├── nav_buttons.rs   # Document navigation buttons overlay
+│   │   ├── view_segment.rs  # Title bar view mode segment, buttons
+│   │   └── window.rs        # Custom window resize for borderless windows
+│   ├── platform/            # Platform-specific code
+│   │   ├── mod.rs           # Module exports, Apple Event paths
+│   │   └── macos.rs         # macOS app delegate, Open With support
+│   ├── vcs/                 # Version control integration
+│   │   ├── mod.rs           # Module exports
+│   │   └── git.rs           # GitService, status tracking (git2)
+│   ├── workers/             # Async worker infrastructure (feature-gated)
+│   │   ├── mod.rs           # WorkerHandle, WorkerCommand, WorkerResponse
+│   │   └── echo_worker.rs   # Echo worker template (async-workers feature)
+│   └── workspaces/          # Workspace/folder management
+│       ├── mod.rs           # AppMode, Workspace, module exports
+│       ├── file_tree.rs     # FileTreeNode, directory scanning
+│       ├── settings.rs      # WorkspaceSettings persistence
+│       ├── persistence.rs   # WorkspaceState persistence
+│       └── watcher.rs       # File system watcher (notify)
+├── locales/                 # Translation files (i18n)
+│   ├── en.yaml              # English (base language)
+│   ├── de.yaml              # German
+│   ├── ja.yaml              # Japanese
+│   ├── nb_NO.yaml           # Norwegian Bokmål
+│   ├── pt.yaml              # Portuguese
+│   ├── zh_Hans.yaml         # Simplified Chinese
+│   └── et.yaml              # Estonian
+├── assets/                  # Static assets
+│   ├── fonts/               # TTF fonts (Inter, JetBrains Mono)
+│   ├── icons/               # Application icons (16-512px PNG, ICO, ICNS)
+│   ├── linux/               # Flatpak desktop entry and AppStream metainfo
+│   ├── screenshots/         # App screenshots for README/stores
+│   └── web/                 # Web favicon assets
+├── build.rs                 # Build script (Windows icon embedding)
+├── wix/                     # Windows MSI installer (cargo-wix)
+├── .signpath/               # Code signing config (SignPath.io)
+├── .github/                 # CI/CD workflows, issue/PR templates
+├── docs/                    # Documentation (see below)
+│   ├── index.md             # This file - documentation hub
+│   ├── technical/           # Technical documentation by area
+│   └── ai-workflow/         # AI development process docs
+└── .taskmaster/             # Task management (Task Master AI)
 ```
 
 ---

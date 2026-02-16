@@ -6,21 +6,33 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI, no retained
 
 | Module | Purpose |
 |--------|---------|
-| `app.rs` | Main update loop, keyboard shortcuts, event dispatch |
-| `state.rs` | All application state (`AppState`, `Tab`, `TabState`) |
+| `app/` | Main application (15 modules: keyboard, file_ops, formatting, navigation, etc.) |
+| `state.rs` | All application state (`AppState`, `Tab`, `TabKind`, `SpecialTabKind`, `FileType`) |
 | `editor/widget.rs` | Editor widget wrapper, integrates FerriteEditor |
-| `editor/ferrite/` | Custom rope-based editor for large files |
+| `editor/ferrite/` | Custom rope-based editor for large files (buffer, cursor, history, view, rendering) |
 | `markdown/editor.rs` | WYSIWYG rendered editing |
-| `markdown/mermaid/` | Native mermaid diagram rendering |
-| `ui/` | UI panels (ribbon, settings, file_tree, etc.) |
-| `terminal/` | Integrated terminal emulator (PTY, VTE, screen buffer, themes, layouts) |
+| `markdown/parser.rs` | Comrak markdown parsing, AST operations |
+| `markdown/mermaid/` | Native mermaid diagram rendering (11 diagram types) |
+| `markdown/csv_viewer.rs` | CSV/TSV table viewer with rainbow columns |
+| `markdown/tree_viewer.rs` | JSON/YAML/TOML hierarchical tree viewer |
+| `ui/` | UI panels (ribbon, settings, file_tree, outline, search, etc.) |
 | `ui/terminal_panel.rs` | Terminal panel UI (tabs, splits, floating windows, drag-and-drop) |
 | `ui/productivity_panel.rs` | Productivity hub (task management, Pomodoro timer, quick notes) |
+| `terminal/` | Integrated terminal emulator (PTY, VTE, screen buffer, themes, layouts) |
 | `workers/` | Async worker infrastructure (feature-gated `async-workers`) |
 | `config/settings.rs` | Persistent settings |
 | `config/snippets.rs` | Text expansion snippets system |
 | `config/session.rs` | Session persistence and crash recovery |
-| `theme/` | Light/dark theme management |
+| `theme/` | Light/dark theme management (ThemeManager, light.rs, dark.rs) |
+| `export/` | Document export (HTML with CSS, clipboard operations) |
+| `preview/` | Preview sync scrolling between Raw and Rendered views |
+| `vcs/git.rs` | Git integration (status tracking, branch display, auto-refresh) |
+| `workspaces/` | Folder mode (file tree, watcher, workspace settings, persistence) |
+| `files/dialogs.rs` | Native file dialogs (rfd) |
+| `platform/` | Platform-specific code (macOS Apple Events) |
+| `fonts.rs` | Font loading, lazy CJK, family selection |
+| `update.rs` | Update checker (GitHub Releases API) |
+| `error.rs` | Error types and centralized handling |
 
 ## FerriteEditor (v0.2.6 - Complete)
 
@@ -68,12 +80,42 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 
 | Want to... | Look in... |
 |------------|------------|
-| Add keyboard shortcut | `app.rs` → `handle_keyboard_shortcuts()` |
-| Add setting | `config/settings.rs` → `Settings` struct |
-| Add translation | `locales/en.yaml` + use `t!("key")` |
+| Add keyboard shortcut | `app/keyboard.rs` → `handle_keyboard_shortcuts()` |
+| Add a file operation (open/save) | `app/file_ops.rs` |
+| Add text formatting command | `app/formatting.rs` |
+| Add line operation (duplicate, move) | `app/line_ops.rs` |
+| Add navigation feature | `app/navigation.rs` |
+| Modify the title bar | `app/title_bar.rs` |
+| Modify the status bar | `app/status_bar.rs` |
+| Modify the central editor panel | `app/central_panel.rs` |
+| Add a special tab (settings-like panel) | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` → `render_special_tab_content()` |
+| Add a setting | `config/settings.rs` → `Settings` struct |
+| Add a translation string | `locales/en.yaml` + use `t!("key")` |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
+| Modify markdown parsing | `markdown/parser.rs` (comrak integration) |
 | Add mermaid diagram type | `markdown/mermaid/` → new module |
-| Modify editor behavior | `editor/ferrite/editor.rs` |
+| Modify editor core behavior | `editor/ferrite/editor.rs` |
+| Modify editor text buffer | `editor/ferrite/buffer.rs` (rope-based) |
+| Change undo/redo behavior | `editor/ferrite/history.rs` |
+| Modify code folding | `editor/folding.rs` |
+| Modify minimap | `editor/minimap.rs` |
+| Add/modify a UI panel | `ui/` → create or edit panel module |
+| Modify the ribbon toolbar | `ui/ribbon.rs` |
+| Modify settings panel | `ui/settings.rs` |
+| Modify terminal features | `terminal/` (PTY, screen, widget, layout) |
+| Modify terminal panel UI | `ui/terminal_panel.rs` |
+| Modify productivity hub | `ui/productivity_panel.rs` |
+| Modify file tree | `ui/file_tree.rs` |
+| Modify quick switcher | `ui/quick_switcher.rs` |
+| Modify search in files | `ui/search.rs` |
+| Change themes (light/dark) | `theme/light.rs` or `theme/dark.rs` |
+| Add export format | `export/` → new module |
+| Modify Git integration | `vcs/git.rs` |
+| Modify workspace features | `workspaces/` (file_tree, watcher, settings) |
+| Add global app state | `state.rs` → `AppState` struct |
+| Add per-tab state | `state.rs` → `Tab` struct |
+| Add font support | `fonts.rs` |
+| Modify platform-specific code | `platform/` (currently macOS only) |
 
 ## Performance Rules
 
@@ -128,6 +170,7 @@ Full integrated terminal at `src/terminal/`. Uses `portable-pty` for cross-platf
 ## Recently Changed
 
 **v0.2.7 (Feb 2026 - in progress):** Performance, features & polish
+- **Special Tabs:** Settings and About/Help now open as tabs (like Cursor/VS Code) instead of modal windows. `TabKind`/`SpecialTabKind` system is extensible for future panels. `show_inline()` methods on `SettingsPanel` and `AboutPanel` render content directly in the tab area.
 - **CRASH FIX:** Large selection delete with word wrap caused `capacity overflow` panic. Stale `wrap_info`/`first_visible_line` after deletion → `Vec::with_capacity(usize underflow)`. Fixed: hard-clamp `first_visible_line` in `clamp_scroll_position`, `saturating_sub` in allocation, clamp `cursor_to_char_pos` to `buffer.len()`, new `truncate_wrap_info()` (trims stale entries without flickering).
 
 **v0.2.6.1 (Feb 2026):** Bug fixes, code signing, terminal & productivity integration

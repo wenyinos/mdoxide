@@ -205,18 +205,111 @@ refactor(theme): extract color constants to module
 
 ```
 src/
-├── main.rs           # Entry point
-├── app.rs            # Main application, UI layout
-├── state.rs          # Application state management
-├── config/           # Settings and persistence
-├── editor/           # Text editor components
-├── files/            # File operations
-├── markdown/         # Parser and WYSIWYG editor
-├── preview/          # Preview and sync scrolling
-├── export/           # HTML export
-├── theme/            # Theming system
-├── ui/               # UI components (ribbon, dialogs, panels)
-└── workspaces/       # Workspace/folder support
+├── main.rs              # Entry point, eframe setup, memory allocators
+├── app/                 # Main application (refactored from single app.rs)
+│   ├── mod.rs           # FerriteApp struct, update loop coordination
+│   ├── keyboard.rs      # Keyboard shortcut handling
+│   ├── input_handling.rs # Input processing
+│   ├── file_ops.rs      # File operations (open, save, close)
+│   ├── formatting.rs    # Text formatting commands
+│   ├── line_ops.rs      # Line operations (duplicate, move)
+│   ├── navigation.rs    # Tab and cursor navigation
+│   ├── find_replace.rs  # Find/replace integration
+│   ├── export.rs        # Export operations
+│   ├── dialogs.rs       # Dialog handling
+│   ├── title_bar.rs     # Custom title bar rendering
+│   ├── status_bar.rs    # Status bar rendering
+│   ├── central_panel.rs # Central editor panel rendering
+│   ├── helpers.rs       # Helper utilities
+│   └── types.rs         # Shared type definitions
+├── state.rs             # AppState, Tab, TabState, FileType
+├── error.rs             # Error types and handling
+├── fonts.rs             # Font loading, lazy CJK, family selection
+├── path_utils.rs        # Windows path normalization
+├── string_utils.rs      # String utility functions
+├── update.rs            # Update checker (GitHub Releases API)
+├── config/              # Settings and persistence
+│   ├── settings.rs      # Settings struct, shortcuts, validation
+│   ├── persistence.rs   # Config file load/save
+│   ├── session.rs       # Session persistence, crash recovery
+│   └── snippets.rs      # Text expansion snippets
+├── editor/              # Text editor components
+│   ├── widget.rs        # EditorWidget wrapper
+│   ├── ferrite/         # Custom rope-based editor (high-performance)
+│   │   ├── editor.rs    # Main FerriteEditor widget
+│   │   ├── buffer.rs    # TextBuffer (rope via ropey)
+│   │   ├── cursor.rs    # Cursor management
+│   │   ├── selection.rs # Selection handling
+│   │   ├── history.rs   # EditHistory (undo/redo)
+│   │   ├── view.rs      # ViewState (viewport tracking)
+│   │   ├── line_cache.rs # LineCache (galley caching)
+│   │   ├── input/       # Input handling (keyboard, mouse)
+│   │   └── rendering/   # Rendering (gutter, text, cursor)
+│   ├── folding.rs       # Code folding
+│   ├── matching.rs      # Bracket matching
+│   ├── minimap.rs       # Semantic minimap
+│   ├── outline.rs       # Document outline extraction
+│   ├── find_replace.rs  # Find/replace panel
+│   ├── line_numbers.rs  # Line counting utilities
+│   └── stats.rs         # Text statistics
+├── markdown/            # Parser and WYSIWYG editor
+│   ├── parser.rs        # Comrak integration, AST parsing
+│   ├── editor.rs        # WYSIWYG markdown editor
+│   ├── widgets.rs       # Editable heading/list/table widgets
+│   ├── formatting.rs    # Formatting commands
+│   ├── ast_ops.rs       # AST operations
+│   ├── syntax.rs        # Syntax highlighting (syntect)
+│   ├── toc.rs           # Table of Contents generation
+│   ├── csv_viewer.rs    # CSV/TSV table viewer
+│   ├── tree_viewer.rs   # JSON/YAML/TOML tree viewer
+│   └── mermaid/         # Native Mermaid diagram rendering (11 types)
+├── terminal/            # Integrated terminal emulator
+│   ├── mod.rs           # Terminal, TerminalManager
+│   ├── pty.rs           # Cross-platform PTY (portable-pty)
+│   ├── screen.rs        # Screen buffer, ANSI color cells
+│   ├── handler.rs       # VTE escape sequence handler
+│   ├── widget.rs        # Terminal rendering widget
+│   ├── layout.rs        # Split pane layouts (H/V, grid)
+│   ├── theme.rs         # Terminal color schemes
+│   └── sound.rs         # Notification sounds
+├── files/               # File operations
+│   └── dialogs.rs       # Native file dialogs (rfd)
+├── preview/             # Preview and sync scrolling
+│   └── sync_scroll.rs   # Bidirectional scroll sync
+├── export/              # Document export
+│   ├── html.rs          # HTML generation with themed CSS
+│   ├── clipboard.rs     # Clipboard operations
+│   └── options.rs       # Export options
+├── theme/               # Theming system
+│   ├── manager.rs       # ThemeManager for runtime switching
+│   ├── light.rs         # Light theme
+│   └── dark.rs          # Dark theme
+├── ui/                  # UI components
+│   ├── ribbon.rs        # Ribbon toolbar
+│   ├── settings.rs      # Settings panel
+│   ├── about.rs         # About/Help panel
+│   ├── outline_panel.rs # Document outline panel
+│   ├── file_tree.rs     # File tree sidebar
+│   ├── quick_switcher.rs # Quick file switcher (Ctrl+P)
+│   ├── search.rs        # Search in files (Ctrl+Shift+F)
+│   ├── pipeline.rs      # Live pipeline (JSON/YAML piping)
+│   ├── terminal_panel.rs # Terminal panel (tabs, splits, floating)
+│   ├── productivity_panel.rs # Productivity hub (tasks, Pomodoro, notes)
+│   ├── dialogs.rs       # File operation dialogs
+│   ├── nav_buttons.rs   # Navigation buttons
+│   ├── view_segment.rs  # View mode segments
+│   └── window.rs        # Custom window resize
+├── vcs/                 # Version control integration
+│   └── git.rs           # GitService, status tracking (git2)
+├── platform/            # Platform-specific code
+│   └── macos.rs         # macOS Apple Events, Open With
+├── workspaces/          # Workspace/folder management
+│   ├── file_tree.rs     # FileTreeNode, directory scanning
+│   ├── settings.rs      # Workspace settings
+│   ├── persistence.rs   # Workspace state persistence
+│   └── watcher.rs       # File system watcher (notify)
+└── workers/             # Async workers (feature-gated: async-workers)
+    └── echo_worker.rs   # Worker template for future AI/SSH/DB
 ```
 
 See [docs/index.md](docs/index.md) for detailed technical documentation.

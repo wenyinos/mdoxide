@@ -395,6 +395,131 @@ impl SettingsPanel {
         output
     }
 
+    /// Render the settings panel inline within a tab (not as a modal window).
+    ///
+    /// This is used when settings are displayed as a special tab in the main
+    /// editor area, giving more screen real estate than the modal version.
+    pub fn show_inline(
+        &mut self,
+        ui: &mut Ui,
+        settings: &mut Settings,
+        is_dark: bool,
+    ) -> SettingsPanelOutput {
+        let mut output = SettingsPanelOutput::default();
+
+        let available = ui.available_size();
+        let sidebar_width = 160.0;
+
+        ui.horizontal(|ui| {
+            // Left side: Section tabs
+            ui.vertical(|ui| {
+                ui.set_min_width(sidebar_width);
+                ui.set_max_width(sidebar_width);
+                ui.set_min_height(available.y - 50.0);
+
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(format!("⚙ {}", t!("settings.title")))
+                        .size(18.0)
+                        .strong(),
+                );
+                ui.add_space(12.0);
+
+                for section in [
+                    SettingsSection::Appearance,
+                    SettingsSection::Editor,
+                    SettingsSection::Files,
+                    SettingsSection::Keyboard,
+                    SettingsSection::Terminal,
+                    SettingsSection::About,
+                ] {
+                    let selected = self.active_section == section;
+                    let text = format!("{} {}", section.icon(), section.label());
+
+                    let btn = ui.add_sized(
+                        [sidebar_width - 16.0, 32.0],
+                        egui::SelectableLabel::new(
+                            selected,
+                            RichText::new(text).size(14.0),
+                        ),
+                    );
+
+                    if btn.clicked() {
+                        self.active_section = section;
+                        if section != SettingsSection::Keyboard {
+                            self.key_capture = None;
+                            self.conflict_warning = None;
+                        }
+                    }
+                }
+
+                // Reset button at the bottom of sidebar
+                ui.add_space(16.0);
+                ui.separator();
+                ui.add_space(8.0);
+                if ui
+                    .add_sized(
+                        [sidebar_width - 16.0, 28.0],
+                        egui::Button::new(format!("↺ {}", t!("settings.reset_all"))),
+                    )
+                    .on_hover_text(t!("settings.reset_tooltip"))
+                    .clicked()
+                {
+                    output.reset_requested = true;
+                }
+            });
+
+            ui.separator();
+
+            // Right side: Section content (fills remaining space)
+            ui.vertical(|ui| {
+                let content_width = (available.x - sidebar_width - 24.0).max(300.0);
+                ui.set_min_width(content_width);
+
+                egui::ScrollArea::vertical()
+                    .id_source(format!("settings_inline_scroll_{:?}", self.active_section))
+                    .show(ui, |ui| {
+                        ui.set_min_width(content_width - 16.0);
+                        ui.add_space(8.0);
+
+                        match self.active_section {
+                            SettingsSection::Appearance => {
+                                if self.show_appearance_section(ui, settings, is_dark) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Editor => {
+                                if self.show_editor_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Files => {
+                                if self.show_files_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Keyboard => {
+                                if self.show_keyboard_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Terminal => {
+                                if self.show_terminal_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::About => {
+                                let ctx = ui.ctx().clone();
+                                self.show_about_section(ui, &ctx);
+                            }
+                        }
+                    });
+            });
+        });
+
+        output
+    }
+
     /// Show the Terminal settings section.
     ///
     /// Returns true if any setting was changed.
@@ -1765,10 +1890,10 @@ impl SettingsPanel {
         }
 
         // Scrollable area for shortcuts list
+        // Uses available height - the outer container (modal or inline tab) handles overflow
         let filter_lower = self.keyboard_filter.to_lowercase();
 
         egui::ScrollArea::vertical()
-            .max_height(280.0)
             .show(ui, |ui| {
                 for (category, commands) in KeyboardShortcuts::commands_by_category() {
                     // Filter commands by search term

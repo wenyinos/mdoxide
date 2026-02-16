@@ -815,8 +815,6 @@ impl FerriteApp {
         // Any modal dialog open
         if self.state.ui.show_confirm_dialog
             || self.state.ui.show_error_modal
-            || self.state.ui.show_settings
-            || self.state.ui.show_about
         {
             return true;
         }

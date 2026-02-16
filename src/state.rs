@@ -987,6 +987,56 @@ pub const LARGE_FILE_THRESHOLD: usize = 1_000_000; // 1MB
 /// Maximum undo stack size for large files (reduced from 100 to save memory).
 pub const LARGE_FILE_MAX_UNDO: usize = 10;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab Kind (Document vs Special)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Types of special (non-editable) tabs that display application UI.
+///
+/// Special tabs render their own content (settings, help, etc.) instead of a
+/// document editor. They cannot be edited, have no view mode, and never prompt
+/// to save. This is designed to be extensible for future panel types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpecialTabKind {
+    /// Application settings panel
+    Settings,
+    /// About/Help information panel
+    About,
+}
+
+impl SpecialTabKind {
+    /// Get the display title for this special tab kind.
+    pub fn title(&self) -> &'static str {
+        match self {
+            SpecialTabKind::Settings => "Settings",
+            SpecialTabKind::About => "About / Help",
+        }
+    }
+
+    /// Get the icon for this special tab kind.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            SpecialTabKind::Settings => "⚙",
+            SpecialTabKind::About => "❓",
+        }
+    }
+}
+
+/// The kind of content a tab holds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TabKind {
+    /// Regular document tab (file editing)
+    Document,
+    /// Special non-editable tab (settings, about, etc.)
+    Special(SpecialTabKind),
+}
+
+impl Default for TabKind {
+    fn default() -> Self {
+        TabKind::Document
+    }
+}
+
 ///
 /// This struct holds the complete state of an open document tab,
 /// including content and editing state. Different from `TabInfo` which
@@ -995,6 +1045,8 @@ pub const LARGE_FILE_MAX_UNDO: usize = 10;
 pub struct Tab {
     /// Unique identifier for this tab
     pub id: usize,
+    /// Kind of tab (document or special panel)
+    pub kind: TabKind,
     /// File path (None for unsaved/new documents)
     pub path: Option<PathBuf>,
     /// Document content
@@ -1112,6 +1164,7 @@ impl Tab {
     pub fn new(id: usize) -> Self {
         Self {
             id,
+            kind: TabKind::Document,
             path: None,
             content: String::new(),
             original_content: String::new(),
@@ -1188,6 +1241,7 @@ impl Tab {
         
         Self {
             id,
+            kind: TabKind::Document,
             path: Some(path),
             content,
             original_content,
@@ -1276,6 +1330,7 @@ impl Tab {
 
         Self {
             id,
+            kind: TabKind::Document,
             path: Some(path),
             content,
             original_content,
@@ -1382,6 +1437,7 @@ impl Tab {
         
         Self {
             id,
+            kind: TabKind::Document,
             path: info.path.clone(),
             content,
             original_content,
@@ -1480,6 +1536,7 @@ impl Tab {
 
         Self {
             id,
+            kind: TabKind::Document,
             path: info.path.clone(),
             content,
             original_content,
@@ -1526,6 +1583,10 @@ impl Tab {
     /// For large files (>1MB), uses hash comparison instead of full string comparison
     /// to avoid storing a full copy of the original content.
     pub fn is_modified(&self) -> bool {
+        // Special tabs are never "modified"
+        if self.is_special() {
+            return false;
+        }
         if let Some(hash) = self.original_content_hash {
             // Large file: use hash-based comparison
             Self::compute_content_hash(&self.content) != hash
@@ -1570,6 +1631,11 @@ impl Tab {
     /// This allows new tabs that haven't been touched to be closed silently,
     /// while still protecting any typed content from accidental loss.
     pub fn should_prompt_to_save(&self) -> bool {
+        // Special tabs never need to save
+        if self.is_special() {
+            return false;
+        }
+
         // Don't prompt for unmodified files
         if !self.is_modified() {
             return false;
@@ -1587,6 +1653,10 @@ impl Tab {
 
     /// Get the display title for this tab.
     pub fn title(&self) -> String {
+        if let TabKind::Special(special) = &self.kind {
+            return format!("{} {}", special.icon(), special.title());
+        }
+
         let name = self
             .path
             .as_ref()
@@ -1599,6 +1669,11 @@ impl Tab {
         } else {
             name.to_string()
         }
+    }
+
+    /// Check if this tab is a special (non-editable) tab.
+    pub fn is_special(&self) -> bool {
+        matches!(self.kind, TabKind::Special(_))
     }
 
     /// Mark the current content as saved (updates original_content or hash).
@@ -2779,6 +2854,31 @@ impl AppState {
         self.active_tab_index
     }
 
+    /// Open or focus a special tab (settings, about, etc.).
+    ///
+    /// If a tab of this kind already exists, it will be focused instead of
+    /// creating a duplicate. Returns the index of the (new or existing) tab.
+    pub fn open_special_tab(&mut self, special_kind: SpecialTabKind) -> usize {
+        // Check if a tab of this kind already exists
+        if let Some(index) = self.tabs.iter().position(|t| {
+            matches!(&t.kind, TabKind::Special(k) if *k == special_kind)
+        }) {
+            self.active_tab_index = index;
+            debug!("Focused existing special tab {:?} at index {}", special_kind, index);
+            return index;
+        }
+
+        // Create a new special tab
+        let mut tab = Tab::new(self.next_tab_id);
+        tab.kind = TabKind::Special(special_kind);
+        tab.needs_focus = false; // Special tabs don't need editor focus
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        self.active_tab_index = self.tabs.len() - 1;
+        debug!("Created special tab {:?} at index {}", special_kind, self.active_tab_index);
+        self.active_tab_index
+    }
+
     /// Open a file in a new tab.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
@@ -3190,8 +3290,11 @@ impl AppState {
     /// Returns `true` if settings were saved.
     pub fn save_settings_if_dirty(&mut self) -> bool {
         if self.settings_dirty {
-            // Update session restoration data
-            self.settings.last_open_tabs = self.tabs.iter().map(|t| t.to_tab_info()).collect();
+            // Update session restoration data (skip special tabs like settings/about)
+            self.settings.last_open_tabs = self.tabs.iter()
+                .filter(|t| !t.is_special())
+                .map(|t| t.to_tab_info())
+                .collect();
             self.settings.active_tab_index = self.active_tab_index;
 
             if save_config_silent(&self.settings) {
@@ -3365,6 +3468,7 @@ impl AppState {
                             
                             let t = Tab {
                                 id: self.next_tab_id,
+                                kind: TabKind::Document,
                                 path: Some(path.clone()),
                                 content,
                                 original_content: original_content_str,
@@ -3718,8 +3822,34 @@ impl AppState {
     }
 
     /// Toggle the about/help panel.
+    ///
+    /// If already viewing the About tab, closes it and returns to the previous tab.
+    /// Otherwise, opens the About tab.
     pub fn toggle_about(&mut self) {
-        self.ui.show_about = !self.ui.show_about;
+        // Check if we're already viewing the About tab
+        if let Some(tab) = self.tabs.get(self.active_tab_index) {
+            if matches!(&tab.kind, TabKind::Special(SpecialTabKind::About)) {
+                // Close it
+                self.force_close_tab(self.active_tab_index);
+                return;
+            }
+        }
+        self.open_special_tab(SpecialTabKind::About);
+    }
+
+    /// Open the settings panel as a tab.
+    ///
+    /// If already viewing the Settings tab, closes it.
+    /// Otherwise, opens the Settings tab.
+    pub fn open_settings_tab(&mut self) {
+        // Check if we're already viewing the Settings tab
+        if let Some(tab) = self.tabs.get(self.active_tab_index) {
+            if matches!(&tab.kind, TabKind::Special(SpecialTabKind::Settings)) {
+                self.force_close_tab(self.active_tab_index);
+                return;
+            }
+        }
+        self.open_special_tab(SpecialTabKind::Settings);
     }
 
     /// Toggle Zen Mode (distraction-free writing).
