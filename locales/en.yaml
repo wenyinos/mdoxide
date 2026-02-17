@@ -621,3 +621,16 @@ ribbon:
   export_pdf: "📄 Export as PDF"
   coming_soon: "Coming soon"
   heading_level: "Heading %{level}"
+
+# Welcome page (first launch)
+welcome:
+  subtitle: "Configure your editor to get started."
+  section:
+    appearance: "Appearance"
+    editor: "Editor"
+    cjk: "CJK Font Preference"
+    files: "Files"
+  label:
+    theme: "Theme"
+    language: "Language"
+  line_width_hint: "Limits how wide text lines can grow. Set a value for centered text in Zen Mode (F11)."

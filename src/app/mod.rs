@@ -538,9 +538,12 @@ impl FerriteApp {
         });
     }
 
-    ///Open welcome on startup
+    /// Open the welcome tab on startup, but only if no tabs are already open
+    /// (e.g., from session restore).
     pub fn open_welcome_on_startup(&mut self) {
-        self.state.show_welcome_tab();
+        if self.state.tab_count() == 0 {
+            self.state.show_welcome_tab();
+        }
     }
     /// Set the single-instance listener for receiving file paths from secondary instances.
     ///

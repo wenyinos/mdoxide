@@ -285,10 +285,13 @@ fn main() -> eframe::Result<()> {
             app.set_instance_listener(instance_listener);
 
             // Open files/directories from CLI arguments and Apple Events
+            let has_initial_paths = !initial_paths.is_empty();
             app.open_initial_paths(initial_paths);
 
-            // app.open_welcome_on_startup();
-            app.open_welcome_on_startup();
+            // Only show welcome screen when no files were passed via CLI
+            if !has_initial_paths {
+                app.open_welcome_on_startup();
+            }
 
             log_memory("After app creation and initial paths");
 

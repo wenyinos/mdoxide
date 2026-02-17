@@ -3070,14 +3070,12 @@ impl AppState {
         }
     }
 
-    /// This is code of view tab welcome at first launch time
+    /// Open the Welcome tab, or activate it if it already exists.
     pub fn show_welcome_tab(&mut self) {
-        // If Settings tab already exists, just activate it.
-        if
-            let Some(i) = self.tabs
-                .iter()
-                .position(|t| { matches!(t.kind, TabKind::Special(SpecialTabKind::Welcome)) })
-        {
+        // If Welcome tab already exists, just activate it.
+        if let Some(i) = self.tabs.iter().position(|t| {
+            matches!(&t.kind, TabKind::Special(SpecialTabKind::Welcome))
+        }) {
             self.active_tab_index = i;
             return;
         }
