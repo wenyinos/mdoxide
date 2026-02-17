@@ -216,7 +216,9 @@ settings:
     try_again: Nochmal versuchen
     up_to_date: Die aktuellste Version wird verwendet!
     title: Info
-    updates: Updates
+    updates: Neue Versionen
+    license: 'Lizenz: MIT'
+    report_issue: Problem melden
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
