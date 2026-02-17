@@ -219,6 +219,15 @@ settings:
     updates: Neue Versionen
     license: 'Lizenz: MIT'
     report_issue: Problem melden
+    check_for_updates: Neue Versionen suchen
+    checking: Neue Versionen werden gesucht...
+    check_again: Nochmal suchen
+    check_failed: Neue Versionen konnten nicht gesucht werden
+    update_available: Es gibt eine neue Version!
+    links: Links
+    all_releases: Alle Versionen
+    view_release: Version anschauen und laden
+    description: Ein schneller, schlanker Editor für Markdown, JSON und mehr
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
@@ -455,6 +464,8 @@ notification:
   session_restored: "Sitzung ist wiederhergestellt"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_performance: Große Datei (%{size} MB). Evtl. eingeschränkte 
+    Geschwindigkeit.
 tree_viewer:
   collapse_all: "▶ Alles einklappen"
   expand_all: "▼ Alles aufklappen"
