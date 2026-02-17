@@ -12,7 +12,7 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI, no retained
 | `editor/ferrite/` | Custom rope-based editor for large files (buffer, cursor, history, view, rendering) |
 | `markdown/editor.rs` | WYSIWYG rendered editing |
 | `markdown/parser.rs` | Comrak markdown parsing, AST operations |
-| `markdown/mermaid/` | Native mermaid diagram rendering (11 diagram types) |
+| `markdown/mermaid/` | Native mermaid diagram rendering (11 diagram types); flowchart is modular (`flowchart/types`, `parser`, `layout/`, `render/`, `utils`) |
 | `markdown/csv_viewer.rs` | CSV/TSV table viewer with rainbow columns |
 | `markdown/tree_viewer.rs` | JSON/YAML/TOML hierarchical tree viewer |
 | `ui/` | UI panels (ribbon, settings, file_tree, outline, search, etc.) |
@@ -94,6 +94,10 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
 | Modify markdown parsing | `markdown/parser.rs` (comrak integration) |
 | Add mermaid diagram type | `markdown/mermaid/` → new module |
+| Modify flowchart parsing | `markdown/mermaid/flowchart/parser.rs` |
+| Modify flowchart layout | `markdown/mermaid/flowchart/layout/` (sugiyama.rs, subgraph.rs) |
+| Modify flowchart rendering | `markdown/mermaid/flowchart/render/` (nodes.rs, edges.rs) |
+| Add flowchart node shape | `flowchart/types.rs` (NodeShape) + `flowchart/render/nodes.rs` |
 | Modify editor core behavior | `editor/ferrite/editor.rs` |
 | Modify editor text buffer | `editor/ferrite/buffer.rs` (rope-based) |
 | Change undo/redo behavior | `editor/ferrite/history.rs` |
@@ -170,6 +174,7 @@ Full integrated terminal at `src/terminal/`. Uses `portable-pty` for cross-platf
 ## Recently Changed
 
 **v0.2.7 (Feb 2026 - in progress):** Performance, features & polish
+- **Flowchart Modular Refactor (Task 17):** Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass. See `docs/technical/mermaid/flowchart-modular-refactor.md`.
 - **Special Tabs:** Settings and About/Help now open as tabs (like Cursor/VS Code) instead of modal windows. `TabKind`/`SpecialTabKind` system is extensible for future panels. `show_inline()` methods on `SettingsPanel` and `AboutPanel` render content directly in the tab area.
 - **CRASH FIX:** Large selection delete with word wrap caused `capacity overflow` panic. Stale `wrap_info`/`first_visible_line` after deletion → `Vec::with_capacity(usize underflow)`. Fixed: hard-clamp `first_visible_line` in `clamp_scroll_position`, `saturating_sub` in allocation, clamp `cursor_to_char_pos` to `buffer.len()`, new `truncate_wrap_info()` (trims stale entries without flickering).
 

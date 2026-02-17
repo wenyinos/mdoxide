@@ -13,56 +13,52 @@
 
 ## Current Task
 
-**Task 27: Fix images not displaying in rendered markdown view**
-- **Priority**: High
+**Task 18: Implement native macOS window controls and icon polish**
+- **Priority**: Medium
 - **Dependencies**: None
 - **Status**: Pending
-- **Task Master ID**: 27
-- **Complexity**: 5
+- **Task Master ID**: 18
+- **Complexity**: 4
 
 ### Description
-Images in markdown (`![](path)`) do not show in rendered/split view. Fix so images display correctly.
+Add macOS traffic-light controls and ensure consistent icons across themes.
 
 ### Implementation Details
-1. In `src/markdown/` (editor.rs or widgets.rs), resolve image paths relative to document location
-2. Load image bytes, render with egui Image
-3. Support common formats (PNG, JPEG, GIF, WebP)
-4. Handle missing files and unsupported formats gracefully (placeholder or alt text)
-5. Ensure path resolution uses current file directory and workspace root
+1. In `src/ui/window.rs`, configure eframe/egui for native macOS window decoration (close/min/maximize traffic lights)
+2. Verify icons scale correctly in light/dark themes following HIG
+3. Test cross-platform consistency (Windows/Linux should remain unchanged)
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/markdown/editor.rs` | WYSIWYG markdown editor — image rendering |
-| `src/markdown/widgets.rs` | Editable heading/list/table widgets — may need image widget |
-| `src/markdown/parser.rs` | Comrak integration — image node in AST |
-| `src/state.rs` | Tab state — file path for relative resolution |
+| `src/ui/window.rs` | Custom window resize handles, borderless window logic |
+| `src/platform/macos.rs` | macOS-specific code (app delegate, Open With) |
+| `src/ui/icons.rs` | Icon loading for window/taskbar icons |
+| `src/main.rs` | eframe setup, window configuration |
 
 ### Test Strategy
-1. Rendered view: `![](./img.png)` and `![](assets/logo.png)` show image
-2. Missing file → placeholder or alt text
-3. Split view shows images correctly
+1. macOS build - native traffic lights visible
+2. Icons crisp in both light/dark themes
+3. Verify Windows/Linux unchanged
 
 ---
 
 ## Recently Completed (Previous Sessions)
 
+- **Task 17**: Flowchart modular refactoring (DONE)
+  - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules
+  - New structure: `flowchart/types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`
+  - Zero behavior changes, all 83 mermaid tests pass
+  - Technical doc: `docs/technical/mermaid/flowchart-modular-refactor.md`
+
+- **Task 27**: Image rendering in rendered/split view (DONE)
+
 - **Task 25**: Single-instance file opening (DONE)
-  - Lock file + TCP IPC protocol in `src/single_instance.rs`
-  - Double-click in OS forwards path to existing window via local TCP
-  - Polls listener each frame (non-blocking), opens received paths as tabs
-  - Brings window to front with `ViewportCommand::Focus`
-  - Stale lock detection, cleanup on exit via `Drop`
-  - Technical doc: `docs/technical/platform/single-instance.md`
 
 - **Task 16**: Backlinks panel with graph-based indexing (DONE)
 
 - **Task 15**: Wikilinks parsing, resolution, and navigation (DONE)
-
-- **Task 13**: Manual "Check for Updates" button in Settings (DONE)
-
-- **Task 12**: GitHub-style callouts parsing and rendering (DONE)
 
 ---
 

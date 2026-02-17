@@ -1,5 +1,7 @@
 # Flowchart Module Refactoring Plan
 
+> **Status: COMPLETED** (Feb 2026, Task 17). See [Flowchart Modular Refactor](./flowchart-modular-refactor.md) for the implementation results.
+
 ## Overview
 
 This document provides a comprehensive analysis of `src/markdown/mermaid/flowchart.rs` (~3,500 lines) and proposes a detailed refactoring strategy to split it into focused, maintainable modules.
