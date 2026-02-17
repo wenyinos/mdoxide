@@ -36,7 +36,7 @@
 - [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index for massive CSVs.
 
 #### Welcome View
-- [ ] **Welcome view on first run** - Modal or full-view welcome screen with basic settings: word wrap, default view (Raw / Rendered / Split), optionally theme/font. "Do not show again" checkbox; preference stored in settings. Re-show via Help or Settings if desired.
+- [x] **Welcome view on first run** - Welcome tab on first launch with configuration for theme, language, editor settings (word wrap, line numbers, minimap, bracket matching, syntax highlighting), max line width, CJK font preference, and auto-save. Only shown when no CLI paths and no session-restored tabs. Contributed by [@blizzard007dev](https://github.com/blizzard007dev) ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80)).
 
 #### Installer & Localization
 - [ ] **Windows MSI: optional file associations** - During install, ask user whether to set Ferrite as default for .md, .txt, .json, .yaml, .toml (e.g. "Set as default for all" or per-extension); do not force associations without consent. WiX: `wix/main.wxs`.
