@@ -280,7 +280,8 @@ impl FerriteApp {
                             if focus {
                                 self.state.ui.show_recent_files_popup = false;
                             }
-                            match self.state.open_file_with_focus(path.clone(), focus) {
+                            let time = self.get_app_time();
+                            match self.state.open_file_with_focus(path.clone(), focus, Some(time)) {
                                 Ok(_) => {
                                     self.pending_cjk_check = true;
                                     if focus {

@@ -2,7 +2,15 @@
 
 ## Overview
 
-Performance optimizations made during Phase 1 validation to ensure smooth editing of large files (5MB+). These fixes address per-frame operations that scaled with file size.
+Performance optimizations made during Phase 1 validation to ensure smooth editing of large files (5MB+). These fixes address per-frame operations that scaled with file size. Additionally, users are notified when opening very large files so they are aware that performance may be affected.
+
+## Open-time Warning Toast (v0.2.7)
+
+When opening a file, the app checks its size via `std::fs::metadata(path)` before loading. If the file is larger than **10 MB**, a non-blocking toast is shown: *"Large file (X MB). Performance may be affected."* The file is then loaded as usual; the toast is informational only.
+
+- **Threshold**: 10 MB (`LARGE_FILE_THRESHOLD_BYTES` in `src/state.rs`). Intended to be configurable in settings in a future release.
+- **Implementation**: `AppState::open_file_with_focus()` in `src/state.rs`. Callers pass `app_time: Option<f64>` so the toast can be shown when time is available (e.g. from the UI); tests and internal callers pass `None` and do not show the toast.
+- **i18n**: Message key `notification.large_file_performance` in `locales/en.yaml`.
 
 ## Key Optimizations
 

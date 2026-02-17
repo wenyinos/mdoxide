@@ -14,9 +14,15 @@ use crate::ui::TabPipelineState;
 use crate::vcs::GitService;
 use crate::workspaces::{filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher};
 use log::{debug, info, warn};
+use rust_i18n::t;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+
+/// File size threshold (bytes) above which a performance warning toast is shown on open.
+/// Kept as a constant for now; can be moved to settings later.
+const LARGE_FILE_THRESHOLD_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content Hashing Helper
@@ -2630,6 +2636,260 @@ enum ResolvedContent {
     },
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Backlink Index
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A single backlink entry: a file that references the target file.
+#[derive(Debug, Clone)]
+pub struct BacklinkEntry {
+    /// Absolute path to the file that contains the link
+    pub source_path: PathBuf,
+    /// Display name for the source file (filename without extension)
+    pub display_name: String,
+}
+
+/// In-memory index mapping file names to the files that reference them.
+///
+/// For small workspaces (≤50 files), backlinks are scanned on demand when
+/// the active tab changes. For larger workspaces, the index is built once
+/// on workspace load and updated incrementally on file save events.
+#[derive(Debug, Default)]
+pub struct BacklinkIndex {
+    /// Map from lowercase filename (without extension) → list of files that link to it.
+    /// The key is normalized (lowercase, no extension) to match wikilink resolution.
+    index: HashMap<String, Vec<BacklinkEntry>>,
+    /// Number of files in the workspace when the index was last built.
+    /// Used to decide between on-demand scanning vs cached index.
+    pub file_count: usize,
+    /// Whether the full index has been built (for large workspaces).
+    pub is_built: bool,
+}
+
+impl BacklinkIndex {
+    /// Create a new empty backlink index.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Clear the entire index.
+    pub fn clear(&mut self) {
+        self.index.clear();
+        self.file_count = 0;
+        self.is_built = false;
+    }
+
+    /// Get backlinks for a given filename.
+    ///
+    /// The filename is normalized to lowercase without extension for matching.
+    pub fn get_backlinks(&self, filename: &str) -> Vec<BacklinkEntry> {
+        let key = normalize_filename(filename);
+        self.index.get(&key).cloned().unwrap_or_default()
+    }
+
+    /// Build the full index by scanning all workspace files.
+    ///
+    /// This reads every markdown file in the workspace and extracts wikilinks
+    /// and standard markdown links, building a reverse mapping.
+    pub fn build_from_files(&mut self, files: &[PathBuf]) {
+        self.index.clear();
+        self.file_count = files.len();
+
+        let md_files: Vec<&PathBuf> = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        for file_path in &md_files {
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                let links = extract_links_from_content(&content);
+                let source_display = file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                for link_target in links {
+                    let key = normalize_filename(&link_target);
+                    let entry = BacklinkEntry {
+                        source_path: file_path.to_path_buf(),
+                        display_name: source_display.clone(),
+                    };
+                    self.index.entry(key).or_default().push(entry);
+                }
+            }
+        }
+
+        self.is_built = true;
+        log::debug!(
+            "Backlink index built: {} files scanned, {} targets indexed",
+            md_files.len(),
+            self.index.len()
+        );
+    }
+
+    /// Incrementally update the index for a single file that was saved.
+    ///
+    /// Removes all old entries from this source file, then re-scans it.
+    pub fn update_file(&mut self, file_path: &Path) {
+        // Remove old entries from this source
+        for entries in self.index.values_mut() {
+            entries.retain(|e| e.source_path != file_path);
+        }
+        // Remove empty keys
+        self.index.retain(|_, v| !v.is_empty());
+
+        // Re-scan the file
+        if let Ok(content) = std::fs::read_to_string(file_path) {
+            let links = extract_links_from_content(&content);
+            let source_display = file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            for link_target in links {
+                let key = normalize_filename(&link_target);
+                let entry = BacklinkEntry {
+                    source_path: file_path.to_path_buf(),
+                    display_name: source_display.clone(),
+                };
+                self.index.entry(key).or_default().push(entry);
+            }
+        }
+    }
+
+    /// Scan a subset of files on demand (for small workspaces or single-file mode).
+    ///
+    /// Returns backlinks for the given target filename by scanning the provided files.
+    pub fn scan_on_demand(
+        target_filename: &str,
+        files: &[PathBuf],
+        target_path: Option<&Path>,
+    ) -> Vec<BacklinkEntry> {
+        let target_key = normalize_filename(target_filename);
+        let mut results = Vec::new();
+
+        for file_path in files {
+            // Skip non-markdown files
+            let is_md = file_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+                .unwrap_or(false);
+            if !is_md {
+                continue;
+            }
+
+            // Skip the target file itself
+            if let Some(tp) = target_path {
+                if file_path == tp {
+                    continue;
+                }
+            }
+
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                let links = extract_links_from_content(&content);
+                for link in &links {
+                    if normalize_filename(link) == target_key {
+                        let display = file_path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        results.push(BacklinkEntry {
+                            source_path: file_path.clone(),
+                            display_name: display,
+                        });
+                        break; // One match per file is enough
+                    }
+                }
+            }
+        }
+
+        results
+    }
+}
+
+/// Normalize a filename for backlink matching.
+/// Removes `.md`/`.markdown` extension (case-insensitive) and converts to lowercase.
+fn normalize_filename(name: &str) -> String {
+    let name = name.trim();
+    let lower = name.to_lowercase();
+    let without_ext = lower
+        .strip_suffix(".md")
+        .or_else(|| lower.strip_suffix(".markdown"))
+        .unwrap_or(&lower);
+    without_ext.to_string()
+}
+
+/// Extract all link targets from markdown content.
+///
+/// Detects:
+/// - `[[target]]` wikilinks
+/// - `[[target|display]]` wikilinks with display text
+/// - `[text](target.md)` standard markdown links to local .md files
+fn extract_links_from_content(content: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+
+    // Extract wikilinks: [[target]] and [[target|display]]
+    let mut remaining = content;
+    while let Some(open) = remaining.find("[[") {
+        let after_open = &remaining[open + 2..];
+        if let Some(close) = after_open.find("]]") {
+            let inner = &after_open[..close];
+            // Don't allow newlines inside wikilinks
+            if !inner.contains('\n') && !inner.is_empty() {
+                // Extract target (before | if present)
+                let target = if let Some(pipe) = inner.find('|') {
+                    inner[..pipe].trim()
+                } else {
+                    inner.trim()
+                };
+                if !target.is_empty() {
+                    targets.push(target.to_string());
+                }
+            }
+            remaining = &after_open[close + 2..];
+        } else {
+            remaining = after_open;
+        }
+    }
+
+    // Extract standard markdown links: [text](target.md)
+    // Only capture local .md file references (not http/https URLs)
+    remaining = content;
+    while let Some(open_paren) = remaining.find("](") {
+        let after_paren = &remaining[open_paren + 2..];
+        if let Some(close_paren) = after_paren.find(')') {
+            let url = after_paren[..close_paren].trim();
+            // Only match local .md links (not URLs)
+            if !url.starts_with("http://")
+                && !url.starts_with("https://")
+                && !url.starts_with('#')
+                && (url.ends_with(".md") || url.ends_with(".markdown"))
+            {
+                // Extract just the filename from the path
+                let filename = Path::new(url)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or(url);
+                targets.push(filename.to_string());
+            }
+            remaining = &after_paren[close_paren + 1..];
+        } else {
+            break;
+        }
+    }
+
+    targets
+}
+
 #[derive(Debug)]
 pub struct AppState {
     /// All open tabs
@@ -2654,6 +2914,8 @@ pub struct AppState {
     pub pending_file_events: Vec<WorkspaceEvent>,
     /// Git integration service
     pub git_service: GitService,
+    /// Backlink index for tracking which files link to which
+    pub backlink_index: BacklinkIndex,
 }
 
 impl AppState {
@@ -2684,6 +2946,7 @@ impl AppState {
             workspace_watcher: None,
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
+            backlink_index: BacklinkIndex::new(),
         };
 
         // Try to restore tabs from previous session
@@ -2782,6 +3045,7 @@ impl AppState {
             workspace_watcher: None,
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
+            backlink_index: BacklinkIndex::new(),
         };
 
         // Try to restore tabs from session data
@@ -2882,8 +3146,14 @@ impl AppState {
     /// Open a file in a new tab.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
-    pub fn open_file(&mut self, path: PathBuf) -> Result<usize, std::io::Error> {
-        self.open_file_with_focus(path, true)
+    /// Pass `app_time` when available so a non-blocking performance warning toast
+    /// can be shown for files larger than 10 MB.
+    pub fn open_file(
+        &mut self,
+        path: PathBuf,
+        app_time: Option<f64>,
+    ) -> Result<usize, std::io::Error> {
+        self.open_file_with_focus(path, true, app_time)
     }
 
     /// Open a file in a new tab with optional focus control.
@@ -2892,10 +3162,13 @@ impl AppState {
     /// in the background without switching tabs.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
+    /// Pass `app_time` when available so a non-blocking performance warning toast
+    /// can be shown for files larger than 10 MB.
     pub fn open_file_with_focus(
         &mut self,
         path: PathBuf,
         focus: bool,
+        app_time: Option<f64>,
     ) -> Result<usize, std::io::Error> {
         // Check if file is already open
         if let Some(index) = self.find_tab_by_path(&path) {
@@ -2906,6 +3179,23 @@ impl AppState {
                 info!("File already open at tab {} (no focus change)", index);
             }
             return Ok(index);
+        }
+
+        // Show non-blocking performance warning for large files before loading
+        if let (Some(time), Ok(meta)) = (app_time, std::fs::metadata(&path)) {
+            let len = meta.len();
+            if len > LARGE_FILE_THRESHOLD_BYTES {
+                let size_mb = len / (1024 * 1024);
+                self.show_toast(
+                    t!(
+                        "notification.large_file_performance",
+                        size = size_mb.to_string()
+                    )
+                    .to_string(),
+                    time,
+                    3.0,
+                );
+            }
         }
 
         // Read file as bytes for encoding detection
@@ -3748,7 +4038,7 @@ impl AppState {
                     debug!("Exit confirmed");
                 }
                 PendingAction::OpenFile(path) => {
-                    if let Err(e) = self.open_file(path) {
+                    if let Err(e) = self.open_file(path, None) {
                         self.show_error(format!("Failed to open file:\n{}", e));
                     }
                 }
@@ -4922,7 +5212,7 @@ mod tests {
         let initial_tab_count = state.tab_count();
 
         // Open with focus=true
-        let result = state.open_file_with_focus(temp_file.clone(), true);
+        let result = state.open_file_with_focus(temp_file.clone(), true, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4950,7 +5240,7 @@ mod tests {
         let initial_tab_count = state.tab_count();
 
         // Open with focus=false
-        let result = state.open_file_with_focus(temp_file.clone(), false);
+        let result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4978,7 +5268,7 @@ mod tests {
         let mut state = AppState::with_settings(Settings::default());
 
         // Open the file first
-        let first_result = state.open_file_with_focus(temp_file.clone(), true);
+        let first_result = state.open_file_with_focus(temp_file.clone(), true, None);
         assert!(first_result.is_ok());
         let first_index = first_result.unwrap();
 
@@ -4987,7 +5277,7 @@ mod tests {
         assert_ne!(state.active_tab_index(), first_index);
 
         // Open the same file again with focus=true
-        let second_result = state.open_file_with_focus(temp_file.clone(), true);
+        let second_result = state.open_file_with_focus(temp_file.clone(), true, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -5014,7 +5304,7 @@ mod tests {
         let mut state = AppState::with_settings(Settings::default());
 
         // Open the file first
-        let first_result = state.open_file_with_focus(temp_file.clone(), true);
+        let first_result = state.open_file_with_focus(temp_file.clone(), true, None);
         assert!(first_result.is_ok());
         let first_index = first_result.unwrap();
 
@@ -5024,7 +5314,7 @@ mod tests {
         assert_ne!(new_tab_index, first_index);
 
         // Open the same file again with focus=false
-        let second_result = state.open_file_with_focus(temp_file.clone(), false);
+        let second_result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -5052,7 +5342,7 @@ mod tests {
         assert!(state.settings.recent_files.is_empty());
 
         // Open file (either focus mode should update recent files)
-        let result = state.open_file_with_focus(temp_file.clone(), false);
+        let result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -5061,5 +5351,200 @@ mod tests {
         // Recent files should now contain the opened file
         assert!(!state.settings.recent_files.is_empty());
         assert_eq!(state.settings.recent_files[0], temp_file);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Backlink Index Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_normalize_filename() {
+        assert_eq!(normalize_filename("MyNote"), "mynote");
+        assert_eq!(normalize_filename("MyNote.md"), "mynote");
+        assert_eq!(normalize_filename("MyNote.markdown"), "mynote");
+        assert_eq!(normalize_filename("  spaces  "), "spaces");
+        assert_eq!(normalize_filename("UPPER.MD"), "upper");
+    }
+
+    #[test]
+    fn test_extract_wikilinks_from_content() {
+        let content = "Check [[note-a]] and [[note-b|Display Text]] for details.";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0], "note-a");
+        assert_eq!(links[1], "note-b");
+    }
+
+    #[test]
+    fn test_extract_standard_links_from_content() {
+        let content = "See [link](other.md) and [another](path/to/file.md) here.";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0], "other.md");
+        assert_eq!(links[1], "file.md");
+    }
+
+    #[test]
+    fn test_extract_links_ignores_urls() {
+        let content = "Visit [link](https://example.com) and [local](note.md).";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0], "note.md");
+    }
+
+    #[test]
+    fn test_extract_links_ignores_anchors() {
+        let content = "Jump to [section](#heading) and [file](doc.md).";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0], "doc.md");
+    }
+
+    #[test]
+    fn test_extract_mixed_links() {
+        let content = "[[wiki-link]] and [text](local.md) and [[another|display]]";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 3);
+        assert!(links.contains(&"wiki-link".to_string()));
+        assert!(links.contains(&"local.md".to_string()));
+        assert!(links.contains(&"another".to_string()));
+    }
+
+    #[test]
+    fn test_extract_unclosed_wikilink() {
+        let content = "This [[unclosed stays as text";
+        let links = extract_links_from_content(content);
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn test_extract_empty_wikilink() {
+        let content = "Empty [[]] wikilink";
+        let links = extract_links_from_content(content);
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn test_backlink_index_get_and_build() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // Create test files
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+        let file_c = temp_dir.join("note-c.md");
+
+        std::fs::File::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-b]] here.")
+            .unwrap();
+        std::fs::File::create(&file_b)
+            .unwrap()
+            .write_all(b"# Note B\nStandalone note.")
+            .unwrap();
+        std::fs::File::create(&file_c)
+            .unwrap()
+            .write_all(b"# Note C\nAlso links to [[note-b]] and [text](note-a.md).")
+            .unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone(), file_c.clone()];
+
+        let mut index = BacklinkIndex::new();
+        index.build_from_files(&files);
+
+        assert!(index.is_built);
+        assert_eq!(index.file_count, 3);
+
+        // note-b should have 2 backlinks (from note-a and note-c)
+        let backlinks_b = index.get_backlinks("note-b");
+        assert_eq!(backlinks_b.len(), 2);
+
+        // note-a should have 1 backlink (from note-c via standard link)
+        let backlinks_a = index.get_backlinks("note-a");
+        assert_eq!(backlinks_a.len(), 1);
+        assert_eq!(backlinks_a[0].source_path, file_c);
+
+        // note-c should have 0 backlinks
+        let backlinks_c = index.get_backlinks("note-c");
+        assert!(backlinks_c.is_empty());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_backlink_index_update_file() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_update_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+
+        std::fs::File::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-b]].")
+            .unwrap();
+        std::fs::File::create(&file_b)
+            .unwrap()
+            .write_all(b"# Note B")
+            .unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone()];
+
+        let mut index = BacklinkIndex::new();
+        index.build_from_files(&files);
+
+        assert_eq!(index.get_backlinks("note-b").len(), 1);
+
+        // Update file_a to remove the link
+        std::fs::File::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nNo more links.")
+            .unwrap();
+
+        index.update_file(&file_a);
+
+        // note-b should now have 0 backlinks
+        assert_eq!(index.get_backlinks("note-b").len(), 0);
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_backlink_scan_on_demand() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_ondemand_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+        let file_c = temp_dir.join("note-c.md");
+
+        std::fs::File::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-c]].")
+            .unwrap();
+        std::fs::File::create(&file_b)
+            .unwrap()
+            .write_all(b"# Note B\nAlso links to [[note-c|See C]].")
+            .unwrap();
+        std::fs::File::create(&file_c)
+            .unwrap()
+            .write_all(b"# Note C\nTarget file.")
+            .unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone(), file_c.clone()];
+
+        let backlinks = BacklinkIndex::scan_on_demand("note-c", &files, Some(&file_c));
+        assert_eq!(backlinks.len(), 2);
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

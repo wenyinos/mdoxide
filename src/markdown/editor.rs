@@ -60,9 +60,11 @@ use crate::markdown::widgets::{
     RenderedLinkState, RenderedLinkWidget, TableData, TableEditState, WidgetColors,
 };
 use eframe::egui::{
-    self, Color32, FontId, Key, Response, RichText, ScrollArea, TextEdit, Ui, Vec2,
+    self, Color32, ColorImage, FontId, Key, Response, RichText, ScrollArea, TextEdit,
+    TextureHandle, TextureOptions, Ui, Vec2,
 };
 use log::{debug, warn};
+use std::path::{Path, PathBuf};
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Editor Mode
@@ -103,6 +105,9 @@ pub struct MarkdownEditorOutput {
     /// Line-to-Y mappings for rendered mode (source_line -> rendered_y)
     /// Used for accurate scroll sync between Raw and Rendered modes
     pub line_mappings: Vec<LineMapping>,
+    /// Wikilink target that was clicked (for navigation).
+    /// When set, the caller should resolve this target to a file path and open it.
+    pub wikilink_clicked: Option<String>,
 }
 
 /// Maps a source line range to a rendered Y position range.
@@ -435,6 +440,18 @@ pub struct MarkdownEditor<'a> {
     zen_max_column_width: f32,
     /// CJK paragraph first-line indentation
     paragraph_indent: ParagraphIndent,
+    /// File context for wikilink resolution (current file dir + workspace root)
+    wikilink_context: Option<WikilinkContext>,
+}
+
+/// Context for resolving wikilinks to actual files during rendering.
+/// Stored in egui memory per-frame so `render_wikilink` can check file existence.
+#[derive(Debug, Clone)]
+pub struct WikilinkContext {
+    /// Directory of the currently open file (for relative resolution)
+    pub current_dir: Option<PathBuf>,
+    /// Workspace root (for workspace-wide resolution)
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl<'a> MarkdownEditor<'a> {
@@ -454,6 +471,7 @@ impl<'a> MarkdownEditor<'a> {
             zen_mode: false,
             zen_max_column_width: 80.0,
             paragraph_indent: ParagraphIndent::Off,
+            wikilink_context: None,
         }
     }
 
@@ -542,6 +560,16 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn paragraph_indent(mut self, indent: ParagraphIndent) -> Self {
         self.paragraph_indent = indent;
+        self
+    }
+
+    /// Set the wikilink resolution context (current file directory and workspace root).
+    ///
+    /// When provided, wikilinks that cannot be resolved to existing files are
+    /// rendered with a distinct "broken link" visual style.
+    #[must_use]
+    pub fn wikilink_context(mut self, ctx: WikilinkContext) -> Self {
+        self.wikilink_context = Some(ctx);
         self
     }
 
@@ -635,6 +663,7 @@ impl<'a> MarkdownEditor<'a> {
             content_height: scroll_output.content_size.y,
             viewport_height: scroll_output.inner_rect.height(),
             line_mappings: Vec::new(), // Raw mode doesn't need line mappings
+            wikilink_clicked: None, // Raw mode doesn't have clickable wikilinks
         }
     }
 
@@ -655,6 +684,16 @@ impl<'a> MarkdownEditor<'a> {
             mem.data
                 .remove::<bool>(egui::Id::new("link_click_consumed_this_frame"));
         });
+
+        // Store wikilink resolution context in egui memory so render_wikilink can access it
+        if let Some(ctx) = &self.wikilink_context {
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(
+                    egui::Id::new("wikilink_resolution_context"),
+                    ctx.clone(),
+                );
+            });
+        }
 
         // Parse the markdown content
         let doc = match parse_markdown(self.content) {
@@ -893,6 +932,17 @@ impl<'a> MarkdownEditor<'a> {
         // Get focused element info for formatting commands
         let focused_element = edit_state.get_focused_element(&original_content);
 
+        // Check if a wikilink was clicked this frame
+        let wikilink_id = egui::Id::new("wikilink_clicked_target");
+        let wikilink_clicked = ui.memory(|mem| {
+            mem.data.get_temp::<String>(wikilink_id)
+        });
+        if wikilink_clicked.is_some() {
+            ui.memory_mut(|mem| {
+                mem.data.remove::<String>(wikilink_id);
+            });
+        }
+
         MarkdownEditorOutput {
             response: scroll_output.inner,
             changed,
@@ -903,6 +953,7 @@ impl<'a> MarkdownEditor<'a> {
             content_height: scroll_output.content_size.y,
             viewport_height: scroll_output.inner_rect.height(),
             line_mappings,
+            wikilink_clicked,
         }
     }
 }
@@ -1042,6 +1093,9 @@ fn render_node_with_structural_keys(
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
         MarkdownNodeType::Strong => {
             render_styled_inline(
                 ui,
@@ -1083,6 +1137,9 @@ fn render_node_with_structural_keys(
                     paragraph_indent,
                 );
             }
+        }
+        MarkdownNodeType::Image { url, title } => {
+            render_image(ui, node, colors, font_size, url, title);
         }
         MarkdownNodeType::Item => {
             // List items are handled by render_list_with_structural_keys
@@ -1221,6 +1278,9 @@ fn render_node(
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
         MarkdownNodeType::Strong => {
             // Render strong (bold) with proper style accumulation for nested formatting
             render_styled_inline(
@@ -1262,6 +1322,9 @@ fn render_node(
                     paragraph_indent,
                 );
             }
+        }
+        MarkdownNodeType::Image { url, title } => {
+            render_image(ui, node, colors, font_size, url, title);
         }
         MarkdownNodeType::Item => {
             // Handled by render_list
@@ -1498,15 +1561,17 @@ fn render_paragraph_with_structural_keys(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
-    // Check if paragraph contains special inline elements
+    // Check if paragraph contains special inline elements (including images)
     let has_inline_elements = node.children.iter().any(|c| {
         matches!(
             c.node_type,
             MarkdownNodeType::Link { .. }
+                | MarkdownNodeType::Wikilink { .. }
                 | MarkdownNodeType::Strong
                 | MarkdownNodeType::Emphasis
                 | MarkdownNodeType::Strikethrough
                 | MarkdownNodeType::Code(_)
+                | MarkdownNodeType::Image { .. }
         )
     });
 
@@ -2121,7 +2186,7 @@ fn render_list_item_with_structural_keys(
         .filter(|c| matches!(c.node_type, MarkdownNodeType::List { .. }))
         .collect();
 
-    // Check if paragraph has inline formatting (bold, italic, line breaks, etc.)
+    // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
     // and would display them as replacement characters (□). See GitHub issue #41.
     let has_inline_formatting = para_node
@@ -2133,7 +2198,9 @@ fn render_list_item_with_structural_keys(
                         | MarkdownNodeType::Emphasis
                         | MarkdownNodeType::Strikethrough
                         | MarkdownNodeType::Link { .. }
+                        | MarkdownNodeType::Wikilink { .. }
                         | MarkdownNodeType::Code(_)
+                        | MarkdownNodeType::Image { .. }
                         | MarkdownNodeType::LineBreak
                 )
             })
@@ -2477,15 +2544,17 @@ fn render_paragraph(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
-    // Check if paragraph contains any special inline elements (links, formatting)
+    // Check if paragraph contains any special inline elements (links, formatting, images)
     let has_inline_elements = node.children.iter().any(|c| {
         matches!(
             c.node_type,
             MarkdownNodeType::Link { .. }
+                | MarkdownNodeType::Wikilink { .. }
                 | MarkdownNodeType::Strong
                 | MarkdownNodeType::Emphasis
                 | MarkdownNodeType::Strikethrough
                 | MarkdownNodeType::Code(_)
+                | MarkdownNodeType::Image { .. }
         )
     });
 
@@ -3070,6 +3139,10 @@ fn render_inline_node(
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
 
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
+
         MarkdownNodeType::Strong => {
             // Add bold to the style and render children with accumulated styles
             let new_style = style.with_bold();
@@ -3129,6 +3202,12 @@ fn render_inline_node(
                     .font(FontId::monospace(font_size * 0.9))
                     .background_color(colors.code_bg),
             );
+        }
+
+        MarkdownNodeType::Image { url, title } => {
+            // Images break out of the inline flow - end the current row and render as block
+            ui.end_row();
+            render_image(ui, node, colors, font_size, url, title);
         }
 
         MarkdownNodeType::SoftBreak => {
@@ -3692,7 +3771,7 @@ fn render_list_item(
         .filter(|c| matches!(c.node_type, MarkdownNodeType::List { .. }))
         .collect();
 
-    // Check if paragraph has inline formatting (bold, italic, line breaks, etc.)
+    // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
     // and would display them as replacement characters (□). See GitHub issue #41.
     let has_inline_formatting = para_node
@@ -3704,7 +3783,9 @@ fn render_list_item(
                         | MarkdownNodeType::Emphasis
                         | MarkdownNodeType::Strikethrough
                         | MarkdownNodeType::Link { .. }
+                        | MarkdownNodeType::Wikilink { .. }
                         | MarkdownNodeType::Code(_)
+                        | MarkdownNodeType::Image { .. }
                         | MarkdownNodeType::LineBreak
                 )
             })
@@ -4315,6 +4396,386 @@ fn render_link(
             node.start_line, text, url, output.text, output.url, output.is_autolink
         );
     }
+}
+
+/// Render a wikilink as a clickable label.
+///
+/// Wikilinks are rendered as colored, underlined text (like internal links).
+/// If a `WikilinkContext` is available in egui memory, the target is checked
+/// for existence — broken links are styled with a dimmed red color.
+/// Clicking navigates to the target file. The target is stored in egui memory
+/// and picked up by `MarkdownEditorOutput::wikilink_clicked`.
+fn render_wikilink(
+    ui: &mut Ui,
+    colors: &EditorColors,
+    font_size: f32,
+    target: &str,
+    display: Option<&str>,
+) {
+    let label_text = display.unwrap_or(target);
+
+    // Check if target file exists (using context stored in egui memory)
+    let target_exists = ui.memory(|mem| {
+        mem.data
+            .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
+    })
+    .map(|ctx| wikilink_target_exists(target, ctx.current_dir.as_deref(), ctx.workspace_root.as_deref()))
+    .unwrap_or(true); // Default to "exists" if no context is available
+
+    // Color: green-ish blue for valid links, dimmed red for broken links
+    let wikilink_color = if target_exists {
+        Color32::from_rgb(
+            colors.link.r().saturating_sub(30),
+            colors.link.g(),
+            colors.link.b().saturating_add(20).min(255),
+        )
+    } else {
+        // Broken link: dimmed red/orange
+        Color32::from_rgb(200, 100, 100)
+    };
+
+    let mut rich = RichText::new(label_text)
+        .color(wikilink_color)
+        .font(FontId::proportional(font_size))
+        .underline();
+
+    if !target_exists {
+        rich = rich.strikethrough();
+    }
+
+    let link_response = ui.add(
+        egui::Label::new(rich).sense(egui::Sense::click()),
+    );
+
+    let link_rect = link_response.rect;
+
+    // Hand cursor on hover
+    if link_response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    // Use manual pointer check (same pattern as RenderedLinkWidget) because
+    // the parent paragraph's ui.interact() call swallows Label::clicked().
+    let (primary_released, pointer_pos) = ui.input(|i| {
+        (i.pointer.primary_released(), i.pointer.interact_pos())
+    });
+    let was_clicked =
+        primary_released && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
+
+    // Tooltip showing the target and status
+    let tooltip = if !target_exists {
+        if display.is_some() {
+            format!("[[{}]]\nFile not found", target)
+        } else {
+            "File not found".to_string()
+        }
+    } else if display.is_some() {
+        format!("[[{}]]\nClick to open", target)
+    } else {
+        "Click to open".to_string()
+    };
+    link_response.on_hover_text(tooltip);
+
+    // On click: store target in egui memory for the output to pick up,
+    // and also mark click as consumed so parent doesn't enter edit mode
+    if was_clicked {
+        let target_owned = target.to_string();
+        ui.memory_mut(|mem| {
+            mem.data
+                .insert_temp(egui::Id::new("wikilink_clicked_target"), target_owned);
+            mem.data
+                .insert_temp(egui::Id::new("link_click_consumed_this_frame"), true);
+        });
+    }
+}
+
+/// Quick check whether a wikilink target can be resolved to an existing file.
+/// Used during rendering to style broken links differently.
+fn wikilink_target_exists(
+    target: &str,
+    current_dir: Option<&std::path::Path>,
+    workspace_root: Option<&std::path::Path>,
+) -> bool {
+    let target = target.trim();
+    if target.is_empty() {
+        return false;
+    }
+
+    let check = |dir: &std::path::Path| -> bool {
+        let exact = dir.join(target);
+        if exact.is_file() {
+            return true;
+        }
+        if !target.to_lowercase().ends_with(".md") {
+            let with_md = dir.join(format!("{}.md", target));
+            if with_md.is_file() {
+                return true;
+            }
+        }
+        false
+    };
+
+    if let Some(dir) = current_dir {
+        if check(dir) {
+            return true;
+        }
+    }
+    if let Some(root) = workspace_root {
+        if check(root) {
+            return true;
+        }
+    }
+    false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image Rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Cached image data stored in egui memory to avoid reloading every frame.
+#[derive(Clone)]
+struct CachedImageTexture {
+    texture: TextureHandle,
+    original_width: u32,
+    original_height: u32,
+}
+
+/// Result of attempting to load an image — either success or a description of the failure.
+#[derive(Clone)]
+enum ImageLoadResult {
+    Loaded(CachedImageTexture),
+    Failed(String),
+}
+
+/// Resolve an image URL to an absolute path on disk.
+///
+/// Resolution order:
+/// 1. If URL is a web URL (http/https), returns None (not supported).
+/// 2. If URL is an absolute path, uses it directly.
+/// 3. Resolves relative to the current document's directory.
+/// 4. Falls back to workspace root.
+fn resolve_image_path(url: &str, current_dir: Option<&Path>, workspace_root: Option<&Path>) -> Option<PathBuf> {
+    let url = url.trim();
+    if url.is_empty() {
+        return None;
+    }
+
+    // Skip web URLs — we only support local images
+    if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:") {
+        return None;
+    }
+
+    // Strip leading file:// protocol if present
+    let path_str = url.strip_prefix("file://").unwrap_or(url);
+
+    let path = Path::new(path_str);
+
+    // If absolute path, use directly
+    if path.is_absolute() {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+        return None;
+    }
+
+    // Resolve relative to current document directory
+    if let Some(dir) = current_dir {
+        let resolved = dir.join(path_str);
+        if resolved.is_file() {
+            return Some(resolved);
+        }
+    }
+
+    // Fall back to workspace root
+    if let Some(root) = workspace_root {
+        let resolved = root.join(path_str);
+        if resolved.is_file() {
+            return Some(resolved);
+        }
+    }
+
+    None
+}
+
+/// Load an image from disk, decode it, and create an egui texture.
+fn load_image_texture(ctx: &egui::Context, path: &Path) -> Result<CachedImageTexture, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Failed to decode: {}", e))?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    let pixels: Vec<Color32> = rgba
+        .pixels()
+        .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+
+    let color_image = ColorImage {
+        size: [width as usize, height as usize],
+        pixels,
+    };
+
+    let texture_name = format!("md_img_{}", path.display());
+    let texture = ctx.load_texture(&texture_name, color_image, TextureOptions::LINEAR);
+
+    Ok(CachedImageTexture {
+        texture,
+        original_width: width,
+        original_height: height,
+    })
+}
+
+/// Render a markdown image node.
+///
+/// Resolves the image path relative to the current document, loads and caches
+/// the texture in egui memory, and renders it scaled to fit the available width.
+/// Falls back to showing alt text with a placeholder icon on failure.
+fn render_image(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    colors: &EditorColors,
+    font_size: f32,
+    url: &str,
+    title: &str,
+) {
+    let alt_text = node.text_content();
+
+    // Get file context from egui memory (same context used for wikilinks)
+    let wl_ctx: Option<WikilinkContext> = ui.memory(|mem| {
+        mem.data
+            .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
+    });
+
+    let resolved_path = resolve_image_path(
+        url,
+        wl_ctx.as_ref().and_then(|c| c.current_dir.as_deref()),
+        wl_ctx.as_ref().and_then(|c| c.workspace_root.as_deref()),
+    );
+
+    // Web URLs: show placeholder with link text
+    if url.starts_with("http://") || url.starts_with("https://") {
+        render_image_placeholder(ui, colors, font_size, &alt_text, "Web images not supported");
+        return;
+    }
+
+    let Some(resolved) = resolved_path else {
+        let hint = if url.is_empty() { "No image path" } else { "Image not found" };
+        render_image_placeholder(ui, colors, font_size, &alt_text, hint);
+        return;
+    };
+
+    // Use the resolved path as a stable cache key
+    let cache_id = egui::Id::new("md_image_cache").with(&resolved);
+
+    // Check cache first
+    let cached: Option<ImageLoadResult> = ui.data(|d| d.get_temp(cache_id));
+
+    let load_result = cached.unwrap_or_else(|| {
+        // Load and cache
+        let result = match load_image_texture(ui.ctx(), &resolved) {
+            Ok(tex) => ImageLoadResult::Loaded(tex),
+            Err(msg) => {
+                log::warn!("Failed to load image '{}': {}", url, msg);
+                ImageLoadResult::Failed(msg)
+            }
+        };
+        ui.data_mut(|d| d.insert_temp(cache_id, result.clone()));
+        result
+    });
+
+    match load_result {
+        ImageLoadResult::Loaded(cached_tex) => {
+            let available_width = ui.available_width();
+            let orig_w = cached_tex.original_width as f32;
+            let orig_h = cached_tex.original_height as f32;
+
+            // Scale to fit available width, maintaining aspect ratio
+            let (display_w, display_h) = if orig_w > available_width {
+                let scale = available_width / orig_w;
+                (available_width, orig_h * scale)
+            } else {
+                (orig_w, orig_h)
+            };
+
+            let sized = egui::load::SizedTexture::new(
+                cached_tex.texture.id(),
+                Vec2::new(display_w, display_h),
+            );
+            let image_widget = egui::Image::from_texture(sized);
+            let response = ui.add(image_widget);
+
+            // Show tooltip with alt text and/or title on hover
+            let tooltip = build_image_tooltip(&alt_text, title, url);
+            if !tooltip.is_empty() {
+                response.on_hover_text(tooltip);
+            }
+        }
+        ImageLoadResult::Failed(msg) => {
+            render_image_placeholder(ui, colors, font_size, &alt_text, &msg);
+        }
+    }
+}
+
+/// Build a tooltip string from alt text, title, and URL.
+fn build_image_tooltip(alt_text: &str, title: &str, url: &str) -> String {
+    let mut parts = Vec::new();
+    if !alt_text.is_empty() {
+        parts.push(alt_text.to_string());
+    }
+    if !title.is_empty() && title != alt_text {
+        parts.push(title.to_string());
+    }
+    if !url.is_empty() {
+        parts.push(url.to_string());
+    }
+    parts.join("\n")
+}
+
+/// Render a placeholder for images that couldn't be loaded.
+/// Shows an icon and the alt text (or an error hint).
+fn render_image_placeholder(
+    ui: &mut Ui,
+    colors: &EditorColors,
+    font_size: f32,
+    alt_text: &str,
+    hint: &str,
+) {
+    let frame_color = colors.quote_border;
+    let bg_color = colors.code_bg;
+
+    egui::Frame::none()
+        .fill(bg_color)
+        .stroke(egui::Stroke::new(1.0, frame_color))
+        .rounding(4.0)
+        .inner_margin(egui::Margin::same(8.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                // Image icon
+                ui.label(
+                    RichText::new("\u{1F5BC}") // 🖼 framed picture emoji
+                        .color(frame_color)
+                        .size(font_size * 1.2),
+                );
+
+                ui.vertical(|ui| {
+                    if !alt_text.is_empty() {
+                        ui.label(
+                            RichText::new(alt_text)
+                                .color(colors.text)
+                                .size(font_size)
+                                .italics(),
+                        );
+                    }
+                    ui.label(
+                        RichText::new(hint)
+                            .color(frame_color)
+                            .size(font_size * 0.85),
+                    );
+                });
+            });
+        });
 }
 
 /// Render inline content with accumulated text styles.

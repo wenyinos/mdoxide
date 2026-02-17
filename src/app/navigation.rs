@@ -10,9 +10,10 @@ use super::types::HeadingNavRequest;
 use crate::config::{CjkFontPreference, Settings, Theme, ViewMode};
 use crate::editor::{extract_outline_for_file, DocumentOutline, DocumentStats, OutlineType};
 use crate::fonts;
-use crate::state::{FileType, PendingAction};
+use crate::state::{BacklinkIndex, FileType, PendingAction};
 use eframe::egui;
 use log::{debug, info, warn};
+use std::path::{Path, PathBuf};
 
 impl FerriteApp {
 
@@ -674,4 +675,163 @@ impl FerriteApp {
             }
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Backlink Index
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Refresh backlinks for the currently active file.
+    ///
+    /// Strategy:
+    /// - For workspaces with ≤50 files: scan on demand each time
+    /// - For workspaces with >50 files: build full index once, then use cached lookups
+    /// - For single-file mode: scan files in the current directory
+    pub(crate) fn refresh_backlinks(&mut self) {
+        let current_filename = self
+            .state
+            .active_tab()
+            .and_then(|tab| tab.path.as_ref())
+            .and_then(|p| p.file_stem())
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+
+        let current_path = self
+            .state
+            .active_tab()
+            .and_then(|tab| tab.path.clone());
+
+        let Some(filename) = current_filename else {
+            // No file open or unsaved — clear backlinks
+            self.backlinks_panel.clear();
+            return;
+        };
+
+        // Check if backlinks are already cached for this file
+        if self.backlinks_panel.cached_for_file() == Some(filename.as_str())
+            && !self.backlinks_need_refresh
+        {
+            return;
+        }
+
+        if let Some(workspace) = &self.state.workspace {
+            // Walk the workspace directory to find all markdown files.
+            // We use walkdir instead of workspace.all_files() because the file tree
+            // uses shallow/lazy loading — subdirectories may not be scanned yet
+            // (e.g., on session restore), which would miss backlink sources.
+            let root = workspace.root_path.clone();
+            let hidden = workspace.hidden_patterns.clone();
+            let all_md_files = collect_markdown_files(&root, &hidden);
+            let file_count = all_md_files.len();
+
+            if file_count <= 50 {
+                // Small workspace: scan on demand
+                let backlinks = BacklinkIndex::scan_on_demand(
+                    &filename,
+                    &all_md_files,
+                    current_path.as_deref(),
+                );
+                debug!(
+                    "Backlinks (on-demand scan): {} backlinks for '{}'",
+                    backlinks.len(),
+                    filename
+                );
+                self.backlinks_panel
+                    .set_backlinks(Some(filename), backlinks);
+            } else {
+                // Large workspace: use cached index
+                if !self.state.backlink_index.is_built
+                    || self.state.backlink_index.file_count != file_count
+                {
+                    debug!(
+                        "Building backlink index for {} files...",
+                        file_count
+                    );
+                    self.state.backlink_index.build_from_files(&all_md_files);
+                }
+
+                let mut backlinks = self.state.backlink_index.get_backlinks(&filename);
+                // Filter out self-references
+                if let Some(ref cp) = current_path {
+                    backlinks.retain(|e| &e.source_path != cp);
+                }
+                debug!(
+                    "Backlinks (cached index): {} backlinks for '{}'",
+                    backlinks.len(),
+                    filename
+                );
+                self.backlinks_panel
+                    .set_backlinks(Some(filename), backlinks);
+            }
+        } else {
+            // Single-file mode: scan markdown files in the current file's directory
+            if let Some(ref path) = current_path {
+                if let Some(parent) = path.parent() {
+                    let dir_files: Vec<std::path::PathBuf> = std::fs::read_dir(parent)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path())
+                        .filter(|p| p.is_file())
+                        .collect();
+
+                    let backlinks = BacklinkIndex::scan_on_demand(
+                        &filename,
+                        &dir_files,
+                        Some(path),
+                    );
+                    debug!(
+                        "Backlinks (directory scan): {} backlinks for '{}'",
+                        backlinks.len(),
+                        filename
+                    );
+                    self.backlinks_panel
+                        .set_backlinks(Some(filename), backlinks);
+                } else {
+                    self.backlinks_panel.set_backlinks(Some(filename), vec![]);
+                }
+            } else {
+                self.backlinks_panel.clear();
+            }
+        }
+    }
+}
+
+/// Walk the workspace directory recursively to collect all markdown files,
+/// skipping hidden directories (same patterns as the file tree).
+///
+/// This is independent of the lazy file tree, so it works even when
+/// subdirectories haven't been expanded yet (e.g., right after session restore).
+fn collect_markdown_files(root: &Path, hidden_patterns: &[String]) -> Vec<PathBuf> {
+    use walkdir::WalkDir;
+
+    WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            // Skip hidden dot-directories/files
+            if name.starts_with('.') {
+                return false;
+            }
+            // Skip directories matching hidden patterns
+            if entry.file_type().is_dir() {
+                for pattern in hidden_patterns {
+                    if name == pattern.as_str() {
+                        return false;
+                    }
+                }
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            if !e.file_type().is_file() {
+                return false;
+            }
+            match e.path().extension().and_then(|ext| ext.to_str()) {
+                Some(ext) => ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"),
+                None => false,
+            }
+        })
+        .map(|e| e.into_path())
+        .collect()
 }

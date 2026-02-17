@@ -451,6 +451,7 @@ notification:
   restored_auto_save: "Restored from auto-save"
   auto_save_discarded: "Auto-save discarded"
   session_restored: "Session restored"
+  large_file_performance: "Large file (%{size} MB). Performance may be affected."
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:

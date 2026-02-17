@@ -40,6 +40,7 @@ mod markdown;
 mod path_utils;
 mod platform;
 mod preview;
+mod single_instance;
 mod state;
 mod string_utils;
 mod terminal;
@@ -268,6 +269,17 @@ fn main() -> eframe::Result<()> {
         initial_paths.extend(apple_event_paths);
     }
 
+    // Single-instance check: if another Ferrite window is already running,
+    // forward our file paths to it and exit immediately.
+    let instance_listener = match single_instance::try_acquire_instance(&initial_paths) {
+        Some(listener) => listener,
+        None => {
+            // Paths were forwarded to the existing instance — exit cleanly
+            info!("File paths forwarded to existing Ferrite instance. Exiting.");
+            return Ok(());
+        }
+    };
+
     log_memory("Before eframe::run_native");
     
     // Run the application
@@ -278,6 +290,9 @@ fn main() -> eframe::Result<()> {
             // Configure egui visuals based on theme (basic setup)
             // Full theme support will be implemented in a later task
             let mut app = FerriteApp::new(cc);
+
+            // Store the single-instance listener for polling in the update loop
+            app.set_instance_listener(instance_listener);
 
             // Open files/directories from CLI arguments and Apple Events
             app.open_initial_paths(initial_paths);

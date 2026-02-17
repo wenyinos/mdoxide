@@ -54,7 +54,7 @@ These diagrams provide a quick visual overview for new contributors.
 | **[EditHistory](./technical/editor/edit-history.md)** | **Operation-based undo/redo for memory-efficient large file editing** |
 | **[ViewState](./technical/editor/view-state.md)** | **Viewport tracking and visible line range calculation for virtual scrolling** |
 | **[LineCache](./technical/editor/line-cache.md)** | **LRU-cached galley storage for efficient text rendering without recreation each frame** |
-| **[Large File Performance](./technical/editor/large-file-performance.md)** | **Per-frame optimizations for 5MB+ files: hash avoidance, minimap disable, content caching** |
+| **[Large File Performance](./technical/editor/large-file-performance.md)** | **Per-frame optimizations for 5MB+ files; open-time warning toast for 10MB+** |
 | **[Memory Optimization](./technical/editor/memory-optimization.md)** | **Tab closure cleanup, FerriteEditorStorage management, debug vs release performance** |
 | **[Word Wrap](./technical/editor/word-wrap.md)** | **Phase 2 word wrap support: visual row tracking, wrapped galley caching, cursor navigation** |
 | [Editor Widget](./technical/editor/editor-widget.md) | Text editor widget, cursor tracking, scroll persistence, egui TextEdit integration |
@@ -88,6 +88,7 @@ These diagrams provide a quick visual overview for new contributors.
 | **[Special Tabs](./technical/ui/special-tabs.md)** | **Tab-based UI panels (Settings, About/Help) replacing modal windows, extensible for future panels** |
 | [Settings Panel](./technical/ui/settings-panel.md) | Settings UI in a special tab, live preview, appearance/editor/files/keyboard/terminal sections |
 | [Outline Panel](./technical/ui/outline-panel.md) | Document outline side panel, heading extraction, statistics for structured files |
+| [Backlinks Panel](./technical/ui/backlinks-panel.md) | Backlinks panel showing files linking to current file, adaptive indexing, click-to-navigate |
 | [Status Bar](./technical/ui/status-bar.md) | Bottom status bar with file path, stats, toast messages |
 | [About/Help Panel](./technical/ui/about-help.md) | About/Help in a special tab, version info, keyboard shortcuts reference |
 | [Zen Mode](./technical/ui/zen-mode.md) | Distraction-free writing mode, centered text column, chrome hiding, F11 toggle |
@@ -125,6 +126,8 @@ These diagrams provide a quick visual overview for new contributors.
 | [CJK Paragraph Indentation](./technical/markdown/cjk-paragraph-indentation.md) | First-line paragraph indentation for Chinese (2em) and Japanese (1em) typography conventions |
 | [Block Element Alignment](./technical/markdown/block-element-alignment.md) | Consistent 4px left indent for tables, code blocks, blockquotes, and other block elements |
 | [GitHub-Style Callouts](./technical/markdown/github-callouts.md) | GitHub-style callouts (`> [!NOTE]`, `> [!TIP]`, etc.) with color-coded rendering, collapse toggle |
+| [Wikilinks](./technical/markdown/wikilinks.md) | `[[target]]` and `[[target\|display]]` syntax, file resolution, click-to-navigate, broken link indicators |
+| [Image Rendering](./technical/markdown/image-rendering.md) | Local image display in rendered/split view, path resolution, texture caching, format support (PNG/JPEG/GIF/WebP) |
 
 ### Data Viewers
 
@@ -190,6 +193,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Linux Cursor Flicker Fix](./technical/platform/linux-cursor-flicker-fix.md) | Title bar exclusion zone to prevent cursor conflicts with window controls |
 | **[Idle Mode Optimization](./technical/platform/idle-mode-optimization.md)** | **Tiered idle repaint system to reduce CPU usage on all platforms** |
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
+| **[Single-Instance Protocol](./technical/platform/single-instance.md)** | **Lock file + TCP IPC to open files in existing window instead of spawning new process** |
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |

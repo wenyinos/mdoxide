@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Markdown Linking
+- **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[target]]` and `[[target|display]]` syntax with relative path resolution, spaces in filenames, click-to-navigate, same-folder-first tie-breaker, ambiguity prompting
+- **Backlinks panel** - Panel showing files linking to the current document; graph-based indexing for workspaces >50 files; click-to-navigate; detects both `[[wikilinks]]` and `[markdown](links)`
+
+#### Content Blocks
+- **GitHub-style callouts** - `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]` with color-coded rendering, custom titles, and collapsible state (`> [!NOTE]-`)
+
+#### Check for Updates
+- **Manual Check for Updates** - Settings → About section with button to check GitHub Releases API; shows up-to-date, update available with download link, or error; user-initiated only (offline-first)
+- **Security hardening** - Response URL validated against GitHub releases prefix; TLS via rustls (pure Rust)
+
+#### Large File & Performance
+- **Large file detection** - Files >10MB on open show non-blocking performance warning toast
+
+#### Window & File Handling
+- **Single-instance protocol** - Double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning new processes; lock file + TCP IPC
+
+#### Localization
+- **German and Japanese in Settings** - Deutsch and 日本語 now available in Settings → Appearance → Language (locale files already existed)
+
+### Fixed
+
+- **Images not displaying in rendered mode** - Markdown `![](path)` images now render in Rendered/Split view; path resolution relative to document and workspace root; PNG, JPEG, GIF, WebP support; graceful placeholders for missing/unsupported files
+- **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - Preload user's preferred CJK font at startup when preference is explicit (non-Auto), so restored tabs render correctly without tofu
+- **Latin-only names in Language and CJK selectors** - Language and CJK Regional Preference dropdowns now use Latin-only display names (e.g. "Chinese (Simplified)", "Japanese") so they render correctly before CJK fonts load
+- **Syntax highlighting per-frame re-parsing** - `highlight_line()` was called every frame before cache check, causing lag on long lines; now checks cache first and only parses on cache miss
+- **Scrollbar position with word wrap** - Scrollbar thumb position now uses cumulative y-offsets from height cache instead of uniform line height; scrollbar accurately reflects position
+- **Scrollbar drag reverse mapping** - Dragging scrollbar now uses `y_offset_to_line()` binary search instead of uniform division for accurate jumps
+- **Scrollbar jumping** - Replaced per-frame `rebuild_height_cache` with dirty-flag approach; smoothed scrollbar height to avoid abrupt changes as wrap info is discovered
+- **Crash on large selection delete with word wrap** - Fixed capacity overflow panic when deleting large selections; added `saturating_sub`, viewport clamping, and `truncate_wrap_info()` for stale entries
+
 ---
 
 ## [0.2.6.1] - 2026-02-06

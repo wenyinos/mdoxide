@@ -260,6 +260,13 @@ pub enum MarkdownNodeType {
     DescriptionDetails,
     /// Front matter (YAML/TOML)
     FrontMatter(String),
+    /// Wikilink ([[target]] or [[target|display text]])
+    Wikilink {
+        /// The link target (file name or path, without .md extension)
+        target: String,
+        /// Optional display text (if [[target|display]] syntax is used)
+        display: Option<String>,
+    },
 }
 
 /// A node in the markdown AST with position information.
@@ -305,6 +312,9 @@ impl MarkdownNode {
             MarkdownNodeType::Code(t) => output.push_str(t),
             MarkdownNodeType::SoftBreak => output.push(' '),
             MarkdownNodeType::LineBreak => output.push('\n'),
+            MarkdownNodeType::Wikilink { target, display } => {
+                output.push_str(display.as_deref().unwrap_or(target));
+            }
             _ => {}
         }
         for child in &self.children {
@@ -381,6 +391,10 @@ pub fn parse_markdown_with_options(
     // them produces a single continuous blockquote with a single border.
     // Note: Callout nodes are NOT BlockQuote nodes, so they won't be merged.
     merge_consecutive_blockquotes(&mut converted_root);
+
+    // Extract wikilinks from Text nodes: [[target]] and [[target|display text]]
+    // This must run after all block-level transformations are complete.
+    extract_wikilinks(&mut converted_root);
 
     // FIX: Comrak returns line numbers as if frontmatter doesn't exist.
     // When frontmatter is present, we need to calculate the offset and adjust all line numbers.
@@ -671,6 +685,137 @@ fn extract_callout_info(
     }
 
     Some((callout_type, title, collapsed))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wikilink Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Recursively walk the AST and split `Text` nodes that contain `[[...]]`
+/// wikilink syntax into a sequence of `Text` and `Wikilink` nodes.
+fn extract_wikilinks(node: &mut MarkdownNode) {
+    // Recurse into children first (depth-first)
+    for child in &mut node.children {
+        extract_wikilinks(child);
+    }
+
+    // Now process this node's direct children: look for Text nodes containing [[...]]
+    let old_children = std::mem::take(&mut node.children);
+    let mut new_children = Vec::with_capacity(old_children.len());
+
+    for child in old_children {
+        if let MarkdownNodeType::Text(ref text) = child.node_type {
+            if text.contains("[[") {
+                let split = split_text_with_wikilinks(text, child.start_line, child.end_line);
+                new_children.extend(split);
+            } else {
+                new_children.push(child);
+            }
+        } else {
+            new_children.push(child);
+        }
+    }
+
+    node.children = new_children;
+}
+
+/// Split a text string containing `[[...]]` patterns into a sequence of
+/// `Text` and `Wikilink` nodes.
+///
+/// Handles:
+/// - `[[target]]` → Wikilink { target, display: None }
+/// - `[[target|display text]]` → Wikilink { target, display: Some("display text") }
+/// - Unclosed `[[` is left as plain text
+fn split_text_with_wikilinks(
+    text: &str,
+    start_line: usize,
+    end_line: usize,
+) -> Vec<MarkdownNode> {
+    let mut result = Vec::new();
+    let mut remaining = text;
+
+    while let Some(open_pos) = remaining.find("[[") {
+        // Push any text before the opening [[
+        if open_pos > 0 {
+            let before = &remaining[..open_pos];
+            result.push(MarkdownNode {
+                node_type: MarkdownNodeType::Text(before.to_string()),
+                children: Vec::new(),
+                start_line,
+                end_line,
+            });
+        }
+
+        let after_open = &remaining[open_pos + 2..];
+
+        // Find the closing ]] — but don't cross newlines
+        if let Some(close_pos) = after_open.find("]]") {
+            let inner = &after_open[..close_pos];
+
+            // Don't allow newlines inside wikilinks
+            if inner.contains('\n') {
+                // Malformed — push the [[ as text and continue
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Text("[[".to_string()),
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+                remaining = after_open;
+                continue;
+            }
+
+            // Parse target and optional display text (split on first |)
+            let (target, display) = if let Some(pipe_pos) = inner.find('|') {
+                let t = inner[..pipe_pos].trim().to_string();
+                let d = inner[pipe_pos + 1..].trim().to_string();
+                (t, if d.is_empty() { None } else { Some(d) })
+            } else {
+                (inner.trim().to_string(), None)
+            };
+
+            // Only create a wikilink if the target is non-empty
+            if !target.is_empty() {
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Wikilink { target, display },
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+            } else {
+                // Empty target like [[]] — push as plain text
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Text(format!("[[{}]]", inner)),
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+            }
+
+            remaining = &after_open[close_pos + 2..];
+        } else {
+            // No closing ]] found — push [[ as text and continue
+            result.push(MarkdownNode {
+                node_type: MarkdownNodeType::Text("[[".to_string()),
+                children: Vec::new(),
+                start_line,
+                end_line,
+            });
+            remaining = after_open;
+        }
+    }
+
+    // Push any remaining text
+    if !remaining.is_empty() {
+        result.push(MarkdownNode {
+            node_type: MarkdownNodeType::Text(remaining.to_string()),
+            children: Vec::new(),
+            start_line,
+            end_line,
+        });
+    }
+
+    result
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1696,5 +1841,101 @@ mod tests {
         let text = node.text_content();
         assert!(text.contains("Line 1"), "Should have Line 1");
         assert!(text.contains("Line 3"), "Should have Line 3");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wikilink Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_simple_wikilink() {
+        let doc = parse_markdown("Check [[note-b]] for details").unwrap();
+        let para = &doc.root.children[0];
+        assert!(matches!(para.node_type, MarkdownNodeType::Paragraph));
+
+        let has_wikilink = para.children.iter().any(|c| {
+            matches!(
+                &c.node_type,
+                MarkdownNodeType::Wikilink { target, display } if target == "note-b" && display.is_none()
+            )
+        });
+        assert!(has_wikilink, "Should contain a Wikilink node. Children: {:?}",
+            para.children.iter().map(|c| format!("{:?}", c.node_type)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_parse_wikilink_with_display_text() {
+        let doc = parse_markdown("See [[note-b|Custom Text]] here").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilink = para.children.iter().find(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        });
+        assert!(wikilink.is_some(), "Should have a Wikilink node");
+
+        if let MarkdownNodeType::Wikilink { target, display } = &wikilink.unwrap().node_type {
+            assert_eq!(target, "note-b");
+            assert_eq!(display.as_deref(), Some("Custom Text"));
+        }
+    }
+
+    #[test]
+    fn test_parse_wikilink_with_spaces() {
+        let doc = parse_markdown("Open [[My Document]] now").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilink = para.children.iter().find(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        });
+        assert!(wikilink.is_some());
+
+        if let MarkdownNodeType::Wikilink { target, display } = &wikilink.unwrap().node_type {
+            assert_eq!(target, "My Document");
+            assert!(display.is_none());
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_wikilinks() {
+        let doc = parse_markdown("Link [[a]] and [[b|B text]] here").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilinks: Vec<_> = para.children.iter().filter(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        }).collect();
+        assert_eq!(wikilinks.len(), 2, "Should have 2 wikilinks");
+    }
+
+    #[test]
+    fn test_parse_wikilink_text_content() {
+        let doc = parse_markdown("[[note-b|Display]]").unwrap();
+        let text = doc.root.text_content();
+        assert!(text.contains("Display"), "text_content should use display text");
+
+        let doc2 = parse_markdown("[[note-b]]").unwrap();
+        let text2 = doc2.root.text_content();
+        assert!(text2.contains("note-b"), "text_content should fall back to target");
+    }
+
+    #[test]
+    fn test_parse_unclosed_wikilink() {
+        let doc = parse_markdown("This [[unclosed stays as text").unwrap();
+        let text = doc.root.text_content();
+        assert!(text.contains("[["), "Unclosed [[ should remain as text");
+
+        let has_wikilink = doc.root.children.iter().any(|c| {
+            c.children.iter().any(|cc| matches!(&cc.node_type, MarkdownNodeType::Wikilink { .. }))
+        });
+        assert!(!has_wikilink, "Unclosed [[ should NOT produce a Wikilink node");
+    }
+
+    #[test]
+    fn test_parse_empty_wikilink() {
+        let doc = parse_markdown("This [[]] is empty").unwrap();
+        let has_wikilink = doc.root.children.iter().any(|c| {
+            c.children.iter().any(|cc| matches!(&cc.node_type, MarkdownNodeType::Wikilink { .. }))
+        });
+        assert!(!has_wikilink, "Empty [[]] should NOT produce a Wikilink node");
     }
 }

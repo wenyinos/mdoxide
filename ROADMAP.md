@@ -6,8 +6,10 @@
 **Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
 
 #### Bug Fixes & UX
-- [ ] **Open file in current window as tab** - When double-clicking a file (in file tree or from OS/Explorer), open it as a new tab in the current Ferrite window instead of launching a new window. May require single-instance handling or passing paths to existing instance on Windows/Linux.
-- [ ] **Images not displaying in rendered mode** - Markdown image syntax `![](path)` does not show images in rendered/split view; fix path resolution (relative to document), image loading, and egui rendering so images display correctly.
+- [x] **Latin-only names in Language and CJK preference selectors** - Language selector (Settings → Appearance) and CJK Regional Preference (Settings → Editor) used native script (e.g. 简体中文, 日本語, 한국어), which rendered as squares when CJK fonts were not yet loaded (lazy loading). Both dropdowns now use Latin-only display names (e.g. "Chinese (Simplified)", "Japanese", "Korean (Hangul)") so they are always legible without preloading CJK fonts.
+- [ ] **View mode bar on unsupported file types** - When default view is Split and user opens a file that doesn't support split (e.g. .rs), the view mode bar is hidden so mode can only be changed via hotkeys. Always show the view mode bar: for non–split-supported files use the two-mode segment (Raw | Rendered) so users can switch without hotkeys.
+- [x] **Open file in current window as tab** - Single-instance protocol: double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning a new process. Lock file + TCP IPC for cross-platform support.
+- [x] **Images not displaying in rendered mode** - Markdown image syntax `![](path)` now shows images in rendered/split view; path resolution (relative to document dir + workspace root), image loading/caching via `image` crate (PNG, JPEG, GIF, WebP), scaled rendering with aspect ratio, graceful placeholders for missing/unsupported files.
 - [x] **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - When "Which CJK font to prioritize" is set to a non-Auto value and the app restarts, Chinese can render as tofu in restored tabs because we only lazy-load CJK for the active tab and don't preload the user's preferred font at startup. Fix: preload the single preferred CJK font at startup when preference is explicit (same approach as Auto + system locale), so restored documents render correctly regardless of which tab is active.
 - [x] **Syntax highlighting per-frame re-parsing** - `highlight_line()` was called on every frame for every visible line *before* checking the galley cache, causing severe lag on files with long lines (e.g. dense markdown with inline formatting). Fixed by checking the cache first and only running syntect regex parsing on cache misses.
 - [x] **Scrollbar position incorrect with word wrap** - Scrollbar thumb position was calculated using uniform `first_visible_line * line_height`, ignoring actual wrapped line heights. Fixed to use cumulative y-offsets from the height cache, so the scrollbar accurately reflects scroll position and reaches the bottom.
@@ -18,8 +20,8 @@
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
 #### Markdown Linking
-- [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax.
-- [ ] **Backlinks panel** - Show documents linking to current file.
+- [x] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[target]]` and `[[target|display]]` syntax with relative path resolution, spaces in filenames, click-to-navigate, ambiguity handling.
+- [x] **Backlinks panel** - Panel showing files linking to current file; graph-based indexing for large workspaces; click-to-navigate.
 
 #### Editing Modes
 - [ ] **Vim Mode** - Optional Vim-style modal editing (Normal / Insert / Visual modes).
@@ -30,7 +32,7 @@
 - [x] **Security hardening** - Response URL validated against `https://github.com/OlaProeis/Ferrite/releases/` prefix; malformed URLs are replaced with a constructed safe URL. TLS via `rustls` (pure Rust, no OpenSSL).
 
 #### Large File Performance
-- [ ] **Large file detection** - Auto-detect files > 10MB on open, show warning toast.
+- [x] **Large file detection** - Auto-detect files > 10MB on open, show warning toast.
 - [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index for massive CSVs.
 
 #### Welcome View
@@ -38,7 +40,7 @@
 
 #### Installer & Localization
 - [ ] **Windows MSI: optional file associations** - During install, ask user whether to set Ferrite as default for .md, .txt, .json, .yaml, .toml (e.g. "Set as default for all" or per-extension); do not force associations without consent. WiX: `wix/main.wxs`.
-- [ ] **German and Japanese in Settings** - Locale files `locales/de.yaml` and `locales/ja.yaml` exist; add German and Japanese to the `Language` enum in settings so users can select them from Settings → Appearance.
+- [x] **German and Japanese in Settings** - German (Deutsch) and Japanese (日本語) now available in Settings → Appearance → Language.
 
 #### Refactoring & Quality
 - [ ] **Flowchart Refactoring** - Modularize the 3200+ line `flowchart.rs`.
@@ -71,7 +73,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
 
 ### Rendered View Limitations
-- [ ] **Images not displaying** - `![](path)` images do not show in rendered/split view; needs path resolution and image rendering (see v0.2.7 task).
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
 
 ---
