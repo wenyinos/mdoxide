@@ -43,7 +43,7 @@
 - [x] **German and Japanese in Settings** - German (Deutsch) and Japanese (日本語) now available in Settings → Appearance → Language.
 
 #### Refactoring & Quality
-- [ ] **Flowchart Refactoring** - Modularize the 3200+ line `flowchart.rs`.
+- [x] **Flowchart Refactoring** - Modularized 3600-line `flowchart.rs` into 12 focused modules: `flowchart/types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`.
 - [ ] **Window Controls** - Native-feel window controls for macOS; further icon polish.
 
 #### Executable Code Blocks

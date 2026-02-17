@@ -9,9 +9,27 @@ The native Mermaid diagram rendering implementation has been refactored from a s
 ```
 src/markdown/mermaid/
 ├── mod.rs           # Public API, diagram type dispatcher, unit tests
+├── cache.rs         # AST + layout caching (blake3 hashing, LRU eviction)
 ├── text.rs          # TextMeasurer trait and implementations
 ├── utils.rs         # Shared drawing utilities
-├── flowchart.rs     # Flowchart/graph diagrams
+├── frontmatter.rs   # YAML frontmatter support
+├── flowchart/       # Flowchart/graph diagrams (modular)
+│   ├── mod.rs       # Public API re-exports
+│   ├── types.rs     # AST types (FlowNode, FlowEdge, etc.)
+│   ├── parser.rs    # Mermaid source -> AST parsing
+│   ├── utils.rs     # Flowchart-specific utilities (bezier, arrows)
+│   ├── layout/      # Sugiyama-style layered graph layout
+│   │   ├── mod.rs       # layout_flowchart() + subgraph bounds
+│   │   ├── config.rs    # Layout parameters
+│   │   ├── graph.rs     # Internal graph representation
+│   │   ├── subgraph.rs  # Subgraph layout engine
+│   │   └── sugiyama.rs  # Core layered graph algorithm
+│   └── render/      # egui drawing
+│       ├── mod.rs       # render_flowchart() orchestration
+│       ├── colors.rs    # Dark/light color themes
+│       ├── nodes.rs     # Node shape rendering (10 shapes)
+│       ├── edges.rs     # Edge routing and drawing
+│       └── subgraphs.rs # Subgraph background rendering
 ├── sequence.rs      # Sequence diagrams with control-flow blocks
 ├── pie.rs           # Pie charts
 ├── state.rs         # State diagrams with composite states

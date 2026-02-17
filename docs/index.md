@@ -232,7 +232,8 @@ These diagrams provide a quick visual overview for new contributors.
 | [Sequence Control Blocks](./technical/mermaid/sequence-control-blocks.md) | Sequence diagram loop/alt/opt/par blocks, nested parsing, block rendering |
 | [Sequence Activations & Notes](./technical/mermaid/sequence-activations-notes.md) | Activation boxes, notes, +/- shorthand, state tracking |
 | [State Composite Nested](./technical/mermaid/state-composite-nested.md) | State diagram composite and nested state support |
-| **[Flowchart Refactor Plan](./technical/mermaid/flowchart-refactor-plan.md)** | **Task 58: Comprehensive analysis and refactoring plan for flowchart.rs modularization** |
+| **[Flowchart Modular Refactor](./technical/mermaid/flowchart-modular-refactor.md)** | **Task 17: Flowchart.rs split into 12 focused modules (types, parser, layout/, render/, utils)** |
+| [Flowchart Refactor Plan](./technical/mermaid/flowchart-refactor-plan.md) | Original analysis and refactoring plan for flowchart.rs modularization |
 
 ### Planning & Roadmap
 
@@ -352,7 +353,23 @@ ferrite/
 │   │   ├── tree_viewer.rs   # JSON/YAML/TOML tree viewer widget
 │   │   └── mermaid/         # Native Mermaid diagram rendering (11 types)
 │   │       ├── mod.rs       # MermaidRenderer, caching (blake3)
-│   │       ├── flowchart.rs # Flowchart diagrams
+│   │       ├── flowchart/   # Flowchart diagrams (modular)
+│   │       │   ├── mod.rs       # Public API re-exports
+│   │       │   ├── types.rs     # AST types (FlowNode, FlowEdge, etc.)
+│   │       │   ├── parser.rs    # Mermaid source -> AST parsing
+│   │       │   ├── utils.rs     # Shared utilities (bezier, arrows)
+│   │       │   ├── layout/      # Sugiyama-style graph layout
+│   │       │   │   ├── mod.rs       # layout_flowchart() entry point
+│   │       │   │   ├── config.rs    # Layout parameters
+│   │       │   │   ├── graph.rs     # Internal graph representation
+│   │       │   │   ├── subgraph.rs  # Subgraph layout engine
+│   │       │   │   └── sugiyama.rs  # Core layered graph algorithm
+│   │       │   └── render/      # egui drawing
+│   │       │       ├── mod.rs       # render_flowchart() orchestration
+│   │       │       ├── colors.rs    # Dark/light color themes
+│   │       │       ├── nodes.rs     # Node shape rendering
+│   │       │       ├── edges.rs     # Edge routing and drawing
+│   │       │       └── subgraphs.rs # Subgraph backgrounds
 │   │       ├── sequence.rs  # Sequence diagrams
 │   │       ├── pie.rs       # Pie charts
 │   │       ├── state.rs     # State diagrams
@@ -363,7 +380,7 @@ ferrite/
 │   │       ├── git_graph.rs # Git graph diagrams
 │   │       ├── frontmatter.rs # YAML frontmatter support
 │   │       ├── text.rs      # Text measurement
-│   │       └── utils.rs     # Shared utilities
+│   │       └── utils.rs     # Shared mermaid utilities
 │   ├── terminal/            # Integrated terminal emulator
 │   │   ├── mod.rs           # Terminal, TerminalManager, monitor detection
 │   │   ├── pty.rs           # Cross-platform PTY (portable-pty)
