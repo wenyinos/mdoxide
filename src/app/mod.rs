@@ -52,11 +52,11 @@ use crate::state::{AppState, FileType, PendingAction, Selection};
 use crate::theme::{ThemeColors, ThemeManager};
 use crate::vcs::GitAutoRefresh;
 use crate::ui::{
-    handle_window_resize, load_app_logo_texture, AboutPanel, FileOperationDialog, FileOperationResult,
-    FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel, ProductivityPanel,
-    QuickSwitcher, Ribbon, RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel,
-    TitleBarButton, TerminalPanel, TerminalPanelState, ViewModeSegment, ViewSegmentAction,
-    WindowResizeState,
+    handle_window_resize, load_app_logo_texture, AboutPanel, BacklinksPanel, FileOperationDialog,
+    FileOperationResult, FileTreeContextAction, FileTreePanel, GoToLineResult, OutlinePanel,
+    ProductivityPanel, QuickSwitcher, Ribbon, RibbonAction, SearchNavigationTarget, SearchPanel,
+    SettingsPanel, TitleBarButton, TerminalPanel, TerminalPanelState, ViewModeSegment,
+    ViewSegmentAction, WindowResizeState,
 };
 
 #[cfg(feature = "async-workers")]
@@ -85,6 +85,8 @@ pub struct FerriteApp {
     find_replace_panel: FindReplacePanel,
     /// Outline panel component
     outline_panel: OutlinePanel,
+    /// Backlinks panel component (rendered inside outline panel)
+    backlinks_panel: BacklinksPanel,
     /// File tree panel component (for workspace mode)
     file_tree_panel: FileTreePanel,
     /// Quick file switcher (Ctrl+P) for workspace mode
@@ -157,6 +159,12 @@ pub struct FerriteApp {
     /// Set when a file is opened during the UI render pass, checked at end of update().
     /// This ensures CJK fonts are loaded immediately rather than waiting for next frame.
     pending_cjk_check: bool,
+    /// Last active tab index (for detecting tab switches to refresh backlinks)
+    last_active_tab_for_backlinks: usize,
+    /// Flag to trigger backlink refresh (set on file save or tab switch)
+    backlinks_need_refresh: bool,
+    /// Single-instance listener for receiving file paths from secondary instances
+    instance_listener: Option<crate::single_instance::SingleInstanceListener>,
     /// Echo worker handle for async demo (lazy initialization)
     #[cfg(feature = "async-workers")]
     echo_worker: Option<WorkerHandle>,
@@ -305,6 +313,7 @@ impl FerriteApp {
             about_panel: AboutPanel::new(),
             find_replace_panel: FindReplacePanel::new(),
             outline_panel,
+            backlinks_panel: BacklinksPanel::new(),
             file_tree_panel: FileTreePanel::new(),
             quick_switcher: QuickSwitcher::new(),
             file_operation_dialog: None,
@@ -340,6 +349,9 @@ impl FerriteApp {
             last_window_title: String::new(),
             app_logo_texture,
             pending_cjk_check: false,
+            last_active_tab_for_backlinks: usize::MAX,
+            backlinks_need_refresh: true,
+            instance_listener: None,
             #[cfg(feature = "async-workers")]
             echo_worker: None, // Lazy - spawns when AI panel first shown
             #[cfg(feature = "async-workers")]
@@ -436,7 +448,8 @@ impl FerriteApp {
             let mut first_opened_tab_idx: Option<usize> = None;
             for file_path in valid_files.iter() {
                 info!("Opening file from CLI: {}", file_path.display());
-                match self.state.open_file(file_path.clone()) {
+                let time = self.get_app_time();
+                match self.state.open_file(file_path.clone(), Some(time)) {
                     Ok(tab_idx) => {
                         if first_opened_tab_idx.is_none() {
                             first_opened_tab_idx = Some(tab_idx);
@@ -463,6 +476,13 @@ impl FerriteApp {
                 ""
             }
         );
+    }
+
+    /// Set the single-instance listener for receiving file paths from secondary instances.
+    ///
+    /// Called once during startup from `main()` after instance acquisition.
+    pub fn set_instance_listener(&mut self, listener: crate::single_instance::SingleInstanceListener) {
+        self.instance_listener = Some(listener);
     }
 
     /// Get elapsed time since app start in seconds.
@@ -1348,6 +1368,9 @@ impl FerriteApp {
         let mut outline_close_requested = false;
         let mut outline_detach_productivity = false;
 
+        // Track backlink navigation request from outline panel
+        let mut backlink_navigate_to: Option<std::path::PathBuf> = None;
+
         if self.state.settings.outline_enabled && !zen_mode {
             // Update outline if content changed
             self.update_outline_if_needed();
@@ -1360,6 +1383,19 @@ impl FerriteApp {
                 .unwrap_or(0);
             let current_section = self.cached_outline.find_current_section(current_line);
 
+            // Detect tab switch and refresh backlinks
+            let current_tab_idx = self.state.active_tab_index();
+            if current_tab_idx != self.last_active_tab_for_backlinks {
+                self.last_active_tab_for_backlinks = current_tab_idx;
+                self.backlinks_need_refresh = true;
+            }
+
+            // Refresh backlinks if needed (tab switch or file save)
+            if self.backlinks_need_refresh {
+                self.refresh_backlinks();
+                self.backlinks_need_refresh = false;
+            }
+
             // Configure and render the outline panel
             self.outline_panel
                 .set_side(self.state.settings.outline_side);
@@ -1371,6 +1407,7 @@ impl FerriteApp {
                 self.cached_doc_stats.as_ref(),
                 is_dark,
                 if docked { Some(&mut self.productivity_panel) } else { None },
+                Some(&self.backlinks_panel),
             );
 
             // Capture output for processing after render
@@ -1386,6 +1423,7 @@ impl FerriteApp {
             outline_new_width = outline_output.new_width;
             outline_close_requested = outline_output.close_requested;
             outline_detach_productivity = outline_output.detach_productivity;
+            backlink_navigate_to = outline_output.backlink_navigate_to;
 
             // Handle repaint request from productivity panel (e.g. timer)
             if outline_output.needs_repaint {
@@ -1419,6 +1457,28 @@ impl FerriteApp {
             // Switch outline panel back to Outline tab
             self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Outline);
             self.state.mark_settings_dirty();
+        }
+
+        // Handle backlink navigation (click on a backlink entry)
+        if let Some(path) = backlink_navigate_to {
+            info!("Navigating to backlink: {}", path.display());
+            let time = self.get_app_time();
+            match self.state.open_file(path.clone(), Some(time)) {
+                Ok(tab_index) => {
+                    self.pending_cjk_check = true;
+                    self.check_auto_save_recovery(tab_index);
+                    debug!("Opened backlink target in tab {}", tab_index);
+                }
+                Err(e) => {
+                    warn!("Failed to open backlink target: {}", e);
+                    let time = self.get_app_time();
+                    self.state.show_toast(
+                        format!("Could not open {}: {}", path.display(), e),
+                        time,
+                        3.0,
+                    );
+                }
+            }
         }
 
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
@@ -1465,7 +1525,8 @@ impl FerriteApp {
 
         // Handle file tree interactions
         if let Some(file_path) = file_tree_file_clicked {
-            match self.state.open_file(file_path.clone()) {
+            let time = self.get_app_time();
+            match self.state.open_file(file_path.clone(), Some(time)) {
                 Ok(_) => {
                     self.pending_cjk_check = true;
                     debug!("Opened file from tree: {}", file_path.display());
@@ -1988,6 +2049,9 @@ impl eframe::App for FerriteApp {
 
         // Handle drag-drop of files and folders
         self.handle_dropped_files(ctx);
+
+        // Poll for file paths from secondary instances (single-instance protocol)
+        self.handle_instance_paths(ctx);
 
         // Poll file watcher for workspace changes
         self.handle_file_watcher_events();

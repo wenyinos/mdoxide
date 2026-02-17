@@ -49,7 +49,9 @@ pub fn create_light_visuals() -> Visuals {
     // ─────────────────────────────────────────────────────────────────────────
     // Text Colors
     // ─────────────────────────────────────────────────────────────────────────
-    visuals.override_text_color = None; // Let widgets decide
+    // Use theme primary so all widget text (slider values, combobox, drag value,
+    // labels) has readable contrast on light background in both themes.
+    visuals.override_text_color = Some(colors.text.primary);
     visuals.warn_fg_color = colors.ui.warning;
     visuals.error_fg_color = colors.ui.error;
     visuals.hyperlink_color = colors.text.link;

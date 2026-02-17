@@ -25,28 +25,6 @@ fn font_description(font: &EditorFont) -> String {
     }
 }
 
-/// Get localized CJK preference display name
-fn cjk_display_name(pref: &CjkFontPreference) -> String {
-    match pref {
-        CjkFontPreference::Auto => t!("settings.editor.cjk_auto").to_string(),
-        CjkFontPreference::Korean => t!("settings.editor.cjk_korean").to_string(),
-        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese").to_string(),
-        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese").to_string(),
-        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese").to_string(),
-    }
-}
-
-/// Get localized CJK preference description
-fn cjk_description(pref: &CjkFontPreference) -> String {
-    match pref {
-        CjkFontPreference::Auto => t!("settings.editor.cjk_auto_desc").to_string(),
-        CjkFontPreference::Korean => t!("settings.editor.cjk_korean_desc").to_string(),
-        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese_desc").to_string(),
-        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese_desc").to_string(),
-        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese_desc").to_string(),
-    }
-}
-
 /// Get localized view mode description
 fn view_mode_description(mode: &ViewMode) -> String {
     match mode {
@@ -833,10 +811,15 @@ impl SettingsPanel {
                 });
             }
             UpdateState::UpToDate => {
+                let success_color = if ui.visuals().dark_mode {
+                    Color32::from_rgb(75, 210, 100)
+                } else {
+                    Color32::from_rgb(40, 167, 69)
+                };
                 ui.horizontal(|ui| {
                     ui.label(
                         RichText::new(format!("✓ {}", t!("settings.about.up_to_date")))
-                            .color(Color32::from_rgb(80, 180, 80)),
+                            .color(success_color),
                     );
                 });
                 ui.add_space(8.0);
@@ -893,7 +876,7 @@ impl SettingsPanel {
                 ui.horizontal(|ui| {
                     ui.label(
                         RichText::new(format!("⚠ {}", t!("settings.about.check_failed")))
-                            .color(Color32::from_rgb(220, 80, 80)),
+                            .color(ui.visuals().error_fg_color),
                     );
                 });
                 ui.label(RichText::new(msg).small().weak());
@@ -1118,7 +1101,7 @@ impl SettingsPanel {
                 if !font_found {
                     ui.label(
                         RichText::new(t!("settings.editor.font_not_found"))
-                            .color(Color32::RED)
+                            .color(ui.visuals().error_fg_color)
                             .small(),
                     );
                 }
@@ -1140,10 +1123,10 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         egui::ComboBox::from_id_source("cjk_preference_combo")
-            .selected_text(cjk_display_name(&settings.cjk_font_preference))
+            .selected_text(settings.cjk_font_preference.selector_display_name().to_string())
             .show_ui(ui, |ui| {
                 for pref in CjkFontPreference::all() {
-                    let label = format!("{} - {}", cjk_display_name(pref), cjk_description(pref));
+                    let label = format!("{} - {}", pref.selector_display_name(), pref.description());
                     if ui
                         .selectable_value(&mut settings.cjk_font_preference, *pref, label)
                         .changed()
@@ -1237,11 +1220,11 @@ impl SettingsPanel {
 
         let current_lang = settings.language;
         egui::ComboBox::from_id_source("language_combo")
-            .selected_text(format!("🌐 {}", current_lang.native_name()))
+            .selected_text(format!("🌐 {}", current_lang.selector_display_name()))
             .show_ui(ui, |ui| {
                 for lang in Language::all() {
                     if ui
-                        .selectable_value(&mut settings.language, *lang, lang.native_name())
+                        .selectable_value(&mut settings.language, *lang, lang.selector_display_name())
                         .changed()
                     {
                         // Apply language change immediately
@@ -1761,9 +1744,10 @@ impl SettingsPanel {
 
         // Show conflict warning if any
         if let Some((cmd, msg)) = &self.conflict_warning {
+            let warn_color = ui.visuals().warn_fg_color;
             ui.horizontal(|ui| {
-                ui.label(RichText::new("⚠").color(Color32::YELLOW));
-                ui.label(RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg)).color(Color32::YELLOW));
+                ui.label(RichText::new("⚠").color(warn_color));
+                ui.label(RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg)).color(warn_color));
             });
             ui.add_space(4.0);
         }

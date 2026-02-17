@@ -52,8 +52,8 @@ walkdir = "2"
 # Git integration (no SSH/HTTPS - we only need local repo status)
 git2 = { version = "0.19", default-features = false }
 
-# Icon loading
-image = { version = "0.25", default-features = false, features = ["png"] }
+# Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 font-kit = "0.14.3"
 
 # Internationalization

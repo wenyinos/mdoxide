@@ -10,6 +10,7 @@ use crate::files::dialogs::{open_multiple_files_dialog, save_file_dialog};
 use crate::ui::{FileOperationDialog, FileTreeContextAction, SearchNavigationTarget};
 use eframe::egui;
 use log::{debug, info, trace, warn};
+use std::path::{Path, PathBuf};
 
 impl FerriteApp {
 
@@ -41,7 +42,8 @@ impl FerriteApp {
 
         for path in paths {
             info!("Opening file: {}", path.display());
-            match self.state.open_file(path.clone()) {
+            let time = self.get_app_time();
+            match self.state.open_file(path.clone(), Some(time)) {
                 Ok(tab_index) => {
                     success_count += 1;
                     self.pending_cjk_check = true;
@@ -111,6 +113,14 @@ impl FerriteApp {
                     
                     // Trigger git status refresh after successful save
                     self.request_git_refresh();
+
+                    // Update backlink index incrementally for the saved file
+                    if let Some(path) = self.state.active_tab().and_then(|t| t.path.clone()) {
+                        if self.state.backlink_index.is_built {
+                            self.state.backlink_index.update_file(&path);
+                        }
+                        self.backlinks_need_refresh = true;
+                    }
                 }
                 Err(e) => {
                     warn!("Failed to save file: {}", e);
@@ -181,6 +191,12 @@ impl FerriteApp {
                     
                     // Trigger git status refresh after successful save
                     self.request_git_refresh();
+
+                    // Update backlink index incrementally and refresh backlinks
+                    if self.state.backlink_index.is_built {
+                        self.state.backlink_index.update_file(&path);
+                    }
+                    self.backlinks_need_refresh = true;
                 }
                 Err(e) => {
                     warn!("Failed to save file: {}", e);
@@ -278,6 +294,9 @@ impl FerriteApp {
     pub(crate) fn handle_close_workspace(&mut self) {
         if self.state.is_workspace_mode() {
             self.state.close_workspace();
+            self.state.backlink_index.clear();
+            self.backlinks_panel.clear();
+            self.backlinks_need_refresh = true;
             let time = self.get_app_time();
             self.state.show_toast("Workspace closed", time, 2.0);
             
@@ -379,7 +398,8 @@ impl FerriteApp {
         let file_path = target.path.clone();
 
         // Open the file (or switch to existing tab)
-        match self.state.open_file(file_path.clone()) {
+        let time = self.get_app_time();
+        match self.state.open_file(file_path.clone(), Some(time)) {
             Ok(_) => {
                 self.pending_cjk_check = true;
                 debug!(
@@ -784,6 +804,78 @@ impl FerriteApp {
         Ok(())
     }
 
+    /// Handle file paths received from secondary Ferrite instances.
+    ///
+    /// When the user double-clicks a file in the OS while Ferrite is already running,
+    /// the second process forwards the path here via the single-instance TCP protocol.
+    /// This opens the file as a new tab and brings the window to the front.
+    pub(crate) fn handle_instance_paths(&mut self, ctx: &egui::Context) {
+        let paths = match &self.instance_listener {
+            Some(listener) => listener.poll(),
+            None => return,
+        };
+
+        if paths.is_empty() {
+            return;
+        }
+
+        info!("Received {} path(s) from secondary instance", paths.len());
+
+        // Bring this window to the front
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+
+        let time = self.get_app_time();
+        let mut opened = 0;
+
+        for path in paths {
+            if path.is_dir() {
+                // Open as workspace
+                info!("Opening workspace from secondary instance: {}", path.display());
+                match self.state.open_workspace(path.clone()) {
+                    Ok(_) => {
+                        let folder_name = path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("folder");
+                        self.state.show_toast(
+                            format!("Opened workspace: {}", folder_name),
+                            time,
+                            2.5,
+                        );
+                        self.force_session_save();
+                    }
+                    Err(e) => {
+                        warn!("Failed to open workspace from secondary instance: {}", e);
+                    }
+                }
+            } else if path.is_file() {
+                // Open as tab
+                match self.state.open_file(path.clone(), Some(time)) {
+                    Ok(tab_index) => {
+                        self.pending_cjk_check = true;
+                        self.check_auto_save_recovery(tab_index);
+                        opened += 1;
+                        debug!("Opened file from secondary instance: {}", path.display());
+                    }
+                    Err(e) => {
+                        warn!("Failed to open file from secondary instance: {}", e);
+                    }
+                }
+            } else {
+                warn!("Path from secondary instance does not exist: {}", path.display());
+            }
+        }
+
+        if opened > 0 {
+            let msg = if opened == 1 {
+                "Opened file from external request".to_string()
+            } else {
+                format!("Opened {} files from external request", opened)
+            };
+            self.state.show_toast(msg, time, 2.5);
+        }
+    }
+
     /// Handle files/folders dropped onto the application window.
     pub(crate) fn handle_dropped_files(&mut self, ctx: &egui::Context) {
         let dropped_files: Vec<std::path::PathBuf> = ctx.input(|i| {
@@ -901,8 +993,9 @@ impl FerriteApp {
         }
 
         // Priority 3: Open document files in tabs
+        let time = self.get_app_time();
         for file in documents {
-            match self.state.open_file(file.clone()) {
+            match self.state.open_file(file.clone(), Some(time)) {
                 Ok(_) => {
                     self.pending_cjk_check = true;
                     debug!("Opened dropped file: {}", file.display());
@@ -989,7 +1082,8 @@ impl FerriteApp {
                 self.state.refresh_workspace();
 
                 // Open the new file in a tab
-                match self.state.open_file(path.clone()) {
+                let time = self.get_app_time();
+                match self.state.open_file(path.clone(), Some(time)) {
                     Ok(_) => {
                         self.pending_cjk_check = true;
                     }
@@ -1113,6 +1207,172 @@ impl FerriteApp {
             Err(e) => {
                 warn!("Failed to delete: {}", e);
                 self.state.show_error(format!("Failed to delete:\n{}", e));
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wikilink Navigation
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Navigate to a wikilink target by resolving it to a file path and opening it.
+    ///
+    /// Resolution order:
+    /// 1. Relative to the current file's directory (with and without `.md`)
+    /// 2. Relative to the workspace root (if in workspace mode)
+    /// 3. If not found, show an error toast
+    pub(crate) fn navigate_wikilink(&mut self, target: &str) {
+        let current_dir = self
+            .state
+            .active_tab()
+            .and_then(|tab| tab.path.as_ref())
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf());
+
+        let workspace_root = self.state.workspace_root().cloned();
+
+        // Build candidate paths
+        let resolved = resolve_wikilink_target(target, current_dir.as_deref(), workspace_root.as_deref());
+
+        match resolved {
+            Some(path) => {
+                info!("Wikilink [[{}]] resolved to: {}", target, path.display());
+                let time = self.get_app_time();
+                match self.state.open_file(path.clone(), Some(time)) {
+                    Ok(tab_index) => {
+                        self.pending_cjk_check = true;
+                        self.check_auto_save_recovery(tab_index);
+                        debug!("Opened wikilink target in tab {}", tab_index);
+                    }
+                    Err(e) => {
+                        warn!("Failed to open wikilink target '{}': {}", target, e);
+                        let time = self.get_app_time();
+                        self.state.show_toast(
+                            format!("Could not open [[{}]]: {}", target, e),
+                            time,
+                            3.0,
+                        );
+                    }
+                }
+            }
+            None => {
+                warn!("Wikilink target '{}' not found", target);
+                let time = self.get_app_time();
+                self.state.show_toast(
+                    format!("[[{}]] — file not found", target),
+                    time,
+                    3.0,
+                );
+            }
+        }
+    }
+}
+
+/// Resolve a wikilink target string to a file path.
+///
+/// Tries these candidates in order:
+/// 1. `{current_dir}/{target}` (exact)
+/// 2. `{current_dir}/{target}.md`
+/// 3. `{workspace_root}/{target}` (exact)
+/// 4. `{workspace_root}/{target}.md`
+/// 5. Recursive search in workspace for `{target}.md` (same-folder-first, shortest path)
+///
+/// Returns the first existing path found, or `None`.
+fn resolve_wikilink_target(
+    target: &str,
+    current_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
+) -> Option<PathBuf> {
+    // Normalize the target: trim whitespace
+    let target = target.trim();
+    if target.is_empty() {
+        return None;
+    }
+
+    // Helper: check exact path and path with .md extension
+    let check_with_md = |dir: &Path| -> Option<PathBuf> {
+        // Exact match first
+        let exact = dir.join(target);
+        if exact.is_file() {
+            return Some(exact);
+        }
+        // With .md extension (only if target doesn't already end with .md)
+        if !target.to_lowercase().ends_with(".md") {
+            let with_md = dir.join(format!("{}.md", target));
+            if with_md.is_file() {
+                return Some(with_md);
+            }
+        }
+        None
+    };
+
+    // 1. Relative to current file's directory
+    if let Some(dir) = current_dir {
+        if let Some(found) = check_with_md(dir) {
+            return Some(found);
+        }
+    }
+
+    // 2. Relative to workspace root
+    if let Some(root) = workspace_root {
+        if let Some(found) = check_with_md(root) {
+            return Some(found);
+        }
+
+        // 3. Recursive search in workspace for matching file
+        // Build the expected filename
+        let filename_md = if target.to_lowercase().ends_with(".md") {
+            target.to_string()
+        } else {
+            format!("{}.md", target)
+        };
+        let filename_lower = filename_md.to_lowercase();
+
+        // Walk the workspace looking for the file
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        collect_matching_files(root, &filename_lower, &mut candidates);
+
+        if !candidates.is_empty() {
+            // Tie-breaking: prefer same folder, then shortest path
+            candidates.sort_by(|a, b| {
+                let a_same_dir = current_dir.map_or(false, |d| a.parent() == Some(d));
+                let b_same_dir = current_dir.map_or(false, |d| b.parent() == Some(d));
+                // Same-folder first
+                b_same_dir.cmp(&a_same_dir)
+                    .then_with(|| {
+                        // Shorter path wins
+                        a.components().count().cmp(&b.components().count())
+                    })
+            });
+            return Some(candidates.into_iter().next().unwrap());
+        }
+    }
+
+    None
+}
+
+/// Recursively collect files matching a given lowercase filename.
+fn collect_matching_files(dir: &Path, filename_lower: &str, results: &mut Vec<PathBuf>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            // Skip hidden directories and common non-content dirs
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with('.') || name == "node_modules" || name == "target" {
+                    continue;
+                }
+            }
+            collect_matching_files(&path, filename_lower, results);
+        } else if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.to_lowercase() == filename_lower {
+                    results.push(path);
+                }
             }
         }
     }

@@ -15,7 +15,7 @@ use crate::editor::{
 use crate::markdown::{
     apply_raw_format, cleanup_rendered_editor_memory, get_structured_file_type, get_tabular_file_type,
     CsvViewer, CsvViewerState, EditorMode, FormattingState, MarkdownEditor, MarkdownFormatCommand,
-    TreeViewer, TreeViewerState,
+    TreeViewer, TreeViewerState, WikilinkContext,
 };
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
@@ -38,6 +38,7 @@ impl FerriteApp {
     ) -> Option<DeferredFormatAction> {
         let zen_mode = self.state.is_zen_mode();
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
+        let mut pending_wikilink_target: Option<String> = None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Tab bar - uses custom wrapping layout for multi-line support
@@ -1085,10 +1086,18 @@ impl FerriteApp {
                             } else {
                                 // Rendered pane - fully editable like the main Rendered mode
                                 // Edits here modify tab.content directly, with proper undo/redo support
+                                // Collect workspace root before mutable borrow
+                                let ws_root = self.state.workspace_root().cloned();
                                 if let Some(tab) = self.state.active_tab_mut() {
                                     // Capture content and cursor before editing for undo support
                                     let content_before = tab.content.clone();
                                     let cursor_before = tab.cursors.primary().head;
+
+                                    // Build wikilink context from current file and workspace
+                                    let wl_ctx = WikilinkContext {
+                                        current_dir: tab.path.as_ref().and_then(|p| p.parent().map(|d| d.to_path_buf())),
+                                        workspace_root: ws_root.clone(),
+                                    };
 
                                     let md_editor_output = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
@@ -1099,6 +1108,7 @@ impl FerriteApp {
                                         .max_line_width(max_line_width)
                                         .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                         .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                        .wikilink_context(wl_ctx)
                                         .id(egui::Id::new("split_preview_rendered"))
                                         .pending_scroll_offset(pending_preview_scroll)
                                         .show(&mut right_ui);
@@ -1135,6 +1145,11 @@ impl FerriteApp {
                                         } else {
                                             tab.selection = None;
                                         }
+                                    }
+
+                                    // Handle wikilink navigation
+                                    if let Some(target) = md_editor_output.wikilink_clicked {
+                                        pending_wikilink_target = Some(target);
                                     }
                                 }
                             }
@@ -1277,6 +1292,8 @@ impl FerriteApp {
                             let zen_max_column_width = self.state.settings.zen_max_column_width;
                             let paragraph_indent = self.state.settings.paragraph_indent;
 
+                            // Collect workspace root before mutable borrow
+                            let ws_root = self.state.workspace_root().cloned();
                             if let Some(tab) = self.state.active_tab_mut() {
                                 // Capture content and cursor before editing for undo support
                                 let content_before = tab.content.clone();
@@ -1285,6 +1302,12 @@ impl FerriteApp {
                                 // Handle scroll sync: check for pending scroll ratio or offset
                                 let pending_offset = tab.pending_scroll_offset.take();
                                 let pending_ratio = tab.pending_scroll_ratio.take();
+
+                                // Build wikilink context from current file and workspace
+                                let wl_ctx = WikilinkContext {
+                                    current_dir: tab.path.as_ref().and_then(|p| p.parent().map(|d| d.to_path_buf())),
+                                    workspace_root: ws_root,
+                                };
 
                                 let editor_output = MarkdownEditor::new(&mut tab.content)
                                     .mode(EditorMode::Rendered)
@@ -1295,6 +1318,7 @@ impl FerriteApp {
                                     .max_line_width(max_line_width) // Apply line width limit
                                     .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                     .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                    .wikilink_context(wl_ctx)
                                     .id(egui::Id::new("main_editor_rendered"))
                                     .scroll_to_line(scroll_to_line)
                                     .pending_scroll_offset(pending_offset)
@@ -1386,6 +1410,11 @@ impl FerriteApp {
                                     // No focused element
                                     tab.selection = None;
                                 }
+
+                                // Handle wikilink navigation
+                                if let Some(target) = editor_output.wikilink_clicked {
+                                    pending_wikilink_target = Some(target);
+                                }
                             }
                         }
                     }
@@ -1415,7 +1444,8 @@ impl FerriteApp {
 
                 // Handle file selection
                 if let Some(file_path) = output.selected_file {
-                    match self.state.open_file(file_path.clone()) {
+                    let time = self.get_app_time();
+                    match self.state.open_file(file_path.clone(), Some(time)) {
                         Ok(_) => {
                             self.pending_cjk_check = true;
                             debug!("Opened file from quick switcher: {}", file_path.display());
@@ -1509,8 +1539,12 @@ impl FerriteApp {
             }
         }
 
-        // Return deferred format action to be handled after editor has captured selection
+        // Handle wikilink navigation (deferred until after UI rendering completes)
+        if let Some(target) = pending_wikilink_target {
+            self.navigate_wikilink(&target);
+        }
 
+        // Return deferred format action to be handled after editor has captured selection
         deferred_format_action
     }
 

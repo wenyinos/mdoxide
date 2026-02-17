@@ -754,6 +754,12 @@ pub enum Language {
     /// Simplified Chinese (简体中文)
     #[serde(rename = "zh-Hans")]
     ChineseSimplified,
+    /// German (Deutsch)
+    #[serde(rename = "de")]
+    German,
+    /// Japanese (日本語)
+    #[serde(rename = "ja")]
+    Japanese,
 }
 
 impl Language {
@@ -762,6 +768,8 @@ impl Language {
         match self {
             Language::English => "en",
             Language::ChineseSimplified => "zh_Hans",
+            Language::German => "de",
+            Language::Japanese => "ja",
         }
     }
 
@@ -770,6 +778,19 @@ impl Language {
         match self {
             Language::English => "English",
             Language::ChineseSimplified => "简体中文",
+            Language::German => "Deutsch",
+            Language::Japanese => "日本語",
+        }
+    }
+
+    /// Latin-only name for use in the language selector dropdown.
+    /// Avoids loading CJK fonts just to render the selector; always legible.
+    pub fn selector_display_name(&self) -> &'static str {
+        match self {
+            Language::English => "English",
+            Language::ChineseSimplified => "Chinese (Simplified)",
+            Language::German => "German",
+            Language::Japanese => "Japanese",
         }
     }
 
@@ -778,6 +799,8 @@ impl Language {
         &[
             Language::English,
             Language::ChineseSimplified,
+            Language::German,
+            Language::Japanese,
         ]
     }
 
@@ -809,6 +832,8 @@ impl Language {
         match primary_lang {
             "en" => Some(Language::English),
             "zh" => Some(Language::ChineseSimplified),
+            "de" => Some(Language::German),
+            "ja" => Some(Language::Japanese),
             _ => None,
         }
     }
@@ -1193,7 +1218,7 @@ pub enum CjkFontPreference {
 }
 
 impl CjkFontPreference {
-    /// Get the display name for the preference.
+    /// Get the display name for the preference (may include native script).
     pub fn display_name(&self) -> &'static str {
         match self {
             CjkFontPreference::Auto => "Auto (System Locale)",
@@ -1201,6 +1226,18 @@ impl CjkFontPreference {
             CjkFontPreference::SimplifiedChinese => "Simplified Chinese (简体中文)",
             CjkFontPreference::TraditionalChinese => "Traditional Chinese (繁體中文)",
             CjkFontPreference::Japanese => "Japanese (日本語)",
+        }
+    }
+
+    /// Latin-only name for use in the CJK preference dropdown.
+    /// Avoids loading CJK fonts just to render the selector; always legible.
+    pub fn selector_display_name(&self) -> &'static str {
+        match self {
+            CjkFontPreference::Auto => "Auto (System Locale)",
+            CjkFontPreference::Korean => "Korean (Hangul)",
+            CjkFontPreference::SimplifiedChinese => "Simplified Chinese",
+            CjkFontPreference::TraditionalChinese => "Traditional Chinese",
+            CjkFontPreference::Japanese => "Japanese",
         }
     }
 
@@ -1287,7 +1324,7 @@ impl ViewMode {
         match self {
             ViewMode::Raw => "📝",
             ViewMode::Rendered => "👁",
-            ViewMode::Split => "⫿",
+            ViewMode::Split => "▌▐", // Left + right half blocks (split panes); widely supported
         }
     }
 
@@ -2528,7 +2565,7 @@ mod tests {
         assert_eq!(ViewMode::Split.label(), "Split");
         assert_eq!(ViewMode::Raw.icon(), "📝");
         assert_eq!(ViewMode::Rendered.icon(), "👁");
-        assert_eq!(ViewMode::Split.icon(), "⫿");
+        assert_eq!(ViewMode::Split.icon(), "▌▐");
     }
 
     #[test]
@@ -3160,8 +3197,6 @@ mod tests {
         // Currently unsupported locales
         assert_eq!(Language::from_locale_code("ko"), None);
         assert_eq!(Language::from_locale_code("fr"), None);
-        assert_eq!(Language::from_locale_code("ja"), None);
-        assert_eq!(Language::from_locale_code("de"), None);
     }
 
     #[test]
@@ -3170,6 +3205,15 @@ mod tests {
         assert_eq!(Language::from_locale_code("zh-CN"), Some(Language::ChineseSimplified));
         assert_eq!(Language::from_locale_code("zh_Hans"), Some(Language::ChineseSimplified));
         assert_eq!(Language::from_locale_code("zh"), Some(Language::ChineseSimplified));
+
+        // German
+        assert_eq!(Language::from_locale_code("de"), Some(Language::German));
+        assert_eq!(Language::from_locale_code("de-DE"), Some(Language::German));
+        assert_eq!(Language::from_locale_code("de_AT"), Some(Language::German));
+
+        // Japanese
+        assert_eq!(Language::from_locale_code("ja"), Some(Language::Japanese));
+        assert_eq!(Language::from_locale_code("ja-JP"), Some(Language::Japanese));
     }
 
     #[test]

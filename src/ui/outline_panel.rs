@@ -6,6 +6,7 @@
 
 use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
+use crate::ui::backlinks_panel::BacklinksPanel;
 use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, Response, RichText, ScrollArea, Sense, Ui, Vec2};
 use rust_i18n::t;
@@ -49,6 +50,8 @@ pub enum OutlinePanelTab {
     Statistics,
     /// Productivity hub (tasks, pomodoro, notes)
     Productivity,
+    /// Backlinks view (files linking to the current file)
+    Backlinks,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +79,8 @@ pub struct OutlinePanelOutput {
     pub detach_productivity: bool,
     /// Whether the productivity panel needs a repaint (e.g. timer active)
     pub needs_repaint: bool,
+    /// File path to navigate to from backlinks panel
+    pub backlink_navigate_to: Option<std::path::PathBuf>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,6 +190,7 @@ impl OutlinePanel {
         doc_stats: Option<&DocumentStats>,
         is_dark: bool,
         productivity_panel: Option<&mut ProductivityPanel>,
+        backlinks_panel: Option<&BacklinksPanel>,
     ) -> OutlinePanelOutput {
         let mut output = OutlinePanelOutput::default();
 
@@ -298,7 +304,25 @@ impl OutlinePanel {
                 ui.add_space(4.0);
 
                 // Render content based on active tab
-                if self.active_tab == OutlinePanelTab::Productivity {
+                if self.active_tab == OutlinePanelTab::Backlinks {
+                    // Backlinks content
+                    if let Some(bl_panel) = backlinks_panel {
+                        let bl_output = bl_panel.show_content(ui, is_dark);
+                        if bl_output.navigate_to.is_some() {
+                            output.backlink_navigate_to = bl_output.navigate_to;
+                        }
+                    } else {
+                        ui.add_space(20.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                RichText::new("Backlinks unavailable")
+                                    .size(11.0)
+                                    .color(muted_color)
+                                    .italics(),
+                            );
+                        });
+                    }
+                } else if self.active_tab == OutlinePanelTab::Productivity {
                     // Productivity Hub content
                     if let Some(panel) = productivity_panel {
                         // Detach button
@@ -490,6 +514,9 @@ impl OutlinePanel {
                                 OutlinePanelTab::Productivity => {
                                     // Already handled above, shouldn't reach here
                                 }
+                                OutlinePanelTab::Backlinks => {
+                                    // Already handled above, shouldn't reach here
+                                }
                             }
                         }
                     }
@@ -667,6 +694,7 @@ impl OutlinePanel {
         let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
             (OutlinePanelTab::Outline, "📑", t!("outline.tab_outline").to_string()),
             (OutlinePanelTab::Statistics, "📊", t!("outline.tab_statistics").to_string()),
+            (OutlinePanelTab::Backlinks, "🔗", "Links".to_string()),
             (OutlinePanelTab::Productivity, "📋", "Hub".to_string()),
         ];
 

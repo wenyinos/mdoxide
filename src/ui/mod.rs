@@ -3,6 +3,7 @@
 //! This module contains reusable UI widgets and components.
 
 mod about;
+mod backlinks_panel;
 mod dialogs;
 mod file_tree;
 mod icons;
@@ -19,6 +20,7 @@ mod view_segment;
 mod window;
 
 pub use about::AboutPanel;
+pub use backlinks_panel::{BacklinksPanel, BacklinksPanelOutput};
 pub use dialogs::{FileOperationDialog, FileOperationResult, GoToLineDialog, GoToLineResult};
 pub use file_tree::{FileTreeContextAction, FileTreePanel};
 pub use icons::{get_app_icon, load_app_logo_texture};
