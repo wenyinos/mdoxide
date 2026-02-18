@@ -4,93 +4,94 @@
 
 # Application metadata
 app:
-  name: ""
+  name: "Ferrite"
 
 # Menu bar items
 menu:
   file:
-    label: ""
-    open: ""
-    save: ""
-    save_as: ""
-    recent: ""
-    export: ""
-    export_html: ""
-    export_clipboard: ""
+    label: "Archivo"
+    open: "Abrir..."
+    save: "Guardar"
+    save_as: "Guardar Como..."
+    recent: "Archivos Recientes"
+    export: "Exportar"
+    export_html: "Exportar a HTML..."
+    export_clipboard: "Copiar como HTML"
   edit:
-    label: ""
+    label: "Editar"
   format:
-    label: ""
+    label: "Formato"
   tools:
-    label: ""
+    label: "Herramientas"
 
 # Toolbar buttons
 
 # View mode labels
 view_mode:
-  raw_desc: ""
+  raw_desc: "Edición de texto con markdown simple"
   rendered_desc: ""
   split_desc: ""
 
 # Status bar
 status:
-  untitled: ""
-  no_file: ""
+  untitled: "Sin título"
+  no_file: "No hay archivo abierto"
 
 # File dialogs
 dialog:
   unsaved_changes:
-    title: ""
-    save: ""
-    dont_save: ""
+    title: "Cambios no guardados"
+    save: "Guardar"
+    dont_save: "No guardes"
   confirm:
-    cancel: ""
-    close: ""
+    cancel: "Cancelar"
+    close: "Cerrar"
   # File operation dialogs
   file:
-    new_file: ""
-    new_folder: ""
-    enter_file_name: ""
-    enter_folder_name: ""
-    hint_file: ""
-    hint_folder: ""
-    create: ""
-    rename: ""
-    enter_new_name: ""
-    exists_error: ""
-    confirm_delete: ""
-    delete_folder_warning: ""
-    delete: ""
-    file: ""
-    folder: ""
-    location: ""
-    delete_confirm: ""
+    new_file: "Nuevo Archivo"
+    new_folder: "Nueva Carpeta"
+    enter_file_name: "Introduce el nombre del archivo:"
+    enter_folder_name: "Introduce el nombre de la carpeta:"
+    hint_file: "nombreDelArchivo.md"
+    hint_folder: "nombreDeLaCarpeta"
+    create: "Crear"
+    rename: "Renombrar"
+    enter_new_name: "Introduce el nuevo nombre:"
+    exists_error: "Ya existe un archivo o carpeta con este nombre"
+    confirm_delete: "Confirmar eliminación"
+    delete_folder_warning: "⚠ Esto eliminará la carpeta y todo su contenido!"
+    delete: "Eliminar"
+    file: "archivo"
+    folder: "carpeta"
+    location: "Ubicación: %{path}"
+    delete_confirm: "¿Seguro que quieres eliminar este %{item_type}?"
   # Go to Line dialog
   go_to_line:
-    title: ""
-    enter_line: ""
-    go: ""
-    range: ""
+    title: "Ir a la línea"
+    enter_line: "Introduzca el número de línea:"
+    go: "Ir"
+    range: "Rango: 1-%{max}"
 
 # Settings panel
 settings:
-  title: ""
-  reset_all: ""
-  reset_tooltip: ""
-  auto_save_hint: ""
-  default_view_hint: ""
+  title: "Ajustes"
+  reset_all: "Restablecer todo"
+  reset_tooltip: "Restablecer todas las configuraciones a los valores predeterminados"
+  auto_save_hint: "Los ajustes se guardan automáticamente"
+  default_view_hint: "Modo de visualización para nuevas pestañas (las pestañas existentes
+    conservan su modo de visualización guardado)"
   font_size:
-    small: ""
-    medium: ""
-    large: ""
+    small: "Pequeño"
+    medium: "Medio"
+    large: "Grande"
   general:
-    theme: ""
-    theme_dark: ""
-    theme_light: ""
-    theme_system: ""
-    restore_session: ""
+    theme: "Tema"
+    theme_dark: "Oscuro"
+    theme_light: "Claro"
+    theme_system: "Sistema"
+    restore_session: "Restaurar sesión anterior al iniciar"
   editor:
-    title: ""
+    title: "Editor"
     font_family: ""
     font_size: ""
     font_inter_desc: ""
