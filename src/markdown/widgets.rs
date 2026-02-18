@@ -211,7 +211,7 @@ impl<'a> EditableHeading<'a> {
             if self.show_level_controls {
                 if ui
                     .small_button("−")
-                    .on_hover_text("Decrease level")
+                    .on_hover_text(t!("widgets.list.decrease_level").to_string())
                     .clicked()
                 {
                     *self.level = decrease_heading_level(*self.level);
@@ -219,7 +219,7 @@ impl<'a> EditableHeading<'a> {
                 }
                 if ui
                     .small_button("+")
-                    .on_hover_text("Increase level")
+                    .on_hover_text(t!("widgets.list.increase_level").to_string())
                     .clicked()
                 {
                     *self.level = increase_heading_level(*self.level);
@@ -587,7 +587,7 @@ impl<'a> EditableList<'a> {
                 }
 
                 // Remove button (if controls enabled)
-                if self.show_controls && ui.small_button("×").on_hover_text("Remove item").clicked()
+                if self.show_controls && ui.small_button("×").on_hover_text(t!("widgets.list.remove_item").to_string()).clicked()
                 {
                     item_to_remove = Some(i);
                 }
@@ -604,7 +604,7 @@ impl<'a> EditableList<'a> {
         if self.show_controls {
             ui.horizontal(|ui| {
                 ui.add_space(self.indent_level as f32 * 20.0);
-                if ui.button("+ Add item").clicked() {
+                if ui.button(t!("widgets.list.add_item").to_string()).clicked() {
                     self.items.push(ListItem::new(""));
                     changed = true;
                 }
@@ -1624,7 +1624,7 @@ impl<'a> EditableTable<'a> {
                                                 control_hover_color,
                                             );
                                         }
-                                        if del_btn.on_hover_text("Delete row").clicked() {
+                                        if del_btn.on_hover_text(t!("widgets.table.delete_row").to_string()).clicked() {
                                             action = Some(TableAction::RemoveRow(row_idx));
                                         }
                                     }
@@ -1669,7 +1669,7 @@ impl<'a> EditableTable<'a> {
                                             control_hover_color,
                                         );
                                     }
-                                    if add_row_btn.on_hover_text("Add a new row").clicked() {
+                                    if add_row_btn.on_hover_text(t!("widgets.table.add_row_tooltip").to_string()).clicked() {
                                         action = Some(TableAction::AddRow);
                                     }
 
@@ -1691,7 +1691,7 @@ impl<'a> EditableTable<'a> {
                                             control_hover_color,
                                         );
                                     }
-                                    if add_col_btn.on_hover_text("Add a new column").clicked() {
+                                    if add_col_btn.on_hover_text(t!("widgets.table.add_column_tooltip").to_string()).clicked() {
                                         action = Some(TableAction::AddColumn);
                                     }
 

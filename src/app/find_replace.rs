@@ -7,6 +7,7 @@ use super::FerriteApp;
 use crate::state::Selection;
 use eframe::egui;
 use log::{debug, warn};
+use rust_i18n::t;
 
 impl FerriteApp {
 
@@ -160,7 +161,7 @@ impl FerriteApp {
                 self.state.ui.find_state.find_matches(&new_content);
                 
                 let time = self.get_app_time();
-                self.state.show_toast("Replaced", time, 1.5);
+                self.state.show_toast(t!("notification.replaced").to_string(), time, 1.5);
                 debug!("Replaced current match");
             }
         }
@@ -206,11 +207,7 @@ impl FerriteApp {
                     
                     let time = self.get_app_time();
                     self.state.show_toast(
-                        format!(
-                            "Replaced {} occurrence{}",
-                            count,
-                            if count == 1 { "" } else { "s" }
-                        ),
+                        t!("notification.replaced_count", count = count, suffix = if count == 1 { "" } else { "s" }).to_string(),
                         time,
                         2.0,
                     );

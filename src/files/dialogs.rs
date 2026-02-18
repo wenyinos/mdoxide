@@ -4,6 +4,7 @@
 //! for opening and saving files, and for opening workspace folders.
 
 use rfd::FileDialog;
+use rust_i18n::t;
 use std::path::PathBuf;
 
 /// File extension filters for supported file types.
@@ -29,7 +30,7 @@ const SUPPORTED_EXTENSIONS: &[&str] = &[
 ///
 /// Returns `Some(PathBuf)` if a folder was selected, `None` if cancelled.
 pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
-    let mut dialog = FileDialog::new().set_title("Open Workspace Folder");
+    let mut dialog = FileDialog::new().set_title(&t!("file_dialog.open_workspace").to_string());
 
     if let Some(dir) = initial_dir {
         dialog = dialog.set_directory(dir);
@@ -45,15 +46,15 @@ pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
 /// Returns a vector of selected file paths. Empty if the dialog was cancelled.
 pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> Vec<PathBuf> {
     let mut dialog = FileDialog::new()
-        .set_title("Open Files")
-        .add_filter("Supported Files", SUPPORTED_EXTENSIONS)
-        .add_filter("Markdown Files", MARKDOWN_EXTENSIONS)
-        .add_filter("Text Files", TEXT_EXTENSIONS)
-        .add_filter("JSON Files", JSON_EXTENSIONS)
-        .add_filter("YAML Files", YAML_EXTENSIONS)
-        .add_filter("TOML Files", TOML_EXTENSIONS)
-        .add_filter("CSV/TSV Files", CSV_EXTENSIONS)
-        .add_filter("All Files", &["*"]);
+        .set_title(&t!("file_dialog.open_files").to_string())
+        .add_filter(&t!("file_dialog.filter.supported").to_string(), SUPPORTED_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.markdown").to_string(), MARKDOWN_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.text").to_string(), TEXT_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.json").to_string(), JSON_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.yaml").to_string(), YAML_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.toml").to_string(), TOML_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.csv_tsv").to_string(), CSV_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.all").to_string(), &["*"]);
 
     if let Some(dir) = initial_dir {
         dialog = dialog.set_directory(dir);
@@ -70,15 +71,15 @@ pub fn save_file_dialog(
     default_name: Option<&str>,
 ) -> Option<PathBuf> {
     let mut dialog = FileDialog::new()
-        .set_title("Save File")
-        .add_filter("Supported Files", SUPPORTED_EXTENSIONS)
-        .add_filter("Markdown Files", MARKDOWN_EXTENSIONS)
-        .add_filter("Text Files", TEXT_EXTENSIONS)
-        .add_filter("JSON Files", JSON_EXTENSIONS)
-        .add_filter("YAML Files", YAML_EXTENSIONS)
-        .add_filter("TOML Files", TOML_EXTENSIONS)
-        .add_filter("CSV/TSV Files", CSV_EXTENSIONS)
-        .add_filter("All Files", &["*"]);
+        .set_title(&t!("file_dialog.save_file").to_string())
+        .add_filter(&t!("file_dialog.filter.supported").to_string(), SUPPORTED_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.markdown").to_string(), MARKDOWN_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.text").to_string(), TEXT_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.json").to_string(), JSON_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.yaml").to_string(), YAML_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.toml").to_string(), TOML_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.csv_tsv").to_string(), CSV_EXTENSIONS)
+        .add_filter(&t!("file_dialog.filter.all").to_string(), &["*"]);
 
     if let Some(dir) = initial_dir {
         dialog = dialog.set_directory(dir);

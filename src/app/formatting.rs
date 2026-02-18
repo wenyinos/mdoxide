@@ -10,6 +10,7 @@ use crate::markdown::{apply_raw_format, insert_or_update_toc, MarkdownFormatComm
 use crate::state::{FileType, PendingAction};
 use eframe::egui;
 use log::{debug, info, warn};
+use rust_i18n::t;
 
 impl FerriteApp {
 
@@ -181,7 +182,7 @@ impl FerriteApp {
         if !is_markdown {
             let time = self.get_app_time();
             self.state
-                .show_toast("TOC only available for Markdown files", time, 2.0);
+                .show_toast(t!("notification.toc_markdown_only").to_string(), time, 2.0);
             return;
         }
 
@@ -214,11 +215,11 @@ impl FerriteApp {
         // Show feedback
         let time = self.get_app_time();
         let msg = if result.was_update {
-            format!("TOC updated ({} headings)", result.heading_count)
+            t!("notification.toc_updated", count = result.heading_count).to_string()
         } else if result.heading_count > 0 {
-            format!("TOC inserted ({} headings)", result.heading_count)
+            t!("notification.toc_inserted", count = result.heading_count).to_string()
         } else {
-            "TOC inserted (no headings found)".to_string()
+            t!("notification.toc_inserted_empty").to_string()
         };
         self.state.show_toast(&msg, time, 2.0);
 
@@ -236,7 +237,7 @@ impl FerriteApp {
 
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast("No document to format", time, 2.0);
+            self.state.show_toast(t!("notification.no_document_format").to_string(), time, 2.0);
             return;
         };
 
@@ -244,7 +245,7 @@ impl FerriteApp {
         if !file_type.is_structured() {
             let time = self.get_app_time();
             self.state
-                .show_toast("Not a structured data file", time, 2.0);
+                .show_toast(t!("notification.not_structured").to_string(), time, 2.0);
             return;
         }
 
@@ -271,13 +272,13 @@ impl FerriteApp {
                             tab.record_edit(old_content, old_cursor);
                         }
                         let time = self.get_app_time();
-                        self.state.show_toast("Document formatted", time, 2.0);
+                        self.state.show_toast(t!("notification.document_formatted").to_string(), time, 2.0);
                         info!("Formatted {} document", file_type.display_name());
                     }
                     Err(e) => {
                         let time = self.get_app_time();
                         self.state
-                            .show_toast(format!("Format failed: {}", e), time, 3.0);
+                            .show_toast(t!("notification.format_failed", error = e.to_string()).to_string(), time, 3.0);
                         warn!("Failed to serialize {}: {}", file_type.display_name(), e);
                     }
                 }
@@ -285,7 +286,7 @@ impl FerriteApp {
             Err(e) => {
                 let time = self.get_app_time();
                 self.state
-                    .show_toast(format!("Parse error: {}", e), time, 3.0);
+                    .show_toast(t!("notification.parse_error", error = e.to_string()).to_string(), time, 3.0);
                 warn!(
                     "Failed to parse {} for formatting: {}",
                     file_type.display_name(),
@@ -302,7 +303,7 @@ impl FerriteApp {
 
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast("No document to validate", time, 2.0);
+            self.state.show_toast(t!("notification.no_document_validate").to_string(), time, 2.0);
             return;
         };
 
@@ -310,7 +311,7 @@ impl FerriteApp {
         if !file_type.is_structured() {
             let time = self.get_app_time();
             self.state
-                .show_toast("Not a structured data file", time, 2.0);
+                .show_toast(t!("notification.not_structured").to_string(), time, 2.0);
             return;
         }
 
@@ -329,7 +330,7 @@ impl FerriteApp {
             Ok(_) => {
                 let time = self.get_app_time();
                 self.state.show_toast(
-                    format!("✔ Valid {} syntax", file_type.display_name()),
+                    t!("notification.valid_syntax", file_type = file_type.display_name()).to_string(),
                     time,
                     2.0,
                 );
@@ -337,7 +338,7 @@ impl FerriteApp {
             }
             Err(e) => {
                 let time = self.get_app_time();
-                self.state.show_toast(format!("✗ {}", e), time, 4.0);
+                self.state.show_toast(t!("notification.invalid_syntax", error = e.to_string()).to_string(), time, 4.0);
                 warn!("{} validation failed: {}", file_type.display_name(), e);
             }
         }

@@ -6,6 +6,7 @@
 //! - AutoSave helper for debounced writes
 //! - Workspace-scoped persistence functions
 
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -369,7 +370,7 @@ pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std
     if safe_new.is_empty() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Note name cannot be empty",
+            t!("productivity.notes.empty_name").to_string(),
         ));
     }
 
@@ -380,7 +381,7 @@ pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std
     if new_path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
-            "A note with that name already exists",
+            t!("productivity.notes.duplicate_name").to_string(),
         ));
     }
 
@@ -595,31 +596,31 @@ impl ProductivityPanel {
 
         // Show message if no workspace
         if self.workspace_root.is_none() {
-            ui.label(eframe::egui::RichText::new("Open a workspace to enable task and note persistence")
+            ui.label(eframe::egui::RichText::new(t!("productivity.workspace_hint").to_string())
                 .weak()
                 .italics());
             ui.separator();
         }
 
         // TASKS SECTION
-        ui.heading("Tasks");
+        ui.heading(t!("productivity.tasks.title").to_string());
 
         // Completed tasks counter
         let completed = self.tasks.iter().filter(|t| t.completed).count();
         let total = self.tasks.len();
         if total > 0 {
-            ui.label(format!("{}/{} completed", completed, total));
+            ui.label(t!("productivity.tasks.progress", completed = completed, total = total).to_string());
         }
 
         // New task input
         ui.horizontal(|ui| {
             let response = ui.add(
                 eframe::egui::TextEdit::singleline(&mut self.new_task_input)
-                    .hint_text("Type task or - [ ] task...")
+                    .hint_text(t!("productivity.tasks.input_hint").to_string())
                     .desired_width(ui.available_width() - 50.0)
             );
 
-            if ui.button("Add").clicked()
+            if ui.button(t!("productivity.tasks.add").to_string()).clicked()
                 || (response.lost_focus() && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
             {
                 self.add_task();
@@ -627,7 +628,7 @@ impl ProductivityPanel {
         });
 
         // Keyboard shortcut hint
-        ui.label(eframe::egui::RichText::new("Tip: Use - [ ] for checkbox, ! or !! for priority").small().weak());
+        ui.label(eframe::egui::RichText::new(t!("productivity.tasks.tip").to_string()).small().weak());
 
         ui.add_space(4.0);
 
@@ -645,14 +646,14 @@ impl ProductivityPanel {
                     ui.horizontal(|ui| {
                         // Move up button (disabled for first item)
                         ui.add_enabled_ui(i > 0, |ui| {
-                            if ui.small_button("^").on_hover_text("Move up").clicked() {
+                            if ui.small_button("^").on_hover_text(t!("productivity.tasks.move_up").to_string()).clicked() {
                                 to_move_up = Some(i);
                             }
                         });
 
                         // Move down button (disabled for last item)
                         ui.add_enabled_ui(i < tasks_len - 1, |ui| {
-                            if ui.small_button("v").on_hover_text("Move down").clicked() {
+                            if ui.small_button("v").on_hover_text(t!("productivity.tasks.move_down").to_string()).clicked() {
                                 to_move_down = Some(i);
                             }
                         });
@@ -705,37 +706,37 @@ impl ProductivityPanel {
                 }
 
                 if self.tasks.is_empty() {
-                    ui.label(eframe::egui::RichText::new("No tasks yet").weak());
+                    ui.label(eframe::egui::RichText::new(t!("productivity.tasks.empty").to_string()).weak());
                 }
             });
 
         ui.separator();
 
         // POMODORO SECTION
-        ui.heading("Pomodoro Timer");
+        ui.heading(t!("productivity.pomodoro.title").to_string());
 
         ui.horizontal(|ui| {
             // Timer display
             let time_text = self.timer.format_remaining();
             let label = if self.timer.is_work() {
-                format!("Work: {}", time_text)
+                t!("productivity.pomodoro.work", time = time_text).to_string()
             } else if self.timer.is_break() {
-                format!("Break: {}", time_text)
+                t!("productivity.pomodoro.break_label", time = time_text).to_string()
             } else {
-                "Ready".to_string()
+                t!("productivity.pomodoro.ready").to_string()
             };
 
             ui.label(eframe::egui::RichText::new(label).size(24.0).strong());
 
             // Cycles counter
             if self.timer.cycles() > 0 {
-                ui.label(format!("Cycles: {}", self.timer.cycles()));
+                ui.label(t!("productivity.pomodoro.cycles", count = self.timer.cycles()).to_string());
             }
         });
 
         ui.horizontal(|ui| {
             if self.timer.is_active() {
-                if ui.button("Stop").clicked() {
+                if ui.button(t!("productivity.pomodoro.stop").to_string()).clicked() {
                     self.timer.stop();
                 }
 
@@ -757,10 +758,10 @@ impl ProductivityPanel {
                     }
                 }
             } else {
-                if ui.button("Start Work (25m)").clicked() {
+                if ui.button(t!("productivity.pomodoro.start_work").to_string()).clicked() {
                     self.timer.start_work();
                 }
-                if ui.button("Start Break (5m)").clicked() {
+                if ui.button(t!("productivity.pomodoro.start_break").to_string()).clicked() {
                     self.timer.start_break();
                 }
             }
@@ -769,20 +770,20 @@ impl ProductivityPanel {
         ui.separator();
 
         // NOTES SECTION
-        ui.heading("Quick Notes");
+        ui.heading(t!("productivity.notes.title").to_string());
 
         // Note selector with rename/delete
         if self.available_notes.len() > 1 || self.workspace_root.is_some() {
             // Rename mode
             if self.renaming_note {
                 ui.horizontal(|ui| {
-                    ui.label("Name:");
+                    ui.label(t!("productivity.notes.name_label").to_string());
                     let response = ui.add(
                         eframe::egui::TextEdit::singleline(&mut self.rename_buffer)
                             .desired_width(ui.available_width() - 80.0)
                     );
 
-                    if ui.small_button("Ok").on_hover_text("Confirm rename").clicked()
+                    if ui.small_button(t!("productivity.notes.ok").to_string()).on_hover_text(t!("productivity.notes.confirm_rename").to_string()).clicked()
                         || (response.lost_focus() && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
                     {
                         let new_name = self.rename_buffer.trim().to_string();
@@ -804,13 +805,13 @@ impl ProductivityPanel {
                         self.renaming_note = false;
                     }
 
-                    if ui.small_button("X").on_hover_text("Cancel rename").clicked() {
+                    if ui.small_button("X").on_hover_text(t!("productivity.notes.cancel_rename").to_string()).clicked() {
                         self.renaming_note = false;
                     }
                 });
             } else {
                 ui.horizontal(|ui| {
-                    ui.label("Note:");
+                    ui.label(t!("productivity.notes.note_label").to_string());
                     eframe::egui::ComboBox::from_id_source("note_selector")
                         .selected_text(&self.current_note)
                         .show_ui(ui, |ui| {
@@ -832,7 +833,7 @@ impl ProductivityPanel {
                         });
 
                     // New note button
-                    if ui.small_button("+").on_hover_text("New note").clicked() {
+                    if ui.small_button("+").on_hover_text(t!("productivity.notes.new_note").to_string()).clicked() {
                         let new_name = format!("note_{}", self.available_notes.len() + 1);
                         self.available_notes.push(new_name.clone());
                         if let Some(ref root) = self.workspace_root {
@@ -845,7 +846,7 @@ impl ProductivityPanel {
                     }
 
                     // Rename button
-                    if ui.small_button("Rn").on_hover_text("Rename note").clicked() {
+                    if ui.small_button("Rn").on_hover_text(t!("productivity.notes.rename_note").to_string()).clicked() {
                         self.rename_buffer = self.current_note.clone();
                         self.renaming_note = true;
                         self.delete_confirming = false;
@@ -854,8 +855,8 @@ impl ProductivityPanel {
                     // Delete button
                     if self.available_notes.len() > 1 {
                         if self.delete_confirming {
-                            if ui.small_button("Confirm?")
-                                .on_hover_text("Click to confirm deletion")
+                            if ui.small_button(t!("productivity.notes.confirm").to_string())
+                                .on_hover_text(t!("productivity.notes.confirm_delete").to_string())
                                 .clicked()
                             {
                                 if let Some(ref root) = self.workspace_root {
@@ -868,7 +869,7 @@ impl ProductivityPanel {
                                 }
                                 self.delete_confirming = false;
                             }
-                        } else if ui.small_button("🗑").on_hover_text("Delete note").clicked() {
+                        } else if ui.small_button("🗑").on_hover_text(t!("productivity.notes.delete_note").to_string()).clicked() {
                             self.delete_confirming = true;
                             self.renaming_note = false;
                         }
@@ -881,7 +882,7 @@ impl ProductivityPanel {
         let response = ui.add(
             eframe::egui::TextEdit::multiline(&mut self.notes_content)
                 .desired_rows(8)
-                .hint_text("Type your notes here...")
+                .hint_text(t!("productivity.notes.input_hint").to_string())
                 .desired_width(f32::INFINITY)
         );
 
@@ -918,7 +919,7 @@ impl ProductivityPanel {
         let was_visible = *visible;
         let mut needs_repaint = false;
 
-        eframe::egui::Window::new("Productivity Hub")
+        eframe::egui::Window::new(t!("productivity.title").to_string())
             .open(visible)
             .default_width(350.0)
             .min_width(250.0)
@@ -930,13 +931,13 @@ impl ProductivityPanel {
                         if ui
                             .add(
                                 eframe::egui::Button::new(
-                                    eframe::egui::RichText::new("Dock")
+                                    eframe::egui::RichText::new(t!("productivity.notes.dock").to_string())
                                         .size(10.0)
                                         .weak(),
                                 )
                                 .frame(false),
                             )
-                            .on_hover_text("Dock into outline panel")
+                            .on_hover_text(t!("productivity.notes.dock_tooltip").to_string())
                             .clicked()
                         {
                             self.dock_requested = true;

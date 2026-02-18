@@ -10,6 +10,7 @@ use crate::files::dialogs::{open_multiple_files_dialog, save_file_dialog};
 use crate::ui::{FileOperationDialog, FileTreeContextAction, SearchNavigationTarget};
 use eframe::egui;
 use log::{debug, info, trace, warn};
+use rust_i18n::t;
 use std::path::{Path, PathBuf};
 
 impl FerriteApp {
@@ -52,7 +53,7 @@ impl FerriteApp {
                 }
                 Err(e) => {
                     warn!("Failed to open file {}: {}", path.display(), e);
-                    last_error = Some(format!("Failed to open {}:\n{}", path.display(), e));
+                    last_error = Some(t!("error.open_file_failed", error = e.to_string()).to_string());
                 }
             }
         }
@@ -61,7 +62,7 @@ impl FerriteApp {
         if file_count > 1 && success_count > 0 {
             let time = self.get_app_time();
             self.state
-                .show_toast(format!("Opened {} files", success_count), time, 2.0);
+                .show_toast(t!("notification.opened_files", count = success_count).to_string(), time, 2.0);
         }
 
         // Show error if any file failed to open
@@ -104,7 +105,7 @@ impl FerriteApp {
                     debug!("File saved successfully");
                     let time = self.get_app_time();
                     self.state
-                        .show_toast(format!("Saved: {}", path_display), time, 3.0);
+                        .show_toast(t!("notification.saved", path = path_display).to_string(), time, 3.0);
                     
                     // Clean up auto-save temp file after successful manual save
                     if let Some(id) = tab_id {
@@ -125,7 +126,7 @@ impl FerriteApp {
                 Err(e) => {
                     warn!("Failed to save file: {}", e);
                     self.state
-                        .show_error(format!("Failed to save file:\n{}", e));
+                        .show_error(t!("error.save_failed", error = e.to_string()).to_string());
                 }
             }
         } else {
@@ -176,7 +177,7 @@ impl FerriteApp {
                 Ok(_) => {
                     let time = self.get_app_time();
                     self.state
-                        .show_toast(format!("Saved: {}", path.display()), time, 3.0);
+                        .show_toast(t!("notification.saved", path = path.display().to_string()).to_string(), time, 3.0);
                     
                     // Clean up auto-save temp files after successful manual save
                     // (both old path and new path, in case they differ)
@@ -201,7 +202,7 @@ impl FerriteApp {
                 Err(e) => {
                     warn!("Failed to save file: {}", e);
                     self.state
-                        .show_error(format!("Failed to save file:\n{}", e));
+                        .show_error(t!("error.save_failed", error = e.to_string()).to_string());
                 }
             }
         } else {
@@ -242,7 +243,7 @@ impl FerriteApp {
                         .and_then(|n| n.to_str())
                         .unwrap_or("folder");
                     self.state
-                        .show_toast(format!("Opened workspace: {}", folder_name), time, 2.5);
+                        .show_toast(t!("notification.opened_workspace", name = folder_name).to_string(), time, 2.5);
                     
                     // Auto-load terminal layout if enabled
                     if self.state.settings.terminal_auto_load_layout {
@@ -280,7 +281,7 @@ impl FerriteApp {
                 Err(e) => {
                     warn!("Failed to open workspace: {}", e);
                     self.state
-                        .show_error(format!("Failed to open workspace:\n{}", e));
+                        .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
                 }
             }
         } else {
@@ -298,7 +299,7 @@ impl FerriteApp {
             self.backlinks_panel.clear();
             self.backlinks_need_refresh = true;
             let time = self.get_app_time();
-            self.state.show_toast("Workspace closed", time, 2.0);
+            self.state.show_toast(t!("notification.workspace_closed").to_string(), time, 2.0);
             
             // Immediately save session to persist the mode change
             self.force_session_save();
@@ -346,16 +347,16 @@ impl FerriteApp {
             self.state.toggle_file_tree();
             let time = self.get_app_time();
             let msg = if self.state.should_show_file_tree() {
-                "File tree shown"
+                t!("notification.file_tree_shown").to_string()
             } else {
-                "File tree hidden"
+                t!("notification.file_tree_hidden").to_string()
             };
             self.state.show_toast(msg, time, 1.5);
         } else {
             // Not in workspace mode - show a hint
             let time = self.get_app_time();
             self.state
-                .show_toast("Open a folder first (📁 button)", time, 2.0);
+                .show_toast(t!("notification.open_folder_first").to_string(), time, 2.0);
         }
     }
 
@@ -367,7 +368,7 @@ impl FerriteApp {
             // Not in workspace mode - show a hint
             let time = self.get_app_time();
             self.state
-                .show_toast("Open a folder first to use quick open", time, 2.0);
+                .show_toast(t!("notification.open_folder_quick_open").to_string(), time, 2.0);
         }
     }
 
@@ -386,7 +387,7 @@ impl FerriteApp {
             // Not in workspace mode - show a hint
             let time = self.get_app_time();
             self.state
-                .show_toast("Open a folder first to use search in files", time, 2.0);
+                .show_toast(t!("notification.open_folder_search").to_string(), time, 2.0);
         }
     }
 
@@ -445,7 +446,7 @@ impl FerriteApp {
             Err(e) => {
                 warn!("Failed to open file from search: {}", e);
                 self.state
-                    .show_error(format!("Failed to open file:\n{}", e));
+                    .show_error(t!("error.open_file_failed", error = e.to_string()).to_string());
             }
         }
     }
@@ -575,26 +576,22 @@ impl FerriteApp {
             // Show appropriate toast
             let msg = if reloaded_count > 0 {
                 if reloaded_count == 1 {
-                    format!(
-                        "Reloaded: {}",
-                        modified_files[0]
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("unknown")
-                    )
-                } else {
-                    format!("{} files reloaded from disk", reloaded_count)
-                }
-            } else if modified_files.len() == 1 {
-                format!(
-                    "File changed externally (unsaved changes): {}",
-                    modified_files[0]
+                    let name = modified_files[0]
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .unwrap_or("unknown")
-                )
+                        .unwrap_or("unknown");
+                    t!("notification.reloaded_single", name = name).to_string()
+                } else {
+                    t!("notification.reloaded_multiple", count = reloaded_count).to_string()
+                }
+            } else if modified_files.len() == 1 {
+                let name = modified_files[0]
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                t!("notification.external_change_single", name = name).to_string()
             } else {
-                format!("{} files changed externally (have unsaved changes)", modified_files.len())
+                t!("notification.external_change_multiple", count = modified_files.len()).to_string()
             };
             self.state.show_toast(msg, time, 3.0);
         }
@@ -843,7 +840,7 @@ impl FerriteApp {
                             .and_then(|n| n.to_str())
                             .unwrap_or("folder");
                         self.state.show_toast(
-                            format!("Opened workspace: {}", folder_name),
+                            t!("notification.opened_workspace", name = folder_name).to_string(),
                             time,
                             2.5,
                         );
@@ -873,9 +870,9 @@ impl FerriteApp {
 
         if opened > 0 {
             let msg = if opened == 1 {
-                "Opened file from external request".to_string()
+                t!("notification.opened_external_single").to_string()
             } else {
-                format!("Opened {} files from external request", opened)
+                t!("notification.opened_external_multiple", count = opened).to_string()
             };
             self.state.show_toast(msg, time, 2.5);
         }
@@ -929,7 +926,7 @@ impl FerriteApp {
                         .and_then(|n| n.to_str())
                         .unwrap_or("folder");
                     self.state
-                        .show_toast(format!("Opened workspace: {}", folder_name), time, 2.5);
+                        .show_toast(t!("notification.opened_workspace", name = folder_name).to_string(), time, 2.5);
 
                     // Auto-load terminal layout if enabled
                     if self.state.settings.terminal_auto_load_layout {
@@ -967,7 +964,7 @@ impl FerriteApp {
                 Err(e) => {
                     warn!("Failed to open workspace: {}", e);
                     self.state
-                        .show_error(format!("Failed to open workspace:\n{}", e));
+                        .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
                 }
             }
             return; // Prioritize folder over files
@@ -982,7 +979,7 @@ impl FerriteApp {
                 }
                 Err(e) => {
                     warn!("Failed to handle dropped image: {}", e);
-                    self.state.show_error(format!("Failed to add image:\n{}", e));
+                    self.state.show_error(t!("error.image_failed", error = e.to_string()).to_string());
                 }
             }
         }
@@ -990,9 +987,9 @@ impl FerriteApp {
         if images_inserted > 0 {
             let time = self.get_app_time();
             let msg = if images_inserted == 1 {
-                "Image added to assets".to_string()
+                t!("notification.image_added").to_string()
             } else {
-                format!("{} images added to assets", images_inserted)
+                t!("notification.images_added", count = images_inserted).to_string()
             };
             self.state.show_toast(msg, time, 2.5);
         }
@@ -1042,7 +1039,7 @@ impl FerriteApp {
                 if let Err(e) = open::that(&folder) {
                     warn!("Failed to reveal in explorer: {}", e);
                     self.state
-                        .show_error(format!("Failed to open explorer:\n{}", e));
+                        .show_error(t!("error.explorer_failed", error = e.to_string()).to_string());
                 } else {
                     debug!("Revealed in explorer: {}", folder.display());
                 }
@@ -1050,7 +1047,7 @@ impl FerriteApp {
             FileTreeContextAction::Refresh => {
                 self.state.refresh_workspace();
                 let time = self.get_app_time();
-                self.state.show_toast("File tree refreshed", time, 1.5);
+                self.state.show_toast(t!("notification.file_tree_refreshed").to_string(), time, 1.5);
             }
         }
     }
@@ -1073,7 +1070,7 @@ impl FerriteApp {
                 if let Err(e) = file.write_all(default_content.as_bytes()) {
                     warn!("Failed to write to new file: {}", e);
                     self.state
-                        .show_error(format!("Failed to write file:\n{}", e));
+                        .show_error(t!("error.write_failed", error = e.to_string()).to_string());
                     return;
                 }
 
@@ -1081,7 +1078,7 @@ impl FerriteApp {
                 let time = self.get_app_time();
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
                 self.state
-                    .show_toast(format!("Created: {}", name), time, 2.0);
+                    .show_toast(t!("notification.created", name = name).to_string(), time, 2.0);
 
                 // Refresh file tree
                 self.state.refresh_workspace();
@@ -1100,7 +1097,7 @@ impl FerriteApp {
             Err(e) => {
                 warn!("Failed to create file: {}", e);
                 self.state
-                    .show_error(format!("Failed to create file:\n{}", e));
+                    .show_error(t!("error.create_file_failed", error = e.to_string()).to_string());
             }
         }
     }
@@ -1116,7 +1113,7 @@ impl FerriteApp {
                     .and_then(|n| n.to_str())
                     .unwrap_or("folder");
                 self.state
-                    .show_toast(format!("Created: {}", name), time, 2.0);
+                    .show_toast(t!("notification.created", name = name).to_string(), time, 2.0);
 
                 // Refresh file tree
                 self.state.refresh_workspace();
@@ -1124,7 +1121,7 @@ impl FerriteApp {
             Err(e) => {
                 warn!("Failed to create folder: {}", e);
                 self.state
-                    .show_error(format!("Failed to create folder:\n{}", e));
+                    .show_error(t!("error.create_folder_failed", error = e.to_string()).to_string());
             }
         }
     }
@@ -1140,7 +1137,7 @@ impl FerriteApp {
                     .and_then(|n| n.to_str())
                     .unwrap_or("item");
                 self.state
-                    .show_toast(format!("Renamed to: {}", new_name), time, 2.0);
+                    .show_toast(t!("notification.renamed_to", name = new_name).to_string(), time, 2.0);
 
                 // Update any open tabs with the old path
                 for i in 0..self.state.tab_count() {
@@ -1157,7 +1154,7 @@ impl FerriteApp {
             }
             Err(e) => {
                 warn!("Failed to rename: {}", e);
-                self.state.show_error(format!("Failed to rename:\n{}", e));
+                self.state.show_error(t!("error.rename_failed", error = e.to_string()).to_string());
             }
         }
     }
@@ -1181,7 +1178,7 @@ impl FerriteApp {
                 let time = self.get_app_time();
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("item");
                 self.state
-                    .show_toast(format!("Deleted: {}", name), time, 2.0);
+                    .show_toast(t!("notification.deleted", name = name).to_string(), time, 2.0);
 
                 // Close any tabs with this path
                 // Collect both index and tab_id for cleanup after closing
@@ -1211,7 +1208,7 @@ impl FerriteApp {
             }
             Err(e) => {
                 warn!("Failed to delete: {}", e);
-                self.state.show_error(format!("Failed to delete:\n{}", e));
+                self.state.show_error(t!("error.delete_failed", error = e.to_string()).to_string());
             }
         }
     }
@@ -1253,7 +1250,7 @@ impl FerriteApp {
                         warn!("Failed to open wikilink target '{}': {}", target, e);
                         let time = self.get_app_time();
                         self.state.show_toast(
-                            format!("Could not open [[{}]]: {}", target, e),
+                            t!("notification.wikilink_open_failed", target = target, error = e.to_string()).to_string(),
                             time,
                             3.0,
                         );
@@ -1264,7 +1261,7 @@ impl FerriteApp {
                 warn!("Wikilink target '{}' not found", target);
                 let time = self.get_app_time();
                 self.state.show_toast(
-                    format!("[[{}]] — file not found", target),
+                    t!("notification.wikilink_not_found", target = target).to_string(),
                     time,
                     3.0,
                 );

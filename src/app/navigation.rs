@@ -13,6 +13,7 @@ use crate::fonts;
 use crate::state::{BacklinkIndex, FileType, PendingAction};
 use eframe::egui;
 use log::{debug, info, warn};
+use rust_i18n::t;
 use std::path::{Path, PathBuf};
 
 impl FerriteApp {
@@ -305,7 +306,7 @@ impl FerriteApp {
                     tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
                     let time = self.get_app_time();
                     self.state.show_toast(
-                        format!("Undo ({} remaining)", undo_count.saturating_sub(1)),
+                        t!("notification.undo", remaining = undo_count.saturating_sub(1)).to_string(),
                         time,
                         1.5,
                     );
@@ -313,7 +314,7 @@ impl FerriteApp {
                 }
             } else {
                 let time = self.get_app_time();
-                self.state.show_toast("Nothing to undo", time, 1.5);
+                self.state.show_toast(t!("notification.nothing_to_undo").to_string(), time, 1.5);
                 debug!("Undo requested but stack is empty");
             }
         }
@@ -340,7 +341,7 @@ impl FerriteApp {
                     tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
                     let time = self.get_app_time();
                     self.state.show_toast(
-                        format!("Redo ({} remaining)", redo_count.saturating_sub(1)),
+                        t!("notification.redo", remaining = redo_count.saturating_sub(1)).to_string(),
                         time,
                         1.5,
                     );
@@ -348,7 +349,7 @@ impl FerriteApp {
                 }
             } else {
                 let time = self.get_app_time();
-                self.state.show_toast("Nothing to redo", time, 1.5);
+                self.state.show_toast(t!("notification.nothing_to_redo").to_string(), time, 1.5);
                 debug!("Redo requested but stack is empty");
             }
         }
@@ -362,9 +363,9 @@ impl FerriteApp {
 
         let time = self.get_app_time();
         if self.state.settings.outline_enabled {
-            self.state.show_toast("Outline panel shown", time, 1.5);
+            self.state.show_toast(t!("notification.outline_shown").to_string(), time, 1.5);
         } else {
-            self.state.show_toast("Outline panel hidden", time, 1.5);
+            self.state.show_toast(t!("notification.outline_hidden").to_string(), time, 1.5);
         }
 
         debug!(
@@ -397,19 +398,19 @@ impl FerriteApp {
         if self.terminal_panel_state.is_visible() && self.state.settings.terminal_auto_load_layout {
             if self.terminal_panel_state.try_load_workspace_layout() {
                 let time = self.get_app_time();
-                self.state.show_toast("Loaded workspace terminal layout", time, 2.0);
+                self.state.show_toast(t!("notification.loaded_terminal_layout").to_string(), time, 2.0);
             }
         }
 
         let time = self.get_app_time();
         if self.terminal_panel_state.is_visible() {
-            self.state.show_toast("Terminal panel shown", time, 1.5);
+            self.state.show_toast(t!("notification.terminal_shown").to_string(), time, 1.5);
         } else {
             // Auto-save when hiding the panel (if enabled)
             if self.state.settings.terminal_auto_save_layout {
                 self.terminal_panel_state.save_workspace_layout();
             }
-            self.state.show_toast("Terminal panel hidden", time, 1.5);
+            self.state.show_toast(t!("notification.terminal_hidden").to_string(), time, 1.5);
         }
 
         debug!(
@@ -445,10 +446,10 @@ impl FerriteApp {
 
         let time = self.get_app_time();
         if self.state.is_zen_mode() {
-            self.state.show_toast("Zen Mode enabled", time, 1.5);
+            self.state.show_toast(t!("notification.zen_enabled").to_string(), time, 1.5);
             info!("Zen Mode enabled");
         } else {
-            self.state.show_toast("Zen Mode disabled", time, 1.5);
+            self.state.show_toast(t!("notification.zen_disabled").to_string(), time, 1.5);
             info!("Zen Mode disabled");
         }
     }
@@ -465,10 +466,10 @@ impl FerriteApp {
 
         let time = self.get_app_time();
         if new_fullscreen {
-            self.state.show_toast("Fullscreen mode (F10 or Esc to exit)", time, 2.0);
+            self.state.show_toast(t!("notification.fullscreen_enter").to_string(), time, 2.0);
             info!("Entered fullscreen mode");
         } else {
-            self.state.show_toast("Exited fullscreen mode", time, 1.5);
+            self.state.show_toast(t!("notification.fullscreen_exit").to_string(), time, 1.5);
             info!("Exited fullscreen mode");
         }
     }
@@ -478,14 +479,14 @@ impl FerriteApp {
         // Check if pipeline feature is enabled
         if !self.state.settings.pipeline_enabled {
             let time = self.get_app_time();
-            self.state.show_toast("Pipeline feature is disabled", time, 2.0);
+            self.state.show_toast(t!("notification.pipeline_disabled").to_string(), time, 2.0);
             return;
         }
 
         // Check if we're in Zen Mode (pipeline hidden in Zen Mode)
         if self.state.is_zen_mode() {
             let time = self.get_app_time();
-            self.state.show_toast("Pipeline panel hidden in Zen Mode", time, 2.0);
+            self.state.show_toast(t!("notification.pipeline_zen").to_string(), time, 2.0);
             return;
         }
 
@@ -497,7 +498,7 @@ impl FerriteApp {
                 .unwrap_or_else(|| "Unknown".to_string());
             let time = self.get_app_time();
             self.state.show_toast(
-                &format!("Pipeline only available for JSON/YAML (current: {})", file_type_name),
+                t!("notification.pipeline_unsupported", file_type = file_type_name).to_string(),
                 time,
                 2.5,
             );
@@ -517,10 +518,10 @@ impl FerriteApp {
         // Show toast after the mutable borrow is released
         let time = self.get_app_time();
         if is_visible {
-            self.state.show_toast("Pipeline panel opened", time, 1.5);
+            self.state.show_toast(t!("notification.pipeline_opened").to_string(), time, 1.5);
             info!("Pipeline panel opened for tab {}", tab_id);
         } else {
-            self.state.show_toast("Pipeline panel closed", time, 1.5);
+            self.state.show_toast(t!("notification.pipeline_closed").to_string(), time, 1.5);
             info!("Pipeline panel closed for tab {}", tab_id);
         }
     }

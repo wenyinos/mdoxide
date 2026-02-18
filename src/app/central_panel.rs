@@ -2035,7 +2035,7 @@ impl FerriteApp {
                     );
 
                     let time = self.get_app_time();
-                    self.state.show_toast("Settings reset to defaults", time, 2.0);
+                    self.state.show_toast(t!("notification.settings_reset").to_string(), time, 2.0);
                 }
             }
             SpecialTabKind::About => {
