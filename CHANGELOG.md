@@ -22,17 +22,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Large File & Performance
 - **Large file detection** - Files >10MB on open show non-blocking performance warning toast
+- **Lazy CSV row parsing** - Large CSV/TSV files (≥1MB) now use byte-offset row indexing instead of parsing all rows into memory. Only visible rows (~200) are parsed on demand with viewport caching. For a 1M-row CSV, reduces additional memory from ~100-200MB to ~8MB. Small files (<1MB) now use cached full parse (previously re-parsed every frame)
 
 #### Window & File Handling
 - **Single-instance protocol** - Double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning new processes; lock file + TCP IPC
 
+#### Installer (Windows MSI)
+- **File associations** - Optional per-extension file type registration (.md, .markdown, .txt, .json, .yaml, .yml, .toml, .csv, .tsv) via OpenWithProgids; adds Ferrite to "Open With" menu and Windows Default Apps settings without overriding existing defaults
+- **Explorer context menu** - Optional "Open with Ferrite" right-click entry for files and "Open Folder with Ferrite" for directories (including folder background)
+- **Add to System PATH** - Optional PATH entry so `ferrite` can be run from any terminal; cleanly removed on uninstall
+- **Desktop shortcut** - Optional desktop shortcut alongside the existing Start Menu shortcut
+- **Feature selection UI** - Installer now uses WixUI_FeatureTree with a customization page where users can toggle each feature group independently
+- **Launch after install** - "Launch Ferrite" checkbox on the installer exit dialog (checked by default)
+
+#### Editing Modes
+- **Vim mode** - Optional Vim-style modal editing with Normal/Insert/Visual modes. Essential Vim commands: hjkl movement, dd (delete line), yy (yank), p (paste), /search, v/V (visual selection). Mode indicator in status bar ([NORMAL]/[INSERT]/[VISUAL]). Toggle in Settings → Editor. Ctrl+ shortcuts still work globally when Vim mode is active.
+
+#### Welcome View
+- **Welcome view on first run** - Welcome tab on first launch with configuration for theme, language, editor settings (word wrap, line numbers, minimap, bracket matching, syntax highlighting), max line width, CJK font preference, and auto-save. Only shown when no CLI paths and no session-restored tabs. Contributed by [@blizzard007dev](https://github.com/blizzard007dev) ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80)).
+
 #### Localization
 - **German and Japanese in Settings** - Deutsch and 日本語 now available in Settings → Appearance → Language (locale files already existed)
 
+### Changed
+
+#### Refactoring
+- **Flowchart modular refactor** - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass.
+
+#### View Mode
+- **View mode bar always visible** - The view mode segmented control (Raw/Split/Rendered) now appears for all editor tabs, not just markdown/structured/tabular files. File types that don't support split view (e.g. `.rs`, `.py`, `.txt`) show a compact two-mode segment (Raw | Rendered). When default view mode is Split and a non-split-capable file is opened, the tab automatically falls back to Raw mode.
+
+#### Window Controls
+- **Window control button redesign** - Close (×), Minimize (–), Maximize/Restore, and Fullscreen buttons are now drawn with crisp manually-painted icons (line segments, no font glyphs), rounded hover backgrounds (4 px radius), and a more compact footprint (36 × 22 px, down from 46 × 28 px). All four buttons now have consistent rounded-rect hover styling.
+- **Close button** - Icon drawn as two diagonal line segments for pixel-accurate rendering; switches to white on red hover.
+- **Maximize button** - Rectangle icon with a thicker top edge (2 px) to suggest a window title bar; restore icon unchanged.
+- **Fullscreen button** - Replaced broken arrow icon (was rendering as ×) with proper corner-bracket icons: expand ⌜⌝⌞⌟ when windowed, compress when in fullscreen.
+- **NE corner resize re-enabled** - Top-right corner (`NorthEast` direction) can now be used to resize the window. The 12 px right margin on the button group keeps the 10 px corner grab zone button-free, so resize and close never conflict. `TITLE_BAR_BUTTON_RIGHT_MARGIN` constant documents the invariant.
+
 ### Fixed
 
+- **Light mode text invisible** - All `RichText::strong()` labels (section headers in Settings, Terminal, Files, About, and other panels) were invisible in light mode. Root cause: egui's `strong_text_color()` returns `widgets.active.fg_stroke.color`, which was set to `Color32::WHITE` for the pressed-button state. This bypasses `override_text_color`, rendering white-on-white text. Fixed by setting `active.fg_stroke` to `colors.text.primary` in the light theme.
 - **Images not displaying in rendered mode** - Markdown `![](path)` images now render in Rendered/Split view; path resolution relative to document and workspace root; PNG, JPEG, GIF, WebP support; graceful placeholders for missing/unsupported files
 - **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - Preload user's preferred CJK font at startup when preference is explicit (non-Auto), so restored tabs render correctly without tofu
+- **CJK fonts load on language switch** - Switching to Chinese or Japanese in the Welcome panel (or Settings) now lazily loads the required CJK font immediately, so translated UI labels render correctly instead of showing squares
 - **Latin-only names in Language and CJK selectors** - Language and CJK Regional Preference dropdowns now use Latin-only display names (e.g. "Chinese (Simplified)", "Japanese") so they render correctly before CJK fonts load
 - **Syntax highlighting per-frame re-parsing** - `highlight_line()` was called every frame before cache check, causing lag on long lines; now checks cache first and only parses on cache miss
 - **Scrollbar position with word wrap** - Scrollbar thumb position now uses cumulative y-offsets from height cache instead of uniform line height; scrollbar accurately reflects position
@@ -666,6 +698,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, flowchart refactoring, window control redesign, 10+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix
@@ -678,6 +711,7 @@ Complete ground-up reimplementation of the text editor:
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
+[0.2.7]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6-hotfix.1...v0.2.7
 [0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6-hotfix.1
 [0.2.6]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.3...v0.2.6
 [0.2.5.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.2...v0.2.5-hotfix.3

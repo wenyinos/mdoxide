@@ -6,8 +6,9 @@
 **Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
 
 #### Bug Fixes & UX
+- [x] **CJK fonts load on language switch** - Switching to Chinese or Japanese in the Welcome panel now lazily loads the required CJK font so translated UI labels render correctly instead of showing squares. Uses `Language::required_cjk_font()` to map language → `CjkFontPreference` and `preload_explicit_cjk_font()` to load only the single needed font (~15-20MB).
 - [x] **Latin-only names in Language and CJK preference selectors** - Language selector (Settings → Appearance) and CJK Regional Preference (Settings → Editor) used native script (e.g. 简体中文, 日本語, 한국어), which rendered as squares when CJK fonts were not yet loaded (lazy loading). Both dropdowns now use Latin-only display names (e.g. "Chinese (Simplified)", "Japanese", "Korean (Hangul)") so they are always legible without preloading CJK fonts.
-- [ ] **View mode bar on unsupported file types** - When default view is Split and user opens a file that doesn't support split (e.g. .rs), the view mode bar is hidden so mode can only be changed via hotkeys. Always show the view mode bar: for non–split-supported files use the two-mode segment (Raw | Rendered) so users can switch without hotkeys.
+- [x] **View mode bar on unsupported file types** - When default view is Split and user opens a file that doesn't support split (e.g. .rs), the view mode bar is hidden so mode can only be changed via hotkeys. Always show the view mode bar: for non–split-supported files use the two-mode segment (Raw | Rendered) so users can switch without hotkeys.
 - [x] **Open file in current window as tab** - Single-instance protocol: double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning a new process. Lock file + TCP IPC for cross-platform support.
 - [x] **Images not displaying in rendered mode** - Markdown image syntax `![](path)` now shows images in rendered/split view; path resolution (relative to document dir + workspace root), image loading/caching via `image` crate (PNG, JPEG, GIF, WebP), scaled rendering with aspect ratio, graceful placeholders for missing/unsupported files.
 - [x] **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - When "Which CJK font to prioritize" is set to a non-Auto value and the app restarts, Chinese can render as tofu in restored tabs because we only lazy-load CJK for the active tab and don't preload the user's preferred font at startup. Fix: preload the single preferred CJK font at startup when preference is explicit (same approach as Auto + system locale), so restored documents render correctly regardless of which tab is active.
@@ -17,6 +18,7 @@
 - [x] **Scrollbar jumping as new wrap info discovered** - `rebuild_height_cache` ran every frame (O(N)) and `total_content_height` changed abruptly as previously-unseen wrapped lines were measured during scrolling. Fixed with a dirty flag (only rebuild when wrap info changes) and smoothed scrollbar height that lerps toward the actual value.
 - [x] **Crash on large selection delete with word wrap** - Selecting a large block of text top-down and pressing Backspace caused an instant crash (`capacity overflow` panic). Root cause: after deletion, `first_visible_line` remained past the now-shorter document due to stale `wrap_info`/`cumulative_heights`, causing `get_visible_line_range()` to return `start > end` and `Vec::with_capacity(end - start)` to underflow. Fixed with 4 layers: (1) `saturating_sub` on the Vec allocation, (2) hard-clamp `first_visible_line` to `total_lines-1` in `clamp_scroll_position`, (3) clamp `cursor_to_char_pos` result to `buffer.len()`, (4) new `truncate_wrap_info()` to trim stale entries instead of full-clearing (avoids flickering).
 - [ ] **Wrapped line scroll stuttering** - Scrolling through documents with many word-wrapped lines still shows micro-stuttering. Likely related to per-line galley layout cost or height cache granularity. Needs further investigation.
+- [x] **Light mode text invisible** - All `RichText::strong()` section headers in Settings, Terminal, and other panels were invisible in light mode. Root cause: egui's `strong_text_color()` returns `widgets.active.fg_stroke.color` (set to WHITE for pressed buttons), bypassing `override_text_color`. Fixed by using primary text color for `active.fg_stroke` in light theme.
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
 #### Markdown Linking
@@ -24,7 +26,7 @@
 - [x] **Backlinks panel** - Panel showing files linking to current file; graph-based indexing for large workspaces; click-to-navigate.
 
 #### Editing Modes
-- [ ] **Vim Mode** - Optional Vim-style modal editing (Normal / Insert / Visual modes).
+- [x] **Vim Mode** - Optional Vim-style modal editing (Normal / Insert / Visual modes). Essential commands: hjkl, dd, yy, p, /search, v/V selection. Mode indicator in status bar. Toggle in Settings → Editor.
 
 #### Check for Updates
 - [x] **Check for Updates button** - Settings → About section with button that checks GitHub Releases API and shows result inline (up-to-date, update available with link, or error). Uses `ureq` (lightweight blocking HTTP) on a background thread with `mpsc` channel for non-blocking UI.
@@ -33,20 +35,25 @@
 
 #### Large File Performance
 - [x] **Large file detection** - Auto-detect files > 10MB on open, show warning toast.
-- [ ] **Lazy CSV row parsing** - Parse rows on-demand using byte offset index for massive CSVs.
+- [x] **Lazy CSV row parsing** - Byte-offset row index (`Vec<u64>`) built on CSV load; only visible rows parsed on demand with viewport caching. Reduces additional memory from ~100-200MB to ~8MB for 1M-row files. Small files (<1MB) now cached instead of re-parsed every frame. Note: files >50MB still bottleneck on initial file I/O and string allocation — memory-mapped I/O is planned for v0.4+.
 
 #### Welcome View
 - [x] **Welcome view on first run** - Welcome tab on first launch with configuration for theme, language, editor settings (word wrap, line numbers, minimap, bracket matching, syntax highlighting), max line width, CJK font preference, and auto-save. Only shown when no CLI paths and no session-restored tabs. Contributed by [@blizzard007dev](https://github.com/blizzard007dev) ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80)).
 
 #### Installer & Localization
-- [ ] **Windows MSI: optional file associations** - During install, ask user whether to set Ferrite as default for .md, .txt, .json, .yaml, .toml (e.g. "Set as default for all" or per-extension); do not force associations without consent. WiX: `wix/main.wxs`.
+- [x] **Windows MSI installer overhaul** - Complete installer rewrite with WixUI_FeatureTree: optional file associations (.md, .txt, .json, .yaml, .toml, .csv) via OpenWithProgids with per-extension toggles, Explorer context menu ("Open with Ferrite" on files and folders), optional add-to-PATH, desktop shortcut, Windows Default Apps registration (ApplicationCapabilities), and launch-after-install checkbox. All features user-selectable; no forced associations.
 - [x] **German and Japanese in Settings** - German (Deutsch) and Japanese (日本語) now available in Settings → Appearance → Language.
+
+#### UI Declutter & Edge Toggles
+- [ ] **Move format toolbar to editor bottom** - Markdown formatting buttons (bold, italic, code, headings, lists, etc.) moved from the ribbon to a collapsible toolbar at the bottom of the raw editor area. Visible in Raw and Split modes for markdown files. Collapse/expand via chevron toggle. Reduces ribbon clutter significantly.
+- [ ] **Side panel toggle strip** - Replaced separate Outline and Productivity Hub ribbon buttons with a thin toggle strip on the right edge of the editor. Click to open/close the side panel (which contains Outline, Statistics, Backlinks, and Productivity Hub tabs). Consistent UX pattern with the bottom format toolbar.
+- [ ] **Keyboard shortcuts preserved** - All existing keyboard shortcuts for formatting, outline toggle, and productivity hub continue to work.
 
 #### Refactoring & Quality
 - [x] **Flowchart Refactoring** - Modularized 3600-line `flowchart.rs` into 12 focused modules: `flowchart/types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`.
-- [ ] **Window Controls** - Native-feel window controls for macOS; further icon polish.
+- [x] **Window Controls** - Redesigned Close, Minimize, Maximize/Restore, and Fullscreen buttons: crisp manually-painted icons (line segments), rounded hover backgrounds (4 px radius), compact size (36 × 22 px). Fixed fullscreen icon (was rendering as ×, now uses proper corner-bracket expand/compress symbols). Re-enabled NE corner resize — 12 px right margin keeps the corner grab zone button-free. `TITLE_BAR_BUTTON_RIGHT_MARGIN` constant documents the sizing invariant in `window.rs`.
 
-#### Executable Code Blocks
+#### Executable Code Blocks *(deferred to v0.2.8+)*
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
 - [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
 - [ ] **Python support** - Detect `python` / `python3` and run with system interpreter.
@@ -80,6 +87,15 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ## Planned Features 
 
 ### v0.2.8 - UI & Accessibility
+
+#### LSP Integration (Language Server Protocol)
+*Plan: [docs/lsp-integration-plan.md](docs/lsp-integration-plan.md)*
+
+- [ ] **Phase 1: Infrastructure** — Auto-detect language server by file extension; spawn server as child process via stdio on workspace open; graceful fallback with dismissable notification if not installed; server lifecycle (start, restart on crash, shutdown on close); LSP toggle per workspace (opt-in, off by default); status bar indicator (ready / indexing / not found).
+- [ ] **Phase 2: Inline diagnostics** — Error/warning squiggles under text with hover tooltip; incremental document sync (changed ranges only); diagnostic count in status bar (e.g. 2 errors, 1 warning).
+- [ ] **Phase 3: Hover & Go to Definition** — Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click).
+- [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
+- [ ] **Settings** — Per-language server path override; all processing local (no network calls).
 
 #### Traditional Menu Bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
 - [ ] **Alt-key menu access** - Traditional File/Edit/View menus toggled via Alt key (VS Code style).
@@ -126,8 +142,8 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
   - Export option to strip layout hints (“Export clean”)
 
 #### 3. Markdown Enhancements
-- [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with auto-completion.
-- [ ] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file.
+- [x] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with click-to-navigate. *(Completed in v0.2.7)*
+- [x] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file with graph-based indexing. *(Completed in v0.2.7)*
 
 #### 4. HTML Rendering (GitHub Parity)
 **Phase 1 – Block Elements**
@@ -141,9 +157,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 #### 5. Platform & Distribution
 **Windows**
 - [ ] Inno Setup installer
-- [ ] File associations (`.md`, `.json`, `.yaml`, `.toml`)
-- [ ] Context menu integration
-- [ ] Optional add-to-PATH
+- [x] File associations (`.md`, `.json`, `.yaml`, `.toml`) — done via MSI installer (v0.2.7)
+- [x] Context menu integration — done via MSI installer (v0.2.7)
+- [x] Optional add-to-PATH — done via MSI installer (v0.2.7)
 **macOS**
 - [ ] App signing & notarization
 
@@ -226,6 +242,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ---
 
 ## Recently Completed ✅
+
+### v0.2.7 (Feb 2026) - Performance, Features & Polish
+Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, German and Japanese localization, flowchart modular refactoring, window control redesign, 10+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
 
 ### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
 **First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.

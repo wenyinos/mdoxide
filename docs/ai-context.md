@@ -174,11 +174,18 @@ Full integrated terminal at `src/terminal/`. Uses `portable-pty` for cross-platf
 
 ## Recently Changed
 
-**v0.2.7 (Feb 2026 - in progress):** Performance, features & polish
-- **Flowchart Modular Refactor (Task 17):** Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass. See `docs/technical/mermaid/flowchart-modular-refactor.md`.
-- **Welcome Page:** First-launch welcome tab for initial configuration (theme, language, editor settings, CJK font, line width, auto-save). Opens via `SpecialTabKind::Welcome` only when no CLI paths and no restored session tabs. Dropdowns use Latin-only `selector_display_name()` to avoid loading CJK fonts at startup.
-- **Special Tabs:** Settings and About/Help now open as tabs (like Cursor/VS Code) instead of modal windows. `TabKind`/`SpecialTabKind` system is extensible for future panels. `show_inline()` methods on `SettingsPanel` and `AboutPanel` render content directly in the tab area.
-- **CRASH FIX:** Large selection delete with word wrap caused `capacity overflow` panic. Stale `wrap_info`/`first_visible_line` after deletion → `Vec::with_capacity(usize underflow)`. Fixed: hard-clamp `first_visible_line` in `clamp_scroll_position`, `saturating_sub` in allocation, clamp `cursor_to_char_pos` to `buffer.len()`, new `truncate_wrap_info()` (trims stale entries without flickering).
+**v0.2.7 (Feb 2026 - finishing):** Performance, features & polish
+- **Wikilinks & Backlinks:** `[[target]]` and `[[target|display]]` syntax with relative path resolution, click-to-navigate, same-folder-first tie-breaker. Backlinks panel showing files linking to current document with graph-based indexing.
+- **Vim Mode:** Optional modal editing (Normal/Insert/Visual) with hjkl, dd, yy, p, /search, v/V selection. Mode indicator in status bar. Toggle in Settings → Editor.
+- **GitHub-style Callouts:** `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]` with color-coded rendering, custom titles, collapsible state.
+- **Welcome Page:** First-launch welcome tab for initial configuration (theme, language, editor settings, CJK font, line width, auto-save). Contributed by [@blizzard007dev](https://github.com/blizzard007dev).
+- **Check for Updates:** Manual button in Settings → About. GitHub Releases API, security-hardened URL validation, rustls TLS.
+- **Large File & CSV:** 10MB+ file detection with warning toast. Lazy CSV row parsing with byte-offset indexing (1M-row CSV: ~8MB vs ~100-200MB).
+- **Single-Instance Protocol:** Double-clicking files opens as tabs in existing window. Lock file + TCP IPC.
+- **MSI Installer Overhaul:** WixUI_FeatureTree with optional file associations, Explorer context menu, add-to-PATH, desktop shortcut, launch-after-install.
+- **Flowchart Modular Refactor:** Split `flowchart.rs` (3600 lines) into 12 focused modules. Zero behavior changes, 83 tests pass.
+- **Window Control Redesign:** Crisp manually-painted icons, rounded hover, compact 36×22 px, re-enabled NE corner resize.
+- **Bug Fixes:** Light mode text invisible, images not rendering, CJK font issues, scrollbar accuracy, crash on large selection delete, syntax highlighting per-frame re-parsing.
 
 **v0.2.6.1 (Feb 2026):** Bug fixes, code signing, terminal & productivity integration
 - Fixed keyboard shortcut conflicts (FormatInlineCode/ToggleTerminal Ctrl+Backtick collision)

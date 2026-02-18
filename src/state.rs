@@ -99,6 +99,11 @@ impl FileType {
         matches!(self, Self::Csv | Self::Tsv)
     }
 
+    /// Check if this file type supports split view (raw + rendered side-by-side).
+    pub fn supports_split(&self) -> bool {
+        self.is_markdown() || self.is_tabular()
+    }
+
     /// Get a display name for this file type.
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -2640,6 +2645,8 @@ pub struct UiState {
     pub zen_mode: bool,
     /// Go to Line dialog state (None = closed)
     pub go_to_line_dialog: Option<crate::ui::GoToLineDialog>,
+    /// Current Vim mode label for status bar display (None = Vim disabled).
+    pub vim_mode_indicator: Option<&'static str>,
 }
 
 /// Actions that may need confirmation before execution.
@@ -3264,13 +3271,18 @@ impl AppState {
         // Create new tab with settings-based defaults and encoding detection
         let auto_save_default = self.settings.auto_save_enabled_default;
         let default_view_mode = self.settings.default_view_mode;
-        let tab = Tab::with_file_bytes_and_settings(
+        let mut tab = Tab::with_file_bytes_and_settings(
             self.next_tab_id,
             path.clone(),
             bytes,
             auto_save_default,
             default_view_mode
         );
+
+        // If default view mode is Split but file type doesn't support it, fall back to Raw
+        if default_view_mode == ViewMode::Split && !tab.file_type().supports_split() {
+            tab.view_mode = ViewMode::Raw;
+        }
 
         let detected_encoding = tab.current_encoding;
         self.next_tab_id += 1;

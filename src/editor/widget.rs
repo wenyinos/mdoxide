@@ -146,6 +146,8 @@ pub struct EditorOutput {
     pub content_height: f32,
     /// Total number of lines in the document.
     pub total_lines: usize,
+    /// Current Vim mode label (None when Vim mode is disabled).
+    pub vim_mode_label: Option<&'static str>,
 }
 
 /// Search match highlight information.
@@ -225,6 +227,8 @@ pub struct EditorWidget<'a> {
     pending_sync_scroll_offset: Option<f32>,
     /// Whether auto-close brackets is enabled.
     auto_close_brackets: bool,
+    /// Whether Vim modal editing is enabled.
+    vim_mode: bool,
 }
 
 impl<'a> EditorWidget<'a> {
@@ -253,6 +257,7 @@ impl<'a> EditorWidget<'a> {
             syntax_theme: None,
             pending_sync_scroll_offset: None,
             auto_close_brackets: false,
+            vim_mode: false,
         }
     }
 
@@ -419,6 +424,13 @@ impl<'a> EditorWidget<'a> {
         self
     }
 
+    /// Set whether Vim modal editing is enabled.
+    #[must_use]
+    pub fn vim_mode(mut self, enabled: bool) -> Self {
+        self.vim_mode = enabled;
+        self
+    }
+
     /// Show the editor widget and return the output.
     ///
     /// This uses the custom FerriteEditor which provides:
@@ -567,6 +579,7 @@ impl<'a> EditorWidget<'a> {
         editor.set_font_family(self.font_family.clone());
         editor.set_wrap_enabled(self.word_wrap);
         editor.set_auto_close_brackets(self.auto_close_brackets);
+        editor.set_vim_mode(self.vim_mode);
 
         // Apply max line width setting (convert character count to pixels)
         // Use approximate character width based on font size
@@ -790,6 +803,9 @@ impl<'a> EditorWidget<'a> {
         // Calculate scroll offset for output (using already-captured metrics)
         let scroll_total_offset = first_visible as f32 * line_height + scroll_offset_y_val;
 
+        // Capture Vim mode label before storing editor back
+        let vim_mode_label = editor.vim_mode().map(|m| m.label());
+
         // Store the editor back
         ui.ctx().data_mut(|data| {
             let storage = data.get_temp_mut_or_default::<FerriteEditorStorage>(egui::Id::NULL);
@@ -811,6 +827,7 @@ impl<'a> EditorWidget<'a> {
             viewport_height: viewport_height_val,
             content_height: content_height_val,
             total_lines,
+            vim_mode_label,
         }
     }
 }

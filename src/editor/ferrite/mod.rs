@@ -20,6 +20,7 @@ mod rendering;
 mod search;
 mod selection;
 mod view;
+pub mod vim;
 
 // Re-export the main types for external use
 pub use buffer::TextBuffer;
@@ -28,3 +29,4 @@ pub use editor::{FerriteEditor, SearchMatch};
 pub use history::{EditHistory, EditOperation};
 pub use line_cache::{HighlightedSegment, LineCache};
 pub use view::ViewState;
+pub use vim::VimState;

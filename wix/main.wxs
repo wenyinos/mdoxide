@@ -2,12 +2,20 @@
 <!--
   Ferrite MSI Installer
   Built with WiX Toolset via cargo-wix
-  
+
   To build: cargo wix
   To customize: edit this file and run cargo wix again
+
+  Feature tree (user can toggle during install):
+    [x] Ferrite Editor          (required)
+        [x] Start Menu Shortcut (default on)
+        [ ] Desktop Shortcut    (default off)
+    [x] File Associations       (default on, per-extension toggles)
+    [ ] Explorer Context Menu   (default off)
+    [ ] Add to System PATH      (default off)
 -->
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
-    
+
     <Product
         Id='*'
         Name='Ferrite'
@@ -15,8 +23,8 @@
         Manufacturer='OlaProeis'
         Language='1033'
         Codepage='1252'
-        Version='0.2.5.2'>
-        
+        Version='0.2.7.0'>
+
         <Package
             Id='*'
             Keywords='Installer'
@@ -27,17 +35,22 @@
             Compressed='yes'
             InstallScope='perMachine'
             SummaryCodepage='1252'/>
-        
+
         <MajorUpgrade
             Schedule='afterInstallInitialize'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
-        
+
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
         <Property Id='DiskPrompt' Value='Ferrite Installation'/>
-        
+
+        <!-- ================================================================
+             Directory Structure
+             ================================================================ -->
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='ProgramFiles64Folder' Name='PFiles'>
                 <Directory Id='APPLICATIONFOLDER' Name='Ferrite'>
+
+                    <!-- Main executable -->
                     <Component Id='ferrite.exe' Guid='*'>
                         <File
                             Id='ferrite.exe'
@@ -46,9 +59,128 @@
                             Source='target\release\ferrite.exe'
                             KeyPath='yes'/>
                     </Component>
+
+                    <!-- ================================================
+                         Add to System PATH (optional)
+                         ================================================ -->
+                    <Component Id='PathEntry' Guid='*'>
+                        <Environment
+                            Id='FerritePath'
+                            Name='PATH'
+                            Value='[APPLICATIONFOLDER]'
+                            Permanent='no'
+                            Part='last'
+                            Action='set'
+                            System='yes'/>
+                        <RegistryValue
+                            Root='HKLM'
+                            Key='Software\OlaProeis\Ferrite'
+                            Name='PathAdded'
+                            Type='integer'
+                            Value='1'
+                            KeyPath='yes'/>
+                    </Component>
+
+                    <!-- ================================================
+                         File Association ProgIds
+                         Each component registers a ProgId and adds the
+                         app to OpenWithProgids for its extensions.
+                         ================================================ -->
+
+                    <!-- Markdown (.md, .markdown) -->
+                    <Component Id='FileAssocMarkdown' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.md' Type='string' Value='Markdown Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.md\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.md\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.md\OpenWithProgids' Name='Ferrite.md' Type='string' Value='' KeyPath='yes'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.markdown\OpenWithProgids' Name='Ferrite.md' Type='string' Value=''/>
+                    </Component>
+
+                    <!-- Plain Text (.txt) -->
+                    <Component Id='FileAssocText' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.txt' Type='string' Value='Text Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.txt\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.txt\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.txt\OpenWithProgids' Name='Ferrite.txt' Type='string' Value='' KeyPath='yes'/>
+                    </Component>
+
+                    <!-- JSON (.json) -->
+                    <Component Id='FileAssocJson' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.json' Type='string' Value='JSON Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.json\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.json\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.json\OpenWithProgids' Name='Ferrite.json' Type='string' Value='' KeyPath='yes'/>
+                    </Component>
+
+                    <!-- YAML (.yaml, .yml) -->
+                    <Component Id='FileAssocYaml' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.yaml' Type='string' Value='YAML Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.yaml\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.yaml\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.yaml\OpenWithProgids' Name='Ferrite.yaml' Type='string' Value='' KeyPath='yes'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.yml\OpenWithProgids' Name='Ferrite.yaml' Type='string' Value=''/>
+                    </Component>
+
+                    <!-- TOML (.toml) -->
+                    <Component Id='FileAssocToml' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.toml' Type='string' Value='TOML Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.toml\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.toml\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.toml\OpenWithProgids' Name='Ferrite.toml' Type='string' Value='' KeyPath='yes'/>
+                    </Component>
+
+                    <!-- CSV (.csv, .tsv) -->
+                    <Component Id='FileAssocCsv' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.csv' Type='string' Value='CSV Document'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.csv\DefaultIcon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Ferrite.csv\shell\open\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.csv\OpenWithProgids' Name='Ferrite.csv' Type='string' Value='' KeyPath='yes'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\.tsv\OpenWithProgids' Name='Ferrite.csv' Type='string' Value=''/>
+                    </Component>
+
+                    <!-- ================================================
+                         Windows Default Apps Registration
+                         Makes Ferrite appear in Settings > Default Apps
+                         ================================================ -->
+                    <Component Id='DefaultAppsRegistration' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities' Name='ApplicationDescription' Type='string' Value='A fast, lightweight text editor for Markdown, JSON, and more'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities' Name='ApplicationName' Type='string' Value='Ferrite'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.md' Type='string' Value='Ferrite.md'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.markdown' Type='string' Value='Ferrite.md'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.txt' Type='string' Value='Ferrite.txt'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.json' Type='string' Value='Ferrite.json'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.yaml' Type='string' Value='Ferrite.yaml'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.yml' Type='string' Value='Ferrite.yaml'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.toml' Type='string' Value='Ferrite.toml'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.csv' Type='string' Value='Ferrite.csv'/>
+                        <RegistryValue Root='HKLM' Key='Software\OlaProeis\Ferrite\Capabilities\FileAssociations' Name='.tsv' Type='string' Value='Ferrite.csv'/>
+                        <RegistryValue Root='HKLM' Key='Software\RegisteredApplications' Name='Ferrite' Type='string' Value='Software\OlaProeis\Ferrite\Capabilities' KeyPath='yes'/>
+                    </Component>
+
+                    <!-- ================================================
+                         Explorer Context Menu (optional)
+                         ================================================ -->
+
+                    <!-- "Open with Ferrite" on any file -->
+                    <Component Id='ContextMenuFiles' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\*\shell\OpenWithFerrite' Type='string' Value='Open with Ferrite'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\*\shell\OpenWithFerrite' Name='Icon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\*\shell\OpenWithFerrite\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;' KeyPath='yes'/>
+                    </Component>
+
+                    <!-- "Open Folder with Ferrite" on directories + background -->
+                    <Component Id='ContextMenuFolders' Guid='*'>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\shell\OpenWithFerrite' Type='string' Value='Open Folder with Ferrite'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\shell\OpenWithFerrite' Name='Icon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\shell\OpenWithFerrite\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%1&quot;'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\Background\shell\OpenWithFerrite' Type='string' Value='Open Folder with Ferrite'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\Background\shell\OpenWithFerrite' Name='Icon' Type='string' Value='[APPLICATIONFOLDER]ferrite.exe,0'/>
+                        <RegistryValue Root='HKLM' Key='Software\Classes\Directory\Background\shell\OpenWithFerrite\command' Type='string' Value='&quot;[APPLICATIONFOLDER]ferrite.exe&quot; &quot;%V&quot;' KeyPath='yes'/>
+                    </Component>
+
                 </Directory>
             </Directory>
-            
+
             <!-- Start Menu Shortcuts -->
             <Directory Id='ProgramMenuFolder' Name='Programs'>
                 <Directory Id='ApplicationProgramsFolder' Name='Ferrite'>
@@ -57,7 +189,7 @@
                             Id='ApplicationStartMenuShortcut'
                             Name='Ferrite'
                             Description='A fast, lightweight text editor'
-                            Target='[#ferrite.exe]'
+                            Target='[APPLICATIONFOLDER]ferrite.exe'
                             WorkingDirectory='APPLICATIONFOLDER'
                             Icon='ProductICO'/>
                         <RemoveFolder Id='CleanUpShortCut' Directory='ApplicationProgramsFolder' On='uninstall'/>
@@ -71,34 +203,168 @@
                     </Component>
                 </Directory>
             </Directory>
+
+            <!-- Desktop Shortcut -->
+            <Directory Id='DesktopFolder' Name='Desktop'>
+                <Component Id='DesktopShortcut' Guid='*'>
+                    <Shortcut
+                        Id='DesktopShortcutLink'
+                        Name='Ferrite'
+                        Description='A fast, lightweight text editor'
+                        Target='[APPLICATIONFOLDER]ferrite.exe'
+                        WorkingDirectory='APPLICATIONFOLDER'
+                        Icon='ProductICO'/>
+                    <RegistryValue
+                        Root='HKCU'
+                        Key='Software\OlaProeis\Ferrite'
+                        Name='DesktopShortcut'
+                        Type='integer'
+                        Value='1'
+                        KeyPath='yes'/>
+                </Component>
+            </Directory>
         </Directory>
-        
+
+        <!-- ================================================================
+             Feature Tree
+             Shown in the CustomizeDlg during install. Users can toggle
+             individual features on/off. Level=1 means on by default,
+             Level=2 means off by default.
+             ================================================================ -->
+
+        <!-- Core application (required, cannot be deselected) -->
         <Feature
             Id='Complete'
-            Title='Ferrite'
-            Description='Installs Ferrite text editor with Start Menu shortcut.'
+            Title='Ferrite Editor'
+            Description='Core Ferrite text editor application.'
             Level='1'
             ConfigurableDirectory='APPLICATIONFOLDER'
             AllowAdvertise='no'
             Absent='disallow'>
-            
+
             <ComponentRef Id='ferrite.exe'/>
-            <ComponentRef Id='ApplicationShortcut'/>
+
+            <Feature
+                Id='StartMenuShortcut'
+                Title='Start Menu Shortcut'
+                Description='Add Ferrite shortcut to the Start Menu.'
+                Level='1'
+                AllowAdvertise='no'>
+                <ComponentRef Id='ApplicationShortcut'/>
+            </Feature>
+
+            <Feature
+                Id='DesktopShortcutFeature'
+                Title='Desktop Shortcut'
+                Description='Add Ferrite shortcut to the Desktop.'
+                Level='2'
+                AllowAdvertise='no'>
+                <ComponentRef Id='DesktopShortcut'/>
+            </Feature>
         </Feature>
-        
+
+        <!-- File type associations (default on, per-extension toggles) -->
+        <Feature
+            Id='FileAssociations'
+            Title='File Associations'
+            Description='Register Ferrite in the "Open With" menu and Windows Default Apps settings for supported file types.'
+            Level='1'
+            AllowAdvertise='no'>
+
+            <ComponentRef Id='DefaultAppsRegistration'/>
+
+            <Feature Id='FileAssocMarkdownFeature' Title='Markdown (.md, .markdown)' Description='Associate Markdown files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocMarkdown'/>
+            </Feature>
+
+            <Feature Id='FileAssocTextFeature' Title='Plain Text (.txt)' Description='Associate plain text files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocText'/>
+            </Feature>
+
+            <Feature Id='FileAssocJsonFeature' Title='JSON (.json)' Description='Associate JSON files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocJson'/>
+            </Feature>
+
+            <Feature Id='FileAssocYamlFeature' Title='YAML (.yaml, .yml)' Description='Associate YAML files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocYaml'/>
+            </Feature>
+
+            <Feature Id='FileAssocTomlFeature' Title='TOML (.toml)' Description='Associate TOML files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocToml'/>
+            </Feature>
+
+            <Feature Id='FileAssocCsvFeature' Title='CSV (.csv, .tsv)' Description='Associate CSV and TSV files with Ferrite.' Level='1' AllowAdvertise='no'>
+                <ComponentRef Id='FileAssocCsv'/>
+            </Feature>
+        </Feature>
+
+        <!-- Explorer right-click context menu (default off) -->
+        <Feature
+            Id='ContextMenu'
+            Title='Explorer Context Menu'
+            Description='Add "Open with Ferrite" to the Windows Explorer right-click menu.'
+            Level='2'
+            AllowAdvertise='no'>
+
+            <Feature Id='ContextMenuFilesFeature' Title='Open with Ferrite (files)' Description='Right-click any file to open it with Ferrite.' Level='2' AllowAdvertise='no'>
+                <ComponentRef Id='ContextMenuFiles'/>
+            </Feature>
+
+            <Feature Id='ContextMenuFoldersFeature' Title='Open Folder with Ferrite (directories)' Description='Right-click a folder to open it as a Ferrite workspace.' Level='2' AllowAdvertise='no'>
+                <ComponentRef Id='ContextMenuFolders'/>
+            </Feature>
+        </Feature>
+
+        <!-- Add install directory to system PATH (default off) -->
+        <Feature
+            Id='AddToPath'
+            Title='Add to System PATH'
+            Description='Add Ferrite to the system PATH so you can run "ferrite" from any terminal.'
+            Level='2'
+            AllowAdvertise='no'>
+            <ComponentRef Id='PathEntry'/>
+        </Feature>
+
+        <!-- ================================================================
+             Properties, Icons, and ARP (Add/Remove Programs) metadata
+             ================================================================ -->
+
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
-        
+
         <Icon Id='ProductICO' SourceFile='assets\icons\windows\app.ico'/>
         <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
         <Property Id='ARPHELPLINK' Value='https://github.com/OlaProeis/Ferrite'/>
-        
+
+        <!-- Launch after install: checkbox on the exit dialog (checked by default) -->
+        <Property Id='WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT' Value='Launch Ferrite'/>
+        <Property Id='WIXUI_EXITDIALOGOPTIONALCHECKBOX' Value='1'/>
+
+        <CustomAction Id='LaunchApplication' FileKey='ferrite.exe' ExeCommand='' Return='asyncNoWait'/>
+
+        <!-- ================================================================
+             Installer UI
+             Uses WixUI_FeatureTree for feature selection with install
+             directory picker. License dialog is skipped via Publish
+             overrides (higher Order takes priority).
+             ================================================================ -->
+
         <UI>
-            <UIRef Id='WixUI_InstallDir'/>
-            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='InstallDirDlg' Order='2'>1</Publish>
-            <Publish Dialog='InstallDirDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='2'>1</Publish>
+            <UIRef Id='WixUI_FeatureTree'/>
+
+            <!-- Skip license dialog: Welcome -> CustomizeDlg directly -->
+            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='CustomizeDlg' Order='5'>1</Publish>
+            <Publish Dialog='CustomizeDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='5'>1</Publish>
+
+            <!-- Launch Ferrite when user clicks Finish with checkbox checked -->
+            <Publish Dialog='ExitDialog' Control='Finish' Event='DoAction' Value='LaunchApplication'>
+                WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed
+            </Publish>
         </UI>
-        
+
         <Property Id='WIXUI_INSTALLDIR' Value='APPLICATIONFOLDER'/>
-        
+
+        <!-- Required by WixUI_FeatureTree even though license dialog is skipped -->
+        <WixVariable Id='WixUILicenseRtf' Value='wix\license.rtf'/>
+
     </Product>
 </Wix>

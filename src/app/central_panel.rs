@@ -36,7 +36,7 @@ use crate::markdown::{
 use crate::preview::SyncScrollState;
 use crate::state::{ FileType, PendingAction, Selection, SpecialTabKind, TabKind };
 use crate::theme::ThemeColors;
-use crate::ui::{ FileOperationResult, GoToLineResult };
+use crate::ui::{ FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction };
 use eframe::egui;
 use log::{ debug, info, trace, warn };
 use rust_i18n::t;
@@ -354,6 +354,7 @@ impl FerriteApp {
                 let theme = self.state.settings.theme;
                 let show_line_numbers = self.state.settings.show_line_numbers;
                 let auto_close_brackets = self.state.settings.auto_close_brackets;
+                let vim_mode = self.state.settings.vim_mode;
 
                 // Get theme colors for line number styling
                 let theme_colors = ThemeColors::from_theme(theme, ui.visuals());
@@ -547,6 +548,24 @@ impl FerriteApp {
                                 .map(|t| (t.content.clone(), t.cursors.primary().head))
                                 .unwrap_or_default();
 
+                            // Format toolbar state (markdown files only, hidden in Zen Mode)
+                            let show_format_toolbar = is_markdown_file && !zen_mode;
+                            let format_toolbar_expanded = self.state.settings.format_toolbar_visible;
+                            let raw_formatting_state = if show_format_toolbar {
+                                self.state.active_tab().map(|tab| {
+                                    get_formatting_state_for(
+                                        &tab.content,
+                                        tab.cursor_position.0,
+                                        tab.cursor_position.1,
+                                    )
+                                })
+                            } else {
+                                None
+                            };
+                            let mut format_bar_toggled = false;
+                            let mut format_bar_action: Option<RibbonAction> = None;
+                            let mut vim_label_for_status: Option<&'static str> = None;
+
                             if let Some(tab) = self.state.active_tab_mut() {
                                 // Update folds if dirty
                                 if folding_enabled && tab.folds_dirty() {
@@ -558,26 +577,48 @@ impl FerriteApp {
                                     );
                                 }
 
+                                // Calculate format toolbar height
+                                let format_bar_height = if show_format_toolbar {
+                                    if format_toolbar_expanded { 32.0 } else { 18.0 }
+                                } else {
+                                    0.0
+                                };
+
                                 // Calculate layout for editor and minimap
                                 let total_rect = ui.available_rect_before_wrap();
-                                let editor_width = if minimap_enabled {
-                                    total_rect.width() - minimap_width
+
+                                // Reserve space for format toolbar at the bottom
+                                let content_rect = egui::Rect::from_min_max(
+                                    total_rect.min,
+                                    egui::pos2(total_rect.max.x, total_rect.max.y - format_bar_height),
+                                );
+                                let format_bar_rect = if show_format_toolbar {
+                                    Some(egui::Rect::from_min_max(
+                                        egui::pos2(total_rect.min.x, total_rect.max.y - format_bar_height),
+                                        total_rect.max,
+                                    ))
                                 } else {
-                                    total_rect.width()
+                                    None
+                                };
+
+                                let editor_width = if minimap_enabled {
+                                    content_rect.width() - minimap_width
+                                } else {
+                                    content_rect.width()
                                 };
 
                                 let editor_rect = egui::Rect::from_min_size(
-                                    total_rect.min,
-                                    egui::vec2(editor_width, total_rect.height())
+                                    content_rect.min,
+                                    egui::vec2(editor_width, content_rect.height())
                                 );
                                 let minimap_rect = if minimap_enabled {
                                     Some(
                                         egui::Rect::from_min_size(
                                             egui::pos2(
-                                                total_rect.min.x + editor_width,
-                                                total_rect.min.y
+                                                content_rect.min.x + editor_width,
+                                                content_rect.min.y
                                             ),
-                                            egui::vec2(minimap_width, total_rect.height())
+                                            egui::vec2(minimap_width, content_rect.height())
                                         )
                                     )
                                 } else {
@@ -613,7 +654,8 @@ impl FerriteApp {
                                         is_dark
                                     )
                                     .syntax_theme(syntax_theme.clone())
-                                    .auto_close_brackets(auto_close_brackets);
+                                    .auto_close_brackets(auto_close_brackets)
+                                    .vim_mode(vim_mode);
 
                                 // Add search highlights if available
                                 if let Some(highlights) = search_highlights.clone() {
@@ -621,6 +663,8 @@ impl FerriteApp {
                                 }
 
                                 let editor_output = editor.show(&mut editor_ui);
+
+                                vim_label_for_status = editor_output.vim_mode_label;
 
                                 // NOTE: Fold toggle is handled internally by FerriteEditor and synced
                                 // back to Tab in widget.rs. We just need to check if a fold was toggled
@@ -759,6 +803,50 @@ impl FerriteApp {
                                             minimap_scroll_to_offset = Some(target_offset);
                                         }
                                     }
+                                }
+
+                                // Format toolbar at bottom of raw editor
+                                if let Some(bar_rect) = format_bar_rect {
+                                    let mut bar_ui = ui.child_ui(
+                                        bar_rect,
+                                        egui::Layout::top_down(egui::Align::LEFT),
+                                        None,
+                                    );
+                                    let toolbar_output = FormatToolbar::show(
+                                        &mut bar_ui,
+                                        format_toolbar_expanded,
+                                        raw_formatting_state.as_ref(),
+                                        true,
+                                        is_dark,
+                                    );
+                                    if toolbar_output.toggle_visibility {
+                                        format_bar_toggled = true;
+                                    }
+                                    if toolbar_output.action.is_some() {
+                                        format_bar_action = toolbar_output.action;
+                                    }
+                                }
+                            }
+
+                            // Update Vim mode indicator (after tab borrow ends)
+                            self.state.ui.vim_mode_indicator = vim_label_for_status;
+
+                            // Handle format toolbar toggle (after mutable borrow ends)
+                            if format_bar_toggled {
+                                self.state.settings.format_toolbar_visible = !self.state.settings.format_toolbar_visible;
+                                self.state.mark_settings_dirty();
+                            }
+
+                            // Handle format toolbar actions
+                            if let Some(action) = format_bar_action {
+                                match action {
+                                    RibbonAction::Format(cmd) => {
+                                        self.handle_format_command(ctx, cmd);
+                                    }
+                                    RibbonAction::InsertToc => {
+                                        self.handle_insert_toc();
+                                    }
+                                    _ => {}
                                 }
                             }
 
@@ -966,6 +1054,8 @@ impl FerriteApp {
                                     None
                                 };
 
+                                let mut split_vim_label: Option<&'static str> = None;
+
                                 // Track scroll outputs from both panes
                                 let mut editor_scroll_offset: Option<f32> = None;
                                 let mut editor_content_height: Option<f32> = None;
@@ -984,13 +1074,47 @@ impl FerriteApp {
                                     .map(|t| (t.content.clone(), t.cursors.primary().head))
                                     .unwrap_or_default();
 
+                                // Format toolbar state for split view (markdown only)
+                                let show_format_toolbar_split = is_markdown_file_split && !zen_mode;
+                                let format_toolbar_expanded_split = self.state.settings.format_toolbar_visible;
+                                let split_formatting_state = if show_format_toolbar_split {
+                                    self.state.active_tab().map(|tab| {
+                                        get_formatting_state_for(
+                                            &tab.content,
+                                            tab.cursor_position.0,
+                                            tab.cursor_position.1,
+                                        )
+                                    })
+                                } else {
+                                    None
+                                };
+                                let mut format_bar_toggled_split = false;
+                                let mut format_bar_action_split: Option<RibbonAction> = None;
+
+                                // Calculate format toolbar height for split view
+                                let format_bar_height_split = if show_format_toolbar_split {
+                                    if format_toolbar_expanded_split { 32.0 } else { 18.0 }
+                                } else {
+                                    0.0
+                                };
+
                                 // Calculate explicit rectangles for split view layout
                                 // Layout: [Editor] [Minimap] [Splitter] [Preview]
+                                //         [Format Toolbar (bottom of left pane)]
                                 let total_rect = ui.available_rect_before_wrap();
+                                let left_editor_height = total_rect.height() - format_bar_height_split;
                                 let left_rect = egui::Rect::from_min_size(
                                     total_rect.min,
-                                    egui::vec2(left_width, total_rect.height())
+                                    egui::vec2(left_width, left_editor_height)
                                 );
+                                let split_format_bar_rect = if show_format_toolbar_split {
+                                    Some(egui::Rect::from_min_size(
+                                        egui::pos2(total_rect.min.x, total_rect.min.y + left_editor_height),
+                                        egui::vec2(left_width, format_bar_height_split),
+                                    ))
+                                } else {
+                                    None
+                                };
                                 let minimap_rect = if minimap_enabled {
                                     Some(
                                         egui::Rect::from_min_size(
@@ -1065,6 +1189,7 @@ impl FerriteApp {
                                         )
                                         .syntax_theme(syntax_theme.clone())
                                         .auto_close_brackets(auto_close_brackets)
+                                        .vim_mode(vim_mode)
                                         .pending_sync_scroll_offset(pending_editor_scroll);
 
                                     // Add search highlights if available
@@ -1073,6 +1198,8 @@ impl FerriteApp {
                                     }
 
                                     let editor_output = editor.show(&mut left_ui);
+
+                                    split_vim_label = editor_output.vim_mode_label;
 
                                     // Capture scroll metrics for sync scrolling
                                     editor_scroll_offset = Some(editor_output.scroll_offset);
@@ -1119,6 +1246,9 @@ impl FerriteApp {
                                         editor_output.ime_committed_text.clone();
                                 }
 
+
+                                // Update Vim mode indicator (after tab borrow ends)
+                                self.state.ui.vim_mode_indicator = split_vim_label;
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Minimap (between editor and splitter)
                                 // Uses semantic minimap for markdown, pixel minimap for others
@@ -1199,6 +1329,45 @@ impl FerriteApp {
                                 if let Some(nav) = minimap_nav_request {
                                     self.navigate_to_heading(nav);
                                     ui.ctx().request_repaint();
+                                }
+
+                                // Format toolbar at bottom of left (raw) pane in split view
+                                if let Some(bar_rect) = split_format_bar_rect {
+                                    let mut bar_ui = ui.child_ui(
+                                        bar_rect,
+                                        egui::Layout::top_down(egui::Align::LEFT),
+                                        None,
+                                    );
+                                    let toolbar_output = FormatToolbar::show(
+                                        &mut bar_ui,
+                                        format_toolbar_expanded_split,
+                                        split_formatting_state.as_ref(),
+                                        true,
+                                        is_dark,
+                                    );
+                                    if toolbar_output.toggle_visibility {
+                                        format_bar_toggled_split = true;
+                                    }
+                                    if toolbar_output.action.is_some() {
+                                        format_bar_action_split = toolbar_output.action;
+                                    }
+                                }
+
+                                // Handle format toolbar toggle/actions (split view)
+                                if format_bar_toggled_split {
+                                    self.state.settings.format_toolbar_visible = !self.state.settings.format_toolbar_visible;
+                                    self.state.mark_settings_dirty();
+                                }
+                                if let Some(action) = format_bar_action_split {
+                                    match action {
+                                        RibbonAction::Format(cmd) => {
+                                            self.handle_format_command(ctx, cmd);
+                                        }
+                                        RibbonAction::InsertToc => {
+                                            self.handle_insert_toc();
+                                        }
+                                        _ => {}
+                                    }
                                 }
 
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
@@ -1874,6 +2043,8 @@ impl FerriteApp {
                 self.about_panel.show_inline(ui, is_dark);
             }
             SpecialTabKind::Welcome => {
+                let prev_language = self.state.settings.language;
+
                 let changed = {
                     let settings = &mut self.state.settings;
                     self.welcome_panel.show_inline(ui, settings)
@@ -1883,6 +2054,16 @@ impl FerriteApp {
                     self.theme_manager.set_theme(self.state.settings.theme);
                     self.theme_manager.apply(ui.ctx());
                     self.state.mark_settings_dirty(); // so it persists
+
+                    // Load CJK fonts when switching to a CJK language so UI
+                    // labels rendered via i18n don't show as squares.
+                    if prev_language != self.state.settings.language {
+                        if let Some(cjk_pref) = self.state.settings.language.required_cjk_font() {
+                            crate::fonts::preload_explicit_cjk_font(ui.ctx(), cjk_pref);
+                            info!("Loaded CJK fonts for language: {:?}", self.state.settings.language);
+                        }
+                    }
+
                     ui.ctx().request_repaint();
                 }
             }

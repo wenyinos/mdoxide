@@ -13,51 +13,51 @@
 
 ## Current Task
 
-**Task 18: Implement native macOS window controls and icon polish**
+**Task 29: Always show view mode bar for all editor tabs**
 - **Priority**: Medium
 - **Dependencies**: None
 - **Status**: Pending
-- **Task Master ID**: 18
-- **Complexity**: 4
+- **Task Master ID**: 29
 
 ### Description
-Add macOS traffic-light controls and ensure consistent icons across themes.
+When default view is Split and user opens a file that does not support split view (e.g. .rs), the view mode bar is hidden so mode can only be changed via hotkeys. Always display the view mode bar; for unsupported file types show the two-mode segment (Raw | Rendered).
 
 ### Implementation Details
-1. In `src/ui/window.rs`, configure eframe/egui for native macOS window decoration (close/min/maximize traffic lights)
-2. Verify icons scale correctly in light/dark themes following HIG
-3. Test cross-platform consistency (Windows/Linux should remain unchanged)
+In `src/app/title_bar.rs` the view mode segment is only shown when `current_file_type` is markdown, structured, or tabular (line ~320). Change to always show for `has_editor && !is_special_tab`. For file types that support split (markdown, tabular) use `segment.show()` (3-mode); for structured use `segment.show_two_mode()`; for all other types (e.g. .rs) also use `show_two_mode(ui, current_view_mode, is_dark)` so users can switch to Raw or Rendered from the UI. Optionally in open-file flow: when opening a file that does not support split and `default_view_mode` is Split, set `tab.view_mode` to Raw so initial state is consistent.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/ui/window.rs` | Custom window resize handles, borderless window logic |
-| `src/platform/macos.rs` | macOS-specific code (app delegate, Open With) |
-| `src/ui/icons.rs` | Icon loading for window/taskbar icons |
-| `src/main.rs` | eframe setup, window configuration |
+| `src/app/title_bar.rs` | View mode segment rendering — change visibility condition |
+| `src/ui/view_segment.rs` | View mode segment widget (show / show_two_mode) |
+| `src/state.rs` | FileType, ViewMode, Tab — check file type capabilities |
 
 ### Test Strategy
-1. macOS build - native traffic lights visible
-2. Icons crisp in both light/dark themes
-3. Verify Windows/Linux unchanged
+1. Set default view to Split.
+2. Open a .rs file → view mode bar visible with Raw | Rendered.
+3. Switch to Raw and Rendered via bar.
+4. Open .md file → 3-mode bar (Raw | Split | Rendered) still works.
+5. Hotkey toggle still works for all.
 
 ---
 
 ## Recently Completed (Previous Sessions)
 
+- **Task 26**: Windows MSI installer overhaul (DONE)
+  - Feature tree: file associations, context menu, PATH, desktop shortcut, Default Apps registration
+  - WixUI_FeatureTree with per-extension toggles, launch-after-install checkbox
+  - Technical doc: `docs/technical/platform/msi-installer-features.md`
+
+- **Task 20 + 21**: Vim mode settings toggle, status bar indicator, and core modal state machine (DONE)
+  - Technical doc: `docs/technical/editor/vim-mode.md`
+
+- **Task 19**: Lazy CSV row parsing with byte-offset indexing (DONE)
+- **Task 30**: Light mode text readability fix (DONE)
 - **Task 17**: Flowchart modular refactoring (DONE)
-  - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules
-  - New structure: `flowchart/types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`
-  - Zero behavior changes, all 83 mermaid tests pass
-  - Technical doc: `docs/technical/mermaid/flowchart-modular-refactor.md`
-
 - **Task 27**: Image rendering in rendered/split view (DONE)
-
 - **Task 25**: Single-instance file opening (DONE)
-
 - **Task 16**: Backlinks panel with graph-based indexing (DONE)
-
 - **Task 15**: Wikilinks parsing, resolution, and navigation (DONE)
 
 ---

@@ -3,7 +3,7 @@
 //! This module implements the Welcome panel displayed on first launch,
 //! allowing users to configure theme, language, fonts, and editor preferences.
 
-use crate::config::{CjkFontPreference, Language, MaxLineWidth, Settings, Theme};
+use crate::config::{CjkFontPreference, Language, MaxLineWidth, Settings, Theme, ViewMode};
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
 
@@ -225,6 +225,32 @@ impl WelcomePanel {
                     ) {
                         changed = true;
                     }
+
+                    // ── Default View Mode ───────────────────────────────
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(t!("settings.preview.default_view"))
+                                .strong()
+                                .color(text_color),
+                        );
+                        ui.add_space(8.0);
+                        for mode in ViewMode::all() {
+                            let label = format!("  {} {}  ", mode.icon(), mode.label());
+                            if ui
+                                .selectable_value(&mut settings.default_view_mode, *mode, label)
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        }
+                    });
+                    ui.label(
+                        RichText::new(t!("settings.default_view_hint"))
+                            .weak()
+                            .small()
+                            .color(weak_color),
+                    );
 
                     // ── Line Width ─────────────────────────────────────
                     Self::section_heading(ui, &t!("settings.editor.max_line_width"), text_color);

@@ -146,6 +146,31 @@ for font in EditorFont::all() {
 }
 ```
 
+## CJK Lazy Loading
+
+CJK fonts (~15-20MB each) are loaded on-demand to keep startup fast and memory low.
+
+### Loading Triggers
+
+| Trigger | Function | What it loads |
+|---------|----------|---------------|
+| Document contains CJK text | `load_cjk_for_text()` | Only fonts for detected scripts (Korean/Japanese/Chinese) |
+| System locale is CJK + preference is Auto | `preload_system_locale_cjk_font()` | Single font matching system locale |
+| User set explicit CJK preference (non-Auto) | `preload_explicit_cjk_font()` | Single font matching preference |
+| **Language switched to CJK in Welcome/Settings** | `preload_explicit_cjk_font()` | Single font for the new language |
+
+### Language → Font Mapping
+
+`Language::required_cjk_font()` in `config/settings.rs` maps UI languages to their required CJK font:
+
+```rust
+Language::ChineseSimplified => Some(CjkFontPreference::SimplifiedChinese)
+Language::Japanese => Some(CjkFontPreference::Japanese)
+_ => None  // English, German, etc. don't need CJK fonts
+```
+
+This is used in `central_panel.rs` when the Welcome panel's language dropdown changes. Without this, switching to Chinese/Japanese would show squares for all i18n-translated UI labels until a document with CJK content is opened.
+
 ## Bundled Fonts
 
 | Font | Type | License | Use Case |
