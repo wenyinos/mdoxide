@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lazy CSV row parsing** - Large CSV/TSV files (≥1MB) now use byte-offset row indexing instead of parsing all rows into memory. Only visible rows (~200) are parsed on demand with viewport caching. For a 1M-row CSV, reduces additional memory from ~100-200MB to ~8MB. Small files (<1MB) now use cached full parse (previously re-parsed every frame)
 
 #### Window & File Handling
-- **Single-instance protocol** - Double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning new processes; lock file + TCP IPC
+- **Single-instance protocol** - Double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning new processes; lock file + TCP IPC with background accept thread for instant response
 
 #### Installer (Windows MSI)
 - **File associations** - Optional per-extension file type registration (.md, .markdown, .txt, .json, .yaml, .yml, .toml, .csv, .tsv) via OpenWithProgids; adds Ferrite to "Open With" menu and Windows Default Apps settings without overriding existing defaults
@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Refactoring
 - **Flowchart modular refactor** - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass.
+
+#### Single-Instance Performance
+- **Instant file opening from Explorer** - Redesigned single-instance IPC for near-zero latency. Moved instance check to before config/icon loading so the secondary process exits in <100ms (was 3-5s). Replaced per-frame non-blocking poll with a dedicated background accept thread that wakes the UI immediately via `ctx.request_repaint()`, eliminating idle repaint delays (was up to 500ms). Added explicit `shutdown(Write)` for immediate EOF delivery. End-to-end: <50ms (was 3-10s).
 
 #### View Mode
 - **View mode bar always visible** - The view mode segmented control (Raw/Split/Rendered) now appears for all editor tabs, not just markdown/structured/tabular files. File types that don't support split view (e.g. `.rs`, `.py`, `.txt`) show a compact two-mode segment (Raw | Rendered). When default view mode is Split and a non-split-capable file is opened, the tab automatically falls back to Raw mode.

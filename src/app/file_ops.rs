@@ -811,7 +811,12 @@ impl FerriteApp {
     /// This opens the file as a new tab and brings the window to the front.
     pub(crate) fn handle_instance_paths(&mut self, ctx: &egui::Context) {
         let paths = match &self.instance_listener {
-            Some(listener) => listener.poll(),
+            Some(listener) => {
+                // Ensure the background accept thread can wake us up immediately.
+                // This is cheap (just an Arc clone check) when already set.
+                listener.set_repaint_ctx(ctx.clone());
+                listener.poll()
+            }
             None => return,
         };
 

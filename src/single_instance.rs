@@ -10,25 +10,27 @@
 //!   running instance as plain text.
 //! - **IPC**: The second instance connects to `127.0.0.1:{port}`, sends file
 //!   paths as UTF-8 lines (one path per line), then closes the connection.
-//! - **Polling**: The primary instance polls the TCP listener each frame
-//!   (non-blocking) and opens received paths as tabs.
+//! - **Background thread**: The primary instance runs a blocking accept loop on
+//!   a background thread. Received paths are sent to the UI via a channel, and
+//!   the UI thread is woken immediately via `ctx.request_repaint()`.
 
 use crate::config::get_config_dir;
 use log::{debug, error, info, warn};
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;
+use std::sync::{mpsc, Arc, Mutex};
 
 /// Name of the lock file stored in the config directory.
 const LOCK_FILE_NAME: &str = "instance.lock";
 
 /// Timeout for connecting to the existing instance (milliseconds).
-const CONNECT_TIMEOUT_MS: u64 = 1000;
+const CONNECT_TIMEOUT_MS: u64 = 500;
 
 /// Attempt to become the primary instance, or forward paths to the existing one.
 ///
-/// Returns `Ok(Some(listener))` if this process should become the primary instance.
-/// Returns `Ok(None)` if paths were forwarded to an existing instance and we should exit.
+/// Returns `Some(listener)` if this process should become the primary instance.
+/// Returns `None` if paths were forwarded to an existing instance and we should exit.
 pub fn try_acquire_instance(paths: &[PathBuf]) -> Option<SingleInstanceListener> {
     let lock_path = match get_lock_file_path() {
         Some(p) => p,
@@ -42,15 +44,10 @@ pub fn try_acquire_instance(paths: &[PathBuf]) -> Option<SingleInstanceListener>
     if let Some(port) = read_lock_port(&lock_path) {
         // Try to connect to the existing instance
         if try_forward_paths(port, paths) {
-            info!(
-                "Forwarded {} path(s) to existing Ferrite instance on port {}",
-                paths.len(),
-                port
-            );
+            // Don't log here — logger may not be initialized yet (early check in main)
             return None; // Signal caller to exit
         }
         // Connection failed — the old instance is dead. Clean up stale lock.
-        debug!("Stale lock file detected (port {} unreachable), taking over", port);
         let _ = std::fs::remove_file(&lock_path);
     }
 
@@ -64,34 +61,97 @@ fn create_listener() -> Option<SingleInstanceListener> {
         Ok(l) => l,
         Err(e) => {
             error!("Failed to bind single-instance listener: {}", e);
-            // Return a dummy listener that never accepts (best-effort: allow app to run)
-            return Some(SingleInstanceListener { listener: None });
+            return Some(SingleInstanceListener::empty());
         }
     };
-
-    // Set non-blocking so polling in the update loop doesn't stall the UI
-    if let Err(e) = listener.set_nonblocking(true) {
-        warn!("Failed to set listener to non-blocking: {}", e);
-    }
 
     let port = match listener.local_addr() {
         Ok(addr) => addr.port(),
         Err(e) => {
             error!("Failed to get listener address: {}", e);
-            return Some(SingleInstanceListener { listener: None });
+            return Some(SingleInstanceListener::empty());
         }
     };
 
-    // Write the lock file
     if let Err(e) = write_lock_file(port) {
         warn!("Failed to write instance lock file: {}", e);
-        // Continue anyway — single-instance won't work but app still runs
     }
 
     info!("Single-instance listener started on port {}", port);
+
+    let (tx, rx) = mpsc::channel();
+    let repaint_ctx: Arc<Mutex<Option<egui::Context>>> = Arc::new(Mutex::new(None));
+
     Some(SingleInstanceListener {
-        listener: Some(listener),
+        receiver: rx,
+        repaint_ctx: Arc::clone(&repaint_ctx),
+        _accept_thread: Some(spawn_accept_thread(listener, tx, repaint_ctx)),
     })
+}
+
+/// Spawn a background thread that blocks on `accept()` and reads paths.
+///
+/// Wakes the UI thread immediately via `ctx.request_repaint()` when paths
+/// arrive, bypassing idle repaint delays entirely.
+fn spawn_accept_thread(
+    listener: TcpListener,
+    tx: mpsc::Sender<Vec<PathBuf>>,
+    repaint_ctx: Arc<Mutex<Option<egui::Context>>>,
+) -> std::thread::JoinHandle<()> {
+    let _ = listener.set_nonblocking(false);
+
+    std::thread::Builder::new()
+        .name("single-instance-accept".into())
+        .spawn(move || {
+            loop {
+                match listener.accept() {
+                    Ok((stream, _addr)) => {
+                        let paths = read_paths_from_stream(stream);
+                        if !paths.is_empty() {
+                            if tx.send(paths).is_err() {
+                                break;
+                            }
+                            // Wake the UI thread immediately so it drains the channel
+                            if let Ok(guard) = repaint_ctx.lock() {
+                                if let Some(ctx) = guard.as_ref() {
+                                    ctx.request_repaint();
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("Accept thread error: {}", e);
+                        break;
+                    }
+                }
+            }
+        })
+        .expect("Failed to spawn single-instance accept thread")
+}
+
+/// Read file paths from an accepted TCP stream.
+///
+/// Uses a short read timeout since all data arrives instantly on localhost.
+fn read_paths_from_stream(stream: TcpStream) -> Vec<PathBuf> {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
+
+    let mut paths = Vec::new();
+    let reader = BufReader::new(stream);
+
+    for line in reader.lines() {
+        match line {
+            Ok(line) => {
+                let trimmed = line.trim().to_string();
+                if trimmed.is_empty() || trimmed == "__FOCUS__" {
+                    continue;
+                }
+                paths.push(PathBuf::from(trimmed));
+            }
+            Err(_) => break,
+        }
+    }
+
+    paths
 }
 
 /// Read the port number from the lock file.
@@ -115,10 +175,8 @@ fn try_forward_paths(port: u16, paths: &[PathBuf]) -> bool {
         Err(_) => return false,
     };
 
-    // Set a write timeout to avoid blocking forever
     let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
 
-    // Send each path as a line
     for path in paths {
         let line = format!("{}\n", path.display());
         if stream.write_all(line.as_bytes()).is_err() {
@@ -126,16 +184,14 @@ fn try_forward_paths(port: u16, paths: &[PathBuf]) -> bool {
         }
     }
 
-    // If no paths, still send a signal so the existing instance focuses its window
     if paths.is_empty() {
-        // Send an empty "focus" signal
         if stream.write_all(b"__FOCUS__\n").is_err() {
             return false;
         }
     }
 
-    // Flush and close
     let _ = stream.flush();
+    let _ = stream.shutdown(Shutdown::Write);
     true
 }
 
@@ -145,7 +201,6 @@ fn write_lock_file(port: u16) -> std::io::Result<()> {
         std::io::Error::new(std::io::ErrorKind::NotFound, "Config dir not available")
     })?;
 
-    // Ensure parent directory exists
     if let Some(parent) = lock_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -162,63 +217,44 @@ fn get_lock_file_path() -> Option<PathBuf> {
 // SingleInstanceListener — lives in the primary instance
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Listener that accepts incoming file-open requests from secondary instances.
+/// Receives file-open requests from secondary instances via a background thread.
 ///
-/// Stored in [`FerriteApp`] and polled every frame in the `update()` loop.
+/// The background thread blocks on TCP `accept()` and reads paths immediately.
+/// The UI thread drains the channel each frame (non-blocking).
+/// An egui repaint context can be provided so the background thread wakes the
+/// UI instantly when paths arrive, bypassing idle repaint delays.
 pub struct SingleInstanceListener {
-    listener: Option<TcpListener>,
+    receiver: mpsc::Receiver<Vec<PathBuf>>,
+    repaint_ctx: Arc<Mutex<Option<egui::Context>>>,
+    _accept_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl SingleInstanceListener {
-    /// Poll for incoming connections and return any file paths received.
-    ///
-    /// This is non-blocking — returns an empty `Vec` if no connections are pending.
-    pub fn poll(&self) -> Vec<PathBuf> {
-        let listener = match &self.listener {
-            Some(l) => l,
-            None => return Vec::new(),
-        };
-
-        let mut paths = Vec::new();
-
-        // Accept all pending connections (non-blocking)
-        loop {
-            match listener.accept() {
-                Ok((stream, addr)) => {
-                    debug!("Single-instance connection from {}", addr);
-                    // Set a read timeout to prevent hangs from misbehaving clients
-                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
-
-                    let reader = BufReader::new(stream);
-                    for line in reader.lines() {
-                        match line {
-                            Ok(line) => {
-                                let trimmed = line.trim().to_string();
-                                if trimmed.is_empty() || trimmed == "__FOCUS__" {
-                                    continue;
-                                }
-                                let path = PathBuf::from(&trimmed);
-                                debug!("Received path from secondary instance: {}", path.display());
-                                paths.push(path);
-                            }
-                            Err(e) => {
-                                debug!("Error reading from secondary instance: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    break; // No more pending connections
-                }
-                Err(e) => {
-                    debug!("Error accepting single-instance connection: {}", e);
-                    break;
-                }
-            }
+    /// Create a dummy listener that never receives anything.
+    fn empty() -> Self {
+        let (_tx, rx) = mpsc::channel();
+        Self {
+            receiver: rx,
+            repaint_ctx: Arc::new(Mutex::new(None)),
+            _accept_thread: None,
         }
+    }
 
-        paths
+    /// Provide the egui context so the background thread can wake the UI
+    /// immediately when paths arrive. Call once after the egui context is available.
+    pub fn set_repaint_ctx(&self, ctx: egui::Context) {
+        if let Ok(mut guard) = self.repaint_ctx.lock() {
+            *guard = Some(ctx);
+        }
+    }
+
+    /// Drain all pending paths from the background thread (non-blocking).
+    pub fn poll(&self) -> Vec<PathBuf> {
+        let mut all_paths = Vec::new();
+        while let Ok(paths) = self.receiver.try_recv() {
+            all_paths.extend(paths);
+        }
+        all_paths
     }
 }
 
@@ -240,7 +276,6 @@ mod tests {
 
     #[test]
     fn test_lock_file_roundtrip() {
-        // Verify port parsing
         let port_str = "12345";
         let port: u16 = port_str.trim().parse().unwrap();
         assert_eq!(port, 12345);
@@ -248,7 +283,6 @@ mod tests {
 
     #[test]
     fn test_forward_to_nonexistent_port_returns_false() {
-        // Attempting to forward to a port with no listener should fail gracefully
         let result = try_forward_paths(1, &[PathBuf::from("test.md")]);
         assert!(!result);
     }
