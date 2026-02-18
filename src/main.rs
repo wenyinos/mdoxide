@@ -161,12 +161,6 @@ fn parse_log_level(s: &str) -> Result<LogLevel, String> {
 const APP_NAME: &str = "Ferrite";
 
 fn main() -> eframe::Result<()> {
-    // Set up Ctrl+C handler to prevent the app from closing when running from console.
-    // We handle Ctrl+C internally in the integrated terminal.
-    let _ = ctrlc::set_handler(|| {
-        log::debug!("Ctrl+C received in console, ignoring to prevent app exit");
-    });
-
     // Initialize macOS app delegate FIRST, before anything else
     // This must happen very early to catch Apple Events for "Open With" functionality
     #[cfg(target_os = "macos")]
@@ -174,6 +168,31 @@ fn main() -> eframe::Result<()> {
 
     // Parse CLI arguments first (before logging, so --help/--version work without config)
     let cli = Cli::parse();
+
+    // Combine CLI paths with any paths received via macOS Apple Events ("Open With")
+    let mut initial_paths = cli.paths;
+    let apple_event_paths = platform::get_open_file_paths();
+    if !apple_event_paths.is_empty() {
+        initial_paths.extend(apple_event_paths);
+    }
+
+    // Single-instance check EARLY — before heavy initialization (config, icons, logging).
+    // When the user double-clicks a file while Ferrite is already running, the secondary
+    // process should forward paths and exit as fast as possible (<100ms).
+    let instance_listener = match single_instance::try_acquire_instance(&initial_paths) {
+        Some(listener) => listener,
+        None => {
+            // Paths were forwarded to the existing instance — exit cleanly.
+            // No logging here since logger isn't initialized yet.
+            return Ok(());
+        }
+    };
+
+    // Set up Ctrl+C handler to prevent the app from closing when running from console.
+    // We handle Ctrl+C internally in the integrated terminal.
+    let _ = ctrlc::set_handler(|| {
+        log::debug!("Ctrl+C received in console, ignoring to prevent app exit");
+    });
 
     // Load settings to get configuration (including log level and language)
     let settings = load_config();
@@ -190,7 +209,7 @@ fn main() -> eframe::Result<()> {
     info!("Starting {}", APP_NAME);
     log_memory("After logging init");
     info!("Language: {} ({})", settings.language.native_name(), settings.language.locale_code());
-    info!("i18n initialized: {}", t!("app.name")); // Test i18n system
+    info!("i18n initialized: {}", t!("app.name"));
     info!("Log level: {} (source: {})", effective_log_level.display_name(), if
         cli.log_level.is_some()
     {
@@ -199,9 +218,8 @@ fn main() -> eframe::Result<()> {
         "config"
     });
 
-    // Log CLI paths if provided
-    if !cli.paths.is_empty() {
-        info!("CLI paths provided: {:?}", cli.paths);
+    if !initial_paths.is_empty() {
+        info!("CLI paths provided: {:?}", initial_paths);
     }
     let window_size = &settings.window_size;
 
@@ -222,8 +240,8 @@ fn main() -> eframe::Result<()> {
     let mut viewport = eframe::egui::ViewportBuilder
         ::default()
         .with_title(APP_NAME)
-        .with_app_id("ferrite") // Set app_id for Wayland (helps with alt-tab and taskbar on Linux)
-        .with_decorations(false) // Custom title bar - no native window decorations
+        .with_app_id("ferrite")
+        .with_decorations(false)
         .with_inner_size([window_size.width, window_size.height])
         .with_min_inner_size([400.0, 300.0]);
 
@@ -244,30 +262,9 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport,
-        // Enable vsync to limit frame rate to display refresh (reduces CPU usage)
         vsync: true,
-        // Use run-on-demand event loop for better power efficiency
         run_and_return: true,
         ..Default::default()
-    };
-
-    // Combine CLI paths with any paths received via macOS Apple Events ("Open With")
-    let mut initial_paths = cli.paths;
-    let apple_event_paths = platform::get_open_file_paths();
-    if !apple_event_paths.is_empty() {
-        info!("Received paths via Apple Event: {:?}", apple_event_paths);
-        initial_paths.extend(apple_event_paths);
-    }
-
-    // Single-instance check: if another Ferrite window is already running,
-    // forward our file paths to it and exit immediately.
-    let instance_listener = match single_instance::try_acquire_instance(&initial_paths) {
-        Some(listener) => listener,
-        None => {
-            // Paths were forwarded to the existing instance — exit cleanly
-            info!("File paths forwarded to existing Ferrite instance. Exiting.");
-            return Ok(());
-        }
     };
 
     log_memory("Before eframe::run_native");
