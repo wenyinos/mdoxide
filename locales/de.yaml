@@ -638,3 +638,167 @@ ribbon:
   export_pdf: "📄 Als PDF exportieren"
   coming_soon: "Bald verfügbar"
   heading_level: "Überschrift %{level}"
+
+# NOTE: New keys were added to notification, status, outline, and widgets sections in en.yaml (v0.2.7).
+# These keys will fall back to English until translated. Check en.yaml for reference.
+
+# Welcome page (first launch)
+welcome:
+  subtitle: ""
+  section:
+    appearance: ""
+    editor: ""
+    cjk: ""
+    files: ""
+  label:
+    theme: ""
+    language: ""
+  line_width_hint: ""
+
+# Terminal panel
+terminal:
+  not_found: ""
+  fallback_title: ""
+  new_terminal_here: ""
+  maximize_active_pane: ""
+  pop_out: ""
+  split_horizontal: ""
+  split_vertical: ""
+  rename: ""
+  close: ""
+  close_pane: ""
+  close_others: ""
+  scatter_to_windows: ""
+  watching: ""
+  stop_watching: ""
+  watch_workspace_root: ""
+  export_html: ""
+  no_workspace_root: ""
+  no_macros: ""
+  close_panel_tooltip: ""
+  running_process_warning: ""
+  terminate_warning: ""
+  close_terminal: ""
+  close_terminal_title: ""
+  cancel: ""
+  no_terminal: ""
+  restore: ""
+  process_exited: ""
+  tab_name: ""
+  floating_title: ""
+  shell:
+    powershell: ""
+    cmd: ""
+    wsl: ""
+  layout:
+    columns_2: ""
+    rows_2: ""
+    grid_2x2: ""
+    save_layout: ""
+    load_layout: ""
+    save_workspace_layout: ""
+    custom_layout: ""
+  workspace:
+    scatter_all: ""
+    save: ""
+    load: ""
+    default_name: ""
+  menu:
+    layouts: ""
+    workspaces: ""
+    watch_mode: ""
+    macros: ""
+  filter:
+    terminal_layout: ""
+    ferrite_workspace: ""
+  error:
+    shell_not_found: ""
+    pty_failed: ""
+    permission_denied: ""
+    io_failed: ""
+    layout_failed: ""
+    unexpected: ""
+    format: ""
+
+# Productivity panel
+productivity:
+  title: ""
+  workspace_hint: ""
+  tasks:
+    title: ""
+    progress: ""
+    input_hint: ""
+    add: ""
+    tip: ""
+    move_up: ""
+    move_down: ""
+    empty: ""
+  pomodoro:
+    title: ""
+    work: ""
+    break_label: ""
+    ready: ""
+    cycles: ""
+    stop: ""
+    start_work: ""
+    start_break: ""
+  notes:
+    title: ""
+    name_label: ""
+    note_label: ""
+    confirm_rename: ""
+    cancel_rename: ""
+    new_note: ""
+    rename_note: ""
+    confirm_delete: ""
+    delete_note: ""
+    input_hint: ""
+    dock: ""
+    dock_tooltip: ""
+    ok: ""
+    confirm: ""
+    empty_name: ""
+    duplicate_name: ""
+
+# Echo/AI placeholder (development)
+echo:
+  title: ""
+  prompt: ""
+  responses: ""
+  replacement_note: ""
+  demo_note: ""
+
+# Title bar
+title_bar:
+  restore: ""
+  maximize: ""
+
+# Error dialogs
+error:
+  save_failed: ""
+  open_workspace_failed: ""
+  open_file_failed: ""
+  create_file_failed: ""
+  create_folder_failed: ""
+  rename_failed: ""
+  delete_failed: ""
+  image_failed: ""
+  explorer_failed: ""
+  write_failed: ""
+  encoding_failed: ""
+
+# File dialog titles and filters
+file_dialog:
+  open_workspace: ""
+  open_files: ""
+  save_file: ""
+  filter:
+    supported: ""
+    markdown: ""
+    text: ""
+    json: ""
+    yaml: ""
+    toml: ""
+    csv_tsv: ""
+    all: ""
+    html: ""

@@ -1,4 +1,4 @@
-﻿//! Export operations for the Ferrite application.
+//! Export operations for the Ferrite application.
 //!
 //! This module contains handlers for HTML export and copy-as-HTML.
 
@@ -6,13 +6,14 @@ use super::FerriteApp;
 use crate::export::{copy_html_to_clipboard, generate_html_document};
 use eframe::egui;
 use log::{debug, info, warn};
+use rust_i18n::t;
 
 impl FerriteApp {
     pub(crate) fn handle_export_html(&mut self, ctx: &egui::Context) {
         // Get the active tab content
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast("No document to export", time, 2.0);
+            self.state.show_toast(t!("notification.no_document_export").to_string(), time, 2.0);
             return;
         };
 
@@ -79,7 +80,7 @@ impl FerriteApp {
 
                             let time = self.get_app_time();
                             self.state.show_toast(
-                                format!("Exported to {}", path.display()),
+                                t!("notification.exported_to", path = path.display().to_string()).to_string(),
                                 time,
                                 2.5,
                             );
@@ -95,7 +96,7 @@ impl FerriteApp {
                             warn!("Failed to write HTML file: {}", e);
                             let time = self.get_app_time();
                             self.state
-                                .show_toast(format!("Export failed: {}", e), time, 3.0);
+                                .show_toast(t!("notification.export_failed", error = e.to_string()).to_string(), time, 3.0);
                         }
                     }
                 }
@@ -114,7 +115,7 @@ impl FerriteApp {
         // Get the active tab content
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast("No document to copy", time, 2.0);
+            self.state.show_toast(t!("notification.no_document_copy").to_string(), time, 2.0);
             return;
         };
 
@@ -125,13 +126,13 @@ impl FerriteApp {
             Ok(()) => {
                 info!("Copied HTML to clipboard");
                 let time = self.get_app_time();
-                self.state.show_toast("HTML copied to clipboard", time, 2.0);
+                self.state.show_toast(t!("notification.html_copied").to_string(), time, 2.0);
             }
             Err(e) => {
                 warn!("Failed to copy HTML to clipboard: {}", e);
                 let time = self.get_app_time();
                 self.state
-                    .show_toast(format!("Copy failed: {}", e), time, 3.0);
+                    .show_toast(t!("notification.copy_failed", error = e.to_string()).to_string(), time, 3.0);
             }
         }
     }

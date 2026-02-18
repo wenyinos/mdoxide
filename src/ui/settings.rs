@@ -121,7 +121,7 @@ impl SettingsSection {
             SettingsSection::Editor => t!("settings.editor.title"),
             SettingsSection::Files => t!("settings.files.title"),
             SettingsSection::Keyboard => t!("settings.keyboard.title"),
-            SettingsSection::Terminal => std::borrow::Cow::Borrowed("Terminal"), // TODO: i18n
+            SettingsSection::Terminal => t!("settings.terminal.title"),
             SettingsSection::About => t!("settings.about.title"),
         }
         .to_string()
@@ -504,12 +504,12 @@ impl SettingsPanel {
     fn show_terminal_section(&mut self, ui: &mut Ui, settings: &mut Settings) -> bool {
         let mut changed = false;
 
-        ui.heading("Terminal"); // TODO: i18n
+        ui.heading(t!("settings.terminal.title").to_string());
         ui.add_space(8.0);
 
         // Terminal Enabled
         if ui
-            .checkbox(&mut settings.terminal_enabled, "Enable Integrated Terminal") // TODO: i18n
+            .checkbox(&mut settings.terminal_enabled, t!("settings.terminal.enable").to_string())
             .changed()
         {
             changed = true;
@@ -521,7 +521,7 @@ impl SettingsPanel {
 
         // Terminal Font Size
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Font Size").strong()); // TODO: i18n
+            ui.label(RichText::new(t!("settings.terminal.font_size").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{}px", settings.terminal_font_size as u32));
         });
@@ -545,7 +545,7 @@ impl SettingsPanel {
 
         // Scrollback Lines
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Scrollback Lines").strong()); // TODO: i18n
+            ui.label(RichText::new(t!("settings.terminal.scrollback").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{}", settings.terminal_scrollback_lines));
         });
@@ -571,8 +571,8 @@ impl SettingsPanel {
 
         // Copy on Select
         if ui
-            .checkbox(&mut settings.terminal_copy_on_select, "Copy Selection Automatically") // TODO: i18n
-            .on_hover_text("Automatically copy text to clipboard when selecting with mouse")
+            .checkbox(&mut settings.terminal_copy_on_select, t!("settings.terminal.copy_selection").to_string())
+            .on_hover_text(t!("settings.terminal.copy_selection_tooltip").to_string())
             .changed()
         {
             changed = true;
@@ -583,7 +583,7 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Terminal Theme
-        ui.label(RichText::new("Terminal Theme").strong());
+        ui.label(RichText::new(t!("settings.terminal.theme").to_string()).strong());
         ui.add_space(4.0);
         
         egui::ComboBox::from_id_source("terminal_theme_combo")
@@ -602,7 +602,7 @@ impl SettingsPanel {
 
         // Terminal Opacity
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Background Opacity").strong());
+            ui.label(RichText::new(t!("settings.terminal.opacity").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{:.0}%", settings.terminal_opacity * 100.0));
         });
@@ -617,11 +617,11 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Terminal Startup Command
-        ui.label(RichText::new("Startup Command").strong());
-        ui.label(RichText::new("Command to run when opening a new terminal (e.g. 'echo Hello')").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.startup_command").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.startup_command_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
-        if ui.add(egui::TextEdit::singleline(&mut settings.terminal_startup_command).hint_text("Optional")).changed() {
+        if ui.add(egui::TextEdit::singleline(&mut settings.terminal_startup_command).hint_text(t!("settings.terminal.startup_command_hint").to_string())).changed() {
             changed = true;
         }
 
@@ -630,8 +630,8 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Monitor Information
-        ui.label(RichText::new("Detected Monitors").strong());
-        ui.label(RichText::new("Detected display layout for window distribution").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.monitors").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.monitors_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
         if self.cached_monitor_info.is_none() {
@@ -646,9 +646,9 @@ impl SettingsPanel {
             .show(ui, |ui| {
                 for (i, m) in monitors.iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(format!("Monitor {}:", i + 1));
+                        ui.label(t!("settings.terminal.monitor_label", index = i + 1).to_string());
                         ui.label(RichText::new(&m.name).strong());
-                        ui.label(format!("({}x{} at {},{})", m.width as u32, m.height as u32, m.x as i32, m.y as i32));
+                        ui.label(t!("settings.terminal.monitor_geometry", width = m.width as u32, height = m.height as u32, x = m.x as i32, y = m.y as i32).to_string());
                     });
                 }
             });
@@ -659,7 +659,7 @@ impl SettingsPanel {
 
         // Breathing color
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Breathing Indicator Color").strong());
+            ui.label(RichText::new(t!("settings.terminal.breathing_color").to_string()).strong());
             ui.add_space(8.0);
             if ui.color_edit_button_srgba(&mut settings.terminal_breathing_color).changed() {
                 changed = true;
@@ -671,12 +671,12 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Prompt patterns
-        ui.label(RichText::new("Custom Prompt Patterns").strong());
-        ui.label(RichText::new("Regex patterns to detect terminal prompt (one per line)").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.prompt_patterns").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.prompt_patterns_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
         let mut patterns_text = settings.terminal_prompt_patterns.join("\n");
-        if ui.add(egui::TextEdit::multiline(&mut patterns_text).desired_rows(3).hint_text("e.g. ^\\w+@\\w+:")).changed() {
+        if ui.add(egui::TextEdit::multiline(&mut patterns_text).desired_rows(3).hint_text(t!("settings.terminal.prompt_patterns_hint").to_string())).changed() {
             settings.terminal_prompt_patterns = patterns_text.lines().map(|s| s.to_string()).filter(|s| !s.is_empty()).collect();
             changed = true;
         }
@@ -686,7 +686,7 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Auto-load
-        if ui.checkbox(&mut settings.terminal_auto_load_layout, "Auto-load Layout").on_hover_text("Automatically load 'terminal_layout.json' from project root").changed() {
+        if ui.checkbox(&mut settings.terminal_auto_load_layout, t!("settings.terminal.auto_load_layout").to_string()).on_hover_text(t!("settings.terminal.auto_load_layout_tooltip").to_string()).changed() {
             changed = true;
         }
 
@@ -695,20 +695,20 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Sound Notification
-        ui.label(RichText::new("Sound Notification").strong());
-        ui.label(RichText::new("Play a sound when terminal is waiting for input").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.sound_notification").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.sound_notification_desc").to_string()).small().weak());
         ui.add_space(4.0);
 
-        if ui.checkbox(&mut settings.terminal_sound_enabled, "Enable Sound on Prompt").on_hover_text("Play a notification sound when terminal detects a prompt (waiting for input)").changed() {
+        if ui.checkbox(&mut settings.terminal_sound_enabled, t!("settings.terminal.enable_sound").to_string()).on_hover_text(t!("settings.terminal.enable_sound_tooltip").to_string()).changed() {
             changed = true;
         }
 
         if settings.terminal_sound_enabled {
             ui.add_space(4.0);
             ui.indent("sound_file_settings", |ui| {
-                ui.label(RichText::new("Custom Sound File (optional)").small());
+                ui.label(RichText::new(t!("settings.terminal.custom_sound").to_string()).small());
                 let mut sound_path = settings.terminal_sound_file.clone().unwrap_or_default();
-                if ui.add(egui::TextEdit::singleline(&mut sound_path).hint_text("Leave empty for system beep")).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut sound_path).hint_text(t!("settings.terminal.custom_sound_hint").to_string())).changed() {
                     settings.terminal_sound_file = if sound_path.is_empty() {
                         None
                     } else {
@@ -724,11 +724,11 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Focus on Detect
-        ui.label(RichText::new("Auto-Focus on Input").strong());
-        ui.label(RichText::new("Automatically switch to terminal when it starts waiting for input").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.auto_focus").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.auto_focus_desc").to_string()).small().weak());
         ui.add_space(4.0);
 
-        if ui.checkbox(&mut settings.terminal_focus_on_detect, "Focus Terminal on Prompt").on_hover_text("Automatically focus a terminal when it transitions from running to waiting for input").changed() {
+        if ui.checkbox(&mut settings.terminal_focus_on_detect, t!("settings.terminal.focus_on_prompt").to_string()).on_hover_text(t!("settings.terminal.focus_on_prompt_tooltip").to_string()).changed() {
             changed = true;
         }
 

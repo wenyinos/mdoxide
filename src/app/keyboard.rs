@@ -10,6 +10,7 @@ use crate::config::ShortcutCommand;
 use crate::markdown::MarkdownFormatCommand;
 use eframe::egui;
 use log::{debug, info};
+use rust_i18n::t;
 
 impl FerriteApp {
     pub(crate) fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
@@ -203,7 +204,7 @@ impl FerriteApp {
                     // Exit fullscreen mode
                     ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
                     let time = self.get_app_time();
-                    self.state.show_toast("Exited fullscreen mode", time, 1.5);
+                    self.state.show_toast(t!("notification.fullscreen_exit").to_string(), time, 1.5);
                     info!("Exited fullscreen mode via Escape");
                 } else if let Some(tab) = self.state.active_tab_mut() {
                     if tab.has_multiple_cursors() {

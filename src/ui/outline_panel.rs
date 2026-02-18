@@ -267,7 +267,7 @@ impl OutlinePanel {
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
                     let header_text = if is_productivity {
-                        "Productivity Hub".into()
+                        t!("productivity.title").to_string()
                     } else {
                         match &outline.outline_type {
                             OutlineType::Markdown => t!("outline.panel_title").to_string(),
@@ -315,7 +315,7 @@ impl OutlinePanel {
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                RichText::new("Backlinks unavailable")
+                                RichText::new(t!("outline.backlinks_unavailable").to_string())
                                     .size(11.0)
                                     .color(muted_color)
                                     .italics(),
@@ -338,7 +338,7 @@ impl OutlinePanel {
                                         )
                                         .frame(false),
                                     )
-                                    .on_hover_text("Detach to floating window")
+                                    .on_hover_text(t!("outline.detach_tooltip").to_string())
                                     .clicked()
                                 {
                                     output.detach_productivity = true;
@@ -363,7 +363,7 @@ impl OutlinePanel {
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                RichText::new("Productivity Hub unavailable")
+                                RichText::new(t!("outline.productivity_unavailable").to_string())
                                     .size(11.0)
                                     .color(muted_color)
                                     .italics(),
@@ -583,7 +583,7 @@ impl OutlinePanel {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             ui.label(
-                RichText::new("📁 Structure")
+                RichText::new(t!("outline.json_structure").to_string())
                     .size(11.0)
                     .strong()
                     .color(text_color),
@@ -591,10 +591,10 @@ impl OutlinePanel {
         });
         ui.add_space(4.0);
 
-        self.render_stat_row(ui, "Objects", stats.object_count, key_color, muted_color);
-        self.render_stat_row(ui, "Arrays", stats.array_count, key_color, muted_color);
-        self.render_stat_row(ui, "Total keys", stats.total_keys, key_color, muted_color);
-        self.render_stat_row(ui, "Max depth", stats.max_depth, muted_color, muted_color);
+        self.render_stat_row(ui, &t!("outline.json_objects"), stats.object_count, key_color, muted_color);
+        self.render_stat_row(ui, &t!("outline.json_arrays"), stats.array_count, key_color, muted_color);
+        self.render_stat_row(ui, &t!("outline.json_total_keys"), stats.total_keys, key_color, muted_color);
+        self.render_stat_row(ui, &t!("outline.json_max_depth"), stats.max_depth, muted_color, muted_color);
 
         ui.add_space(12.0);
 
@@ -602,7 +602,7 @@ impl OutlinePanel {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             ui.label(
-                RichText::new("📊 Values")
+                RichText::new(t!("outline.json_values").to_string())
                     .size(11.0)
                     .strong()
                     .color(text_color),
@@ -612,30 +612,30 @@ impl OutlinePanel {
 
         self.render_stat_row(
             ui,
-            "Total values",
+            &t!("outline.json_total_values"),
             stats.value_count,
             text_color,
             muted_color,
         );
 
         if stats.string_count > 0 {
-            self.render_stat_row(ui, "Strings", stats.string_count, string_color, muted_color);
+            self.render_stat_row(ui, &t!("outline.json_strings"), stats.string_count, string_color, muted_color);
         }
         if stats.number_count > 0 {
-            self.render_stat_row(ui, "Numbers", stats.number_count, number_color, muted_color);
+            self.render_stat_row(ui, &t!("outline.json_numbers"), stats.number_count, number_color, muted_color);
         }
         if stats.bool_count > 0 {
-            self.render_stat_row(ui, "Booleans", stats.bool_count, bool_color, muted_color);
+            self.render_stat_row(ui, &t!("outline.json_booleans"), stats.bool_count, bool_color, muted_color);
         }
         if stats.null_count > 0 {
-            self.render_stat_row(ui, "Nulls", stats.null_count, muted_color, muted_color);
+            self.render_stat_row(ui, &t!("outline.json_nulls"), stats.null_count, muted_color, muted_color);
         }
 
         if stats.total_array_items > 0 {
             ui.add_space(4.0);
             self.render_stat_row(
                 ui,
-                "Array items",
+                &t!("outline.json_array_items"),
                 stats.total_array_items,
                 key_color,
                 muted_color,
@@ -694,8 +694,8 @@ impl OutlinePanel {
         let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
             (OutlinePanelTab::Outline, "📑", t!("outline.tab_outline").to_string()),
             (OutlinePanelTab::Statistics, "📊", t!("outline.tab_statistics").to_string()),
-            (OutlinePanelTab::Backlinks, "🔗", "Links".to_string()),
-            (OutlinePanelTab::Productivity, "📋", "Hub".to_string()),
+            (OutlinePanelTab::Backlinks, "🔗", t!("outline.tab_links").to_string()),
+            (OutlinePanelTab::Productivity, "📋", t!("outline.tab_hub").to_string()),
         ];
 
         ui.horizontal(|ui| {

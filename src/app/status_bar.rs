@@ -139,10 +139,7 @@ impl FerriteApp {
                                             .frame(false)
                                             .min_size(egui::vec2(280.0, 0.0))
                                         );
-                                        item_response.clone().on_hover_text(format!(
-                                            "{}\n\nClick: Open\nShift+Click: Open in background",
-                                            path.display()
-                                        ));
+                                        item_response.clone().on_hover_text(t!("status.file_tooltip", path = path.display().to_string()).to_string());
 
                                         if !parent_dir.is_empty() {
                                             ui.label(egui::RichText::new(parent_dir).small().color(secondary_color));
@@ -179,10 +176,7 @@ impl FerriteApp {
                                             .frame(false)
                                             .min_size(egui::vec2(280.0, 0.0))
                                         );
-                                        item_response.clone().on_hover_text(format!(
-                                            "{}\n\nClick: Open as workspace",
-                                            path.display()
-                                        ));
+                                        item_response.clone().on_hover_text(t!("status.folder_tooltip", path = path.display().to_string()).to_string());
 
                                         if !parent_dir.is_empty() {
                                             ui.label(egui::RichText::new(parent_dir).small().color(secondary_color));
@@ -196,7 +190,7 @@ impl FerriteApp {
                                 } else if !recent_files.is_empty() {
                                     // Only files
                                     ui.set_min_width(300.0);
-                                    ui.label(egui::RichText::new("📄 Recent Files").strong());
+                                    ui.label(egui::RichText::new(t!("status.recent_files_heading").to_string()).strong());
                                     ui.separator();
 
                                     for path in &recent_files {
@@ -214,10 +208,7 @@ impl FerriteApp {
                                             .frame(false)
                                             .min_size(egui::vec2(ui.available_width(), 0.0))
                                         );
-                                        item_response.clone().on_hover_text(format!(
-                                            "{}\n\nClick: Open\nShift+Click: Open in background",
-                                            path.display()
-                                        ));
+                                        item_response.clone().on_hover_text(t!("status.file_tooltip", path = path.display().to_string()).to_string());
 
                                         if !parent_dir.is_empty() {
                                             ui.label(egui::RichText::new(parent_dir).small().color(secondary_color));
@@ -232,7 +223,7 @@ impl FerriteApp {
                                 } else {
                                     // Only folders
                                     ui.set_min_width(300.0);
-                                    ui.label(egui::RichText::new("📁 Recent Folders").strong());
+                                    ui.label(egui::RichText::new(t!("status.recent_folders_heading").to_string()).strong());
                                     ui.separator();
 
                                     for path in &recent_folders {
@@ -252,10 +243,7 @@ impl FerriteApp {
                                             .frame(false)
                                             .min_size(egui::vec2(ui.available_width(), 0.0))
                                         );
-                                        item_response.clone().on_hover_text(format!(
-                                            "{}\n\nClick: Open as workspace",
-                                            path.display()
-                                        ));
+                                        item_response.clone().on_hover_text(t!("status.folder_tooltip", path = path.display().to_string()).to_string());
 
                                         if !parent_dir.is_empty() {
                                             ui.label(egui::RichText::new(parent_dir).small().color(secondary_color));
@@ -289,7 +277,7 @@ impl FerriteApp {
                                     } else {
                                         let time = self.get_app_time();
                                         self.state.show_toast(
-                                            format!("Opened in background: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("file")),
+                                            t!("notification.opened_background", name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file")).to_string(),
                                             time,
                                             2.0
                                         );
@@ -297,7 +285,7 @@ impl FerriteApp {
                                 }
                                 Err(e) => {
                                     warn!("Failed to open recent file: {}", e);
-                                    self.state.show_error(format!("Failed to open file:\n{}", e));
+                                    self.state.show_error(t!("error.open_file_failed", error = e.to_string()).to_string());
                                 }
                             }
                         } else {
@@ -310,7 +298,7 @@ impl FerriteApp {
                                         .and_then(|n| n.to_str())
                                         .unwrap_or("folder");
                                     self.state.show_toast(
-                                        format!("Opened workspace: {}", folder_name),
+                                        t!("notification.opened_workspace", name = folder_name).to_string(),
                                         time,
                                         2.5
                                     );
@@ -318,7 +306,7 @@ impl FerriteApp {
                                 }
                                 Err(e) => {
                                     warn!("Failed to open recent workspace: {}", e);
-                                    self.state.show_error(format!("Failed to open workspace:\n{}", e));
+                                    self.state.show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
                                 }
                             }
                         }
@@ -583,7 +571,7 @@ impl FerriteApp {
                         // Encoding picker popup
                         egui::popup_below_widget(ui, encoding_popup_id, &encoding_button_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
                             ui.set_min_width(150.0);
-                            ui.label(egui::RichText::new("File Encoding").strong());
+                            ui.label(egui::RichText::new(t!("status.encoding_heading").to_string()).strong());
                             ui.separator();
 
                             // Show common encodings
@@ -613,10 +601,10 @@ impl FerriteApp {
                 if let Err(e) = tab.set_encoding(new_encoding) {
                     warn!("Failed to change encoding: {}", e);
                     let time = self.get_app_time();
-                    self.state.show_toast(format!("Failed to change encoding: {}", e), time, 3.0);
+                    self.state.show_toast(t!("error.encoding_failed", error = e.to_string()).to_string(), time, 3.0);
                 } else {
                     let time = self.get_app_time();
-                    self.state.show_toast(format!("Encoding changed to {}", new_encoding.to_uppercase()), time, 2.0);
+                    self.state.show_toast(t!("notification.encoding_changed", encoding = new_encoding.to_uppercase()).to_string(), time, 2.0);
                 }
             }
         }

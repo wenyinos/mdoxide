@@ -1918,7 +1918,7 @@ impl FerriteApp {
                 .default_width(400.0)
                 .default_height(300.0)
                 .show(ctx, |ui| {
-                    ui.label("This demonstrates async workers. Type a message:");
+                    ui.label(t!("echo.prompt").to_string());
 
                     // Input field with state
                     ui.add_space(8.0);
@@ -1938,7 +1938,7 @@ impl FerriteApp {
                     }
 
                     ui.separator();
-                    ui.label("Responses (100ms delay):");
+                    ui.label(t!("echo.responses").to_string());
 
                     // Poll for responses (non-blocking)
                     if let Some(worker) = &self.echo_worker {
@@ -1950,7 +1950,7 @@ impl FerriteApp {
                     }
 
                     ui.separator();
-                    ui.label("This panel will be replaced with AI chat in Phase 8.");
+                    ui.label(t!("echo.replacement_note").to_string());
                     ui.label(
                         "Demonstrates: lazy worker spawn, mpsc communication, non-blocking UI."
                     );
