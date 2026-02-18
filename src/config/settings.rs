@@ -794,6 +794,19 @@ impl Language {
         }
     }
 
+    /// Returns the CJK font needed for this language's UI, if any.
+    ///
+    /// When the user switches to a CJK language, the UI labels (from i18n)
+    /// contain CJK characters that require the corresponding font to be loaded.
+    /// Returns `None` for non-CJK languages (English, German, etc.).
+    pub fn required_cjk_font(&self) -> Option<CjkFontPreference> {
+        match self {
+            Language::ChineseSimplified => Some(CjkFontPreference::SimplifiedChinese),
+            Language::Japanese => Some(CjkFontPreference::Japanese),
+            _ => None,
+        }
+    }
+
     /// Get all available languages.
     pub fn all() -> &'static [Language] {
         &[
@@ -1628,6 +1641,13 @@ pub struct Settings {
     pub syntax_theme: String,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Format Toolbar
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether the format toolbar at the bottom of the raw editor is visible
+    #[serde(default = "default_true")]
+    pub format_toolbar_visible: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Outline Panel
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether the outline panel is visible
@@ -1815,6 +1835,16 @@ pub struct Settings {
     pub snippets_enabled: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Vim Mode Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether Vim keybinding mode is enabled.
+    /// When enabled, the editor uses modal editing (Normal/Insert/Visual modes)
+    /// with Vim-style keybindings (hjkl, dd, yy, p, i, Esc, v/V, /search).
+    /// Default editing behavior is preserved when disabled.
+    #[serde(default)]
+    pub vim_mode: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Keyboard Shortcuts Settings
     // ─────────────────────────────────────────────────────────────────────────
     /// Custom keyboard shortcuts configuration.
@@ -1935,6 +1965,9 @@ impl Default for Settings {
             // Syntax Highlighting
             syntax_theme: String::from("base16-ocean.dark"),
 
+            // Format Toolbar
+            format_toolbar_visible: true, // Shown by default
+
             // Outline Panel
             outline_enabled: false, // Hidden by default
             outline_side: OutlinePanelSide::default(),
@@ -2004,6 +2037,9 @@ impl Default for Settings {
 
             // Snippets Settings
             snippets_enabled: true, // Snippet expansion enabled by default
+
+            // Vim Mode Settings
+            vim_mode: false, // Disabled by default (standard editing preserved)
 
             // Keyboard Shortcuts Settings
             keyboard_shortcuts: KeyboardShortcuts::default(),

@@ -190,6 +190,13 @@ pub struct FerriteEditor {
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether auto-close brackets is enabled (e.g., typing '(' inserts '()').
     pub(crate) auto_close_brackets: bool,
+    // ─────────────────────────────────────────────────────────────────────────
+    // Vim Mode
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether Vim modal editing is enabled.
+    pub(crate) vim_mode_enabled: bool,
+    /// Persistent Vim editing state (mode, yank register, pending operator).
+    pub(crate) vim_state: super::vim::VimState,
 }
 
 impl Default for FerriteEditor {
@@ -259,6 +266,9 @@ impl FerriteEditor {
             content_offset_x: 0.0,
             // Auto-close brackets (default off, configured via EditorWidget)
             auto_close_brackets: false,
+            // Vim mode (default off, configured via EditorWidget)
+            vim_mode_enabled: false,
+            vim_state: super::vim::VimState::new(),
         }
     }
 
@@ -325,6 +335,9 @@ impl FerriteEditor {
             content_offset_x: 0.0,
             // Auto-close brackets (default off, configured via EditorWidget)
             auto_close_brackets: false,
+            // Vim mode (default off, configured via EditorWidget)
+            vim_mode_enabled: false,
+            vim_state: super::vim::VimState::new(),
         }
     }
 
@@ -2194,6 +2207,63 @@ impl FerriteEditor {
                     }
                 }
                 
+                // ── Vim mode interception ─────────────────────────────────────
+                // When Vim mode is active, route key events through VimState first.
+                // In Normal/Visual mode most keys are consumed by Vim; in Insert
+                // mode, only Escape is consumed (everything else passes through).
+                if self.vim_mode_enabled {
+                    // Vim intercepts Key events
+                    if let egui::Event::Key { key, pressed: true, modifiers, .. } = event {
+                        let idx = self.primary_selection_index.min(self.selections.len().saturating_sub(1));
+                        let mut sel = self.selections.get(idx).copied().unwrap_or_else(Selection::start);
+
+                        let vim_result = self.vim_state.handle_key(
+                            *key, modifiers, &mut self.buffer, &mut sel, &mut self.view,
+                        );
+
+                        if let Some(s) = self.selections.get_mut(idx) {
+                            *s = sel;
+                        }
+
+                        match vim_result {
+                            super::vim::VimKeyResult::Handled(result) => {
+                                match result {
+                                    InputResult::TextChanged => {
+                                        self.content_dirty = true;
+                                        self.reset_cursor_blink();
+                                        self.view.ensure_line_visible(
+                                            self.primary_selection().head.line,
+                                            self.buffer.line_count(),
+                                        );
+                                    }
+                                    InputResult::CursorMoved => {
+                                        self.reset_cursor_blink();
+                                        self.view.ensure_line_visible(
+                                            self.primary_selection().head.line,
+                                            self.buffer.line_count(),
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                                continue;
+                            }
+                            super::vim::VimKeyResult::Consumed => {
+                                continue;
+                            }
+                            super::vim::VimKeyResult::Passthrough => {
+                                // Fall through to normal handling below
+                            }
+                        }
+                    }
+
+                    // In Normal/Visual mode, suppress text insertion events
+                    if let egui::Event::Text(_) = event {
+                        if !self.vim_state.should_insert_text() {
+                            continue;
+                        }
+                    }
+                }
+
                 // Handle paste event - multi-cursor paste
                 if let egui::Event::Paste(text) = event {
                     self.insert_text_at_all_cursors(text);
@@ -2825,6 +2895,25 @@ impl FerriteEditor {
     /// (to avoid interfering with contractions like "don't").
     pub fn set_auto_close_brackets(&mut self, enabled: bool) {
         self.auto_close_brackets = enabled;
+    }
+
+    /// Enables or disables Vim modal editing mode.
+    /// When enabled, the editor uses Normal/Insert/Visual modes with Vim keybindings.
+    /// When transitioning from enabled to disabled, resets Vim state to Normal mode.
+    pub fn set_vim_mode(&mut self, enabled: bool) {
+        if self.vim_mode_enabled && !enabled {
+            self.vim_state = super::vim::VimState::new();
+        }
+        self.vim_mode_enabled = enabled;
+    }
+
+    /// Returns the current Vim mode if Vim editing is enabled.
+    pub fn vim_mode(&self) -> Option<super::vim::VimMode> {
+        if self.vim_mode_enabled {
+            Some(self.vim_state.mode)
+        } else {
+            None
+        }
     }
 
     /// Takes the fold toggle line if a fold was toggled this frame.

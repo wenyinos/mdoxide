@@ -1312,6 +1312,16 @@ impl SettingsPanel {
                     changed = true;
                 }
                 ui.end_row();
+
+                // Row 5: Vim Mode
+                if ui
+                    .checkbox(&mut settings.vim_mode, t!("settings.editor.vim_mode"))
+                    .on_hover_text(t!("settings.editor.vim_mode_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.end_row();
             });
 
         // Minimap mode selector (only show if minimap is enabled) - full width

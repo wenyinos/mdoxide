@@ -370,6 +370,30 @@ impl FerriteApp {
                         ).on_hover_text(t!("tooltip.git_branch").to_string());
                     }
 
+                    // Vim mode indicator (shown before tab-specific items)
+                    if let Some(vim_label) = self.state.ui.vim_mode_indicator {
+                        ui.separator();
+                        let vim_color = if is_dark {
+                            match vim_label {
+                                "INSERT" => egui::Color32::from_rgb(130, 200, 130),
+                                "VISUAL" | "V-LINE" => egui::Color32::from_rgb(200, 160, 100),
+                                _ => egui::Color32::from_rgb(130, 180, 240),
+                            }
+                        } else {
+                            match vim_label {
+                                "INSERT" => egui::Color32::from_rgb(40, 120, 40),
+                                "VISUAL" | "V-LINE" => egui::Color32::from_rgb(150, 100, 30),
+                                _ => egui::Color32::from_rgb(50, 100, 170),
+                            }
+                        };
+                        ui.label(
+                            egui::RichText::new(format!("[{}]", vim_label))
+                                .color(vim_color)
+                                .strong()
+                                .size(12.0)
+                        ).on_hover_text(t!("status.vim_mode").to_string());
+                    }
+
                     if let Some(tab) = self.state.active_tab() {
                         ui.separator();
 

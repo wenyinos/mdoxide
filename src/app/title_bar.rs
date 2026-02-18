@@ -97,10 +97,10 @@ impl FerriteApp {
                     // intended for window control buttons. This fixes Linux hit-testing issues.
                     //
                     // Button area width calculation (right-to-left):
-                    // - 4.0 spacing + Close(46) + Max(46) + Min(46) + Fullscreen(46) + 8.0 spacing = 196px
+                    // - 12.0 spacing + Close(36) + Max(36) + Min(36) + Fullscreen(36) + 8.0 spacing = 164px
                     // - Settings(28) + 4.0 + Zen(28) + 4.0 = 64px
                     // - ViewModeSegment (3 x 26px) = 78px (or 2 x 26px = 52px for 2-mode)
-                    // Total ~338px + extra margin for safety = 400px
+                    // Total ~306px + extra margin for safety = 400px
                     const WINDOW_BUTTON_AREA_WIDTH: f32 = 400.0;
                     
                     let available = ui.available_rect_before_wrap();
@@ -158,25 +158,39 @@ impl FerriteApp {
 
                     // Window control buttons (right-to-left)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(4.0);
+                        // 12px right margin ensures the top-right corner zone (10px wide)
+                        // stays button-free, allowing NE corner resize to work correctly.
+                        ui.add_space(12.0);
 
-                        // Close button (×)
+                        // ── Close button (×) ──────────────────────────────────────────────
                         let close_btn = ui.add(
-                            egui::Button::new(
-                                egui::RichText::new("×").size(16.0).color(text_color),
-                            )
-                            .frame(false)
-                            .min_size(egui::vec2(46.0, 28.0)),
+                            egui::Button::new(egui::RichText::new(" ").size(14.0))
+                                .frame(false)
+                                .min_size(egui::vec2(36.0, 22.0)),
                         );
-                        if close_btn.hovered() {
-                            ui.painter()
-                                .rect_filled(close_btn.rect, 0.0, close_hover_color);
-                            ui.painter().text(
-                                close_btn.rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "×",
-                                egui::FontId::proportional(16.0),
-                                egui::Color32::WHITE,
+                        // Rounded hover background; white icon on hover, normal otherwise
+                        let close_icon_color = if close_btn.hovered() {
+                            ui.painter().rect_filled(
+                                close_btn.rect,
+                                egui::Rounding::same(4.0),
+                                close_hover_color,
+                            );
+                            egui::Color32::WHITE
+                        } else {
+                            text_color
+                        };
+                        // Draw × as two crisp diagonal line segments
+                        {
+                            let c = close_btn.rect.center();
+                            let d = 5.5_f32;
+                            let stroke = egui::Stroke::new(1.5, close_icon_color);
+                            ui.painter().line_segment(
+                                [egui::pos2(c.x - d, c.y - d), egui::pos2(c.x + d, c.y + d)],
+                                stroke,
+                            );
+                            ui.painter().line_segment(
+                                [egui::pos2(c.x + d, c.y - d), egui::pos2(c.x - d, c.y + d)],
+                                stroke,
                             );
                         }
                         if close_btn.clicked() && self.state.request_exit() {
@@ -184,29 +198,30 @@ impl FerriteApp {
                         }
                         close_btn.on_hover_text(t!("a11y.close_button").to_string());
 
-                        // Maximize/Restore button - draw custom icon like minimize/fullscreen
-                        // to prevent hover from hiding the icon
+                        // ── Maximize / Restore button ──────────────────────────────────────
                         let max_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(46.0, 28.0)),
+                                .min_size(egui::vec2(36.0, 22.0)),
                         );
                         if max_btn.hovered() {
-                            ui.painter()
-                                .rect_filled(max_btn.rect, 0.0, button_hover_color);
+                            ui.painter().rect_filled(
+                                max_btn.rect,
+                                egui::Rounding::same(4.0),
+                                button_hover_color,
+                            );
                         }
-                        // Draw maximize/restore icon manually (always visible, even on hover)
+                        // Draw maximize/restore icon (always visible, even on hover)
                         let max_center = max_btn.rect.center();
                         let stroke = egui::Stroke::new(1.5, text_color);
                         if is_maximized {
                             // Restore icon: two overlapping rectangles
                             let size = 4.5;
                             let offset = 2.0;
-                            // Back rectangle (offset up-right)
+                            // Back rectangle (offset up-right) - show top and right edges only
                             let back_min = egui::pos2(max_center.x - size + offset, max_center.y - size - offset);
                             let back_max = egui::pos2(max_center.x + size + offset, max_center.y + size - offset);
                             let back_top_right = egui::pos2(back_max.x, back_min.y);
-                            // Only draw the visible parts of the back rectangle (top and right edges)
                             ui.painter().line_segment([egui::pos2(back_min.x + size, back_min.y), back_top_right], stroke);
                             ui.painter().line_segment([back_top_right, back_max], stroke);
                             ui.painter().line_segment([back_max, egui::pos2(back_min.x + size, back_max.y)], stroke);
@@ -217,13 +232,20 @@ impl FerriteApp {
                             );
                             ui.painter().rect_stroke(front_rect, 0.0, stroke);
                         } else {
-                            // Maximize icon: single rectangle
-                            let size = 5.0;
+                            // Maximize icon: rectangle with thicker top edge (suggests a window title bar)
+                            let size = 5.5;
                             let rect = egui::Rect::from_center_size(
                                 max_center,
                                 egui::vec2(size * 2.0, size * 2.0),
                             );
-                            ui.painter().rect_stroke(rect, 0.0, stroke);
+                            let top_stroke = egui::Stroke::new(2.0, text_color);
+                            ui.painter().line_segment(
+                                [egui::pos2(rect.min.x, rect.min.y), egui::pos2(rect.max.x, rect.min.y)],
+                                top_stroke,
+                            );
+                            ui.painter().line_segment([egui::pos2(rect.max.x, rect.min.y), egui::pos2(rect.max.x, rect.max.y)], stroke);
+                            ui.painter().line_segment([egui::pos2(rect.max.x, rect.max.y), egui::pos2(rect.min.x, rect.max.y)], stroke);
+                            ui.painter().line_segment([egui::pos2(rect.min.x, rect.max.y), egui::pos2(rect.min.x, rect.min.y)], stroke);
                         }
                         if max_btn.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
@@ -231,21 +253,24 @@ impl FerriteApp {
                         let max_tooltip = if is_maximized { "Restore" } else { "Maximize" };
                         max_btn.on_hover_text(max_tooltip);
 
-                        // Minimize button - draw a line
+                        // ── Minimize button (–) ────────────────────────────────────────────
                         let min_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(46.0, 28.0)),
+                                .min_size(egui::vec2(36.0, 22.0)),
                         );
                         if min_btn.hovered() {
-                            ui.painter()
-                                .rect_filled(min_btn.rect, 0.0, button_hover_color);
+                            ui.painter().rect_filled(
+                                min_btn.rect,
+                                egui::Rounding::same(4.0),
+                                button_hover_color,
+                            );
                         }
                         let center = min_btn.rect.center();
                         ui.painter().line_segment(
                             [
-                                egui::pos2(center.x - 5.0, center.y),
-                                egui::pos2(center.x + 5.0, center.y),
+                                egui::pos2(center.x - 6.0, center.y),
+                                egui::pos2(center.x + 6.0, center.y),
                             ],
                             egui::Stroke::new(1.5, text_color),
                         );
@@ -259,29 +284,51 @@ impl FerriteApp {
                         let fullscreen_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(46.0, 28.0)),
+                                .min_size(egui::vec2(36.0, 22.0)),
                         );
                         if fullscreen_btn.hovered() || is_fullscreen {
-                            ui.painter()
-                                .rect_filled(fullscreen_btn.rect, 0.0, button_hover_color);
+                            ui.painter().rect_filled(
+                                fullscreen_btn.rect,
+                                egui::Rounding::same(4.0),
+                                button_hover_color,
+                            );
                         }
-                        // Draw fullscreen icon (4 arrows pointing outward, or inward when in fullscreen)
-                        let fs_center = fullscreen_btn.rect.center();
-                        let arrow_len = 3.5;
-                        let arrow_offset = 4.0;
+                        // Draw fullscreen icon using corner-bracket shapes.
+                        //   Enter fullscreen: ⌜⌝⌞⌟  – L-brackets at outer corners, arms pointing in.
+                        //   Exit  fullscreen: inverse – brackets facing inward, arms pointing out.
+                        let cx = fullscreen_btn.rect.center().x;
+                        let cy = fullscreen_btn.rect.center().y;
+                        let d = 4.5_f32; // corner distance from center
+                        let a = 2.5_f32; // arm length
                         let stroke = egui::Stroke::new(1.5, text_color);
                         if is_fullscreen {
-                            // Inward arrows (exit fullscreen) - draw 4 arrows pointing to center
-                            ui.painter().line_segment([egui::pos2(fs_center.x - arrow_offset, fs_center.y - arrow_offset), egui::pos2(fs_center.x - arrow_offset + arrow_len, fs_center.y - arrow_offset + arrow_len)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x + arrow_offset, fs_center.y - arrow_offset), egui::pos2(fs_center.x + arrow_offset - arrow_len, fs_center.y - arrow_offset + arrow_len)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x - arrow_offset, fs_center.y + arrow_offset), egui::pos2(fs_center.x - arrow_offset + arrow_len, fs_center.y + arrow_offset - arrow_len)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x + arrow_offset, fs_center.y + arrow_offset), egui::pos2(fs_center.x + arrow_offset - arrow_len, fs_center.y + arrow_offset - arrow_len)], stroke);
+                            // Compress icon: inward-facing brackets (vertex near center, arms outward)
+                            // TL
+                            ui.painter().line_segment([egui::pos2(cx-d+a, cy-d+a), egui::pos2(cx-d,   cy-d+a)], stroke); // ← left
+                            ui.painter().line_segment([egui::pos2(cx-d+a, cy-d+a), egui::pos2(cx-d+a, cy-d  )], stroke); // ↑ up
+                            // TR
+                            ui.painter().line_segment([egui::pos2(cx+d-a, cy-d+a), egui::pos2(cx+d,   cy-d+a)], stroke); // → right
+                            ui.painter().line_segment([egui::pos2(cx+d-a, cy-d+a), egui::pos2(cx+d-a, cy-d  )], stroke); // ↑ up
+                            // BL
+                            ui.painter().line_segment([egui::pos2(cx-d+a, cy+d-a), egui::pos2(cx-d,   cy+d-a)], stroke); // ← left
+                            ui.painter().line_segment([egui::pos2(cx-d+a, cy+d-a), egui::pos2(cx-d+a, cy+d  )], stroke); // ↓ down
+                            // BR
+                            ui.painter().line_segment([egui::pos2(cx+d-a, cy+d-a), egui::pos2(cx+d,   cy+d-a)], stroke); // → right
+                            ui.painter().line_segment([egui::pos2(cx+d-a, cy+d-a), egui::pos2(cx+d-a, cy+d  )], stroke); // ↓ down
                         } else {
-                            // Outward arrows (enter fullscreen) - draw 4 arrows pointing away from center
-                            ui.painter().line_segment([egui::pos2(fs_center.x - arrow_offset + arrow_len, fs_center.y - arrow_offset + arrow_len), egui::pos2(fs_center.x - arrow_offset, fs_center.y - arrow_offset)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x + arrow_offset - arrow_len, fs_center.y - arrow_offset + arrow_len), egui::pos2(fs_center.x + arrow_offset, fs_center.y - arrow_offset)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x - arrow_offset + arrow_len, fs_center.y + arrow_offset - arrow_len), egui::pos2(fs_center.x - arrow_offset, fs_center.y + arrow_offset)], stroke);
-                            ui.painter().line_segment([egui::pos2(fs_center.x + arrow_offset - arrow_len, fs_center.y + arrow_offset - arrow_len), egui::pos2(fs_center.x + arrow_offset, fs_center.y + arrow_offset)], stroke);
+                            // Expand icon: outer-facing brackets (vertex at corner, arms pointing in)
+                            // TL
+                            ui.painter().line_segment([egui::pos2(cx-d, cy-d), egui::pos2(cx-d+a, cy-d)], stroke); // → right
+                            ui.painter().line_segment([egui::pos2(cx-d, cy-d), egui::pos2(cx-d,   cy-d+a)], stroke); // ↓ down
+                            // TR
+                            ui.painter().line_segment([egui::pos2(cx+d, cy-d), egui::pos2(cx+d-a, cy-d)], stroke); // ← left
+                            ui.painter().line_segment([egui::pos2(cx+d, cy-d), egui::pos2(cx+d,   cy-d+a)], stroke); // ↓ down
+                            // BL
+                            ui.painter().line_segment([egui::pos2(cx-d, cy+d), egui::pos2(cx-d+a, cy+d)], stroke); // → right
+                            ui.painter().line_segment([egui::pos2(cx-d, cy+d), egui::pos2(cx-d,   cy+d-a)], stroke); // ↑ up
+                            // BR
+                            ui.painter().line_segment([egui::pos2(cx+d, cy+d), egui::pos2(cx+d-a, cy+d)], stroke); // ← left
+                            ui.painter().line_segment([egui::pos2(cx+d, cy+d), egui::pos2(cx+d,   cy+d-a)], stroke); // ↑ up
                         }
                         if fullscreen_btn.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen));
@@ -316,18 +363,17 @@ impl FerriteApp {
 
                         ui.add_space(4.0);
 
-                        // View Mode segmented control (only for document tabs with renderable content)
-                        if has_editor && !is_special_tab && (current_file_type.is_markdown() || current_file_type.is_structured() || current_file_type.is_tabular()) {
-                            // Show the segmented pill control for view mode selection
+                        // View Mode segmented control (all document tabs)
+                        if has_editor && !is_special_tab {
                             let segment = ViewModeSegment::new();
-                            
-                            // Use 3-mode segment for markdown/tabular, 2-mode for structured files
-                            if current_file_type.is_markdown() || current_file_type.is_tabular() {
+
+                            if current_file_type.supports_split() {
+                                // Markdown/tabular: 3-mode (Raw | Split | Rendered)
                                 if let Some(action) = segment.show(ui, current_view_mode, current_file_type, is_dark) {
                                     title_bar_view_action = Some(action);
                                 }
                             } else {
-                                // Structured files (JSON/YAML/TOML): only Raw <-> Rendered
+                                // All other types: 2-mode (Raw | Rendered)
                                 if let Some(action) = segment.show_two_mode(ui, current_view_mode, is_dark) {
                                     title_bar_view_action = Some(action);
                                 }

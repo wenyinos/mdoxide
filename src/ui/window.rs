@@ -39,6 +39,12 @@ const TITLE_BAR_EXCLUSION_HEIGHT: f32 = 35.0;
 /// left and center portions of the window's top edge.
 const TITLE_BAR_BUTTON_AREA_WIDTH: f32 = 280.0;
 
+/// Right margin gap (in logical pixels) between window control buttons and the
+/// window's right edge.  Must be larger than `CORNER_GRAB_SIZE` so the NE
+/// corner grab zone stays button-free.  Kept in sync with the
+/// `ui.add_space(12.0)` call in `title_bar.rs`.
+const TITLE_BAR_BUTTON_RIGHT_MARGIN: f32 = 12.0;
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -221,11 +227,16 @@ fn detect_resize_direction_with_exclusion(
         {
             return Some(ResizeDirection::NorthWest);
         }
-        // NorthEast corner - disabled when in button area (always disabled, as it's in button zone)
+        // NorthEast corner – enabled because the button right margin
+        // (TITLE_BAR_BUTTON_RIGHT_MARGIN = 12 px) is larger than the corner
+        // grab zone (CORNER_GRAB_SIZE = 10 px).  Any cursor position that
+        // satisfies `x > max.x - CORNER_GRAB_SIZE` is therefore always
+        // outside all buttons, so resize is safe everywhere in this zone.
         if (near_right || in_right_zone)
             && pointer_pos.x > max.x - CORNER_GRAB_SIZE
             && pointer_pos.y < min.y + CORNER_GRAB_SIZE
-            && !in_title_bar  // NorthEast is always in button area, so disable if in title bar
+            && (!in_title_bar
+                || pointer_pos.x > max.x - TITLE_BAR_BUTTON_RIGHT_MARGIN)
         {
             return Some(ResizeDirection::NorthEast);
         }
@@ -792,14 +803,16 @@ mod tests {
     }
 
     #[test]
-    fn test_title_bar_northeast_corner_blocked() {
+    fn test_title_bar_northeast_corner_enabled() {
         // Large window to test title bar exclusion
         let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
         let title_bar_height = TITLE_BAR_EXCLUSION_HEIGHT;
 
-        // NorthEast corner (right side, in button area) - should be blocked
+        // NorthEast corner zone (x > 790, y < 10).
+        // With TITLE_BAR_BUTTON_RIGHT_MARGIN (12 px) > CORNER_GRAB_SIZE (10 px),
+        // the rightmost 10 px strip is always button-free, so NE resize works.
         let direction = detect_resize_direction_with_exclusion(rect, Pos2::new(798.0, 2.0), title_bar_height);
-        assert_eq!(direction, None);
+        assert_eq!(direction, Some(ResizeDirection::NorthEast));
     }
 
     #[test]

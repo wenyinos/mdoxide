@@ -76,6 +76,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Syntax Highlighting](./technical/editor/syntax-highlighting.md) | Syntect integration for code block highlighting |
 | [Auto-close Brackets](./technical/editor/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Bracket Matching](./technical/editor/bracket-matching.md) | Highlight matching brackets and parentheses |
+| [Vim Mode](./technical/editor/vim-mode.md) | Optional modal editing with Normal/Insert/Visual modes, Vim keybindings, status bar indicator |
 | [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants |
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 
@@ -98,6 +99,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Keyboard Shortcuts](./technical/ui/keyboard-shortcuts.md) | Global shortcuts for file ops, tab navigation, deferred action pattern |
 | [Keyboard Shortcut Customization](./technical/ui/keyboard-shortcut-customization.md) | Settings panel for rebinding shortcuts with conflict detection, persistence, and reset |
 | [Light Mode Contrast](./technical/ui/light-mode-contrast.md) | WCAG AA color tokens, contrast ratios, border/text improvements |
+| [Light Mode Strong Text Fix](./technical/ui/light-mode-strong-text-fix.md) | Fix invisible `RichText::strong()` labels in light mode (egui strong_text_color coupling) |
 | [Theme System](./technical/ui/theme-system.md) | Unified theming with ThemeColors, ThemeManager, light/dark themes, runtime switching |
 | [Adaptive Toolbar](./technical/ui/adaptive-toolbar.md) | File-type aware toolbar, conditional buttons for Markdown vs JSON/YAML/TOML |
 | [Navigation Buttons](./technical/ui/nav-buttons.md) | Document navigation overlay for quick jumping to top, middle, or bottom |
@@ -134,6 +136,7 @@ These diagrams provide a quick visual overview for new contributors.
 | Document | Description |
 |----------|-------------|
 | [CSV Viewer](./technical/viewers/csv-viewer.md) | CSV/TSV table viewer with scrolling, header highlighting, cell tooltips |
+| **[CSV Lazy Parsing](./technical/viewers/csv-lazy-parsing.md)** | **Byte-offset row indexing for large CSVs, on-demand visible-row parsing, viewport caching** |
 | [CSV Delimiter Detection](./technical/viewers/csv-delimiter-detection.md) | Auto-detect delimiter (comma/tab/semicolon/pipe), manual override, session persistence |
 | [CSV Header Detection](./technical/viewers/csv-header-detection.md) | Auto-detect header rows with heuristics, toggle UI, column alignment |
 | [CSV Rainbow Columns](./technical/viewers/csv-rainbow-columns.md) | Subtle alternating column colors using Oklch, status bar toggle |
@@ -197,6 +200,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |
+| **[MSI Installer Features](./technical/platform/msi-installer-features.md)** | **Windows MSI feature tree: file associations, context menu, PATH, desktop shortcut, Default Apps registration** |
 
 ### Distribution & Packaging
 
@@ -248,6 +252,7 @@ These diagrams provide a quick visual overview for new contributors.
 | **[app.rs Refactoring Plan](./technical/planning/app-rs-refactoring-plan.md)** | **Split 7,634-line app.rs into ~15 focused modules under src/app/** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
+| **[LSP Integration Plan](./lsp-integration-plan.md)** | **v0.2.8 planning: Language Server Protocol client (diagnostics, hover, go-to-def, autocomplete)** |
 
 ### Core (Remaining)
 

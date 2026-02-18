@@ -1515,6 +1515,14 @@ impl FerriteApp {
         // Track backlink navigation request from outline panel
         let mut backlink_navigate_to: Option<std::path::PathBuf> = None;
 
+        // Side panel toggle strip (shown when outline panel is closed, hidden in Zen Mode)
+        if !self.state.settings.outline_enabled && !zen_mode {
+            if crate::ui::side_panel_toggle_strip(ctx, is_dark) {
+                self.state.settings.outline_enabled = true;
+                self.state.mark_settings_dirty();
+            }
+        }
+
         if self.state.settings.outline_enabled && !zen_mode {
             // Update outline if content changed
             self.update_outline_if_needed();

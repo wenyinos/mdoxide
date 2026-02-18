@@ -36,6 +36,7 @@ view_mode:
 status:
   untitled: "Untitled"
   no_file: "No file open"
+  vim_mode: "Vim editing mode (Esc = Normal, i = Insert)"
 
 # File dialogs
 dialog:
@@ -136,6 +137,8 @@ settings:
     sync_scroll_tooltip: "Synchronize scroll position when switching between Raw and Rendered views"
     use_spaces: "Use Spaces for Indentation"
     use_spaces_tooltip: "Use spaces instead of tabs for indentation"
+    vim_mode: "Vim Mode"
+    vim_mode_tooltip: "Enable Vim-style modal editing with Normal, Insert, and Visual modes. Use hjkl for navigation, i for insert, Esc for normal mode."
     max_line_width: "Maximum Line Width"
     custom_width: "Custom - Specify pixel width"
     code_folding: "Code Folding"
