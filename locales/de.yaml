@@ -38,6 +38,21 @@ status:
   no_file: "Keine Datei geöffnet"
 
 # File dialogs
+  vim_mode: Vim-Benutzeroberfläche (Esc = Standardmodus, i = Einfügen)
+  cursor_position: Zeile %{line}, Spalte %{col}
+  delimiter_tooltip: |-
+    Begrenzungszeichen: %{delimiter}
+    %{info} ändern durch draufklicken
+  header_tooltip: |-
+    erste Zeile als Überschriften: %{status}
+    %{info} ändern durch Draufklicken
+  rainbow_tooltip: |-
+    Zebra-Darstellung der Spalten: %{status}
+    umschalten durch Draufklicken
+  encoding_tooltip: |-
+    Dateikodierung: %{encoding}
+    %{info} klicken zum Ändern
+  encoding_heading: Dateikodierung
 dialog:
   unsaved_changes:
     title: "Ungespeicherte Änderungen"
@@ -228,6 +243,13 @@ settings:
     all_releases: Alle Versionen
     view_release: Version anschauen und laden
     description: Ein schneller, schlanker Editor für Markdown, JSON und mehr
+  terminal:
+    enable: Integriertes Terminal verwenden
+    font_size: Schriftgröße
+    scrollback: 'Zurückscrollen: Zeilen'
+    copy_selection: Auswahl automatisch kopieren
+    copy_selection_tooltip: Automatisch Text in Zwischenablage kopieren wenn er 
+      mit der Maus selektiert wird
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
