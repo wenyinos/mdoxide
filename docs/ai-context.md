@@ -26,7 +26,7 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 | `workers/` | Async worker infrastructure (feature-gated `async-workers`, tokio runtime) |
 | `platform/` | Platform-specific code (macOS Apple Events) |
 | `single_instance.rs` | Lock file + TCP IPC so double-clicking files opens tabs in existing window |
-| `fonts.rs` | Font loading, lazy CJK, family selection |
+| `fonts.rs` | Font loading, lazy CJK, complex script lazy loading (11 families), family selection |
 | `update.rs` | Update checker (GitHub Releases API) |
 
 ## FerriteEditor
@@ -133,10 +133,12 @@ cargo test           # Run tests
 ## Current Focus
 
 - Finishing v0.2.7 release (performance, polish, new features)
-- Key areas: wikilinks/backlinks, vim mode, callouts, single-instance, welcome page, Unicode font loading
+- Key areas: wikilinks/backlinks, vim mode, callouts, single-instance, welcome page, Unicode font loading (Phase 1 done)
 - v0.2.8 planned: LSP integration, HarfRust text shaping for complex scripts (Arabic, Bengali, Devanagari)
 - v0.3.0 planned: RTL/BiDi text support, mermaid crate extraction, math rendering
 
 ## Recently Changed
 
+- **2026-02-23**: Fixed table rendering in `widgets.rs`: (1) Background alignment — replaced pre-painted backgrounds with Shape::Noop placeholder technique, painting actual-rect backgrounds after row renders. (2) Cell layout — changed from inherited `left_to_right` to explicit `top_down` so vertical padding works. (3) Removed `set_max_size` height constraint. (4) Added column resizing — draggable separators with proportional width persistence in `TableEditState.custom_col_widths`, double-click reset, min-width enforcement.
+- **2026-02-23**: Implemented Unicode Complex Script Font Loading (Phase 1). Extended `fonts.rs` with lazy loading for 11 script families (Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic, Southeast Asian) — 22 Unicode ranges, per-script AtomicBool flags, platform-specific system font candidates, `ComplexScriptDetection`/`ComplexScriptLoadSpec` structs, 17 tests. Triggers in `app/mod.rs` (per-frame + deferred file open) and `app/central_panel.rs` (IME). Font rebuild automatically includes already-loaded complex script fonts via `from_loaded_flags()`.
 - **2026-02-23**: Added 4-phase Unicode/complex script support plan to ROADMAP.md. Phase 1 (font loading) in v0.2.7, Phase 2 (HarfRust text shaping) in v0.2.8, Phase 3-4 (RTL/BiDi + WYSIWYG) in v0.3.0. egui upstream (0.33) has no complex text shaping — Parley integration PR #5784 stalled Nov 2025. We integrate HarfRust directly into FerriteEditor.

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Manual Check for Updates** - Settings → About section with button to check GitHub Releases API; shows up-to-date, update available with download link, or error; user-initiated only (offline-first)
 - **Security hardening** - Response URL validated against GitHub releases prefix; TLS via rustls (pure Rust)
 
+#### Unicode & Complex Script Support
+- **Lazy font loading for complex scripts** - Extends the CJK lazy-loading system to cover 22 Unicode ranges across 11 script families: Arabic (5 sub-ranges), Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic (Gujarati, Gurmukhi, Kannada, Malayalam, Telugu), and Southeast Asian (Myanmar, Khmer, Sinhala). System fonts are loaded on demand when script characters are detected in file content or IME input (~1-5MB per script vs ~15-20MB for CJK). No new dependencies.
+
 #### Large File & Performance
 - **Large file detection** - Files >10MB on open show non-blocking performance warning toast
 - **Lazy CSV row parsing** - Large CSV/TSV files (≥1MB) now use byte-offset row indexing instead of parsing all rows into memory. Only visible rows (~200) are parsed on demand with viewport caching. For a 1M-row CSV, reduces additional memory from ~100-200MB to ~8MB. Small files (<1MB) now use cached full parse (previously re-parsed every frame)
@@ -34,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desktop shortcut** - Optional desktop shortcut alongside the existing Start Menu shortcut
 - **Feature selection UI** - Installer now uses WixUI_FeatureTree with a customization page where users can toggle each feature group independently
 - **Launch after install** - "Launch Ferrite" checkbox on the installer exit dialog (checked by default)
+
+#### Table Editing
+- **Table background & layout fix** - Replaced pre-painted row backgrounds (which used pre-measured heights causing misalignment) with the Shape::Noop placeholder technique (same approach as egui's Frame). Backgrounds are now painted after content using actual rendered row dimensions, eliminating gaps, overlap, and text rendering outside row bounds. Fixed cell layout direction from inherited `left_to_right` to explicit `top_down` so vertical padding works correctly.
+- **Column resizing** - Drag vertical column separators to resize adjacent columns. Cursor changes to resize-horizontal on hover; visual guide line during drag. Custom widths persist in egui memory per table and scale proportionally on window resize. Double-click a separator to reset all columns to auto-calculated widths.
 
 #### Editing Modes
 - **Vim mode** - Optional Vim-style modal editing with Normal/Insert/Visual modes. Essential Vim commands: hjkl movement, dd (delete line), yy (yank), p (paste), /search, v/V (visual selection). Mode indicator in status bar ([NORMAL]/[INSERT]/[VISUAL]). Toggle in Settings → Editor. Ctrl+ shortcuts still work globally when Vim mode is active.
@@ -701,7 +708,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
-- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, flowchart refactoring, window control redesign, 10+ bug fixes
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, 10+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix

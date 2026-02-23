@@ -77,7 +77,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Auto-close Brackets](./technical/editor/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Bracket Matching](./technical/editor/bracket-matching.md) | Highlight matching brackets and parentheses |
 | [Vim Mode](./technical/editor/vim-mode.md) | Optional modal editing with Normal/Insert/Visual modes, Vim keybindings, status bar indicator |
-| [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants |
+| [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants, CJK lazy loading, complex script lazy loading (11 families) |
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 
 ### UI Components

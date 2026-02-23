@@ -4208,25 +4208,17 @@ fn render_table(
             .clone()
     });
 
-    // Wrap table in horizontal scroll area to prevent width overflow.
-    // This ensures wide tables scroll horizontally instead of expanding
-    // the parent layout and breaking max_line_width for subsequent content.
-    let output = ui.horizontal(|ui| {
-        ui.add_space(BASE_INDENT);
-        
-        egui::ScrollArea::horizontal()
-            .id_source(table_id.with("scroll"))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                EditableTable::new(&mut table_data)
-                    .font_size(font_size)
-                    .colors(widget_colors)
-                    .with_controls(true)
-                    .with_alignment_controls(true)
-                    .id(table_id)
-                    .show(ui)
-            }).inner
-    }).inner;
+    // Capture available width BEFORE any layout changes
+    let table_avail_width = (ui.available_width() - BASE_INDENT).max(100.0);
+
+    let output = EditableTable::new(&mut table_data)
+        .font_size(font_size)
+        .colors(widget_colors)
+        .with_controls(true)
+        .with_alignment_controls(true)
+        .id(table_id)
+        .max_width(table_avail_width)
+        .show(ui);
 
     // Update stored data if changed
     if output.changed {

@@ -972,6 +972,9 @@ pub struct TableEditState {
     /// Whether any cell content was modified while editing.
     /// Reset when focus leaves the table.
     pub content_modified: bool,
+    /// User-resized column widths. None = use auto-calculated widths.
+    /// Stored as absolute pixels; normalized to table_width on each frame.
+    pub custom_col_widths: Option<Vec<f32>>,
 }
 
 impl TableEditState {
@@ -1337,6 +1340,8 @@ pub struct EditableTable<'a> {
     show_alignment_controls: bool,
     /// Unique ID for the table
     id: Option<egui::Id>,
+    /// Hard maximum width for the table (overrides available_width)
+    max_width: Option<f32>,
 }
 
 impl<'a> EditableTable<'a> {
@@ -1349,6 +1354,7 @@ impl<'a> EditableTable<'a> {
             show_controls: true,
             show_alignment_controls: true,
             id: None,
+            max_width: None,
         }
     }
 
@@ -1386,6 +1392,13 @@ impl<'a> EditableTable<'a> {
     #[must_use]
     pub fn id(mut self, id: egui::Id) -> Self {
         self.id = Some(id);
+        self
+    }
+
+    /// Set a hard maximum width for the table.
+    #[must_use]
+    pub fn max_width(mut self, width: f32) -> Self {
+        self.max_width = Some(width);
         self
     }
 
@@ -1460,10 +1473,141 @@ impl<'a> EditableTable<'a> {
 
         ui.add_space(4.0);
 
-        // Main table frame with modern styling
+        let num_cols = self.data.num_columns.max(1);
+        let min_col_width = 40.0_f32;
+        let char_width = self.font_size * 0.6;
+        let cell_h_pad = 8.0_f32;
+        let cell_v_pad = 6.0_f32;
+        let line_height = self.font_size * 1.4;
+
+        // Use the explicit max_width if provided, otherwise fall back to available
+        let frame_h_margin = 4.0 * 2.0;
+        let hard_width = self
+            .max_width
+            .unwrap_or_else(|| ui.available_width())
+            .min(ui.available_width());
+        let table_width = (hard_width - frame_h_margin).max(min_col_width);
+
+        // Column widths: short columns keep their natural width,
+        // remaining space is distributed among long columns.
+        let col_widths: Vec<f32> = {
+            // Measure each column's single-line natural width
+            let natural: Vec<f32> = (0..num_cols)
+                .map(|ci| {
+                    let max_text_w = self
+                        .data
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.get(ci))
+                        .map(|c| {
+                            let galley = ui.fonts(|f| {
+                                f.layout_no_wrap(
+                                    c.text.clone(),
+                                    FontId::proportional(self.font_size),
+                                    egui::Color32::PLACEHOLDER,
+                                )
+                            });
+                            galley.size().x
+                        })
+                        .fold(0.0_f32, f32::max);
+                    (max_text_w + cell_h_pad * 2.0).max(min_col_width)
+                })
+                .collect();
+
+            let total_natural: f32 = natural.iter().sum();
+
+            if total_natural <= table_width {
+                // Everything fits on one line — scale up proportionally
+                let scale = table_width / total_natural;
+                natural.iter().map(|&w| w * scale).collect()
+            } else {
+                // Some columns must wrap. Give short columns their natural
+                // width; distribute the remainder among long columns.
+                let fair_share = table_width / num_cols as f32;
+
+                // "Short" = fits in fair_share or less
+                let mut short_total = 0.0_f32;
+                let mut long_natural_total = 0.0_f32;
+                let mut is_short = vec![false; num_cols];
+
+                for (ci, &nw) in natural.iter().enumerate() {
+                    if nw <= fair_share {
+                        is_short[ci] = true;
+                        short_total += nw;
+                    } else {
+                        long_natural_total += nw;
+                    }
+                }
+
+                let remaining = (table_width - short_total).max(0.0);
+
+                natural
+                    .iter()
+                    .enumerate()
+                    .map(|(ci, &nw)| {
+                        if is_short[ci] {
+                            nw
+                        } else if long_natural_total > 0.0 {
+                            (nw / long_natural_total * remaining).max(min_col_width)
+                        } else {
+                            remaining / num_cols as f32
+                        }
+                    })
+                    .collect()
+            }
+        };
+
+        // Apply user-resized column widths if available, scaled to current table_width
+        let col_widths = if let Some(ref custom) = edit_state.custom_col_widths {
+            if custom.len() == num_cols {
+                let sum: f32 = custom.iter().sum();
+                if sum > 0.0 {
+                    custom.iter().map(|&w| w * table_width / sum).collect()
+                } else {
+                    col_widths
+                }
+            } else {
+                col_widths
+            }
+        } else {
+            col_widths
+        };
+
+        // Pre-measure row heights at the exact column widths
+        let row_heights: Vec<f32> = (0..self.data.rows.len())
+            .map(|ri| {
+                let mut max_h = line_height;
+                if let Some(row) = self.data.rows.get(ri) {
+                    for ci in 0..num_cols {
+                        if let Some(cell) = row.get(ci) {
+                            let cw = col_widths.get(ci).copied().unwrap_or(100.0);
+                            let wrap_w = (cw - cell_h_pad * 2.0).max(20.0);
+                            let galley = ui.fonts(|f| {
+                                f.layout(
+                                    cell.text.clone(),
+                                    FontId::proportional(self.font_size),
+                                    egui::Color32::PLACEHOLDER,
+                                    wrap_w,
+                                )
+                            });
+                            max_h = max_h.max(galley.size().y);
+                        }
+                    }
+                }
+                max_h + cell_v_pad * 2.0
+            })
+            .collect();
+
+        let stripe_color = if is_dark {
+            egui::Color32::from_rgb(35, 38, 46)
+        } else {
+            egui::Color32::from_rgb(245, 247, 250)
+        };
+
+        // Main table frame
         egui::Frame::none()
             .stroke(egui::Stroke::new(1.0, border_color))
-            .inner_margin(0.0)
+            .inner_margin(egui::Margin::symmetric(4.0, 0.0))
             .rounding(6.0)
             .shadow(if is_dark {
                 egui::epaint::Shadow::NONE
@@ -1476,311 +1620,454 @@ impl<'a> EditableTable<'a> {
                 }
             })
             .show(ui, |ui| {
-                // Calculate column widths based on content
-                let min_col_width = 80.0_f32;
-                let char_width = self.font_size * 0.6;
-                let cell_padding = 28.0_f32;
+                ui.set_min_width(table_width);
+                ui.set_max_width(table_width);
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 
-                let col_widths: Vec<f32> = (0..self.data.num_columns)
-                    .map(|col_idx| {
-                        let max_text_len = self
-                            .data
-                            .rows
-                            .iter()
-                            .filter_map(|row| row.get(col_idx))
-                            .map(|cell| cell.text.len())
-                            .max()
-                            .unwrap_or(0);
+                let frame_left = ui.cursor().min.x;
+                let mut table_top_y = 0.0_f32;
+                let mut table_bottom_y = 0.0_f32;
 
-                        let text_width = (max_text_len as f32 * char_width) + cell_padding;
-                        text_width.max(min_col_width).min(400.0)
-                    })
-                    .collect();
+                for row_idx in 0..self.data.rows.len() {
+                    let is_header = row_idx == 0;
+                    let row_h = row_heights
+                        .get(row_idx)
+                        .copied()
+                        .unwrap_or(line_height + cell_v_pad * 2.0);
 
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
+                    // Reserve a paint slot for the background (filled after we know actual height)
+                    let bg_idx = ui.painter().add(egui::Shape::Noop);
 
-                    // Render each row
-                    for row_idx in 0..self.data.rows.len() {
-                        let is_header = row_idx == 0;
-                        let row_bg = if is_header { header_bg } else { cell_bg };
+                    let row_response = ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                        // Force the row to be exactly table_width wide
+                        ui.set_min_width(table_width);
+                        ui.set_max_width(table_width);
 
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
+                        for col_idx in 0..num_cols {
+                            let cw = col_widths
+                                .get(col_idx)
+                                .copied()
+                                .unwrap_or(table_width / num_cols as f32);
 
-                            // Render cells for this row
-                            for col_idx in 0..self.data.num_columns {
-                                let col_width = col_widths.get(col_idx).copied().unwrap_or(min_col_width);
-                                let is_last_col = col_idx == self.data.num_columns - 1;
+                            let text_color = if is_header {
+                                colors.heading
+                            } else {
+                                colors.text
+                            };
 
-                                // Cell styling with subtle borders
-                                let cell_stroke = if is_last_col {
-                                    egui::Stroke::NONE
-                                } else {
-                                    egui::Stroke::new(1.0, border_color)
-                                };
+                            let cell_size = egui::vec2(cw, row_h);
+                            ui.allocate_ui_with_layout(
+                                cell_size,
+                                egui::Layout::top_down(egui::Align::LEFT),
+                                |ui| {
+                                ui.set_min_width(cw);
+                                ui.set_max_width(cw);
 
-                                let cell_response = egui::Frame::none()
-                                    .fill(row_bg)
-                                    .stroke(egui::Stroke::NONE)
-                                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-                                    .show(ui, |ui| {
-                                        if let Some(row) = self.data.rows.get_mut(row_idx) {
-                                            if let Some(cell) = row.get_mut(col_idx) {
-                                                let cell_id = table_id
-                                                    .with("cell")
-                                                    .with(row_idx)
-                                                    .with(col_idx);
+                                ui.add_space(cell_v_pad);
+                                ui.horizontal(|ui| {
+                                    ui.add_space(cell_h_pad);
+                                    let inner_w = (cw - cell_h_pad * 2.0).max(20.0);
 
-                                                let text_color = if is_header {
-                                                    colors.heading
-                                                } else {
-                                                    colors.text
+                                    if let Some(row) =
+                                        self.data.rows.get_mut(row_idx)
+                                    {
+                                        if let Some(cell) = row.get_mut(col_idx) {
+                                            let cell_id = table_id
+                                                .with("cell")
+                                                .with(row_idx)
+                                                .with(col_idx);
+                                            let font =
+                                                FontId::proportional(self.font_size);
+
+                                            let cell_has_focus =
+                                                ui.memory(|mem| mem.has_focus(cell_id));
+                                            let enter_pressed = cell_has_focus
+                                                && ui.input_mut(|i| {
+                                                    i.consume_key(
+                                                        egui::Modifiers::NONE,
+                                                        Key::Enter,
+                                                    )
+                                                });
+                                            let tab_pressed = cell_has_focus
+                                                && ui.input_mut(|i| {
+                                                    i.consume_key(
+                                                        egui::Modifiers::NONE,
+                                                        Key::Tab,
+                                                    )
+                                                });
+                                            let shift_tab_pressed = cell_has_focus
+                                                && ui.input_mut(|i| {
+                                                    i.consume_key(
+                                                        egui::Modifiers::SHIFT,
+                                                        Key::Tab,
+                                                    )
+                                                });
+
+                                            let wrap_font = font.clone();
+                                            let wrap_color = text_color;
+                                            let mut layouter =
+                                                move |ui_inner: &egui::Ui,
+                                                      text: &str,
+                                                      _wrap_width: f32| {
+                                                    let job =
+                                                        egui::text::LayoutJob::simple(
+                                                            text.to_string(),
+                                                            wrap_font.clone(),
+                                                            wrap_color,
+                                                            inner_w,
+                                                        );
+                                                    ui_inner
+                                                        .fonts(|f| f.layout_job(job))
                                                 };
 
-                                                let font = if is_header {
-                                                    FontId::proportional(self.font_size)
-                                                } else {
-                                                    FontId::proportional(self.font_size)
-                                                };
-
-                                                ui.set_min_width(col_width);
-
-                                                let text_edit = TextEdit::singleline(&mut cell.text)
+                                            let output =
+                                                TextEdit::multiline(&mut cell.text)
                                                     .id(cell_id)
                                                     .font(font)
                                                     .text_color(text_color)
                                                     .frame(false)
-                                                    .desired_width(col_width);
+                                                    .desired_width(inner_w)
+                                                    .desired_rows(1)
+                                                    .layouter(&mut layouter)
+                                                    .show(ui);
 
-                                                let output = text_edit.show(ui);
-                                                let response = output.response;
-
-                                                if pending_focus == Some((row_idx, col_idx)) {
-                                                    response.request_focus();
-                                                }
-
-                                                if response.has_focus() {
-                                                    edit_state.focused_cell = Some((row_idx, col_idx));
-                                                    any_cell_has_focus = true;
-
-                                                    let num_rows = self.data.rows.len();
-                                                    let num_cols = self.data.num_columns;
-
-                                                    if ui.input(|i| i.key_pressed(Key::Tab) && !i.modifiers.shift) {
-                                                        edit_state.move_next(num_rows, num_cols);
-                                                    } else if ui.input(|i| i.key_pressed(Key::Tab) && i.modifiers.shift) {
-                                                        edit_state.move_prev(num_cols);
-                                                    } else if ui.input(|i| i.key_pressed(Key::Enter)) {
-                                                        edit_state.move_down(num_rows);
-                                                    } else if ui.input(|i| i.key_pressed(Key::Escape)) {
-                                                        edit_state.clear_focus();
-                                                        ui.memory_mut(|mem| mem.surrender_focus(cell_id));
-                                                    }
-                                                }
-
-                                                if response.changed() {
-                                                    edit_state.content_modified = true;
-                                                }
+                                            if cell.text.contains('\n') {
+                                                cell.text =
+                                                    cell.text.replace('\n', " ");
+                                                edit_state.content_modified = true;
                                             }
-                                        }
-                                    });
 
-                                // Draw right border AFTER cell content is rendered,
-                                // using the actual cell bounds from the Frame response
-                                if !is_last_col {
-                                    let cell_rect = cell_response.response.rect;
-                                    ui.painter().vline(
-                                        cell_rect.right(),
-                                        cell_rect.y_range(),
-                                        cell_stroke,
-                                    );
-                                }
-                            }
-
-                            // Row controls (always visible when controls enabled)
-                            if self.show_controls {
-                                ui.add_space(4.0);
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 2.0;
-                                    
-                                    // Delete row button (if more than one row)
-                                    if self.data.rows.len() > 1 {
-                                        let del_btn = ui.add(
-                                            egui::Button::new(
-                                                RichText::new("×")
-                                                    .size(self.font_size * 0.9)
-                                                    .color(control_color)
-                                            )
-                                            .frame(false)
-                                            .min_size(egui::vec2(18.0, 18.0))
-                                        );
-                                        if del_btn.hovered() {
-                                            ui.painter().text(
-                                                del_btn.rect.center(),
-                                                egui::Align2::CENTER_CENTER,
-                                                "×",
-                                                FontId::proportional(self.font_size * 0.9),
-                                                control_hover_color,
-                                            );
-                                        }
-                                        if del_btn.on_hover_text(t!("widgets.table.delete_row").to_string()).clicked() {
-                                            action = Some(TableAction::RemoveRow(row_idx));
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    }
-
-                    // Modern toolbar at bottom
-                    if self.show_controls {
-                        ui.add_space(2.0);
-                        
-                        // Subtle toolbar background
-                        egui::Frame::none()
-                            .fill(hover_bg)
-                            .inner_margin(egui::Margin::symmetric(8.0, 6.0))
-                            .rounding(egui::Rounding {
-                                nw: 0.0,
-                                ne: 0.0,
-                                sw: 6.0,
-                                se: 6.0,
-                            })
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 12.0;
-
-                                    // Add row button
-                                    let add_row_btn = ui.add(
-                                        egui::Button::new(
-                                            RichText::new(t!("widgets.table.add_row").to_string())
-                                                .size(self.font_size * 0.85)
-                                                .color(control_color)
-                                        )
-                                        .frame(false)
-                                    );
-                                    if add_row_btn.hovered() {
-                                        ui.painter().text(
-                                            add_row_btn.rect.center(),
-                                            egui::Align2::CENTER_CENTER,
-                                            t!("widgets.table.add_row").to_string(),
-                                            FontId::proportional(self.font_size * 0.85),
-                                            control_hover_color,
-                                        );
-                                    }
-                                    if add_row_btn.on_hover_text(t!("widgets.table.add_row_tooltip").to_string()).clicked() {
-                                        action = Some(TableAction::AddRow);
-                                    }
-
-                                    // Add column button
-                                    let add_col_btn = ui.add(
-                                        egui::Button::new(
-                                            RichText::new(t!("widgets.table.add_column").to_string())
-                                                .size(self.font_size * 0.85)
-                                                .color(control_color)
-                                        )
-                                        .frame(false)
-                                    );
-                                    if add_col_btn.hovered() {
-                                        ui.painter().text(
-                                            add_col_btn.rect.center(),
-                                            egui::Align2::CENTER_CENTER,
-                                            t!("widgets.table.add_column").to_string(),
-                                            FontId::proportional(self.font_size * 0.85),
-                                            control_hover_color,
-                                        );
-                                    }
-                                    if add_col_btn.on_hover_text(t!("widgets.table.add_column_tooltip").to_string()).clicked() {
-                                        action = Some(TableAction::AddColumn);
-                                    }
-
-                                    // Separator
-                                    if self.data.num_columns > 1 {
-                                        ui.add_space(4.0);
-                                        ui.separator();
-                                        ui.add_space(4.0);
-
-                                        // Column delete buttons (compact)
-                                        ui.label(
-                                            RichText::new(t!("widgets.table.delete_column_label").to_string())
-                                                .size(self.font_size * 0.8)
-                                                .color(control_color)
-                                        );
-                                        
-                                        for col in 0..self.data.num_columns {
-                                            let col_label = format!("{}", col + 1);
-                                            let del_col_btn = ui.add(
-                                                egui::Button::new(
-                                                    RichText::new(&col_label)
-                                                        .size(self.font_size * 0.8)
-                                                        .color(control_color)
-                                                )
-                                                .frame(false)
-                                                .min_size(egui::vec2(16.0, 16.0))
-                                            );
-                                            if del_col_btn.hovered() {
-                                                ui.painter().text(
-                                                    del_col_btn.rect.center(),
-                                                    egui::Align2::CENTER_CENTER,
-                                                    &col_label,
-                                                    FontId::proportional(self.font_size * 0.8),
-                                                    control_hover_color,
-                                                );
-                                            }
-                                            if del_col_btn
-                                                .on_hover_text(t!("widgets.table.delete_column", index = (col + 1).to_string()).to_string())
-                                                .clicked()
+                                            let response = output.response;
+                                            if pending_focus
+                                                == Some((row_idx, col_idx))
                                             {
-                                                action = Some(TableAction::RemoveColumn(col));
+                                                response.request_focus();
                                             }
-                                        }
-                                    }
-
-                                    // Alignment controls (if enabled)
-                                    if self.show_alignment_controls && self.data.num_columns > 0 {
-                                        ui.add_space(4.0);
-                                        ui.separator();
-                                        ui.add_space(4.0);
-
-                                        ui.label(
-                                            RichText::new(t!("widgets.table.align_label").to_string())
-                                                .size(self.font_size * 0.8)
-                                                .color(control_color)
-                                        );
-
-                                        for col in 0..self.data.num_columns {
-                                            let align = self
-                                                .data
-                                                .alignments
-                                                .get(col)
-                                                .copied()
-                                                .unwrap_or(TableAlignment::None);
-
-                                            let (align_icon, tooltip) = match align {
-                                                TableAlignment::Left => ("⬅", t!("widgets.table.align_left").to_string()),
-                                                TableAlignment::Center => ("⬌", t!("widgets.table.align_center").to_string()),
-                                                TableAlignment::Right => ("➡", t!("widgets.table.align_right").to_string()),
-                                                TableAlignment::None => ("—", t!("widgets.table.align_none").to_string()),
-                                            };
-
-                                            let align_btn = ui.add(
-                                                egui::Button::new(
-                                                    RichText::new(align_icon)
-                                                        .size(self.font_size * 0.8)
-                                                        .color(control_color)
-                                                )
-                                                .frame(false)
-                                            );
-                                            if align_btn.on_hover_text(format!("{} (click to cycle)", tooltip)).clicked() {
-                                                action = Some(TableAction::CycleAlignment(col));
+                                            if response.has_focus() {
+                                                edit_state.focused_cell =
+                                                    Some((row_idx, col_idx));
+                                                any_cell_has_focus = true;
+                                                let nr = self.data.rows.len();
+                                                let nc = self.data.num_columns;
+                                                if tab_pressed {
+                                                    edit_state.move_next(nr, nc);
+                                                } else if shift_tab_pressed {
+                                                    edit_state.move_prev(nc);
+                                                } else if enter_pressed {
+                                                    edit_state.move_down(nr);
+                                                } else if ui.input(|i| {
+                                                    i.key_pressed(Key::Escape)
+                                                }) {
+                                                    edit_state.clear_focus();
+                                                    ui.memory_mut(|m| {
+                                                        m.surrender_focus(cell_id)
+                                                    });
+                                                }
+                                            }
+                                            if response.changed() {
+                                                edit_state.content_modified = true;
                                             }
                                         }
                                     }
                                 });
                             });
+                        }
+                    });
+
+                    // Track table vertical extent for resize handles
+                    let actual_rect = row_response.response.rect;
+                    if row_idx == 0 {
+                        table_top_y = actual_rect.min.y;
                     }
-                });
+                    table_bottom_y = actual_rect.max.y;
+
+                    // Paint row background into reserved slot using actual rendered dimensions
+                    let bg_rect = egui::Rect::from_min_size(
+                        egui::pos2(frame_left, actual_rect.min.y),
+                        egui::vec2(table_width, actual_rect.height()),
+                    );
+                    let bg_color = if is_header {
+                        header_bg
+                    } else if row_idx % 2 == 0 {
+                        stripe_color
+                    } else {
+                        cell_bg
+                    };
+                    ui.painter().set(
+                        bg_idx,
+                        egui::Shape::rect_filled(bg_rect, 0.0, bg_color),
+                    );
+                    let row_y_min = actual_rect.min.y;
+                    let row_y_max = actual_rect.max.y;
+
+                    // Vertical column separators
+                    {
+                        let mut x = frame_left;
+                        for ci in 0..num_cols - 1 {
+                            x += col_widths.get(ci).copied().unwrap_or(0.0);
+                            ui.painter().vline(
+                                x,
+                                row_y_min..=row_y_max,
+                                egui::Stroke::new(0.5, border_color),
+                            );
+                        }
+                    }
+
+                    // Horizontal separator after header
+                    if is_header {
+                        ui.painter().hline(
+                            frame_left..=frame_left + table_width,
+                            row_y_max,
+                            egui::Stroke::new(1.5, border_color),
+                        );
+                    }
+                }
+
+                // ── Column resize handles ──
+                if num_cols > 1 {
+                    let table_h = (table_bottom_y - table_top_y).max(1.0);
+                    let handle_half_w = 3.0_f32;
+                    let mut x = frame_left;
+                    for ci in 0..num_cols - 1 {
+                        x += col_widths.get(ci).copied().unwrap_or(0.0);
+                        let handle_rect = egui::Rect::from_min_size(
+                            egui::pos2(x - handle_half_w, table_top_y),
+                            egui::vec2(handle_half_w * 2.0, table_h),
+                        );
+                        let handle_id = table_id.with("col_resize").with(ci);
+                        let response = ui.interact(
+                            handle_rect,
+                            handle_id,
+                            egui::Sense::click_and_drag(),
+                        );
+
+                        if response.hovered() || response.dragged() {
+                            ui.ctx()
+                                .set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                        }
+
+                        if response.dragged() {
+                            let delta = response.drag_delta().x;
+                            let mut widths = col_widths.clone();
+                            let new_left = (widths[ci] + delta).max(min_col_width);
+                            let new_right =
+                                (widths[ci + 1] - delta).max(min_col_width);
+                            if new_left >= min_col_width
+                                && new_right >= min_col_width
+                            {
+                                widths[ci] = new_left;
+                                widths[ci + 1] = new_right;
+                                edit_state.custom_col_widths = Some(widths);
+                            }
+                        }
+
+                        if response.double_clicked() {
+                            edit_state.custom_col_widths = None;
+                        }
+
+                        if response.dragged() {
+                            ui.painter().vline(
+                                x + response.drag_delta().x,
+                                table_top_y..=table_bottom_y,
+                                egui::Stroke::new(1.5, border_color),
+                            );
+                        }
+                    }
+                }
+
+                // ── Toolbar (add/remove rows, columns, alignment) ──
+                if self.show_controls {
+                    ui.add_space(2.0);
+
+                    egui::Frame::none()
+                        .fill(hover_bg)
+                        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                        .rounding(egui::Rounding {
+                            nw: 0.0,
+                            ne: 0.0,
+                            sw: 6.0,
+                            se: 6.0,
+                        })
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 12.0;
+
+                                let add_row_btn = ui.add(
+                                    egui::Button::new(
+                                        RichText::new(
+                                            t!("widgets.table.add_row").to_string(),
+                                        )
+                                        .size(self.font_size * 0.85)
+                                        .color(control_color),
+                                    )
+                                    .frame(false),
+                                );
+                                if add_row_btn.hovered() {
+                                    ui.painter().text(
+                                        add_row_btn.rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        t!("widgets.table.add_row").to_string(),
+                                        FontId::proportional(self.font_size * 0.85),
+                                        control_hover_color,
+                                    );
+                                }
+                                if add_row_btn
+                                    .on_hover_text(
+                                        t!("widgets.table.add_row_tooltip").to_string(),
+                                    )
+                                    .clicked()
+                                {
+                                    action = Some(TableAction::AddRow);
+                                }
+
+                                let add_col_btn = ui.add(
+                                    egui::Button::new(
+                                        RichText::new(
+                                            t!("widgets.table.add_column").to_string(),
+                                        )
+                                        .size(self.font_size * 0.85)
+                                        .color(control_color),
+                                    )
+                                    .frame(false),
+                                );
+                                if add_col_btn.hovered() {
+                                    ui.painter().text(
+                                        add_col_btn.rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        t!("widgets.table.add_column").to_string(),
+                                        FontId::proportional(self.font_size * 0.85),
+                                        control_hover_color,
+                                    );
+                                }
+                                if add_col_btn
+                                    .on_hover_text(
+                                        t!("widgets.table.add_column_tooltip").to_string(),
+                                    )
+                                    .clicked()
+                                {
+                                    action = Some(TableAction::AddColumn);
+                                }
+
+                                if self.data.num_columns > 1 {
+                                    ui.add_space(4.0);
+                                    ui.separator();
+                                    ui.add_space(4.0);
+
+                                    ui.label(
+                                        RichText::new(
+                                            t!("widgets.table.delete_column_label")
+                                                .to_string(),
+                                        )
+                                        .size(self.font_size * 0.8)
+                                        .color(control_color),
+                                    );
+
+                                    for col in 0..self.data.num_columns {
+                                        let col_label = format!("{}", col + 1);
+                                        let del_col_btn = ui.add(
+                                            egui::Button::new(
+                                                RichText::new(&col_label)
+                                                    .size(self.font_size * 0.8)
+                                                    .color(control_color),
+                                            )
+                                            .frame(false)
+                                            .min_size(egui::vec2(16.0, 16.0)),
+                                        );
+                                        if del_col_btn.hovered() {
+                                            ui.painter().text(
+                                                del_col_btn.rect.center(),
+                                                egui::Align2::CENTER_CENTER,
+                                                &col_label,
+                                                FontId::proportional(
+                                                    self.font_size * 0.8,
+                                                ),
+                                                control_hover_color,
+                                            );
+                                        }
+                                        if del_col_btn
+                                            .on_hover_text(
+                                                t!(
+                                                    "widgets.table.delete_column",
+                                                    index = (col + 1).to_string()
+                                                )
+                                                .to_string(),
+                                            )
+                                            .clicked()
+                                        {
+                                            action =
+                                                Some(TableAction::RemoveColumn(col));
+                                        }
+                                    }
+                                }
+
+                                if self.show_alignment_controls
+                                    && self.data.num_columns > 0
+                                {
+                                    ui.add_space(4.0);
+                                    ui.separator();
+                                    ui.add_space(4.0);
+
+                                    ui.label(
+                                        RichText::new(
+                                            t!("widgets.table.align_label").to_string(),
+                                        )
+                                        .size(self.font_size * 0.8)
+                                        .color(control_color),
+                                    );
+
+                                    for col in 0..self.data.num_columns {
+                                        let align = self
+                                            .data
+                                            .alignments
+                                            .get(col)
+                                            .copied()
+                                            .unwrap_or(TableAlignment::None);
+
+                                        let (align_icon, tooltip) = match align {
+                                            TableAlignment::Left => (
+                                                "⬅",
+                                                t!("widgets.table.align_left").to_string(),
+                                            ),
+                                            TableAlignment::Center => (
+                                                "⬌",
+                                                t!("widgets.table.align_center")
+                                                    .to_string(),
+                                            ),
+                                            TableAlignment::Right => (
+                                                "➡",
+                                                t!("widgets.table.align_right")
+                                                    .to_string(),
+                                            ),
+                                            TableAlignment::None => (
+                                                "—",
+                                                t!("widgets.table.align_none").to_string(),
+                                            ),
+                                        };
+
+                                        let align_btn = ui.add(
+                                            egui::Button::new(
+                                                RichText::new(align_icon)
+                                                    .size(self.font_size * 0.8)
+                                                    .color(control_color),
+                                            )
+                                            .frame(false),
+                                        );
+                                        if align_btn
+                                            .on_hover_text(format!(
+                                                "{} (click to cycle)",
+                                                tooltip
+                                            ))
+                                            .clicked()
+                                        {
+                                            action =
+                                                Some(TableAction::CycleAlignment(col));
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                }
             });
 
         ui.add_space(4.0);
