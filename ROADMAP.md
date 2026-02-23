@@ -53,6 +53,13 @@
 - [x] **Flowchart Refactoring** - Modularized 3600-line `flowchart.rs` into 12 focused modules: `flowchart/types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`.
 - [x] **Window Controls** - Redesigned Close, Minimize, Maximize/Restore, and Fullscreen buttons: crisp manually-painted icons (line segments), rounded hover backgrounds (4 px radius), compact size (36 × 22 px). Fixed fullscreen icon (was rendering as ×, now uses proper corner-bracket expand/compress symbols). Re-enabled NE corner resize — 12 px right margin keeps the corner grab zone button-free. `TITLE_BAR_BUTTON_RIGHT_MARGIN` constant documents the sizing invariant in `window.rs`.
 
+#### Unicode & Complex Script Support (Phase 1: Font Loading)
+- [ ] **Lazy font loading for complex scripts** - Extend the existing CJK lazy-loading system to cover Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, and other non-Latin scripts. Detect Unicode ranges on file open/paste and load matching system fonts on demand (Noto Sans Arabic, Noto Sans Bengali, etc.). Same pattern as CJK: atomic load flags, system font candidates per script, font family fallback chain.
+- [ ] **Script detection utility** - `detect_complex_scripts()` function analogous to `detect_cjk_scripts()`, covering Unicode blocks for Arabic (`U+0600–U+06FF`), Bengali (`U+0980–U+09FF`), Devanagari (`U+0900–U+097F`), Thai (`U+0E00–U+0E7F`), Hebrew (`U+0590–U+05FF`), Tamil (`U+0B80–U+0BFF`), and others.
+- [ ] **Settings UI for script preferences** - Extend the CJK font preference dropdown or add a new "Additional Scripts" section so users can pre-select fonts for their language.
+
+*Note: Phase 1 provides correct glyph display for scripts that don't require complex shaping (Hebrew, Thai, Cyrillic extended) and partial display for scripts that do (Arabic, Bengali show individual glyphs without ligature/contextual shaping). Full shaping requires Phase 2 (v0.2.8). See [research notes](docs/technical/editor/unicode-complex-scripts.md).*
+
 #### Executable Code Blocks *(deferred to v0.2.8+)*
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
 - [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
@@ -86,7 +93,19 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Planned Features 
 
-### v0.2.8 - UI & Accessibility
+### v0.2.8 - UI, Accessibility & Text Shaping
+
+#### Unicode & Complex Script Support (Phase 2: Text Shaping Engine)
+*Depends on: Phase 1 font loading from v0.2.7*
+
+- [ ] **HarfRust integration for FerriteEditor** - Integrate [HarfRust](https://github.com/harfbuzz/harfrust) (pure-Rust HarfBuzz port, v0.5.0+) into the FerriteEditor rendering pipeline for production-quality text shaping. Converts Unicode codepoint sequences into correctly positioned, contextually-formed glyphs for all scripts including Arabic (contextual forms: initial/medial/final/isolated), Bengali (conjunct consonants, vowel reordering), Devanagari, Tamil, and other Indic scripts.
+- [ ] **Shaped galley cache** - Extend `LineCache` to store shaped text runs (glyph IDs + positions) instead of raw character galleys. Invalidation on content change, font change, or viewport resize.
+- [ ] **Grapheme-cluster-aware cursor** - Replace character-based cursor movement with grapheme-cluster-aware navigation using `unicode-segmentation`. A single visual "character" in Bengali or Arabic may span multiple Unicode codepoints — cursor must step over the entire cluster.
+- [ ] **Shaped text measurement** - Update word wrap, line width calculation, and scroll offset computation to use shaped advance widths instead of per-character metrics.
+
+*Note: Phase 2 provides correct rendering of all complex scripts in the Raw editor (FerriteEditor). Text direction remains LTR — Arabic/Hebrew text will be shaped correctly (ligatures, contextual forms) but displayed left-to-right. Full RTL layout requires Phase 3 (v0.3.0). WYSIWYG/rendered view inherits egui's text pipeline and will not benefit until egui itself adds shaping support or Phase 4.*
+
+*Background: egui (as of 0.33) uses `ab_glyph` which does glyph-by-glyph rendering with no shaping. PR [#5784](https://github.com/emilk/egui/pull/5784) to integrate Parley is stalled (Nov 2025). We cannot wait for upstream — HarfRust integration in our custom editor widget is the pragmatic path.*
 
 #### LSP Integration (Language Server Protocol)
 *Plan: [docs/lsp-integration-plan.md](docs/lsp-integration-plan.md)*
@@ -120,8 +139,25 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ---
 
-### v0.3.0 - Mermaid Crate + Markdown Enhancements
-**Focus:** Extracting the Mermaid renderer as a standalone crate and improving markdown rendering.
+### v0.3.0 - Mermaid Crate, Markdown Enhancements & Full RTL/BiDi
+**Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, and completing right-to-left and bidirectional text support.
+
+#### 0. Unicode & Complex Script Support (Phase 3 & 4: RTL, BiDi, WYSIWYG)
+*Depends on: Phase 2 text shaping from v0.2.8*
+
+**Phase 3: Right-to-Left Layout & Bidirectional Text**
+- [ ] **RTL text layout in FerriteEditor** - Render Arabic, Hebrew, and other RTL scripts right-to-left within lines. Shaped glyph runs are placed from the right edge; line alignment respects detected paragraph direction.
+- [ ] **Unicode BiDi algorithm** - Implement the Unicode Bidirectional Algorithm (UAX #9) via the `unicode-bidi` crate for mixed-direction text (e.g., English embedded in Arabic). Resolves embedding levels, reorders glyph runs per line, and handles directional isolates/overrides.
+- [ ] **RTL cursor navigation** - Arrow keys move in visual order (left arrow moves left visually, regardless of text direction). Home/End respect paragraph direction. Selection handles disjoint byte ranges in BiDi text.
+- [ ] **RTL selection rendering** - Selection highlighting for BiDi text may produce multiple visual rectangles per logical selection range. Click-to-position respects visual glyph boundaries.
+- [ ] **RTL line wrapping** - Word wrap respects script direction. Break opportunities follow UAX #14 (Unicode Line Breaking Algorithm) for correct behavior with Arabic, Hebrew, Thai, and other scripts.
+
+**Phase 4: WYSIWYG & UI Chrome**
+- [ ] **Shaped text in WYSIWYG editor** - Integrate text shaping into the rendered markdown view (`markdown/editor.rs`). RichText labels use shaped runs for correct Arabic/Bengali rendering in headings, paragraphs, lists, and tables.
+- [ ] **Shaped text in Mermaid diagrams** - Update `TextMeasurer` to use shaped advance widths so diagram node labels render complex scripts correctly.
+- [ ] **UI label shaping** - If egui has native shaping by this point (via Parley or direct HarfRust integration), adopt it. Otherwise, provide a shaping wrapper for critical UI surfaces (file tree, outline panel, status bar) where non-Latin file/heading names appear.
+
+*Note: Full RTL+BiDi is one of the hardest problems in text editing. This phase has high risk in cursor positioning, selection handling, and find/replace with mixed-direction text. Thorough testing with real Arabic, Hebrew, and Bengali content is essential.*
 
 #### 1. Mermaid Crate Extraction
 - [ ] **Standalone crate** - Backend-agnostic architecture with SVG, PNG, and egui outputs.
@@ -235,7 +271,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ### Headless Editor Library
 - [ ] Framework-agnostic core extraction
 - [ ] Abstract rendering backends (egui, wgpu, SVG)
-- [ ] Advanced text layout integration (e.g., Parley)
+- [ ] Advanced text layout integration (HarfRust/skrifa, with Parley as future option)
 
 **Note:** These are ideas under consideration.
 
