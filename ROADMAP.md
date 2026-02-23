@@ -44,6 +44,10 @@
 - [x] **Windows MSI installer overhaul** - Complete installer rewrite with WixUI_FeatureTree: optional file associations (.md, .txt, .json, .yaml, .toml, .csv) via OpenWithProgids with per-extension toggles, Explorer context menu ("Open with Ferrite" on files and folders), optional add-to-PATH, desktop shortcut, Windows Default Apps registration (ApplicationCapabilities), and launch-after-install checkbox. All features user-selectable; no forced associations.
 - [x] **German and Japanese in Settings** - German (Deutsch) and Japanese (日本語) now available in Settings → Appearance → Language.
 
+#### Table Editing
+- [x] **Table background & layout fix** - Replaced pre-painted backgrounds with Shape::Noop placeholder technique. Backgrounds use actual rendered row dimensions, fixing gaps/overlap/text-outside-bounds. Cell layout direction corrected from inherited `left_to_right` to `top_down` for proper vertical padding.
+- [x] **Column resizing** - Draggable column separators with resize cursor, visual guide line, min-width enforcement (40px), proportional scaling on window resize, double-click to reset to auto widths. Custom widths stored in egui memory per table via `TableEditState.custom_col_widths`.
+
 #### UI Declutter & Edge Toggles
 - [ ] **Move format toolbar to editor bottom** - Markdown formatting buttons (bold, italic, code, headings, lists, etc.) moved from the ribbon to a collapsible toolbar at the bottom of the raw editor area. Visible in Raw and Split modes for markdown files. Collapse/expand via chevron toggle. Reduces ribbon clutter significantly.
 - [ ] **Side panel toggle strip** - Replaced separate Outline and Productivity Hub ribbon buttons with a thin toggle strip on the right edge of the editor. Click to open/close the side panel (which contains Outline, Statistics, Backlinks, and Productivity Hub tabs). Consistent UX pattern with the bottom format toolbar.
@@ -54,8 +58,8 @@
 - [x] **Window Controls** - Redesigned Close, Minimize, Maximize/Restore, and Fullscreen buttons: crisp manually-painted icons (line segments), rounded hover backgrounds (4 px radius), compact size (36 × 22 px). Fixed fullscreen icon (was rendering as ×, now uses proper corner-bracket expand/compress symbols). Re-enabled NE corner resize — 12 px right margin keeps the corner grab zone button-free. `TITLE_BAR_BUTTON_RIGHT_MARGIN` constant documents the sizing invariant in `window.rs`.
 
 #### Unicode & Complex Script Support (Phase 1: Font Loading)
-- [ ] **Lazy font loading for complex scripts** - Extend the existing CJK lazy-loading system to cover Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, and other non-Latin scripts. Detect Unicode ranges on file open/paste and load matching system fonts on demand (Noto Sans Arabic, Noto Sans Bengali, etc.). Same pattern as CJK: atomic load flags, system font candidates per script, font family fallback chain.
-- [ ] **Script detection utility** - `detect_complex_scripts()` function analogous to `detect_cjk_scripts()`, covering Unicode blocks for Arabic (`U+0600–U+06FF`), Bengali (`U+0980–U+09FF`), Devanagari (`U+0900–U+097F`), Thai (`U+0E00–U+0E7F`), Hebrew (`U+0590–U+05FF`), Tamil (`U+0B80–U+0BFF`), and others.
+- [x] **Lazy font loading for complex scripts** - Extended the CJK lazy-loading system to cover 22 Unicode ranges across 11 script families: Arabic (5 sub-ranges), Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic (Gujarati, Gurmukhi, Kannada, Malayalam, Telugu), and Southeast Asian (Myanmar, Khmer, Sinhala). Per-script atomic load flags, platform-specific system font candidates, and font family fallback chain. ~500 lines in `fonts.rs`, triggers in `app/mod.rs` and `app/central_panel.rs`.
+- [x] **Script detection utility** - `detect_complex_scripts()` and `needs_complex_script_fonts()` functions with `ComplexScriptDetection` struct, 17 unit tests covering all script families, boundary checks, and negative cases (ASCII, CJK).
 - [ ] **Settings UI for script preferences** - Extend the CJK font preference dropdown or add a new "Additional Scripts" section so users can pre-select fonts for their language.
 
 *Note: Phase 1 provides correct glyph display for scripts that don't require complex shaping (Hebrew, Thai, Cyrillic extended) and partial display for scripts that do (Arabic, Bengali show individual glyphs without ligature/contextual shaping). Full shaping requires Phase 2 (v0.2.8). See [research notes](docs/technical/editor/unicode-complex-scripts.md).*
@@ -280,7 +284,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ## Recently Completed ✅
 
 ### v0.2.7 (Feb 2026) - Performance, Features & Polish
-Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, German and Japanese localization, flowchart modular refactoring, window control redesign, 10+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
+Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), flowchart modular refactoring, window control redesign, 10+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
 
 ### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
 **First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.

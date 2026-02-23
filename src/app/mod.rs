@@ -580,6 +580,20 @@ impl FerriteApp {
         )
     }
 
+    /// Load complex script fonts on-demand for specific text content.
+    ///
+    /// Detects Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. and loads
+    /// only the necessary system fonts (~1-5MB each).
+    fn load_complex_script_fonts_for_content(&self, ctx: &egui::Context, content: &str) -> bool {
+        let custom_font = self.state.settings.font_family.custom_name().map(|s| s.to_string());
+        fonts::load_complex_script_fonts_for_text(
+            content,
+            ctx,
+            custom_font.as_deref(),
+            self.state.settings.cjk_font_preference
+        )
+    }
+
     /// Update window size in settings if changed.
     ///
     /// Returns `true` if the window state was updated.
@@ -2208,6 +2222,9 @@ impl eframe::App for FerriteApp {
             if fonts::needs_cjk(&tab.content) {
                 let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
             }
+            if fonts::needs_complex_script_fonts(&tab.content) {
+                let _ = self.load_complex_script_fonts_for_content(ctx, &tab.content);
+            }
         }
 
         // Update toast message (clear if expired)
@@ -2400,6 +2417,10 @@ impl eframe::App for FerriteApp {
                 if fonts::needs_cjk(&tab.content) {
                     log::debug!("Deferred CJK check: loading fonts for newly opened file");
                     let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
+                }
+                if fonts::needs_complex_script_fonts(&tab.content) {
+                    log::debug!("Deferred complex script check: loading fonts for newly opened file");
+                    let _ = self.load_complex_script_fonts_for_content(ctx, &tab.content);
                 }
             }
         }

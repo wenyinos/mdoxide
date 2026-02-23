@@ -862,9 +862,10 @@ impl FerriteApp {
                                 }
                             }
 
-                            // Load CJK fonts if IME committed text contains CJK characters
+                            // Load CJK / complex script fonts if IME committed text needs them
                             if let Some(ref ime_text) = ime_text_for_font_loading {
                                 let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
+                                let _ = self.load_complex_script_fonts_for_content(ctx, ime_text);
                             }
                         }
                         ViewMode::Split => {
@@ -1647,9 +1648,10 @@ impl FerriteApp {
                                     }
                                 }
 
-                                // Load CJK fonts if IME committed text contains CJK characters
+                                // Load CJK / complex script fonts if IME committed text needs them
                                 if let Some(ref ime_text) = ime_text_for_font_loading_split {
                                     let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
+                                    let _ = self.load_complex_script_fonts_for_content(ctx, ime_text);
                                 }
                             }
                         }

@@ -52,6 +52,22 @@ static CHINESE_SC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
 static CHINESE_TC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Per-Script Complex Script Font Loading State
+// ─────────────────────────────────────────────────────────────────────────────
+
+static ARABIC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static BENGALI_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static DEVANAGARI_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static THAI_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static HEBREW_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static TAMIL_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static GEORGIAN_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static ARMENIAN_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static ETHIOPIC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static OTHER_INDIC_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+static SOUTHEAST_ASIAN_FONTS_LOADED: AtomicBool = AtomicBool::new(false);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // System Locale Detection for CJK Font Preloading
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -470,6 +486,215 @@ pub fn get_loaded_cjk_fonts() -> (bool, bool, bool, bool) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Complex Script Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Unicode ranges for complex script detection
+const ARABIC: (u32, u32) = (0x0600, 0x06FF);
+const ARABIC_SUPPLEMENT: (u32, u32) = (0x0750, 0x077F);
+const ARABIC_EXTENDED_A: (u32, u32) = (0x08A0, 0x08FF);
+const ARABIC_PRESENTATION_A: (u32, u32) = (0xFB50, 0xFDFF);
+const ARABIC_PRESENTATION_B: (u32, u32) = (0xFE70, 0xFEFF);
+
+const BENGALI: (u32, u32) = (0x0980, 0x09FF);
+const DEVANAGARI: (u32, u32) = (0x0900, 0x097F);
+const DEVANAGARI_EXTENDED: (u32, u32) = (0xA8E0, 0xA8FF);
+const THAI: (u32, u32) = (0x0E00, 0x0E7F);
+const HEBREW: (u32, u32) = (0x0590, 0x05FF);
+const TAMIL: (u32, u32) = (0x0B80, 0x0BFF);
+const GEORGIAN: (u32, u32) = (0x10A0, 0x10FF);
+const ARMENIAN: (u32, u32) = (0x0530, 0x058F);
+const ETHIOPIC: (u32, u32) = (0x1200, 0x137F);
+
+const GUJARATI: (u32, u32) = (0x0A80, 0x0AFF);
+const GURMUKHI: (u32, u32) = (0x0A00, 0x0A7F);
+const KANNADA: (u32, u32) = (0x0C80, 0x0CFF);
+const MALAYALAM: (u32, u32) = (0x0D00, 0x0D7F);
+const TELUGU: (u32, u32) = (0x0C00, 0x0C7F);
+
+const MYANMAR: (u32, u32) = (0x1000, 0x109F);
+const KHMER: (u32, u32) = (0x1780, 0x17FF);
+const SINHALA: (u32, u32) = (0x0D80, 0x0DFF);
+
+/// Result of scanning text for complex (non-Latin, non-CJK) scripts.
+#[derive(Debug, Clone, Default)]
+pub struct ComplexScriptDetection {
+    pub has_arabic: bool,
+    pub has_bengali: bool,
+    pub has_devanagari: bool,
+    pub has_thai: bool,
+    pub has_hebrew: bool,
+    pub has_tamil: bool,
+    pub has_georgian: bool,
+    pub has_armenian: bool,
+    pub has_ethiopic: bool,
+    pub has_other_indic: bool,
+    pub has_southeast_asian: bool,
+    pub has_any: bool,
+}
+
+#[inline]
+fn is_arabic_char(c: char) -> bool {
+    let cp = c as u32;
+    in_range(cp, ARABIC)
+        || in_range(cp, ARABIC_SUPPLEMENT)
+        || in_range(cp, ARABIC_EXTENDED_A)
+        || in_range(cp, ARABIC_PRESENTATION_A)
+        || in_range(cp, ARABIC_PRESENTATION_B)
+}
+
+#[inline]
+fn is_bengali_char(c: char) -> bool {
+    in_range(c as u32, BENGALI)
+}
+
+#[inline]
+fn is_devanagari_char(c: char) -> bool {
+    let cp = c as u32;
+    in_range(cp, DEVANAGARI) || in_range(cp, DEVANAGARI_EXTENDED)
+}
+
+#[inline]
+fn is_thai_char(c: char) -> bool {
+    in_range(c as u32, THAI)
+}
+
+#[inline]
+fn is_hebrew_char(c: char) -> bool {
+    in_range(c as u32, HEBREW)
+}
+
+#[inline]
+fn is_tamil_char(c: char) -> bool {
+    in_range(c as u32, TAMIL)
+}
+
+#[inline]
+fn is_georgian_char(c: char) -> bool {
+    in_range(c as u32, GEORGIAN)
+}
+
+#[inline]
+fn is_armenian_char(c: char) -> bool {
+    in_range(c as u32, ARMENIAN)
+}
+
+#[inline]
+fn is_ethiopic_char(c: char) -> bool {
+    in_range(c as u32, ETHIOPIC)
+}
+
+#[inline]
+fn is_other_indic_char(c: char) -> bool {
+    let cp = c as u32;
+    in_range(cp, GUJARATI)
+        || in_range(cp, GURMUKHI)
+        || in_range(cp, KANNADA)
+        || in_range(cp, MALAYALAM)
+        || in_range(cp, TELUGU)
+}
+
+#[inline]
+fn is_southeast_asian_char(c: char) -> bool {
+    let cp = c as u32;
+    in_range(cp, MYANMAR) || in_range(cp, KHMER) || in_range(cp, SINHALA)
+}
+
+#[inline]
+fn is_complex_script_char(c: char) -> bool {
+    is_arabic_char(c)
+        || is_bengali_char(c)
+        || is_devanagari_char(c)
+        || is_thai_char(c)
+        || is_hebrew_char(c)
+        || is_tamil_char(c)
+        || is_georgian_char(c)
+        || is_armenian_char(c)
+        || is_ethiopic_char(c)
+        || is_other_indic_char(c)
+        || is_southeast_asian_char(c)
+}
+
+/// Detect which complex scripts are present in text.
+pub fn detect_complex_scripts(text: &str) -> ComplexScriptDetection {
+    let mut result = ComplexScriptDetection::default();
+
+    for c in text.chars() {
+        if is_arabic_char(c) {
+            result.has_arabic = true;
+            result.has_any = true;
+        } else if is_bengali_char(c) {
+            result.has_bengali = true;
+            result.has_any = true;
+        } else if is_devanagari_char(c) {
+            result.has_devanagari = true;
+            result.has_any = true;
+        } else if is_thai_char(c) {
+            result.has_thai = true;
+            result.has_any = true;
+        } else if is_hebrew_char(c) {
+            result.has_hebrew = true;
+            result.has_any = true;
+        } else if is_tamil_char(c) {
+            result.has_tamil = true;
+            result.has_any = true;
+        } else if is_georgian_char(c) {
+            result.has_georgian = true;
+            result.has_any = true;
+        } else if is_armenian_char(c) {
+            result.has_armenian = true;
+            result.has_any = true;
+        } else if is_ethiopic_char(c) {
+            result.has_ethiopic = true;
+            result.has_any = true;
+        } else if is_other_indic_char(c) {
+            result.has_other_indic = true;
+            result.has_any = true;
+        } else if is_southeast_asian_char(c) {
+            result.has_southeast_asian = true;
+            result.has_any = true;
+        }
+
+        if result.has_arabic
+            && result.has_bengali
+            && result.has_devanagari
+            && result.has_thai
+            && result.has_hebrew
+            && result.has_tamil
+            && result.has_georgian
+            && result.has_armenian
+            && result.has_ethiopic
+            && result.has_other_indic
+            && result.has_southeast_asian
+        {
+            break;
+        }
+    }
+
+    result
+}
+
+/// Check if text contains any complex script characters requiring specialized font support.
+pub fn needs_complex_script_fonts(text: &str) -> bool {
+    text.chars().any(is_complex_script_char)
+}
+
+/// Check if any complex script fonts have been loaded.
+pub fn are_complex_script_fonts_loaded() -> bool {
+    ARABIC_FONTS_LOADED.load(Ordering::Relaxed)
+        || BENGALI_FONTS_LOADED.load(Ordering::Relaxed)
+        || DEVANAGARI_FONTS_LOADED.load(Ordering::Relaxed)
+        || THAI_FONTS_LOADED.load(Ordering::Relaxed)
+        || HEBREW_FONTS_LOADED.load(Ordering::Relaxed)
+        || TAMIL_FONTS_LOADED.load(Ordering::Relaxed)
+        || GEORGIAN_FONTS_LOADED.load(Ordering::Relaxed)
+        || ARMENIAN_FONTS_LOADED.load(Ordering::Relaxed)
+        || ETHIOPIC_FONTS_LOADED.load(Ordering::Relaxed)
+        || OTHER_INDIC_FONTS_LOADED.load(Ordering::Relaxed)
+        || SOUTHEAST_ASIAN_FONTS_LOADED.load(Ordering::Relaxed)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // System Font Detection
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -613,6 +838,19 @@ const FONT_CJK_SC: &str = "CJK_SC";
 const FONT_CJK_TC: &str = "CJK_TC";
 const FONT_CJK_JP: &str = "CJK_JP";
 
+/// Keys for dynamically loaded complex script system fonts
+const FONT_ARABIC: &str = "Arabic";
+const FONT_BENGALI: &str = "Bengali";
+const FONT_DEVANAGARI: &str = "Devanagari";
+const FONT_THAI: &str = "Thai";
+const FONT_HEBREW: &str = "Hebrew";
+const FONT_TAMIL: &str = "Tamil";
+const FONT_GEORGIAN: &str = "Georgian";
+const FONT_ARMENIAN: &str = "Armenian";
+const FONT_ETHIOPIC: &str = "Ethiopic";
+const FONT_OTHER_INDIC: &str = "OtherIndic";
+const FONT_SOUTHEAST_ASIAN: &str = "SoutheastAsian";
+
 /// Key for custom user-selected font
 const FONT_CUSTOM: &str = "Custom";
 
@@ -695,6 +933,115 @@ fn load_chinese_tc_font() -> Option<FontData> {
     // Windows: Microsoft JhengHei
     // Linux: Noto Sans CJK TC
     let candidates = ["PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC"];
+    load_system_font(&candidates)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-Script Complex Script Font Loading
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn load_arabic_font() -> Option<FontData> {
+    let candidates = [
+        "Geeza Pro",
+        "Al Nile",
+        "Arabic Typesetting",
+        "Segoe UI",
+        "Noto Sans Arabic",
+        "Noto Naskh Arabic",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_bengali_font() -> Option<FontData> {
+    let candidates = [
+        "Bangla MN",
+        "Bangla Sangam MN",
+        "Nirmala UI",
+        "Vrinda",
+        "Noto Sans Bengali",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_devanagari_font() -> Option<FontData> {
+    let candidates = [
+        "Devanagari MT",
+        "Kohinoor Devanagari",
+        "Nirmala UI",
+        "Mangal",
+        "Noto Sans Devanagari",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_thai_font() -> Option<FontData> {
+    let candidates = [
+        "Thonburi",
+        "Sathu",
+        "Leelawadee UI",
+        "Tahoma",
+        "Noto Sans Thai",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_hebrew_font() -> Option<FontData> {
+    let candidates = [
+        "Arial Hebrew",
+        "Lucida Grande",
+        "David",
+        "Segoe UI",
+        "Noto Sans Hebrew",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_tamil_font() -> Option<FontData> {
+    let candidates = [
+        "Tamil MN",
+        "Tamil Sangam MN",
+        "Nirmala UI",
+        "Latha",
+        "Noto Sans Tamil",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_georgian_font() -> Option<FontData> {
+    let candidates = ["Segoe UI", "Noto Sans Georgian"];
+    load_system_font(&candidates)
+}
+
+fn load_armenian_font() -> Option<FontData> {
+    let candidates = ["Segoe UI", "Noto Sans Armenian"];
+    load_system_font(&candidates)
+}
+
+fn load_ethiopic_font() -> Option<FontData> {
+    let candidates = ["Kefa", "Nyala", "Noto Sans Ethiopic"];
+    load_system_font(&candidates)
+}
+
+fn load_other_indic_font() -> Option<FontData> {
+    let candidates = [
+        "Nirmala UI",
+        "Noto Sans Gujarati",
+        "Noto Sans Gurmukhi",
+        "Noto Sans Kannada",
+        "Noto Sans Malayalam",
+        "Noto Sans Telugu",
+    ];
+    load_system_font(&candidates)
+}
+
+fn load_southeast_asian_font() -> Option<FontData> {
+    let candidates = [
+        "Myanmar MN",
+        "Myanmar Text",
+        "Noto Sans Myanmar",
+        "Noto Sans Khmer",
+        "Noto Sans Sinhala",
+    ];
     load_system_font(&candidates)
 }
 
@@ -875,6 +1222,219 @@ fn add_cjk_fallbacks(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Complex Script Font Loading Infrastructure
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Specification of which complex script fonts to load.
+#[derive(Debug, Clone, Default)]
+pub struct ComplexScriptLoadSpec {
+    pub load_arabic: bool,
+    pub load_bengali: bool,
+    pub load_devanagari: bool,
+    pub load_thai: bool,
+    pub load_hebrew: bool,
+    pub load_tamil: bool,
+    pub load_georgian: bool,
+    pub load_armenian: bool,
+    pub load_ethiopic: bool,
+    pub load_other_indic: bool,
+    pub load_southeast_asian: bool,
+}
+
+impl ComplexScriptLoadSpec {
+    /// Create spec from script detection, including already-loaded fonts.
+    pub fn from_detection(detection: &ComplexScriptDetection) -> Self {
+        let mut spec = Self::from_loaded_flags();
+
+        if detection.has_arabic {
+            spec.load_arabic = true;
+        }
+        if detection.has_bengali {
+            spec.load_bengali = true;
+        }
+        if detection.has_devanagari {
+            spec.load_devanagari = true;
+        }
+        if detection.has_thai {
+            spec.load_thai = true;
+        }
+        if detection.has_hebrew {
+            spec.load_hebrew = true;
+        }
+        if detection.has_tamil {
+            spec.load_tamil = true;
+        }
+        if detection.has_georgian {
+            spec.load_georgian = true;
+        }
+        if detection.has_armenian {
+            spec.load_armenian = true;
+        }
+        if detection.has_ethiopic {
+            spec.load_ethiopic = true;
+        }
+        if detection.has_other_indic {
+            spec.load_other_indic = true;
+        }
+        if detection.has_southeast_asian {
+            spec.load_southeast_asian = true;
+        }
+
+        spec
+    }
+
+    /// Build spec from the atomic bools (already-loaded fonts only).
+    pub fn from_loaded_flags() -> Self {
+        Self {
+            load_arabic: ARABIC_FONTS_LOADED.load(Ordering::Relaxed),
+            load_bengali: BENGALI_FONTS_LOADED.load(Ordering::Relaxed),
+            load_devanagari: DEVANAGARI_FONTS_LOADED.load(Ordering::Relaxed),
+            load_thai: THAI_FONTS_LOADED.load(Ordering::Relaxed),
+            load_hebrew: HEBREW_FONTS_LOADED.load(Ordering::Relaxed),
+            load_tamil: TAMIL_FONTS_LOADED.load(Ordering::Relaxed),
+            load_georgian: GEORGIAN_FONTS_LOADED.load(Ordering::Relaxed),
+            load_armenian: ARMENIAN_FONTS_LOADED.load(Ordering::Relaxed),
+            load_ethiopic: ETHIOPIC_FONTS_LOADED.load(Ordering::Relaxed),
+            load_other_indic: OTHER_INDIC_FONTS_LOADED.load(Ordering::Relaxed),
+            load_southeast_asian: SOUTHEAST_ASIAN_FONTS_LOADED.load(Ordering::Relaxed),
+        }
+    }
+
+    pub fn any(&self) -> bool {
+        self.load_arabic
+            || self.load_bengali
+            || self.load_devanagari
+            || self.load_thai
+            || self.load_hebrew
+            || self.load_tamil
+            || self.load_georgian
+            || self.load_armenian
+            || self.load_ethiopic
+            || self.load_other_indic
+            || self.load_southeast_asian
+    }
+}
+
+/// Track which complex script fonts were successfully loaded in a single build.
+#[derive(Default, Clone)]
+struct ComplexScriptFontState {
+    arabic: bool,
+    bengali: bool,
+    devanagari: bool,
+    thai: bool,
+    hebrew: bool,
+    tamil: bool,
+    georgian: bool,
+    armenian: bool,
+    ethiopic: bool,
+    other_indic: bool,
+    southeast_asian: bool,
+}
+
+impl ComplexScriptFontState {
+    fn any_loaded(&self) -> bool {
+        self.arabic
+            || self.bengali
+            || self.devanagari
+            || self.thai
+            || self.hebrew
+            || self.tamil
+            || self.georgian
+            || self.armenian
+            || self.ethiopic
+            || self.other_indic
+            || self.southeast_asian
+    }
+}
+
+/// All complex script font keys in a fixed order for the fallback chain.
+const COMPLEX_SCRIPT_FONT_KEYS: &[&str] = &[
+    FONT_ARABIC,
+    FONT_HEBREW,
+    FONT_DEVANAGARI,
+    FONT_BENGALI,
+    FONT_TAMIL,
+    FONT_OTHER_INDIC,
+    FONT_THAI,
+    FONT_SOUTHEAST_ASIAN,
+    FONT_GEORGIAN,
+    FONT_ARMENIAN,
+    FONT_ETHIOPIC,
+];
+
+/// Load complex script system fonts based on specification.
+fn load_complex_script_fonts_selective(
+    fonts: &mut FontDefinitions,
+    spec: &ComplexScriptLoadSpec,
+) -> ComplexScriptFontState {
+    let mut state = ComplexScriptFontState::default();
+
+    macro_rules! load_script {
+        ($spec_field:expr, $loader:ident, $font_key:expr, $state_field:ident, $flag:ident, $name:expr) => {
+            if $spec_field {
+                if let Some(data) = $loader() {
+                    fonts.font_data.insert($font_key.to_owned(), data);
+                    state.$state_field = true;
+                    if !$flag.load(Ordering::Relaxed) {
+                        $flag.store(true, Ordering::Relaxed);
+                        info!("Loaded {} font (first time)", $name);
+                    }
+                }
+            }
+        };
+    }
+
+    load_script!(spec.load_arabic, load_arabic_font, FONT_ARABIC, arabic, ARABIC_FONTS_LOADED, "Arabic");
+    load_script!(spec.load_bengali, load_bengali_font, FONT_BENGALI, bengali, BENGALI_FONTS_LOADED, "Bengali");
+    load_script!(spec.load_devanagari, load_devanagari_font, FONT_DEVANAGARI, devanagari, DEVANAGARI_FONTS_LOADED, "Devanagari");
+    load_script!(spec.load_thai, load_thai_font, FONT_THAI, thai, THAI_FONTS_LOADED, "Thai");
+    load_script!(spec.load_hebrew, load_hebrew_font, FONT_HEBREW, hebrew, HEBREW_FONTS_LOADED, "Hebrew");
+    load_script!(spec.load_tamil, load_tamil_font, FONT_TAMIL, tamil, TAMIL_FONTS_LOADED, "Tamil");
+    load_script!(spec.load_georgian, load_georgian_font, FONT_GEORGIAN, georgian, GEORGIAN_FONTS_LOADED, "Georgian");
+    load_script!(spec.load_armenian, load_armenian_font, FONT_ARMENIAN, armenian, ARMENIAN_FONTS_LOADED, "Armenian");
+    load_script!(spec.load_ethiopic, load_ethiopic_font, FONT_ETHIOPIC, ethiopic, ETHIOPIC_FONTS_LOADED, "Ethiopic");
+    load_script!(spec.load_other_indic, load_other_indic_font, FONT_OTHER_INDIC, other_indic, OTHER_INDIC_FONTS_LOADED, "Other Indic");
+    load_script!(spec.load_southeast_asian, load_southeast_asian_font, FONT_SOUTHEAST_ASIAN, southeast_asian, SOUTHEAST_ASIAN_FONTS_LOADED, "Southeast Asian");
+
+    if spec.any() {
+        info!("Complex script fonts loaded: {:?}", spec);
+    }
+
+    state
+}
+
+/// Add loaded complex script fonts to a font family's fallback chain.
+fn add_complex_script_fallbacks(
+    fonts: &mut FontDefinitions,
+    family: FontFamily,
+    cs_state: &ComplexScriptFontState,
+) {
+    let loaded_flags = [
+        (FONT_ARABIC, cs_state.arabic),
+        (FONT_HEBREW, cs_state.hebrew),
+        (FONT_DEVANAGARI, cs_state.devanagari),
+        (FONT_BENGALI, cs_state.bengali),
+        (FONT_TAMIL, cs_state.tamil),
+        (FONT_OTHER_INDIC, cs_state.other_indic),
+        (FONT_THAI, cs_state.thai),
+        (FONT_SOUTHEAST_ASIAN, cs_state.southeast_asian),
+        (FONT_GEORGIAN, cs_state.georgian),
+        (FONT_ARMENIAN, cs_state.armenian),
+        (FONT_ETHIOPIC, cs_state.ethiopic),
+    ];
+
+    for (key, loaded) in &loaded_flags {
+        if *loaded {
+            fonts
+                .families
+                .entry(family.clone())
+                .or_default()
+                .push((*key).to_owned());
+        }
+    }
+}
+
 /// Create font definitions with custom fonts loaded.
 ///
 /// This sets up:
@@ -958,11 +1518,12 @@ pub fn create_font_definitions_with_cjk_spec(
     // Load only the specified CJK fonts
     let cjk_state = load_cjk_fonts_selective(&mut fonts, spec);
 
+    // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
+    let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
+    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec);
+
     // Set up Proportional font family
-    // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK fonts
-    // JetBrains Mono is added as fallback because Inter doesn't have box-drawing characters
-    // (U+2500-U+257F) and other common symbols. This ensures characters render correctly
-    // in both the editor and markdown preview.
+    // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK -> complex scripts
     if custom_loaded {
         fonts
             .families
@@ -975,16 +1536,17 @@ pub fn create_font_definitions_with_cjk_spec(
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_INTER.to_owned());
-    // Add JetBrains Mono as fallback for box-drawing characters and symbols
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_JETBRAINS.to_owned());
 
-    // Add CJK fallbacks for loaded fonts
     if cjk_state.any_loaded() {
         add_cjk_fallbacks(&mut fonts, FontFamily::Proportional, &cjk_state, cjk_preference);
+    }
+    if cs_state.any_loaded() {
+        add_complex_script_fallbacks(&mut fonts, FontFamily::Proportional, &cs_state);
     }
 
     // Set up Monospace font family
@@ -996,6 +1558,9 @@ pub fn create_font_definitions_with_cjk_spec(
 
     if cjk_state.any_loaded() {
         add_cjk_fallbacks(&mut fonts, FontFamily::Monospace, &cjk_state, cjk_preference);
+    }
+    if cs_state.any_loaded() {
+        add_complex_script_fallbacks(&mut fonts, FontFamily::Monospace, &cs_state);
     }
 
     // Get fallback fonts from default families
@@ -1019,9 +1584,6 @@ pub fn create_font_definitions_with_cjk_spec(
             .insert(FontFamily::Name(FONT_CUSTOM.into()), custom_family);
     }
 
-    // Inter variants with JetBrains Mono as fallback for missing glyphs (box-drawing, etc.)
-    // Inter doesn't include box-drawing characters (U+2500-U+257F), but JetBrains Mono does.
-    // This ensures code comments with decorative lines render correctly.
     let mut inter_family = vec![FONT_INTER.to_owned(), FONT_JETBRAINS.to_owned()];
     inter_family.extend(proportional_fallbacks.clone());
     fonts
@@ -1077,8 +1639,9 @@ pub fn create_font_definitions_with_cjk_spec(
     );
 
     info!(
-        "Loaded fonts with selective CJK: KR={}, JP={}, SC={}, TC={}",
-        cjk_state.kr_loaded, cjk_state.jp_loaded, cjk_state.sc_loaded, cjk_state.tc_loaded
+        "Loaded fonts: CJK(KR={}, JP={}, SC={}, TC={}), ComplexScript={}",
+        cjk_state.kr_loaded, cjk_state.jp_loaded, cjk_state.sc_loaded, cjk_state.tc_loaded,
+        cs_state.any_loaded()
     );
 
     fonts
@@ -1155,11 +1718,12 @@ pub fn create_font_definitions_with_settings(
         CjkFontState::default()
     };
 
+    // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
+    let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
+    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec);
+
     // Set up Proportional font family
-    // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK fonts
-    // JetBrains Mono is added as fallback because Inter doesn't have box-drawing characters
-    // (U+2500-U+257F) and other common symbols. This ensures characters render correctly
-    // in both the editor and markdown preview.
+    // Order: Custom (if set) -> Inter -> JetBrains Mono (box-drawing) -> CJK -> complex scripts
     if custom_loaded {
         fonts
             .families
@@ -1172,16 +1736,17 @@ pub fn create_font_definitions_with_settings(
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_INTER.to_owned());
-    // Add JetBrains Mono as fallback for box-drawing characters and symbols
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
         .push(FONT_JETBRAINS.to_owned());
 
-    // Only add CJK fallbacks if fonts were loaded
     if load_cjk {
         add_cjk_fallbacks(&mut fonts, FontFamily::Proportional, &cjk_state, cjk_preference);
+    }
+    if cs_state.any_loaded() {
+        add_complex_script_fallbacks(&mut fonts, FontFamily::Proportional, &cs_state);
     }
 
     // Set up Monospace font family
@@ -1194,8 +1759,11 @@ pub fn create_font_definitions_with_settings(
     if load_cjk {
         add_cjk_fallbacks(&mut fonts, FontFamily::Monospace, &cjk_state, cjk_preference);
     }
+    if cs_state.any_loaded() {
+        add_complex_script_fallbacks(&mut fonts, FontFamily::Monospace, &cs_state);
+    }
 
-    // Get fallback fonts from default families for CJK/Korean support
+    // Get fallback fonts from default families
     let proportional_fallbacks: Vec<String> = fonts
         .families
         .get(&FontFamily::Proportional)
@@ -1584,6 +2152,101 @@ pub fn check_and_load_cjk_if_needed(
     cjk_preference: CjkFontPreference,
 ) -> bool {
     load_cjk_for_text(text, ctx, custom_font, cjk_preference)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lazy Complex Script Font Loading
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Load only the complex script fonts needed for specific text content.
+///
+/// Detects which scripts are present and loads only the necessary system fonts.
+/// Each script font is typically 1-5MB (much lighter than CJK fonts).
+///
+/// Returns `true` if any new fonts were loaded.
+pub fn load_complex_script_fonts_for_text(
+    text: &str,
+    ctx: &egui::Context,
+    custom_font: Option<&str>,
+    cjk_preference: CjkFontPreference,
+) -> bool {
+    let detection = detect_complex_scripts(text);
+
+    if !detection.has_any {
+        return false;
+    }
+
+    let spec = ComplexScriptLoadSpec::from_detection(&detection);
+
+    // Check if we need to load anything new
+    let needs_any_new = (spec.load_arabic && !ARABIC_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_bengali && !BENGALI_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_devanagari && !DEVANAGARI_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_thai && !THAI_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_hebrew && !HEBREW_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_tamil && !TAMIL_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_georgian && !GEORGIAN_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_armenian && !ARMENIAN_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_ethiopic && !ETHIOPIC_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_other_indic && !OTHER_INDIC_FONTS_LOADED.load(Ordering::Relaxed))
+        || (spec.load_southeast_asian && !SOUTHEAST_ASIAN_FONTS_LOADED.load(Ordering::Relaxed));
+
+    if !needs_any_new {
+        return false;
+    }
+
+    info!("Lazily loading complex script fonts for detected scripts");
+
+    // Set atomic flags for newly detected scripts BEFORE rebuild so
+    // create_font_definitions_with_cjk_spec picks them up via from_loaded_flags()
+    if spec.load_arabic {
+        ARABIC_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_bengali {
+        BENGALI_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_devanagari {
+        DEVANAGARI_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_thai {
+        THAI_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_hebrew {
+        HEBREW_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_tamil {
+        TAMIL_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_georgian {
+        GEORGIAN_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_armenian {
+        ARMENIAN_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_ethiopic {
+        ETHIOPIC_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_other_indic {
+        OTHER_INDIC_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+    if spec.load_southeast_asian {
+        SOUTHEAST_ASIAN_FONTS_LOADED.store(true, Ordering::Relaxed);
+    }
+
+    // Rebuild all font definitions — includes CJK from their atomic flags too
+    let cjk_spec = CjkLoadSpec {
+        load_korean: KOREAN_FONTS_LOADED.load(Ordering::Relaxed),
+        load_japanese: JAPANESE_FONTS_LOADED.load(Ordering::Relaxed),
+        load_chinese_sc: CHINESE_SC_FONTS_LOADED.load(Ordering::Relaxed),
+        load_chinese_tc: CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed),
+    };
+
+    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &cjk_spec);
+    ctx.set_fonts(fonts);
+    bump_font_generation();
+    ctx.request_repaint();
+
+    true
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1977,5 +2640,157 @@ mod tests {
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::TraditionalChinese);
         assert!(spec.load_chinese_tc);
         assert!(!spec.load_chinese_sc);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Complex Script Detection Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_needs_complex_scripts_arabic() {
+        assert!(needs_complex_script_fonts("مرحبا"));
+        assert!(needs_complex_script_fonts("Hello مرحبا"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_bengali() {
+        assert!(needs_complex_script_fonts("বাংলা"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_devanagari() {
+        assert!(needs_complex_script_fonts("हिन्दी"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_thai() {
+        assert!(needs_complex_script_fonts("สวัสดี"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_hebrew() {
+        assert!(needs_complex_script_fonts("שלום"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_tamil() {
+        assert!(needs_complex_script_fonts("தமிழ்"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_georgian() {
+        assert!(needs_complex_script_fonts("ქართული"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_armenian() {
+        assert!(needs_complex_script_fonts("Հայերեն"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_ethiopic() {
+        assert!(needs_complex_script_fonts("ኢትዮጵያ"));
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_other_indic() {
+        assert!(needs_complex_script_fonts("ગુજરાતી")); // Gujarati
+        assert!(needs_complex_script_fonts("ਪੰਜਾਬੀ"));   // Gurmukhi
+        assert!(needs_complex_script_fonts("ಕನ್ನಡ"));     // Kannada
+        assert!(needs_complex_script_fonts("മലയാളം"));   // Malayalam
+        assert!(needs_complex_script_fonts("తెలుగు"));    // Telugu
+    }
+
+    #[test]
+    fn test_needs_complex_scripts_southeast_asian() {
+        assert!(needs_complex_script_fonts("မြန်မာ"));     // Myanmar
+        assert!(needs_complex_script_fonts("ខ្មែរ"));        // Khmer
+        assert!(needs_complex_script_fonts("සිංහල"));     // Sinhala
+    }
+
+    #[test]
+    fn test_no_complex_scripts_ascii() {
+        assert!(!needs_complex_script_fonts("Hello World"));
+        assert!(!needs_complex_script_fonts("café résumé"));
+    }
+
+    #[test]
+    fn test_no_complex_scripts_cjk() {
+        assert!(!needs_complex_script_fonts("你好世界"));
+        assert!(!needs_complex_script_fonts("こんにちは"));
+        assert!(!needs_complex_script_fonts("안녕하세요"));
+    }
+
+    #[test]
+    fn test_detect_complex_scripts_multiple() {
+        let detection = detect_complex_scripts("Hello مرحبا বাংলা");
+        assert!(detection.has_arabic);
+        assert!(detection.has_bengali);
+        assert!(!detection.has_thai);
+        assert!(detection.has_any);
+    }
+
+    #[test]
+    fn test_detect_complex_scripts_arabic_ranges() {
+        // Basic Arabic
+        assert!(is_arabic_char('\u{0600}'));
+        assert!(is_arabic_char('\u{06FF}'));
+        // Arabic Supplement
+        assert!(is_arabic_char('\u{0750}'));
+        assert!(is_arabic_char('\u{077F}'));
+        // Arabic Presentation Forms-A
+        assert!(is_arabic_char('\u{FB50}'));
+        assert!(is_arabic_char('\u{FDFF}'));
+        // Arabic Presentation Forms-B
+        assert!(is_arabic_char('\u{FE70}'));
+        assert!(is_arabic_char('\u{FEFF}'));
+        // Not Arabic
+        assert!(!is_arabic_char('A'));
+        assert!(!is_arabic_char('\u{0500}')); // Cyrillic Supplement
+    }
+
+    #[test]
+    fn test_detect_complex_scripts_devanagari_ranges() {
+        assert!(is_devanagari_char('\u{0900}'));
+        assert!(is_devanagari_char('\u{097F}'));
+        // Devanagari Extended
+        assert!(is_devanagari_char('\u{A8E0}'));
+        assert!(is_devanagari_char('\u{A8FF}'));
+        assert!(!is_devanagari_char('A'));
+    }
+
+    #[test]
+    fn test_detect_complex_scripts_none() {
+        let detection = detect_complex_scripts("Hello World 123");
+        assert!(!detection.has_any);
+        assert!(!detection.has_arabic);
+        assert!(!detection.has_bengali);
+        assert!(!detection.has_devanagari);
+        assert!(!detection.has_thai);
+        assert!(!detection.has_hebrew);
+    }
+
+    #[test]
+    fn test_detect_complex_scripts_all_families() {
+        let text = "مرحبا বাংলা हिन्दी สวัสดี שלום தமிழ் ქართული Հայերեն ኢትዮጵያ ગુજરાતી မြန်မာ";
+        let detection = detect_complex_scripts(text);
+        assert!(detection.has_arabic);
+        assert!(detection.has_bengali);
+        assert!(detection.has_devanagari);
+        assert!(detection.has_thai);
+        assert!(detection.has_hebrew);
+        assert!(detection.has_tamil);
+        assert!(detection.has_georgian);
+        assert!(detection.has_armenian);
+        assert!(detection.has_ethiopic);
+        assert!(detection.has_other_indic);
+        assert!(detection.has_southeast_asian);
+        assert!(detection.has_any);
+    }
+
+    #[test]
+    fn test_complex_script_does_not_detect_cjk() {
+        let detection = detect_complex_scripts("你好世界 こんにちは 안녕하세요");
+        assert!(!detection.has_any);
     }
 }

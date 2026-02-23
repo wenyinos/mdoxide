@@ -204,6 +204,66 @@ let font_id = FontId::new(14.0, bold_family);
 let styled = RichText::new("Bold text").font(font_id);
 ```
 
+## Complex Script Lazy Loading
+
+Extends the CJK lazy-loading system to cover non-Latin, non-CJK scripts. System fonts are loaded on demand when characters from these scripts are detected in file content or IME input.
+
+### Supported Script Families
+
+| Script Family | Unicode Ranges | Atomic Flag | System Font Candidates |
+|---------------|---------------|-------------|----------------------|
+| Arabic | U+0600–06FF, U+0750–077F, U+08A0–08FF, U+FB50–FDFF, U+FE70–FEFF | `ARABIC_FONTS_LOADED` | Noto Sans Arabic, Segoe UI, Geeza Pro |
+| Bengali | U+0980–09FF | `BENGALI_FONTS_LOADED` | Noto Sans Bengali, Vrinda, Bangla MN |
+| Devanagari | U+0900–097F | `DEVANAGARI_FONTS_LOADED` | Noto Sans Devanagari, Mangal, Devanagari MT |
+| Thai | U+0E00–0E7F | `THAI_FONTS_LOADED` | Noto Sans Thai, Leelawadee UI, Thonburi |
+| Hebrew | U+0590–05FF | `HEBREW_FONTS_LOADED` | Noto Sans Hebrew, Segoe UI, Arial Hebrew |
+| Tamil | U+0B80–0BFF | `TAMIL_FONTS_LOADED` | Noto Sans Tamil, Latha, Tamil MN |
+| Georgian | U+10A0–10FF | `GEORGIAN_FONTS_LOADED` | Noto Sans Georgian, Segoe UI, Georgian |
+| Armenian | U+0530–058F | `ARMENIAN_FONTS_LOADED` | Noto Sans Armenian, Segoe UI, Armenian |
+| Ethiopic | U+1200–137F | `ETHIOPIC_FONTS_LOADED` | Noto Sans Ethiopic, Nyala, Kefa |
+| Other Indic | Gujarati, Gurmukhi, Kannada, Malayalam, Telugu | `OTHER_INDIC_FONTS_LOADED` | Noto Sans [Script], platform-specific |
+| Southeast Asian | Myanmar, Khmer, Sinhala | `SOUTHEAST_ASIAN_FONTS_LOADED` | Noto Sans [Script], platform-specific |
+
+### Key Types
+
+```rust
+pub struct ComplexScriptDetection {
+    pub has_arabic: bool,
+    pub has_bengali: bool,
+    pub has_devanagari: bool,
+    // ... per-script bools
+}
+
+pub struct ComplexScriptLoadSpec {
+    pub load_arabic: bool,
+    pub load_bengali: bool,
+    // ... per-script load flags
+}
+```
+
+### Loading Triggers
+
+| Trigger | Function | Where |
+|---------|----------|-------|
+| Per-frame content check | `needs_complex_script_fonts()` → `load_complex_script_fonts_for_text()` | `app/mod.rs` |
+| File open (deferred) | Same as above, via `pending_cjk_check` | `app/mod.rs` |
+| IME input commit | `load_complex_script_fonts_for_content()` | `app/central_panel.rs` |
+
+### Font Fallback Chain
+
+Complex script fonts are appended to the fallback chain after CJK fonts:
+
+```
+Proportional: [primary font] → [CJK fonts...] → [complex script fonts...]
+Monospace:    [JetBrains Mono] → [CJK fonts...] → [complex script fonts...]
+```
+
+When `reload_fonts()` is called (e.g., font or CJK preference change), already-loaded complex script fonts are automatically re-included via `ComplexScriptLoadSpec::from_loaded_flags()`.
+
+### Limitations (Phase 1)
+
+Phase 1 provides correct **glyph display** for scripts that don't require complex shaping (Hebrew, Thai, Georgian, Armenian, Ethiopic) and **partial display** for scripts that do (Arabic, Bengali show individual glyphs without ligature/contextual shaping). Full shaping requires Phase 2 (HarfRust integration, planned for v0.2.8).
+
 ## Tests
 
 Run font system tests:
@@ -216,3 +276,7 @@ Tests verify:
 - Font definitions are created correctly
 - Style combinations map to correct families
 - Both Inter and JetBrains Mono variants work
+- Complex script detection for all 11 script families
+- Unicode range boundary checks
+- ASCII and CJK exclusion from complex script detection
+- Mixed-text multi-script detection
