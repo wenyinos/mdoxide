@@ -38,6 +38,32 @@ status:
   no_file: "開いているファイルがありません"
 
 # File dialogs
+  vim_mode: Vim 編集モード (Esc = 通常, i = 挿入)
+  cursor_position: 行 %{line}, 列 %{col}
+  delimiter_tooltip: |-
+    区切り文字 : %{delimiter}
+    %{info}クリックして変更
+  header_tooltip: |-
+    先頭行が見出し : %{status}
+    %{info}クリックして変更
+  rainbow_tooltip: |-
+    虹色列の色付け : %{status}
+    クリックして切り替え
+  encoding_tooltip: |-
+    ファイルのエンコーディング : %{encoding}
+    %{info}クリックして変更
+  encoding_heading: ファイルのエンコーディング
+  recent_files_heading: 📄 最近使ったファイル
+  recent_folders_heading: 📁 最近使ったフォルダー
+  file_tooltip: |-
+    %{path}
+
+    クリック : 開く
+    Shift+クリック : バックグラウンドで開く
+  folder_tooltip: |-
+    %{path}
+
+    クリック : ワークスペースとして開く
 dialog:
   unsaved_changes:
     title: "未保存の変更"
@@ -164,6 +190,9 @@ settings:
     paragraph_indent_hint: "CJK タイポグラフィ規約に基づく行頭インデント"
     paragraph_indent_custom: "カスタム"
     paragraph_indent_custom_desc: "カスタム em 値"
+    vim_mode: Vim モード
+    vim_mode_tooltip: Vimスタイルのモーダル編集を、通常モード、挿入モード、ビジュアルモードで有効にします。ナビゲーションには 
+      hjkl、挿入には i、通常モードには Escを使用します。
   preview:
     sync_scroll: "スクロールの同期"
     default_view: "既定の表示モード"
@@ -218,6 +247,33 @@ settings:
     report_issue: 問題の報告
     source_code: ソースコード
     license: MITライセンス
+  terminal:
+    title: ターミナル
+    enable: 内蔵ターミナルを有効にする
+    font_size: フォントサイズ
+    scrollback: スクロールバック行数
+    copy_selection: 選択範囲を自動的にコピー
+    copy_selection_tooltip: マウスで選択するとテキストをクリップボードに自動的にコピーします
+    theme: ターミナルのテーマ
+    opacity: 背景の不透明度
+    startup_command: 起動コマンド
+    startup_command_desc: "新しいターミナルを開いたときに実行するコマンド (例 : 'echo Hello')"
+    startup_command_hint: 任意
+    monitors: 検出されたモニター
+    monitors_desc: ウィンドウ配置用の検出済みディスプレイレイアウト
+    monitor_label: 'モニター %{index} :'
+    monitor_geometry: (%{width}x%{height} / %{x},%{y})
+    breathing_color: 点滅インジケーターの色
+    prompt_patterns: カスタムプロンプトパターン
+    prompt_patterns_desc: ターミナルプロンプトを検出するための正規表現パターン (1行に1つ)
+    prompt_patterns_hint: '例 : ^\w+@\w+:'
+    auto_load_layout: レイアウトを自動読み込み
+    auto_load_layout_tooltip: プロジェクトルートから'terminal_layout.json'を自動的に読み込みます
+    sound_notification: 通知音
+    sound_notification_desc: ターミナルが入力待ちのときに通知音を再生
+    enable_sound: プロンプト時に通知音を有効化
+    enable_sound_tooltip: ターミナルがプロンプトを検出したときに通知音を鳴らす (入力待ち)
+    custom_sound: カスタムサウンドファイル (任意)
 find:
   placeholder: "検索..."
   replace_placeholder: "置換後..."
