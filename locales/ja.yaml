@@ -274,6 +274,13 @@ settings:
     enable_sound: プロンプト時に通知音を有効化
     enable_sound_tooltip: ターミナルがプロンプトを検出したときに通知音を鳴らす (入力待ち)
     custom_sound: カスタムサウンドファイル (任意)
+    custom_sound_hint: 空白のままでシステムビープ音
+    auto_focus: 入力時に自動フォーカス
+    auto_focus_desc: 入力待ち状態になると自動的にターミナルに切り替わります
+    focus_on_prompt: プロンプト時にターミナルにフォーカス
+    focus_on_prompt_tooltip: 実行状態から入力待ち状態に移行したときに、端末に自動的にフォーカスを当てます
+    font_size_format: '%{size}px'
+    opacity_format: '%{value}%'
 find:
   placeholder: "検索..."
   replace_placeholder: "置換後..."
@@ -308,6 +315,23 @@ outline:
   parse_error: "⚠ 解析エラー"
 
 # Document statistics
+  detach_tooltip: フローティングウィンドウに分離
+  backlinks_unavailable: バックリンクは利用できません
+  productivity_unavailable: プロダクティビティハブは利用できません
+  tab_links: リンク
+  tab_hub: ハブ
+  json_structure: 📁 構造体
+  json_values: 📊 値
+  json_objects: オブジェクト
+  json_arrays: 配列
+  json_total_keys: 合計キー数
+  json_max_depth: 最大深度
+  json_total_values: 合計値数
+  json_strings: 文字列
+  json_numbers: 数値
+  json_booleans: Booleans
+  json_nulls: Nulls
+  json_array_items: 配列項目
 stats:
   no_data: "統計情報がありません"
   text_stats: "テキスト"
@@ -509,6 +533,16 @@ notification:
   session_restored: "セッションを復元しました"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_performance: 大きなファイル (%{size}MB) 。パフォーマンスが低下する可能性があります。
+  undo: 元に戻す (%{remaining} 残り)
+  nothing_to_undo: 元に戻すものがありません
+  redo: やり直し (%{remaining} 残り)
+  nothing_to_redo: やり直すものがありません
+  outline_shown: アウトラインパネルを表示
+  outline_hidden: アウトラインパネルを非表示
+  loaded_terminal_layout: 読み込まれたワークスペースターミナルレイアウト
+  terminal_shown: ターミナルパネルを表示
+  terminal_hidden: ターミナルパネルを非表示
 tree_viewer:
   collapse_all: "▶ すべて折りたたむ"
   expand_all: "▼ すべて展開"
