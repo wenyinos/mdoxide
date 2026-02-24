@@ -250,6 +250,8 @@ settings:
     copy_selection: Auswahl automatisch kopieren
     copy_selection_tooltip: Automatisch Text in Zwischenablage kopieren wenn er 
       mit der Maus selektiert wird
+    font_size_format: '%{size}px'
+    opacity_format: '%{value}%'
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
@@ -284,6 +286,10 @@ outline:
   parse_error: "⚠ Parse-Fehler"
 
 # Document statistics
+  tab_links: Links
+  json_numbers: Numbers
+  json_arrays: Arrays
+  json_strings: Strings
 stats:
   no_data: "Statistik nicht verfügbar"
   text_stats: "Text"
