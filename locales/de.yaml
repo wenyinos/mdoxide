@@ -38,6 +38,21 @@ status:
   no_file: "Keine Datei geöffnet"
 
 # File dialogs
+  vim_mode: Vim-Benutzeroberfläche (Esc = Standardmodus, i = Einfügen)
+  cursor_position: Zeile %{line}, Spalte %{col}
+  delimiter_tooltip: |-
+    Begrenzungszeichen: %{delimiter}
+    %{info} ändern durch draufklicken
+  header_tooltip: |-
+    erste Zeile als Überschriften: %{status}
+    %{info} ändern durch Draufklicken
+  rainbow_tooltip: |-
+    Zebra-Darstellung der Spalten: %{status}
+    umschalten durch Draufklicken
+  encoding_tooltip: |-
+    Dateikodierung: %{encoding}
+    %{info} klicken zum Ändern
+  encoding_heading: Dateikodierung
 dialog:
   unsaved_changes:
     title: "Ungespeicherte Änderungen"
@@ -210,6 +225,33 @@ settings:
     click_to_change: "Anklicken um Tastenkürzel zu ändern"
 
 # Find and Replace panel
+  about:
+    source_code: Quellcode
+    new_version: Version
+    try_again: Nochmal versuchen
+    up_to_date: Die aktuellste Version wird verwendet!
+    title: Info
+    updates: Neue Versionen
+    license: 'Lizenz: MIT'
+    report_issue: Problem melden
+    check_for_updates: Neue Versionen suchen
+    checking: Neue Versionen werden gesucht...
+    check_again: Nochmal suchen
+    check_failed: Neue Versionen konnten nicht gesucht werden
+    update_available: Es gibt eine neue Version!
+    links: Links
+    all_releases: Alle Versionen
+    view_release: Version anschauen und laden
+    description: Ein schneller, schlanker Editor für Markdown, JSON und mehr
+  terminal:
+    enable: Integriertes Terminal verwenden
+    font_size: Schriftgröße
+    scrollback: 'Zurückscrollen: Zeilen'
+    copy_selection: Auswahl automatisch kopieren
+    copy_selection_tooltip: Automatisch Text in Zwischenablage kopieren wenn er 
+      mit der Maus selektiert wird
+    font_size_format: '%{size}px'
+    opacity_format: '%{value}%'
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
@@ -244,6 +286,10 @@ outline:
   parse_error: "⚠ Parse-Fehler"
 
 # Document statistics
+  tab_links: Links
+  json_numbers: Numbers
+  json_arrays: Arrays
+  json_strings: Strings
 stats:
   no_data: "Statistik nicht verfügbar"
   text_stats: "Text"
@@ -446,6 +492,8 @@ notification:
   session_restored: "Sitzung ist wiederhergestellt"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_performance: Große Datei (%{size} MB). Evtl. eingeschränkte 
+    Geschwindigkeit.
 tree_viewer:
   collapse_all: "▶ Alles einklappen"
   expand_all: "▼ Alles aufklappen"
