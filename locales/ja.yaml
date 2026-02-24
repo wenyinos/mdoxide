@@ -1,4 +1,4 @@
-# Ferrite - English (Base Language)
+# Ferrite - Japanese (日本語)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
@@ -36,34 +36,19 @@ view_mode:
 status:
   untitled: "無題"
   no_file: "開いているファイルがありません"
+  vim_mode: "Vim 編集モード (Esc = 通常, i = 挿入)"
+  cursor_position: "行 %{line}, 列 %{col}"
+  delimiter_tooltip: "区切り文字 : %{delimiter}\n%{info}クリックして変更"
+  header_tooltip: "先頭行が見出し : %{status}\n%{info}クリックして変更"
+  rainbow_tooltip: "虹色列の色付け : %{status}\nクリックして切り替え"
+  encoding_tooltip: "ファイルのエンコーディング : %{encoding}\n%{info}クリックして変更"
+  encoding_heading: "ファイルのエンコーディング"
+  recent_files_heading: "📄 最近使ったファイル"
+  recent_folders_heading: "📁 最近使ったフォルダー"
+  file_tooltip: "%{path}\n\nクリック : 開く\nShift+クリック : バックグラウンドで開く"
+  folder_tooltip: "%{path}\n\nクリック : ワークスペースとして開く"
 
 # File dialogs
-  vim_mode: Vim 編集モード (Esc = 通常, i = 挿入)
-  cursor_position: 行 %{line}, 列 %{col}
-  delimiter_tooltip: |-
-    区切り文字 : %{delimiter}
-    %{info}クリックして変更
-  header_tooltip: |-
-    先頭行が見出し : %{status}
-    %{info}クリックして変更
-  rainbow_tooltip: |-
-    虹色列の色付け : %{status}
-    クリックして切り替え
-  encoding_tooltip: |-
-    ファイルのエンコーディング : %{encoding}
-    %{info}クリックして変更
-  encoding_heading: ファイルのエンコーディング
-  recent_files_heading: 📄 最近使ったファイル
-  recent_folders_heading: 📁 最近使ったフォルダー
-  file_tooltip: |-
-    %{path}
-
-    クリック : 開く
-    Shift+クリック : バックグラウンドで開く
-  folder_tooltip: |-
-    %{path}
-
-    クリック : ワークスペースとして開く
 dialog:
   unsaved_changes:
     title: "未保存の変更"
@@ -162,6 +147,8 @@ settings:
     sync_scroll_tooltip: "Raw表示とレンダリング表示の切り替え時にスクロール位置を同期する"
     use_spaces: "インデントにスペースを使用"
     use_spaces_tooltip: "インデントにタブの代わりにスペースを使用する"
+    vim_mode: "Vim モード"
+    vim_mode_tooltip: "Vimスタイルのモーダル編集を、通常モード、挿入モード、ビジュアルモードで有効にします。ナビゲーションには hjkl、挿入には i、通常モードには Escを使用します。"
     max_line_width: "最大行幅"
     custom_width: "カスタム - ピクセル幅を指定"
     code_folding: "コードの折りたたみ"
@@ -190,9 +177,6 @@ settings:
     paragraph_indent_hint: "CJK タイポグラフィ規約に基づく行頭インデント"
     paragraph_indent_custom: "カスタム"
     paragraph_indent_custom_desc: "カスタム em 値"
-    vim_mode: Vim モード
-    vim_mode_tooltip: Vimスタイルのモーダル編集を、通常モード、挿入モード、ビジュアルモードで有効にします。ナビゲーションには 
-      hjkl、挿入には i、通常モードには Escを使用します。
   preview:
     sync_scroll: "スクロールの同期"
     default_view: "既定の表示モード"
@@ -212,9 +196,9 @@ settings:
     title: "外観"
     language: "言語"
     language_hint: "ユーザーインターフェースの表示言語を選択"
-    syntax_theme: 構文テーマ
-    syntax_theme_hint: コードの構文強調表示用のカラーテーマ
-    syntax_theme_auto: 自動 (アプリのテーマに合わせる)
+    syntax_theme: "構文テーマ"
+    syntax_theme_hint: "コードの構文強調表示用のカラーテーマ"
+    syntax_theme_auto: "自動 (アプリのテーマに合わせる)"
   keyboard:
     title: "キーボード"
     search_hint: "フィルター..."
@@ -227,60 +211,60 @@ settings:
     apply: "適用"
     conflict_with: "競合 :"
     click_to_change: "クリックしてショートカットを変更"
+  about:
+    title: "Ferrite について"
+    description: "Markdown,JSON などに対応した高速で軽量なテキスト エディタ"
+    updates: "アップデート"
+    check_for_updates: "更新の確認"
+    checking: "更新の確認中..."
+    up_to_date: "最新バージョンを使用しています!"
+    check_again: "再確認"
+    update_available: "新しいバージョンが利用可能です!"
+    new_version: "バージョン"
+    view_release: "リリースを表示してダウンロード"
+    check_failed: "更新を確認できませんでした"
+    try_again: "再試行"
+    links: "リンク"
+    all_releases: "すべてのリリース"
+    report_issue: "問題の報告"
+    source_code: "ソースコード"
+    license: "MITライセンス"
+  terminal:
+    title: "ターミナル"
+    enable: "内蔵ターミナルを有効にする"
+    font_size: "フォントサイズ"
+    scrollback: "スクロールバック行数"
+    copy_selection: "選択範囲を自動的にコピー"
+    copy_selection_tooltip: "マウスで選択するとテキストをクリップボードに自動的にコピーします"
+    theme: "ターミナルのテーマ"
+    opacity: "背景の不透明度"
+    startup_command: "起動コマンド"
+    startup_command_desc: "新しいターミナルを開いたときに実行するコマンド (例 : 'echo Hello')"
+    startup_command_hint: "任意"
+    monitors: "検出されたモニター"
+    monitors_desc: "ウィンドウ配置用の検出済みディスプレイレイアウト"
+    monitor_label: "モニター %{index} :"
+    monitor_geometry: "(%{width}x%{height} / %{x},%{y})"
+    breathing_color: "点滅インジケーターの色"
+    prompt_patterns: "カスタムプロンプトパターン"
+    prompt_patterns_desc: "ターミナルプロンプトを検出するための正規表現パターン (1行に1つ)"
+    prompt_patterns_hint: "例 : ^\\w+@\\w+:"
+    auto_load_layout: "レイアウトを自動読み込み"
+    auto_load_layout_tooltip: "プロジェクトルートから'terminal_layout.json'を自動的に読み込みます"
+    sound_notification: "通知音"
+    sound_notification_desc: "ターミナルが入力待ちのときに通知音を再生"
+    enable_sound: "プロンプト時に通知音を有効化"
+    enable_sound_tooltip: "ターミナルがプロンプトを検出したときに通知音を鳴らす (入力待ち)"
+    custom_sound: "カスタムサウンドファイル (任意)"
+    custom_sound_hint: "空白のままでシステムビープ音"
+    auto_focus: "入力時に自動フォーカス"
+    auto_focus_desc: "入力待ち状態になると自動的にターミナルに切り替わります"
+    focus_on_prompt: "プロンプト時にターミナルにフォーカス"
+    focus_on_prompt_tooltip: "実行状態から入力待ち状態に移行したときに、端末に自動的にフォーカスを当てます"
+    font_size_format: "%{size}px"
+    opacity_format: "%{value}%"
 
 # Find and Replace panel
-  about:
-    title: Ferrite について
-    description: Markdown,JSON などに対応した高速で軽量なテキスト エディタ
-    updates: アップデート
-    check_for_updates: 更新の確認
-    checking: 更新の確認中...
-    up_to_date: 最新バージョンを使用しています!
-    check_again: 再確認
-    update_available: 新しいバージョンが利用可能です!
-    new_version: バージョン
-    view_release: リリースを表示してダウンロード
-    check_failed: 更新を確認できませんでした
-    try_again: 再試行
-    links: リンク
-    all_releases: すべてのリリース
-    report_issue: 問題の報告
-    source_code: ソースコード
-    license: MITライセンス
-  terminal:
-    title: ターミナル
-    enable: 内蔵ターミナルを有効にする
-    font_size: フォントサイズ
-    scrollback: スクロールバック行数
-    copy_selection: 選択範囲を自動的にコピー
-    copy_selection_tooltip: マウスで選択するとテキストをクリップボードに自動的にコピーします
-    theme: ターミナルのテーマ
-    opacity: 背景の不透明度
-    startup_command: 起動コマンド
-    startup_command_desc: "新しいターミナルを開いたときに実行するコマンド (例 : 'echo Hello')"
-    startup_command_hint: 任意
-    monitors: 検出されたモニター
-    monitors_desc: ウィンドウ配置用の検出済みディスプレイレイアウト
-    monitor_label: 'モニター %{index} :'
-    monitor_geometry: (%{width}x%{height} / %{x},%{y})
-    breathing_color: 点滅インジケーターの色
-    prompt_patterns: カスタムプロンプトパターン
-    prompt_patterns_desc: ターミナルプロンプトを検出するための正規表現パターン (1行に1つ)
-    prompt_patterns_hint: '例 : ^\w+@\w+:'
-    auto_load_layout: レイアウトを自動読み込み
-    auto_load_layout_tooltip: プロジェクトルートから'terminal_layout.json'を自動的に読み込みます
-    sound_notification: 通知音
-    sound_notification_desc: ターミナルが入力待ちのときに通知音を再生
-    enable_sound: プロンプト時に通知音を有効化
-    enable_sound_tooltip: ターミナルがプロンプトを検出したときに通知音を鳴らす (入力待ち)
-    custom_sound: カスタムサウンドファイル (任意)
-    custom_sound_hint: 空白のままでシステムビープ音
-    auto_focus: 入力時に自動フォーカス
-    auto_focus_desc: 入力待ち状態になると自動的にターミナルに切り替わります
-    focus_on_prompt: プロンプト時にターミナルにフォーカス
-    focus_on_prompt_tooltip: 実行状態から入力待ち状態に移行したときに、端末に自動的にフォーカスを当てます
-    font_size_format: '%{size}px'
-    opacity_format: '%{value}%'
 find:
   placeholder: "検索..."
   replace_placeholder: "置換後..."
@@ -309,29 +293,30 @@ outline:
   statistics: "統計"
   tab_outline: "アウトライン"
   tab_statistics: "統計"
+  summary: "見出し %{headings} 個 · 読了目安 約 %{minutes} 分"
   no_headings: "見出しが見つかりません"
   add_headings_hint: "# 構文を使用して見出しを追加してください"
   close_tooltip: "アウトラインを閉じる (Ctrl+Shift+O)"
   parse_error: "⚠ 解析エラー"
+  detach_tooltip: "フローティングウィンドウに分離"
+  backlinks_unavailable: "バックリンクは利用できません"
+  productivity_unavailable: "プロダクティビティハブは利用できません"
+  tab_links: "リンク"
+  tab_hub: "ハブ"
+  json_structure: "📁 構造体"
+  json_values: "📊 値"
+  json_objects: "オブジェクト"
+  json_arrays: "配列"
+  json_total_keys: "合計キー数"
+  json_max_depth: "最大深度"
+  json_total_values: "合計値数"
+  json_strings: "文字列"
+  json_numbers: "数値"
+  json_booleans: "Booleans"
+  json_nulls: "Nulls"
+  json_array_items: "配列項目"
 
 # Document statistics
-  detach_tooltip: フローティングウィンドウに分離
-  backlinks_unavailable: バックリンクは利用できません
-  productivity_unavailable: プロダクティビティハブは利用できません
-  tab_links: リンク
-  tab_hub: ハブ
-  json_structure: 📁 構造体
-  json_values: 📊 値
-  json_objects: オブジェクト
-  json_arrays: 配列
-  json_total_keys: 合計キー数
-  json_max_depth: 最大深度
-  json_total_values: 合計値数
-  json_strings: 文字列
-  json_numbers: 数値
-  json_booleans: Booleans
-  json_nulls: Nulls
-  json_array_items: 配列項目
 stats:
   no_data: "統計情報がありません"
   text_stats: "テキスト"
@@ -480,7 +465,7 @@ shortcuts:
     save: "保存"
     save_as: "名前を付けて保存"
     close_tab: "タブを閉じる"
-  # Edit shortcuts
+  # Edit shortcuts (for help panel)
   edit:
     undo: "元に戻す"
     redo: "やり直す"
@@ -495,7 +480,7 @@ shortcuts:
     move_line_up: "行を上へ移動"
     move_line_down: "行を下へ移動"
     select_next_occurrence: "次の一致を選択"
-  # View shortcuts
+  # View shortcuts (for help panel)
   view:
     toggle_view: "Raw/Rendered の切り替え"
     toggle_outline: "アウトラインの切り替え"
@@ -504,19 +489,19 @@ shortcuts:
     reset_zoom: "ズームをリセット"
     settings: "設定"
     about: "Ferrite について / ヘルプ"
-  # Formatting shortcuts
+  # Formatting shortcuts (for help panel)
   format:
     bold: "太字"
     italic: "斜体"
     underline: "下線"
     link: "リンクの挿入"
     code: "インラインコード"
-  # Workspace shortcuts
+  # Workspace shortcuts (for help panel)
   workspace:
     quick_switcher: "クイックファイル切り替え"
     search_files: "ファイル内検索"
     toggle_tree: "ファイルツリーの切り替え"
-  # Navigation shortcuts
+  # Navigation shortcuts (for help panel)
   nav:
     next_tab: "次のタブ"
     prev_tab: "前のタブ"
@@ -531,73 +516,73 @@ notification:
   restored_auto_save: "自動保存から復元しました"
   auto_save_discarded: "自動保存を破棄しました"
   session_restored: "セッションを復元しました"
+  large_file_performance: "大きなファイル (%{size}MB) 。パフォーマンスが低下する可能性があります。"
+  undo: "元に戻す (%{remaining} 残り)"
+  nothing_to_undo: "元に戻すものがありません"
+  redo: "やり直し (%{remaining} 残り)"
+  nothing_to_redo: "やり直すものがありません"
+  outline_shown: "アウトラインパネルを表示"
+  outline_hidden: "アウトラインパネルを非表示"
+  loaded_terminal_layout: "読み込まれたワークスペースターミナルレイアウト"
+  terminal_shown: "ターミナルパネルを表示"
+  terminal_hidden: "ターミナルパネルを非表示"
+  zen_enabled: "Zen モード有効"
+  zen_disabled: "Zen モード無効"
+  fullscreen_enter: "全画面モード (F10 または Esc で終了)"
+  fullscreen_exit: "全画面モード終了"
+  pipeline_disabled: "パイプライン機能無効"
+  pipeline_zen: "Zenモード中はパイプラインパネルを隠す"
+  pipeline_unsupported: "パイプラインは JSON/YAML でのみ利用可能です (現在 : %{file_type})"
+  pipeline_opened: "パイプラインパネルが開きました"
+  pipeline_closed: "パイプラインパネルが閉じました"
+  file_tree_shown: "ファイルツリーが表示されました"
+  file_tree_hidden: "ファイルツリーが隠されました"
+  open_folder_first: "最初にフォルダーを開く (📁 ボタン)"
+  open_folder_quick_open: "クイックオープンを使用するには、最初にフォルダーを開きます"
+  open_folder_search: "ファイル内検索を使用するには、まずフォルダーを開きます"
+  toc_markdown_only: "目次 は Markdown ファイルでのみ利用可能です"
+  toc_updated: "目次を更新しました (%{count} 個の見出し)"
+  toc_inserted: "目次を挿入しました (%{count} 個の見出し)"
+  toc_inserted_empty: "目次が挿入されました (見出しが見つかりません)"
+  no_document_format: "フォーマットするドキュメントがありません"
+  not_structured: "構造化データファイルではありません"
+  document_formatted: "フォーマット済みドキュメント"
+  format_failed: "フォーマットに失敗 : %{error}"
+  parse_error: "解析エラー : %{error}"
+  no_document_validate: "検証するドキュメントがありません"
+  valid_syntax: "✔ 有効な %{file_type} 構文"
+  invalid_syntax: "✗ %{error}"
+  replaced: "置換済み"
+  replaced_count: "%{count} 件の出現を置換しました %{suffix}"
+  no_document_export: "エクスポートするドキュメントがありません"
+  exported_to: "%{path} にエクスポートされました"
+  export_failed: "エクスポートに失敗 : %{error}"
+  no_document_copy: "コピーするドキュメントがありません"
+  html_copied: "HTML をクリップボードにコピーしました"
+  copy_failed: "コピーに失敗 : %{error}"
+  opened_files: "%{count} 個のファイルを開きました"
+  saved: "保存済み : %{path}"
+  opened_workspace: "開いたワークスペース : %{name}"
+  workspace_closed: "ワークスペースを閉じました"
+  file_tree_refreshed: "ファイルツリーが更新されました"
+  created: "作成 : %{name}"
+  renamed_to: "名前の変更 : %{name}"
+  deleted: "削除済み : %{name}"
+  opened_background: "バックグラウンドで開く : %{name}"
+  settings_reset: "設定をデフォルトにリセット"
+  encoding_changed: "エンコーディングが %{encoding} に変更されました"
+  reloaded_single: "再読み込み済み : %{name}"
+  reloaded_multiple: "%{count} 個のファイルがディスクから再読み込みされました"
+  external_change_single: "ファイルが外部で変更されました (変更は保存されていません) : %{name}"
+  external_change_multiple: "%{count} 個のファイルが外部で変更されました (未保存の変更があります)"
+  image_added: "アセットに画像を追加しました"
+  images_added: "%{count} 個の画像をアセットに追加しました"
+  opened_external_single: "外部リクエストからファイルを開きました"
+  opened_external_multiple: "外部リクエストから %{count} 個のファイルを開きました"
+  wikilink_not_found: "[[%{target}]] — ファイルが見つかりません"
+  wikilink_open_failed: "[[%{target}]] を開けませんでした : %{error}"
 
 # Tree viewer (JSON/YAML/TOML)
-  large_file_performance: 大きなファイル (%{size}MB) 。パフォーマンスが低下する可能性があります。
-  undo: 元に戻す (%{remaining} 残り)
-  nothing_to_undo: 元に戻すものがありません
-  redo: やり直し (%{remaining} 残り)
-  nothing_to_redo: やり直すものがありません
-  outline_shown: アウトラインパネルを表示
-  outline_hidden: アウトラインパネルを非表示
-  loaded_terminal_layout: 読み込まれたワークスペースターミナルレイアウト
-  terminal_shown: ターミナルパネルを表示
-  terminal_hidden: ターミナルパネルを非表示
-  zen_enabled: Zen モード有効
-  zen_disabled: Zen モード無効
-  fullscreen_enter: 全画面モード (F10 または Esc で終了)
-  fullscreen_exit: 全画面モード終了
-  pipeline_disabled: パイプライン機能無効
-  pipeline_zen: Zenモード中はパイプラインパネルを隠す
-  pipeline_unsupported: 'パイプラインは JSON/YAML でのみ利用可能です (現在 : %{file_type})'
-  pipeline_opened: パイプラインパネルが開きました
-  pipeline_closed: パイプラインパネルが閉じました
-  file_tree_shown: ファイルツリーが表示されました
-  file_tree_hidden: ファイルツリーが隠されました
-  open_folder_first: 最初にフォルダーを開く (📁 ボタン)
-  open_folder_quick_open: クイックオープンを使用するには、最初にフォルダーを開きます
-  open_folder_search: ファイル内検索を使用するには、まずフォルダーを開きます
-  toc_markdown_only: 目次 は Markdown ファイルでのみ利用可能です
-  toc_updated: 目次を更新しました (%{count} 個の見出し)
-  toc_inserted: 目次を挿入しました (%{count} 個の見出し)
-  toc_inserted_empty: 目次が挿入されました (見出しが見つかりません)
-  no_document_format: フォーマットするドキュメントがありません
-  not_structured: 構造化データファイルではありません
-  document_formatted: フォーマット済みドキュメント
-  format_failed: 'フォーマットに失敗 : %{error}'
-  parse_error: '解析エラー : %{error}'
-  no_document_validate: 検証するドキュメントがありません
-  valid_syntax: ✔ 有効な %{file_type} 構文
-  invalid_syntax: ✗ %{error}
-  replaced: 置換済み
-  replaced_count: '%{count} 件の出現を置換しました %{suffix}'
-  no_document_export: エクスポートするドキュメントがありません
-  exported_to: '%{path} にエクスポートされました'
-  export_failed: 'エクスポートに失敗 : %{error}'
-  no_document_copy: コピーするドキュメントがありません
-  html_copied: HTML をクリップボードにコピーしました
-  copy_failed: 'コピーに失敗 : %{error}'
-  opened_files: '%{count} 個のファイルを開きました'
-  saved: '保存済み : %{path}'
-  opened_workspace: '開いたワークスペース : %{name}'
-  workspace_closed: ワークスペースを閉じました
-  file_tree_refreshed: ファイルツリーが更新されました
-  created: '作成 : %{name}'
-  renamed_to: '名前の変更 : %{name}'
-  deleted: '削除済み : %{name}'
-  opened_background: 'バックグラウンドで開く : %{name}'
-  settings_reset: 設定をデフォルトにリセット
-  encoding_changed: エンコーディングが %{encoding} に変更されました
-  reloaded_single: '再読み込み済み : %{name}'
-  reloaded_multiple: '%{count} 個のファイルがディスクから再読み込みされました'
-  external_change_single: 'ファイルが外部で変更されました (変更は保存されていません) : %{name}'
-  external_change_multiple: '%{count} 個のファイルが外部で変更されました (未保存の変更があります)'
-  image_added: アセットに画像を追加しました
-  images_added: '%{count} 個の画像をアセットに追加しました'
-  opened_external_single: 外部リクエストからファイルを開きました
-  opened_external_multiple: 外部リクエストから %{count} 個のファイルを開きました
-  wikilink_not_found: '[[%{target}]] — ファイルが見つかりません'
-  wikilink_open_failed: '[[%{target}]] を開けませんでした : %{error}'
 tree_viewer:
   collapse_all: "▶ すべて折りたたむ"
   expand_all: "▼ すべて展開"
@@ -665,10 +650,15 @@ widgets:
     delete_column: "列 %{index} を削除"
     align_label: "整列 :"
     align_none: "整列しない"
-    delete_row: 行を削除
-    add_row_tooltip: 新しい行を追加
-    add_column_tooltip: 新しい列を追加
-    alignment_tooltip: '%{alignment} (クリックで切り替え)'
+    delete_row: "行を削除"
+    add_row_tooltip: "新しい行を追加"
+    add_column_tooltip: "新しい列を追加"
+    alignment_tooltip: "%{alignment} (クリックで切り替え)"
+  list:
+    decrease_level: "レベルを下げる"
+    increase_level: "レベルを上げる"
+    remove_item: "項目を削除"
+    add_item: "+ 項目を追加"
   link:
     edit: "リンクの編集"
     open: "🔗 開く"
@@ -678,11 +668,6 @@ widgets:
     copy_tooltip: "URL をクリップボードにコピー"
 
 # CSV Viewer
-  list:
-    decrease_level: レベルを下げる
-    increase_level: レベルを上げる
-    remove_item: 項目を削除
-    add_item: + 項目を追加
 csv:
   delimiter_auto: "自動検出"
   error: "CSV の解析に失敗しました"
@@ -696,7 +681,7 @@ csv:
 # Pipeline panel
 pipeline:
   title: "⚡ ライブパイプライン"
-  command_placeholder: "\"jq '.items[]' または yq '.data' ..."
+  command_placeholder: "jq '.items[]' または yq '.data' ..."
   run: "▶ 実行"
   recent: "最近使ったコマンド"
   no_output: "(出力なし)"
@@ -707,9 +692,7 @@ pipeline:
   run_tooltip: "コマンドを実行 (Enter)"
   stdout: "stdout"
   stderr: "stderr"
-  hint: "上の欄にコマンドを入力して、ドキュメントをパイプ処理します。\n例 :\n• jq '.'           - JSON を整形\n• jq
-    '.items[]'    - 配列項目を抽出\n• yq '.data'       - YAML フィールドを抽出\n• grep 'pattern'\
-    \   - パターンを検索"
+  hint: "上の欄にコマンドを入力して、ドキュメントをパイプ処理します。\n例 :\n• jq '.'           - JSON を整形\n• jq '.items[]'    - 配列項目を抽出\n• yq '.data'       - YAML フィールドを抽出\n• grep 'pattern'   - パターンを検索"
   no_output_success: "(コマンドは出力を生成しませんでした)"
 
 # Encoding
@@ -776,9 +759,6 @@ ribbon:
   export_pdf: "📄 PDF としてエクスポート"
   coming_soon: "近日公開"
   heading_level: "見出し %{level}"
-
-# NOTE: New keys were added to notification, status, outline, and widgets sections in en.yaml (v0.2.7).
-# These keys will fall back to English until translated. Check en.yaml for reference.
 
 # Welcome page (first launch)
 welcome:

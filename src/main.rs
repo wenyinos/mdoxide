@@ -27,7 +27,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 // Initialize internationalization system
 // The locales directory contains YAML files for each supported language (e.g., en.yaml, zh.yaml)
 // Usage: rust_i18n::t!("menu.file.open") returns the translated string
-rust_i18n::i18n!("locales");
+rust_i18n::i18n!("locales", fallback = "en");
 
 mod app;
 mod config;

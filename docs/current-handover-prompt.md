@@ -1,4 +1,4 @@
-# Handover: Table Text Wrapping & Layout Fixes
+# Handover: i18n Empty-String Bug (All Non-EN Locales) + List Wrapping Bug
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file - only update when explicitly requested
@@ -11,108 +11,148 @@
 
 ---
 
-## Current Task
+## Current Task (Priority): Remove Empty-String Translations from All Locale Files
 
-**Fix Table Rendering — Text Wrapping, Backgrounds, and Cell Layout**
-- **Priority**: High
-- **Status**: Done — background alignment, cell padding, and column resize all implemented
-- **Test file**: `test_md/test_table_wrapping.md`
+**All non-English locale files contain empty-string values (`""`) that display as blank text instead of falling back to English.**
+- **Priority**: High (user-facing — UI shows blank labels/text in German, Chinese, and others)
+- **Status**: In progress — Japanese is fixed, all others still broken
+- **Repro**: Settings → Language → Deutsch (or 简体中文); then open Settings, Outline sidebar.
 
-### Goal (All Achieved)
+### The Bug
 
-Tables in the rendered/split markdown editor now:
-1. **Fit within screen width** (or max_line_width when set, for zen mode centering)
-2. **Wrap long text** inside cells gracefully
-3. **Keep short text on one line** (e.g., "Alice", "QA", "ID" should never wrap)
-4. Have **clean, aligned backgrounds** (header, striped rows) with no bleeding
-5. Have **proper cell padding** — text does not overflow or offset from its row
-6. **Columns are user-resizable** by dragging separators; double-click resets to auto
+UI elements show **blank/empty text** instead of translated or English fallback strings. This affects German (de), Chinese (zh_Hans), Spanish (es), Estonian (et), Norwegian (nb_NO), and Portuguese (pt).
 
-### What's Already Done
+### Root Cause (Confirmed)
 
-The table rendering was refactored from the original `TextEdit::singleline` (no wrapping) approach. Several iterations were tried:
+`rust_i18n`'s `fallback = "en"` only triggers when a key is **completely absent** from a locale file. An empty string `""` is treated as a **valid translation** — it displays nothing.
 
-1. ~~`egui_extras::TableBuilder`~~ — Removed. Required pre-measured row heights that never matched actual column widths. Caused "First use of Table ID" errors with multiple tables. Dependency (`egui_extras`) was removed from `Cargo.toml`.
+In the previous session, missing keys were added to locale files with `""` as placeholder values. This backfired: instead of falling back to English, the UI now shows blank text.
 
-2. ~~`egui::Grid`~~ — Removed. Grid determines column widths from natural content width and ignores parent `set_max_width` constraints, causing tables to overflow the viewport.
+**Empty string counts per file:**
 
-3. **Current approach: Manual layout** (`ui.horizontal()` + `ui.allocate_ui()`) — This is the current implementation. It correctly constrains width but has visual issues that need fixing.
+| File | Empty `""` values | Status |
+|------|-------------------|--------|
+| `locales/ja.yaml` | **0** | **Working** (fully translated, no empty strings) |
+| `locales/de.yaml` | 246 | **Broken** |
+| `locales/zh_Hans.yaml` | 282 | **Broken** |
+| `locales/es.yaml` | 553 | **Broken** |
+| `locales/nb_NO.yaml` | 606 | **Broken** |
+| `locales/et.yaml` | 727 | **Broken** |
+| `locales/pt.yaml` | 717 | **Broken** |
 
-### Current Architecture
+### How i18n Works Here
 
-**Width flow:**
-- `MarkdownEditor` in `editor.rs` sets `ui.set_max_width(content_width)` based on `max_line_width` setting and zen mode
-- `render_table()` in `editor.rs` (line ~4180) captures `ui.available_width()` BEFORE any layout changes, passes it to the table widget via `.max_width(table_avail_width)`
-- `EditableTable::show()` in `widgets.rs` (line ~1400) uses `min(max_width, ui.available_width())` as the hard table width cap
-- The `ui.horizontal()` wrapper was **removed** from `render_table` — it was causing width to be unbounded
+- **Crate**: `rust_i18n`; macro `t!("key.path")`; keys live in `locales/*.yaml`.
+- **Loading**: Compile-time (`rust_i18n::i18n!("locales", fallback = "en");` in `src/main.rs`). **Full rebuild required** after YAML edits.
+- **Fallback**: Added in previous session. When a key is **missing** from a locale, it falls back to `en.yaml`. But empty strings `""` are **not** missing — they are valid values that show nothing.
+- **Key rule**: If a translation doesn't exist, the key must be **omitted entirely** (not present in the file), so the fallback mechanism works.
 
-**Column width calculation (widgets.rs, ~line 1490):**
-- Measures each column's single-line natural width using `ui.fonts(|f| f.layout_no_wrap(...))`
-- If all columns fit naturally: scales up proportionally
-- If too wide: short columns (≤ fair_share) keep natural width; long columns share remaining space proportionally
+### The Fix
 
-**Row rendering (widgets.rs, ~line 1630):**
-- Pre-measures row heights using `ui.fonts(|f| f.layout(..., wrap_w))` at exact column widths (used as minimum)
-- Reserves a `Shape::Noop` placeholder in the paint list BEFORE content
-- Each row is a `ui.horizontal()` with `set_min_width`/`set_max_width` = `table_width`
-- Each cell uses `ui.allocate_ui_with_layout(cell_size, Layout::top_down)` with `set_min_width`/`set_max_width` (no max height constraint — cells grow to fit)
-- `ui.add_space(cell_v_pad)` correctly adds vertical padding (top_down layout)
-- Text uses `TextEdit::multiline` with a custom `LayoutJob::simple` layouter for word wrapping
-- Newlines are stripped (Enter key navigates to next row instead)
-- After each row renders: background painted into reserved slot using actual row rect (via `ui.painter().set(bg_idx, Shape::rect_filled(...))`)
+**For every non-English locale file**, remove all lines where the value is an empty string `""`. Keep the YAML structure valid (parent keys with children stay, but leaf keys with `""` values must go).
 
-**Column resizing (widgets.rs, after row loop):**
-- 6px-wide invisible interaction zones centered on each vertical column separator
-- Drag adjusts left column `+delta`, right column `-delta`, both clamped to `min_col_width` (40px)
-- Custom widths stored in `TableEditState.custom_col_widths` (egui memory, per table)
-- On each frame, custom widths are normalized to current `table_width` (proportional scaling)
-- Double-click resets to auto-calculated widths
-- Visual: resize cursor on hover, guide line during drag
+**Approach** (in order of priority — fix de and zh_Hans first as user-reported):
 
-**Cell editing:**
-- Tab/Shift+Tab = next/prev cell
-- Enter = move down one row
-- Escape = deselect
-- Focus tracking via `TableEditState` stored in egui memory
+1. **`locales/de.yaml`** — Remove all `key: ""` lines. This file has real German translations for most keys; the 246 empty strings are newer keys added as placeholders. Simply deleting those lines will make them fall back to English.
 
-### Previously Reported Problems (All Fixed)
+2. **`locales/zh_Hans.yaml`** — Same approach: remove all `key: ""` lines. The 282 empty strings are placeholders; existing Chinese translations should be preserved.
 
-1. ~~**Background color bleeding/misalignment**~~ — Fixed. Backgrounds now use actual rendered row rect instead of pre-measured height.
+3. **Remaining files** (`es.yaml`, `et.yaml`, `nb_NO.yaml`, `pt.yaml`) — Same pattern. These have even more empty strings (553–727) because they had fewer translations to begin with.
 
-2. ~~**Text vertical offset**~~ — Fixed. Cell layout changed from inherited `left_to_right` to explicit `top_down`, so `add_space(cell_v_pad)` correctly adds vertical padding.
+**Important rules for the fix:**
+- **Do NOT edit `locales/en.yaml`** — it is the reference and must not be changed.
+- **Do NOT edit `locales/ja.yaml`** — it is working correctly with zero empty strings.
+- **Do NOT replace empty strings with English text** — just delete the entire line. The fallback mechanism handles it.
+- **Keep parent keys** that still have non-empty children. Only remove leaf-level `key: ""` entries.
+- **Preserve all existing translations** — only remove lines where the value is literally `""`.
+- After removing empty strings, verify that all remaining values are **double-quoted** strings. Unquoted non-ASCII values can cause YAML parsing failures.
 
-3. ~~**Text rendering outside row bounds**~~ — Fixed. Removed `set_max_size` height constraint on cells; cells grow to fit content, and backgrounds match.
+### Verification
 
-### How It Was Fixed
-
-Used the **Shape::Noop placeholder technique** (same as egui's `Frame::show()` internals): reserve a paint slot before rendering content, then replace it with the actual background rect after the row renders. This guarantees backgrounds always match content dimensions. Combined with `top_down` cell layout for correct padding and no max-height constraint so cells expand naturally.
+After editing each file:
+1. Run `cargo build` to recompile (locales load at compile time).
+2. Run the app, switch to the language, and check:
+   - Settings nav labels (Terminal, About) show English fallback or translated text (not blank).
+   - Outline tabs (Links, Hub) show text (not blank).
+   - No raw keys visible (like `settings.terminal.title`).
 
 ### Key Files
 
-| File | Purpose | Key Lines |
-|------|---------|-----------|
-| `src/markdown/widgets.rs` | `EditableTable` struct + `show()` method — all table rendering | ~1327-1800 |
-| `src/markdown/editor.rs` | `render_table()` — calls EditableTable, passes width | ~4180-4250 |
-| `src/config/settings.rs` | `MaxLineWidth` enum — Off, Col80, Col100, Custom(u16) | ~1780 |
-| `test_md/test_table_wrapping.md` | Test file with various table scenarios | all |
+| File | Purpose |
+|------|---------|
+| `locales/de.yaml` | German — 246 empty strings to remove |
+| `locales/zh_Hans.yaml` | Chinese — 282 empty strings to remove |
+| `locales/es.yaml` | Spanish — 553 empty strings to remove |
+| `locales/et.yaml` | Estonian — 727 empty strings to remove |
+| `locales/nb_NO.yaml` | Norwegian — 606 empty strings to remove |
+| `locales/pt.yaml` | Portuguese — 717 empty strings to remove |
+| `locales/en.yaml` | **Reference — DO NOT EDIT** |
+| `locales/ja.yaml` | **Working — DO NOT EDIT** |
+| `src/main.rs` | Has `fallback = "en"` already configured (line 30) |
 
-### What NOT to Do
+### What Was Already Done (Previous Session)
 
-- **Do NOT use `egui_extras::TableBuilder`** — it was tried and has fundamental issues with egui 0.28 (no `id_source`, row height mismatch)
-- **Do NOT use `egui::Grid`** — it ignores parent width constraints
-- **Do NOT wrap the table in `ui.horizontal()`** in `render_table()` — horizontal layouts in egui expand to fit content, defeating width constraints
-- **Do NOT paint backgrounds AFTER content** without using a lower paint layer — it covers the text
+1. **`src/main.rs`**: Added `fallback = "en"` to `rust_i18n::i18n!()` macro — this is the single most important fix enabling graceful degradation.
+2. **`locales/ja.yaml`**: Complete rewrite — all values have actual Japanese translations, no empty strings. **This is why Japanese works.**
+3. **`locales/de.yaml`**: Rewritten to match `en.yaml` structure, but new/untranslated keys were set to `""` instead of being omitted — **this is why German is still broken**.
+4. **Other locale files**: Missing sections were added with `""` placeholders — same problem.
+
+### Lesson Learned
+
+**Never use empty strings as translation placeholders.** If a translation doesn't exist, omit the key entirely so `rust_i18n`'s fallback mechanism provides the English string. Empty strings are valid translations that show nothing.
 
 ---
 
-## Recently Completed (This Session)
+## Also Pending: Preview List Item Text Wrapping Bug
 
-- **Table background & layout fix** — Shape::Noop placeholder technique for backgrounds, `top_down` cell layout, removed max-height constraint. All three visual issues (background bleeding, text offset, text outside bounds) resolved.
-- **Column resizing** — Draggable column separators with proportional width persistence, min-width enforcement, double-click reset, visual feedback.
+**Fix Preview Text Wrapping — List Items Break All Wrapping**
+- **Priority**: Critical
+- **Status**: Not started
+- **GitHub Issue**: [#82](https://github.com/OlaProeis/Ferrite/issues/82)
+- **Test file**: `test_md/test_table_wrapping.md` (or create a new list-focused test file)
+
+### The Bug
+
+In the split/preview markdown editor, list items break text wrapping for themselves and all subsequent content. The `max_line_width` setting is also ignored once a list item is present.
+
+### Observed Behavior (4 stages)
+
+1. **Plain text only** — wraps correctly in both editor and preview. No issues.
+2. **Add a `-` to start a list (no content yet)** — the paragraph text ABOVE the list marker suddenly renders as a heading/bold in the preview, and text wrapping breaks entirely in the preview pane.
+3. **Type short content for the list item** — preview partially recovers; looks okay with short text.
+4. **Long text in the list item** — the list item itself refuses to wrap, and ALL content after it also stops wrapping. The `max_line_width` setting is completely ignored.
+
+### Root Cause
+
+List item rendering uses `ui.horizontal()` so the layout expands to fit content and does not respect parent width. Same pattern as the table bug that was fixed by capturing `ui.available_width()` and constraining the inner widget.
+
+### Where the Bug Lives
+
+Two code paths in `src/markdown/editor.rs`:
+1. **`render_list_item_with_structural_keys()`** — ~line 2145, ~2256 `ui.horizontal()` + `TextEdit::multiline` with `desired_width(f32::INFINITY)`
+2. **`render_list_item()`** — ~line 3724, same pattern
+
+Both need the same fix: capture available width before horizontal, pass constrained width to TextEdit. See table fix in `render_table()` for reference. Formatted list display path ~2687 (`horizontal_wrapped`) may also need verification.
+
+### Key Files (list wrapping)
+
+| File | Purpose |
+|------|---------|
+| `src/markdown/editor.rs` | `render_list_item_with_structural_keys()` ~2145–2400, `render_list_item()` ~3724–3900, list containers, formatted display ~2687 |
+
+---
+
+## Recently Completed
+
+- **Japanese i18n fix** — Full rewrite of `ja.yaml` with all values translated and properly quoted; zero empty strings
+- **Fallback locale** — Added `fallback = "en"` to `rust_i18n::i18n!()` in `src/main.rs`
+- **Locale structure alignment** — All locale files now match `en.yaml` key structure (but with empty string problem)
+- **Table background & layout fix** — Shape::Noop placeholder technique for backgrounds, `top_down` cell layout, removed max-height constraint
+- **Column resizing** — Draggable column separators with proportional width persistence
+- **Table wrapping foundation** — manual layout with proportional column widths, text wrapping via `TextEdit::multiline` + `LayoutJob`
 
 ## Previously Completed
 
-- **Table wrapping foundation** — manual layout with proportional column widths, text wrapping via `TextEdit::multiline` + `LayoutJob`, width respects `max_line_width`/zen mode
 - **Task 29**: Always show view mode bar for all editor tabs (DONE)
 - **Task 26**: Windows MSI installer overhaul (DONE)
 - **Task 20 + 21**: Vim mode settings toggle, status bar indicator (DONE)
