@@ -38,6 +38,32 @@ status:
   no_file: "无文件打开"
 
 # File dialogs
+  vim_mode: Vim 编辑模式（Esc = 普通模式，i = 插入模式）
+  cursor_position: 行 %{line}, 列 %{col}
+  delimiter_tooltip: |-
+    分隔符: %{delimiter}
+    %{info}点击进行更改
+  header_tooltip: |-
+    第一行作为标题：%{status}
+    %{info}点击更改
+  rainbow_tooltip: |-
+    彩虹列着色：%{status}
+    点击切换
+  encoding_tooltip: |-
+    文件编码：%{encoding}
+    %{info}点击进行更改
+  encoding_heading: 文件编码
+  recent_files_heading: 📄 最近的文件
+  recent_folders_heading: 最近的文件夹
+  file_tooltip: |-
+    %{path}
+
+    点击：打开
+    Shift+点击：在后台打开
+  folder_tooltip: |-
+    %{path}
+
+    点击：作为工作区打开
 dialog:
   unsaved_changes:
     title: "未保存的更改"
@@ -164,6 +190,9 @@ settings:
     paragraph_indent_hint: "CJK 排版规范的首行缩进"
     paragraph_indent_custom: "自定义"
     paragraph_indent_custom_desc: "自定义 em 值"
+    vim_mode: Vim模式
+    vim_mode_tooltip: 启用 Vim 风格的模态编辑，包含普通模式、插入模式和可视模式。使用 hjkl 进行导航，i 进入插入模式，Esc 
+      返回普通模式。
   preview:
     sync_scroll: "同步滚动"
     default_view: "默认视图模式"
@@ -200,6 +229,58 @@ settings:
     click_to_change: "点击更改快捷键"
 
 # Find and Replace panel
+  about:
+    title: 关于
+    description: 一款用于 Markdown、JSON 等格式的快速轻量级文本编辑器
+    updates: 更新
+    check_for_updates: 检查更新
+    checking: 正在检查更新 ...
+    up_to_date: 已经是最新版本！
+    check_again: 再次检查
+    update_available: 新版本可用！
+    new_version: 版本
+    view_release: 查看版本发布与下载
+    check_failed: 未能检查更新
+    try_again: 再次尝试
+    links: 链接
+    all_releases: 所有发行版
+    report_issue: 报告问题
+    source_code: 源代码
+    license: 采用 MIT 许可证
+  terminal:
+    title: 终端
+    enable: 使用集成终端
+    font_size: 字体大小
+    scrollback: 回滚行数
+    copy_selection: 自动复制选定内容
+    copy_selection_tooltip: 使用鼠标选择时自动将文本复制到剪贴板
+    theme: 终端主题
+    opacity: 背景不透明度
+    startup_command: 启动命令
+    startup_command_desc: 打开新终端时运行的命令（例如：'echo Hello'）
+    startup_command_hint: 可选
+    monitors: 检测到的显示器
+    monitors_desc: 检测到的窗口分布显示布局
+    monitor_label: '显示器 %{index}:'
+    monitor_geometry: （宽度%{width} x 高度%{height}，位于坐标（%{x}，%{y}））
+    breathing_color: 闪烁光标的颜色
+    prompt_patterns: 自定义指令模式
+    prompt_patterns_desc: 用于检测终端提示符的正则表达式模式（每行一个）
+    prompt_patterns_hint: '例如 ^\w+@\w+:'
+    auto_load_layout: 自动加载布局
+    auto_load_layout_tooltip: 自动从项目根目录加载“terminal_layout.json”
+    sound_notification: 通知提示音
+    sound_notification_desc: 在终端等待输入时播放声音
+    enable_sound: 启用提示音
+    enable_sound_tooltip: 当终端检测到提示符（等待输入）时播放通知声音
+    custom_sound: 自定义提示音文件（可选）
+    custom_sound_hint: 留空则使用系统提示音
+    auto_focus: 输入时自动聚焦
+    auto_focus_desc: 当终端开始等待输入时自动切换到该终端
+    focus_on_prompt: 检测到提示符时聚焦终端
+    focus_on_prompt_tooltip: 当终端从运行状态转变为等待输入状态时自动聚焦该终端
+    font_size_format: '%{size}像素'
+    opacity_format: '%{value}%'
 find:
   placeholder: "搜索..."
   replace_placeholder: "替换为..."
@@ -234,6 +315,24 @@ outline:
   parse_error: "⚠ 解析错误"
 
 # Document statistics
+  summary: '%{headings} 个标题 · 阅读时间约 %{minutes} 分钟'
+  detach_tooltip: 分离到浮动窗口
+  backlinks_unavailable: 反向链接不可用
+  productivity_unavailable: 生产力中心不可用
+  tab_links: 链接
+  tab_hub: 中心
+  json_structure: 📁 结构
+  json_values: 📊 值
+  json_objects: 对象
+  json_arrays: 数组
+  json_total_keys: 键总数
+  json_max_depth: 最大深度
+  json_total_values: 值总数
+  json_strings: 字符串
+  json_numbers: 数字
+  json_booleans: 布尔值
+  json_nulls: 空值
+  json_array_items: 数组项
 stats:
   no_data: "暂无统计数据"
   text_stats: "文本"
@@ -435,6 +534,71 @@ notification:
   session_restored: "会话已恢复"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_performance: 大文件（%{size} MB）。可能会影响性能。
+  undo: 撤销（剩余 %{remaining} 步）
+  nothing_to_undo: 没有可撤销的操作
+  redo: 重做（剩余 %{remaining} 步）
+  nothing_to_redo: 没有可撤销的操作
+  outline_shown: 大纲面板已显示
+  outline_hidden: 大纲面板已隐藏
+  loaded_terminal_layout: 已加载工作区终端布局
+  terminal_shown: 终端面板已显示
+  terminal_hidden: 终端面板已隐藏
+  zen_enabled: 禅模式已启用
+  zen_disabled: 禅模式已关闭
+  fullscreen_enter: 全屏模式（按 F10 或 Esc 退出）
+  fullscreen_exit: 已退出全屏模式
+  pipeline_disabled: 流水线功能已禁用
+  pipeline_zen: 禅模式下流水线面板已隐藏
+  pipeline_unsupported: 流水线仅适用于 JSON/YAML 文件（当前：%{file_type}）
+  pipeline_opened: 流水线面板已打开
+  pipeline_closed: 流水线面板已关闭
+  file_tree_shown: 文件树已显示
+  file_tree_hidden: 文件树已隐藏
+  open_folder_first: 请先打开一个文件夹（📁 按钮）
+  open_folder_quick_open: 请先打开一个文件夹以使用快速打开功能
+  open_folder_search: 请先打开一个文件夹以使用文件内搜索功能
+  toc_markdown_only: 目录仅适用于 Markdown 文件
+  toc_updated: 目录已更新（%{count} 个标题）
+  toc_inserted: 目录已插入（%{count} 个标题）
+  toc_inserted_empty: 目录已插入（未找到标题）
+  no_document_format: 没有可格式化的文档
+  not_structured: 不是结构化数据文件
+  document_formatted: 文档已格式化
+  format_failed: '格式化失败: %{error}'
+  parse_error: '解析错误: %{error}'
+  no_document_validate: 没有可验证的文档
+  valid_syntax: ✔ %{file_type} 语法有效
+  invalid_syntax: ✗ %{error}
+  replaced: 已替换
+  replaced_count: 已替换 %{count} 处
+  no_document_export: 没有可导出的文档
+  exported_to: 已导出到 %{path}
+  export_failed: '导出失败: %{error}'
+  no_document_copy: 没有文档可以复制
+  html_copied: HTML已拷贝到剪切板
+  copy_failed: '拷贝失败: %{error}'
+  opened_files: 已打开 %{count} 个文件
+  saved: 已保存：%{path}
+  opened_workspace: 已打开工作区：%{name}
+  workspace_closed: 工作区已关闭
+  file_tree_refreshed: 文件树已刷新
+  created: 已创建：%{name}
+  renamed_to: 已重命名为：%{name}
+  deleted: 已删除：%{name}
+  opened_background: 已在后台打开：%{name}
+  settings_reset: 恢复默认设置
+  encoding_changed: 编码已更改为 %{encoding}
+  reloaded_single: 已重新加载：%{name}
+  reloaded_multiple: 已从磁盘重新加载 %{count} 个文件
+  external_change_single: 文件已被外部修改（有未保存的更改）：%{name}
+  external_change_multiple: '%{count} 个文件已被外部修改（有未保存的更改）'
+  image_added: 图片已添加到资源文件夹
+  images_added: '%{count} 张图片已添加到资源文件夹'
+  opened_external_single: 已根据外部请求打开文件
+  opened_external_multiple: 已根据外部请求打开 %{count} 个文件
+  wikilink_not_found: '[[%{target}]] — 文件未找到'
+  wikilink_open_failed: 无法打开 [[%{target}]]：%{error}
 tree_viewer:
   collapse_all: "▶ 全部收起"
   expand_all: "▼ 全部展开"
@@ -502,6 +666,10 @@ widgets:
     delete_column: "删除第 %{index} 列"
     align_label: "对齐："
     align_none: "无对齐"
+    delete_row: 删除行
+    add_row_tooltip: 添加新行
+    add_column_tooltip: 添加新列
+    alignment_tooltip: '%{alignment}（点击循环切换）'
   link:
     edit: "编辑链接"
     open: "🔗 打开"
@@ -511,6 +679,11 @@ widgets:
     copy_tooltip: "复制链接到剪贴板"
 
 # CSV Viewer
+  list:
+    decrease_level: 降低级别
+    increase_level: 提高级别
+    remove_item: 移除项目
+    add_item: + 添加项目
 csv:
   delimiter_auto: "自动检测"
   error: "CSV 解析失败"
@@ -620,3 +793,55 @@ ribbon:
 # Error dialogs
 
 # File dialog titles and filters
+welcome:
+  subtitle: 配置您的编辑器以开始使用。
+  section:
+    appearance: 外观
+    editor: 编辑器
+    cjk: CJK 字体偏好
+    files: 文件
+  label:
+    theme: 主题
+    language: 语言
+  line_width_hint: 限制文本行的最大宽度。在禅模式（F11）下设置一个数值以居中显示文本。
+terminal:
+  not_found: 未找到终端
+  fallback_title: 终端
+  new_terminal_here: 在此处新建终端
+  maximize_active_pane: 最大化活动面板
+  pop_out: 弹出终端
+  split_horizontal: 水平分割
+  split_vertical: 垂直分割
+  rename: 重命名
+  close: 关闭
+  close_pane: 关闭面板
+  close_others: 关闭其他
+  scatter_to_windows: 分散到窗口
+  watching: 正在监视：%{path}
+  stop_watching: 停止监视
+  watch_workspace_root: 监视工作区根目录
+  export_html: 将输出导出为 HTML...
+  no_workspace_root: （未设置工作区根目录）
+  no_macros: 未保存宏。
+  close_panel_tooltip: 关闭终端面板
+  running_process_warning: 此终端正在运行进程。
+  terminate_warning: 关闭它将终止该进程。
+  close_terminal: 关闭终端
+  close_terminal_title: 关闭终端？
+  cancel: 取消
+  no_terminal: 没有终端。点击 + 创建一个。
+  restore: 恢复
+  process_exited: 终端 '%{title}' 的进程已退出
+  tab_name: 标签页 %{index}
+  floating_title: '#%{index} %{title}'
+  shell:
+    powershell: PowerShell
+    cmd: CMD
+    wsl: WSL
+  layout:
+    columns_2: 2 列
+    rows_2: 2 行
+    grid_2x2: 2x2 网格
+    save_layout: 保存当前布局...
+    load_layout: 正在加载布局...
+    save_workspace_layout: 保存为工作区布局
