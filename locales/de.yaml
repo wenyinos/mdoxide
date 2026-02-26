@@ -178,7 +178,7 @@ settings:
     title: "Dateien"
     restore_session_tooltip: "Aktiviert: alte Karteikarten beim Start wiederherstellen. Deaktiviert: mit einer leeren Karteikarte starten. Sitzungsdaten werden immer gespeichert."
     enable_auto_save: "Standardmäßig automatische Speicherung aktivieren"
-    auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert. Verwendung von temp-Dateinen um Datenverlust zu vermeiden."
+    auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert. Verwendung von temporären Dateien, um Datenverlust zu vermeiden."
     auto_save_delay: "Zeitintervall für automatische Specherung:"
     recent_files: "Letzte Dateien"
     clear_recent: "Liste der letzten Dateien löschen"
@@ -471,6 +471,70 @@ notification:
   auto_save_discarded: "Automatische Sicherung verworfen"
   session_restored: "Sitzung ist wiederhergestellt"
   large_file_performance: "Große Datei (%{size} MB). Evtl. eingeschränkte Geschwindigkeit."
+  undo: "Rückgängig (%{remaining} verbleibend)"
+  nothing_to_undo: "Nichts rückgängig zu machen"
+  redo: "Wiederholen (%{remaining} verbleibend)"
+  nothing_to_redo: "Nichts zu wiederholen"
+  outline_shown: "Übersicht angezeigt"
+  outline_hidden: "Übersicht ausgeblendet"
+  loaded_terminal_layout: "Terminal-Layout des Arbeitsbereichs geladen"
+  terminal_shown: "Terminal-Panel angezeigt"
+  terminal_hidden: "Terminal-Panel ausgeblendet"
+  zen_enabled: "Zen-Modus aktiviert"
+  zen_disabled: "Zen-Modus deaktiviert"
+  fullscreen_enter: "Vollbildmodus (F10 oder Esc zum Beenden)"
+  fullscreen_exit: "Vollbildmodus beendet"
+  pipeline_disabled: "Pipeline-Funktion deaktiviert"
+  pipeline_zen: "Pipeline-Panel im Zen-Modus ausgeblendet"
+  pipeline_unsupported: "Pipeline nur für JSON/YAML verfügbar (aktuell: %{file_type})"
+  pipeline_opened: "Pipeline-Panel geöffnet"
+  pipeline_closed: "Pipeline-Panel geschlossen"
+  file_tree_shown: "Dateibaum angezeigt"
+  file_tree_hidden: "Dateibaum ausgeblendet"
+  open_folder_first: "Zuerst einen Ordner öffnen (📁 Schaltfläche)"
+  open_folder_quick_open: "Zuerst einen Ordner öffnen für Schnellöffnen"
+  open_folder_search: "Zuerst einen Ordner öffnen für Dateisuche"
+  toc_markdown_only: "Inhaltsverzeichnis nur für Markdown-Dateien"
+  toc_updated: "Inhaltsverzeichnis aktualisiert (%{count} Überschriften)"
+  toc_inserted: "Inhaltsverzeichnis eingefügt (%{count} Überschriften)"
+  toc_inserted_empty: "Inhaltsverzeichnis eingefügt (keine Überschriften gefunden)"
+  no_document_format: "Kein Dokument zum Formatieren"
+  not_structured: "Keine strukturierte Datendatei"
+  document_formatted: "Dokument formatiert"
+  format_failed: "Formatierung fehlgeschlagen: %{error}"
+  parse_error: "Parse-Fehler: %{error}"
+  no_document_validate: "Kein Dokument zur Validierung"
+  valid_syntax: "✔ Gültige %{file_type}-Syntax"
+  invalid_syntax: "✗ %{error}"
+  replaced: "Ersetzt"
+  replaced_count: "%{count} Vorkommen ersetzt"
+  no_document_export: "Kein Dokument zum Exportieren"
+  exported_to: "Exportiert nach %{path}"
+  export_failed: "Export fehlgeschlagen: %{error}"
+  no_document_copy: "Kein Dokument zum Kopieren"
+  html_copied: "HTML in Zwischenablage kopiert"
+  copy_failed: "Kopieren fehlgeschlagen: %{error}"
+  opened_files: "%{count} Dateien geöffnet"
+  saved: "Gespeichert: %{path}"
+  opened_workspace: "Arbeitsbereich geöffnet: %{name}"
+  workspace_closed: "Arbeitsordner geschlossen"
+  file_tree_refreshed: "Dateibaum aktualisiert"
+  created: "Erstellt: %{name}"
+  renamed_to: "Umbenannt in: %{name}"
+  deleted: "Gelöscht: %{name}"
+  opened_background: "Im Hintergrund geöffnet: %{name}"
+  settings_reset: "Einstellungen auf Standard zurückgesetzt"
+  encoding_changed: "Kodierung geändert zu %{encoding}"
+  reloaded_single: "Wiedergeladen: %{name}"
+  reloaded_multiple: "%{count} Dateien von Datenträger neu geladen"
+  external_change_single: "Datei extern geändert (ungespeicherte Änderungen): %{name}"
+  external_change_multiple: "%{count} Dateien extern geändert (ungespeicherte Änderungen)"
+  image_added: "Bild zu Ressourcen hinzugefügt"
+  images_added: "%{count} Bilder zu Ressourcen hinzugefügt"
+  opened_external_single: "Datei auf externe Anfrage geöffnet"
+  opened_external_multiple: "%{count} Dateien auf externe Anfrage geöffnet"
+  wikilink_not_found: "[[%{target}]] — Datei nicht gefunden"
+  wikilink_open_failed: "[[%{target}]] konnte nicht geöffnet werden: %{error}"
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
@@ -540,6 +604,9 @@ widgets:
     delete_column: "Spalte %{index} löschen"
     align_label: "Ausrichtung:"
     align_none: "Ohne Ausrichtung"
+    delete_row: "Zeile löschen"
+    add_row_tooltip: "Neue Zeile hinzufügen"
+    add_column_tooltip: "Neue Spalte hinzufügen"
   link:
     edit: "Link bearbeiten"
     open: "🔗 Öffnen"
@@ -573,7 +640,7 @@ pipeline:
   run_tooltip: "Befehl ausführen (Eingabetaste)"
   stdout: "stdout"
   stderr: "stderr"
-  hint: "Oben Befehl eingeben, durch den das Dokument durchgelitet wird.\nBeispiele:\n• jq '.'                       - JSON formatieren\n• jq '.items[]'        - JSON-Array-Inhalt extrahieren\n• yq '.data'            - YAML-Field extrahieren\n• grep 'pattern'  - Muster suchen"
+  hint: "Oben Befehl eingeben, durch den das Dokument durchgeleitet wird.\nBeispiele:\n• jq '.'                       - JSON formatieren\n• jq '.items[]'        - JSON-Array-Inhalt extrahieren\n• yq '.data'            - YAML-Field extrahieren\n• grep 'pattern'  - Muster suchen"
   no_output_success: "(Befehl hat keine Ausgabe erzeugt)"
 
 # Encoding
@@ -652,5 +719,16 @@ ribbon:
 # Title bar
 
 # Error dialogs
+
+# Welcome page (first launch)
+welcome:
+  section:
+    files: "Dateien"
+  label:
+    language: "Sprache"
+
+# Terminal panel
+terminal:
+  rename: "Umbenennen"
 
 # File dialog titles and filters

@@ -171,6 +171,8 @@ files:
 3. Configure YAML file format
 4. Add `locales/en.yaml` as source
 
+**Critical (avoids broken PRs):** In the component settings, set **Monolingual base language file** (or **Template for new translations**) to **`locales/en.yaml`**. That way Weblate mirrors the same key structure and nesting as the English file; translators only fill values. Without this, new keys can end up under wrong sections (e.g. `find.about` instead of `about` or `settings.about`) and the app’s `t!("key.path")` lookups fail. See [Weblate PR 90 review](i18n/weblate-pr90-review.md) for what went wrong and how to fix the component.
+
 ### Option 3: POEditor
 
 **Pros:**
