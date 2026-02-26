@@ -88,7 +88,7 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.7 (in progress):** **Welcome page** for first-launch configuration (theme, language, editor prefs). **Wikilinks** and **backlinks panel**. **GitHub-style callouts**. Image rendering in preview. Flowchart modular refactor. Multiple scrollbar and word-wrap crash fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.7 (in progress):** **Welcome page** for first-launch configuration (theme, language, editor prefs). **Wikilinks** and **backlinks panel**. **GitHub-style callouts**. Image rendering in preview. **Nix/NixOS flake support**. Flowchart modular refactor. Multiple scrollbar and word-wrap crash fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 > 📦 **v0.2.6 Highlights:** New Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
@@ -583,6 +583,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) - AI task management for development workflows
 
 ### Contributors
+- [@liuxiaopai-ai](https://github.com/liuxiaopai-ai) — Nix/NixOS flake support for reproducible builds and dev shells ([PR #92](https://github.com/OlaProeis/Ferrite/pull/92))
 - [@blizzard007dev](https://github.com/blizzard007dev) — Welcome page for first-launch configuration ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80))
 - [@wolverin0](https://github.com/wolverin0) — Integrated Terminal Workspace & Productivity Hub ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74))
 - [@abcd-ca](https://github.com/abcd-ca) — Delete Line, Move Line, macOS file associations ([PR #29](https://github.com/OlaProeis/Ferrite/pull/29), [#30](https://github.com/OlaProeis/Ferrite/pull/30))

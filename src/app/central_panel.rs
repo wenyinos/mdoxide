@@ -1998,6 +1998,7 @@ impl FerriteApp {
                 let is_dark = ui.visuals().dark_mode;
                 let prev_font_family = self.state.settings.font_family.clone();
                 let prev_cjk_preference = self.state.settings.cjk_font_preference;
+                let prev_language = self.state.settings.language;
 
                 let output = self.settings_panel.show_inline(ui, &mut self.state.settings, is_dark);
 
@@ -2020,6 +2021,20 @@ impl FerriteApp {
                             self.state.settings.cjk_font_preference
                         );
                         info!("Font settings changed, reloaded fonts");
+                    }
+
+                    if prev_language != self.state.settings.language {
+                        if let Some(cjk_pref) = self.state.settings.language.required_cjk_font() {
+                            let custom_font = self.state.settings.font_family
+                                .custom_name()
+                                .map(|s| s.to_string());
+                            crate::fonts::preload_explicit_cjk_font_with_custom(
+                                ui.ctx(),
+                                cjk_pref,
+                                custom_font.as_deref(),
+                            );
+                            info!("Loaded CJK fonts for language: {:?}", self.state.settings.language);
+                        }
                     }
                 }
 
@@ -2061,7 +2076,14 @@ impl FerriteApp {
                     // labels rendered via i18n don't show as squares.
                     if prev_language != self.state.settings.language {
                         if let Some(cjk_pref) = self.state.settings.language.required_cjk_font() {
-                            crate::fonts::preload_explicit_cjk_font(ui.ctx(), cjk_pref);
+                            let custom_font = self.state.settings.font_family
+                                .custom_name()
+                                .map(|s| s.to_string());
+                            crate::fonts::preload_explicit_cjk_font_with_custom(
+                                ui.ctx(),
+                                cjk_pref,
+                                custom_font.as_deref(),
+                            );
                             info!("Loaded CJK fonts for language: {:?}", self.state.settings.language);
                         }
                     }

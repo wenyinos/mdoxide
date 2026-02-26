@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`FERRITE_DATA_DIR` environment variable** - New config directory override via env var, enabling external launchers (PortableApps.com, custom wrappers) to redirect settings storage. Checked before `portable/` folder detection; fully backward-compatible with existing portable and standard installs.
 - **Automated PAF build in CI** - Release workflow now builds and signs the `.paf.exe` installer alongside the portable zip and MSI. Version, icons, and metadata are derived automatically from the git tag.
 
+#### Nix/NixOS Support
+- **Official Nix flake** - First-class `flake.nix` for reproducible builds and development shells. Supports `nix run github:OlaProeis/Ferrite`, `nix build .#ferrite`, and `nix develop` with Rust toolchain + platform dependencies. Targets x86_64-linux, aarch64-linux, x86_64-darwin, aarch64-darwin. Includes declarative NixOS/Home Manager usage example. Contributed by [@liuxiaopai-ai](https://github.com/liuxiaopai-ai) ([PR #92](https://github.com/OlaProeis/Ferrite/pull/92)).
+- **Nix CI workflow** - GitHub Actions workflow (`.github/workflows/nix.yml`) evaluates package outputs for all supported systems and runs `nix flake check` on Linux.
+
 #### Installer (Windows MSI)
 - **File associations** - Optional per-extension file type registration (.md, .markdown, .txt, .json, .yaml, .yml, .toml, .csv, .tsv) via OpenWithProgids; adds Ferrite to "Open With" menu and Windows Default Apps settings without overriding existing defaults
 - **Explorer context menu** - Optional "Open with Ferrite" right-click entry for files and "Open Folder with Ferrite" for directories (including folder background)
@@ -717,7 +721,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
-- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix

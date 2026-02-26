@@ -208,6 +208,7 @@ These diagrams provide a quick visual overview for new contributors.
 |----------|-------------|
 | **[Flathub Maintenance](./flathub-maintenance.md)** | **How to maintain and update Ferrite on Flathub (release checklist, cargo-sources, moderation)** |
 | [Linux Package Distribution Plan](./linux-package-distribution-plan.md) | Plan for distributing Ferrite via Flathub, Snap, AUR, and native packages |
+| [Nix Flake](../flake.nix) | Official Nix flake for reproducible builds, dev shells, and NixOS/Home Manager integration |
 
 ### Mermaid Diagrams
 

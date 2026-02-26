@@ -316,6 +316,23 @@ impl FerriteApp {
                 info!("Preloaded CJK font for system locale");
             }
         }
+
+        // If the UI language is CJK, ensure fonts are loaded regardless of the
+        // checks above. This covers the case where a non-CJK-locale user chose
+        // a CJK language — without this, the UI shows squares after restart.
+        if let Some(lang_cjk) = state.settings.language.required_cjk_font() {
+            if !fonts::are_cjk_fonts_loaded() {
+                fonts::preload_explicit_cjk_font_with_custom(
+                    &cc.egui_ctx,
+                    lang_cjk,
+                    custom_font.as_deref(),
+                );
+                info!(
+                    "Preloaded CJK font for UI language {:?} at startup",
+                    state.settings.language
+                );
+            }
+        }
         crate::log_memory("After font configuration");
 
         // Initialize outline panel with saved settings
@@ -2224,6 +2241,21 @@ impl eframe::App for FerriteApp {
             }
             if fonts::needs_complex_script_fonts(&tab.content) {
                 let _ = self.load_complex_script_fonts_for_content(ctx, &tab.content);
+            }
+        }
+
+        // Also ensure CJK fonts are loaded if the UI language requires them.
+        // This catches the case where no CJK document is open but the user
+        // selected a CJK language (e.g. Chinese) — all UI labels need the font.
+        if !fonts::are_cjk_fonts_loaded() {
+            if let Some(lang_cjk) = self.state.settings.language.required_cjk_font() {
+                let custom_font = self.state.settings.font_family.custom_name().map(|s| s.to_string());
+                fonts::preload_explicit_cjk_font_with_custom(
+                    ctx,
+                    lang_cjk,
+                    custom_font.as_deref(),
+                );
+                info!("Per-frame: loaded CJK font for UI language {:?}", self.state.settings.language);
             }
         }
 

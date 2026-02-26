@@ -233,6 +233,18 @@ pub fn preload_explicit_cjk_font(
     ctx: &egui::Context,
     cjk_preference: CjkFontPreference,
 ) -> bool {
+    preload_explicit_cjk_font_with_custom(ctx, cjk_preference, None)
+}
+
+/// Preload the CJK font for an explicit preference, preserving custom font.
+///
+/// Same as `preload_explicit_cjk_font` but also accepts a custom font name
+/// so that an existing custom font selection is not lost during font rebuild.
+pub fn preload_explicit_cjk_font_with_custom(
+    ctx: &egui::Context,
+    cjk_preference: CjkFontPreference,
+    custom_font: Option<&str>,
+) -> bool {
     // Only preload for explicit preferences (not Auto)
     if cjk_preference == CjkFontPreference::Auto {
         return false;
@@ -259,7 +271,7 @@ pub fn preload_explicit_cjk_font(
     };
 
     info!("Preloading CJK font for explicit preference: {:?}", cjk_preference);
-    let fonts = create_font_definitions_with_cjk_spec(None, cjk_preference, &spec);
+    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);
@@ -2067,6 +2079,8 @@ pub fn ensure_cjk_fonts_loaded(
     let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
     ctx.set_fonts(fonts);
     bump_font_generation();
+    configure_text_styles(ctx);
+    schedule_prewarm();
     true
 }
 
@@ -2123,8 +2137,15 @@ pub fn load_cjk_for_text(
     let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
     ctx.set_fonts(fonts);
     bump_font_generation();
-    
-    // Request a repaint to ensure UI updates immediately with new fonts
+    configure_text_styles(ctx);
+
+    // Schedule prewarm for the NEXT frame. This is critical because
+    // ctx.set_fonts() only takes effect on the next egui frame. Without this,
+    // galley caches get invalidated and rebuilt with the OLD fonts (squares),
+    // then on the next frame the generation matches so the cache isn't
+    // re-invalidated — leaving stale square glyphs in the raw editor forever.
+    // The prewarm bumps font_generation a second time when fonts are active.
+    schedule_prewarm();
     ctx.request_repaint();
 
     true
@@ -2244,6 +2265,8 @@ pub fn load_complex_script_fonts_for_text(
     let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &cjk_spec);
     ctx.set_fonts(fonts);
     bump_font_generation();
+    configure_text_styles(ctx);
+    schedule_prewarm();
     ctx.request_repaint();
 
     true
