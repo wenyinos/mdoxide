@@ -81,6 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scrollbar drag reverse mapping** - Dragging scrollbar now uses `y_offset_to_line()` binary search instead of uniform division for accurate jumps
 - **Scrollbar jumping** - Replaced per-frame `rebuild_height_cache` with dirty-flag approach; smoothed scrollbar height to avoid abrupt changes as wrap info is discovered
 - **Crash on large selection delete with word wrap** - Fixed capacity overflow panic when deleting large selections; added `saturating_sub`, viewport clamping, and `truncate_wrap_info()` for stale entries
+- **List item text not wrapping in preview** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Long list item text in rendered/split view extended as a single line beyond the pane edge instead of wrapping. Root cause: all 4 list item `TextEdit` widgets used `singleline` mode which fundamentally cannot wrap. Changed to `multiline` with custom `LayoutJob` layouter (matching the paragraph wrapping pattern), `desired_rows(1)`, and newline stripping to prevent Enter from inserting line breaks within a list item.
+- **Empty list item causes heading mis-render** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Typing `- ` (dash-space, no content yet) after a paragraph caused the paragraph above to render as a large heading. Root cause: comrak interprets a single `-` followed by optional whitespace as a setext heading underline (valid per CommonMark spec), but in a markdown editor this is almost always the start of a list item. Added `fix_false_setext_headings()` post-processing in `parser.rs` that detects single-dash setext headings and converts them back to Paragraph + List(Item).
+- **Windows IME backspace deleting editor text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - When using Chinese (or Japanese/Korean) input methods on Windows, pressing Backspace during IME composition deleted already-committed characters in the editor instead of only modifying the pinyin/romaji in the composition window. Root cause: egui forwards raw `Key::Backspace` events alongside IME preedit updates, and the editor processed both. Fixed by suppressing all `Key` and `Text` events while `ime_enabled` is true (active composition session). Affects Microsoft Pinyin, Xiaolanghao/Rime, and all other IME input methods on all platforms.
 
 ---
 
@@ -708,7 +711,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
-- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, 10+ bug fixes
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix
