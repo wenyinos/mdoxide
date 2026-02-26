@@ -26,19 +26,56 @@ const CONFIG_BACKUP_NAME: &str = "config.json.bak";
 /// Portable mode folder name (when present next to exe, enables portable mode)
 const PORTABLE_DIR_NAME: &str = "portable";
 
+/// Environment variable for overriding the data directory.
+/// Used by PortableApps.com launcher and custom portable setups.
+const DATA_DIR_ENV_VAR: &str = "FERRITE_DATA_DIR";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Portable Mode Detection
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Check if we're running in portable mode.
 ///
-/// Portable mode is enabled when a `portable` folder exists next to the executable.
-/// In portable mode, all configuration and data is stored in that folder instead
-/// of the system's AppData/config directory.
+/// Portable mode is resolved with the following priority:
 ///
-/// This allows Ferrite to run from a USB drive or portable installation without
-/// modifying the host system.
+/// 1. **`FERRITE_DATA_DIR` environment variable** — if set and pointing to an
+///    existing directory, that path is used. This supports the PortableApps.com
+///    launcher and other external packaging systems that set the data path.
+/// 2. **`portable/` folder next to the executable** — the original detection
+///    method for self-contained portable installs (e.g., USB drive).
+///
+/// In portable mode, all configuration and data is stored in the resolved
+/// folder instead of the system's AppData/config directory.
 fn get_portable_dir() -> Option<PathBuf> {
+    // Priority 1: FERRITE_DATA_DIR env var (PortableApps.com / custom setups)
+    if let Ok(dir) = std::env::var(DATA_DIR_ENV_VAR) {
+        if !dir.is_empty() {
+            let path = PathBuf::from(&dir);
+            if path.is_dir() {
+                debug!(
+                    "Portable mode via {}: {}",
+                    DATA_DIR_ENV_VAR,
+                    path.display()
+                );
+                return Some(path);
+            }
+            // Directory doesn't exist yet — create it so new installs work
+            if std::fs::create_dir_all(&path).is_ok() {
+                debug!(
+                    "Portable mode via {} (created): {}",
+                    DATA_DIR_ENV_VAR,
+                    path.display()
+                );
+                return Some(path);
+            }
+            warn!(
+                "{} set to '{}' but directory could not be created, ignoring",
+                DATA_DIR_ENV_VAR, dir
+            );
+        }
+    }
+
+    // Priority 2: portable/ folder next to executable
     std::env::current_exe().ok().and_then(|exe| {
         let portable_dir = exe.parent()?.join(PORTABLE_DIR_NAME);
         if portable_dir.exists() && portable_dir.is_dir() {
@@ -52,7 +89,8 @@ fn get_portable_dir() -> Option<PathBuf> {
 
 /// Returns true if the application is running in portable mode.
 ///
-/// Portable mode is enabled when a `portable` folder exists next to the executable.
+/// Portable mode is active when either `FERRITE_DATA_DIR` is set or a
+/// `portable/` folder exists next to the executable.
 pub fn is_portable_mode() -> bool {
     get_portable_dir().is_some()
 }
@@ -63,13 +101,13 @@ pub fn is_portable_mode() -> bool {
 
 /// Get the configuration directory for the application.
 ///
-/// In **portable mode** (when a `portable` folder exists next to the executable):
-/// - Returns the `portable` folder path
-///
-/// In **standard mode**, returns the platform-specific directory:
-/// - **Windows**: `%APPDATA%\ferrite\` (e.g., `C:\Users\<User>\AppData\Roaming\ferrite\`)
-/// - **macOS**: `~/Library/Application Support/ferrite/`
-/// - **Linux**: `~/.config/ferrite/`
+/// Resolution order:
+/// 1. **`FERRITE_DATA_DIR` env var** — used by PortableApps.com and similar launchers
+/// 2. **`portable/` folder** next to the executable — self-contained portable installs
+/// 3. **Platform-specific directory** (standard install):
+///    - **Windows**: `%APPDATA%\ferrite\`
+///    - **macOS**: `~/Library/Application Support/ferrite/`
+///    - **Linux**: `~/.config/ferrite/`
 ///
 /// # Errors
 ///

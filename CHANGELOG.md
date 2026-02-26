@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Unicode & Complex Script Support
 - **Lazy font loading for complex scripts** - Extends the CJK lazy-loading system to cover 22 Unicode ranges across 11 script families: Arabic (5 sub-ranges), Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic (Gujarati, Gurmukhi, Kannada, Malayalam, Telugu), and Southeast Asian (Myanmar, Khmer, Sinhala). System fonts are loaded on demand when script characters are detected in file content or IME input (~1-5MB per script vs ~15-20MB for CJK). No new dependencies.
+- **Script detection utility** - `detect_complex_scripts()` and `needs_complex_script_fonts()` with 17 unit tests covering all script families and boundary cases; used to trigger lazy font loading.
 
 #### Large File & Performance
 - **Large file detection** - Files >10MB on open show non-blocking performance warning toast
@@ -29,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Window & File Handling
 - **Single-instance protocol** - Double-clicking files (file tree or OS/Explorer) opens them as tabs in the existing Ferrite window instead of spawning new processes; lock file + TCP IPC with background accept thread for instant response
+
+#### PortableApps.com Support
+- **PortableApps.com Format packaging** - Full PAF-compliant portable distribution (`FerriteMDPortable_x.y.z_English.paf.exe`). Stores all settings in `Data\settings\` via the PAF launcher — no registry writes, no AppData modifications. Compatible with the PortableApps.com Platform menu.
+- **`FERRITE_DATA_DIR` environment variable** - New config directory override via env var, enabling external launchers (PortableApps.com, custom wrappers) to redirect settings storage. Checked before `portable/` folder detection; fully backward-compatible with existing portable and standard installs.
+- **Automated PAF build in CI** - Release workflow now builds and signs the `.paf.exe` installer alongside the portable zip and MSI. Version, icons, and metadata are derived automatically from the git tag.
 
 #### Installer (Windows MSI)
 - **File associations** - Optional per-extension file type registration (.md, .markdown, .txt, .json, .yaml, .yml, .toml, .csv, .tsv) via OpenWithProgids; adds Ferrite to "Open With" menu and Windows Default Apps settings without overriding existing defaults

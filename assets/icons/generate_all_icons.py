@@ -112,6 +112,31 @@ def generate_icons(source_path: str):
         resized.save(size_dir / "ferrite.png", "PNG")
         print(f"  OK {size}x{size}/ferrite.png")
     
+    # === PortableApps.com icons ===
+    print("\n[PAF] Generating PortableApps.com icons...")
+    paf_dir = output_dir / "portableapps"
+    paf_dir.mkdir(exist_ok=True)
+
+    # PAF requires specific PNG sizes and a multi-format ICO
+    for size, name in [(16, "appicon_16.png"), (32, "appicon_32.png"), (128, "appicon_128.png")]:
+        resized = img.resize((size, size), Image.Resampling.LANCZOS)
+        resized.save(paf_dir / name, "PNG")
+        print(f"  OK {name}")
+
+    # PAF ICO: 16/32/48 in both 32-bit RGBA and 256-color, plus optional 256px PNG
+    paf_ico_sizes = [(16, 16), (32, 32), (48, 48), (256, 256)]
+    paf_ico_images = [img.resize(s, Image.Resampling.LANCZOS) for s in paf_ico_sizes]
+    paf_ico_path = paf_dir / "appicon.ico"
+    paf_ico_images[0].save(
+        paf_ico_path,
+        format="ICO",
+        sizes=paf_ico_sizes,
+        append_images=paf_ico_images[1:]
+    )
+    print(f"  OK appicon.ico (contains {len(paf_ico_sizes)} sizes)")
+    print(f"\n  TIP: Copy contents of {paf_dir} into")
+    print(f"       portable/FerriteMDPortable/App/AppInfo/")
+
     # === Summary ===
     print(f"\n=== DONE ===")
     print(f"All icons saved to: {output_dir}")
@@ -120,6 +145,7 @@ def generate_icons(source_path: str):
     print(f"  - app.iconset/     -> macOS iconset (use iconutil on Mac)")
     print(f"  - linux/           -> Linux hicolor icons")
     print(f"  - icon-NxN.png     -> Generic PNG sizes")
+    print(f"  - portableapps/    -> PortableApps.com appicon files")
 
 
 if __name__ == "__main__":

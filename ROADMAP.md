@@ -43,8 +43,9 @@
 #### Welcome View
 - [x] **Welcome view on first run** - Welcome tab on first launch with configuration for theme, language, editor settings (word wrap, line numbers, minimap, bracket matching, syntax highlighting), max line width, CJK font preference, and auto-save. Only shown when no CLI paths and no session-restored tabs. Contributed by [@blizzard007dev](https://github.com/blizzard007dev) ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80)).
 
-#### Installer & Localization
+#### Installer, Distribution & Localization
 - [x] **Windows MSI installer overhaul** - Complete installer rewrite with WixUI_FeatureTree: optional file associations (.md, .txt, .json, .yaml, .toml, .csv) via OpenWithProgids with per-extension toggles, Explorer context menu ("Open with Ferrite" on files and folders), optional add-to-PATH, desktop shortcut, Windows Default Apps registration (ApplicationCapabilities), and launch-after-install checkbox. All features user-selectable; no forced associations.
+- [x] **PortableApps.com Format packaging** - Full PAF-compliant portable distribution. PAF launcher sets `FERRITE_DATA_DIR` env var to redirect all config to `Data\settings\`. No registry, no AppData writes. NSIS-compiled `.paf.exe` installer with LZMA compression. Automated in CI — version, icons, and metadata derived from git tag. Ready for PortableApps.com Beta Testing forum submission.
 - [x] **German and Japanese in Settings** - German (Deutsch) and Japanese (日本語) now available in Settings → Appearance → Language.
 
 #### Table Editing
@@ -204,6 +205,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [x] File associations (`.md`, `.json`, `.yaml`, `.toml`) — done via MSI installer (v0.2.7)
 - [x] Context menu integration — done via MSI installer (v0.2.7)
 - [x] Optional add-to-PATH — done via MSI installer (v0.2.7)
+- [x] PortableApps.com listing — PAF packaging and CI automation done (v0.2.7); forum submission pending
 **macOS**
 - [ ] App signing & notarization
 
@@ -288,7 +290,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ## Recently Completed ✅
 
 ### v0.2.7 (Feb 2026) - Performance, Features & Polish
-Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), flowchart modular refactoring, window control redesign, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), 13+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
+Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, PortableApps.com Format packaging with automated CI build, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), flowchart modular refactoring, window control redesign, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), 13+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
 
 ### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
 **First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.
