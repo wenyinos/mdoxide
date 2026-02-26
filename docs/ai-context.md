@@ -134,11 +134,13 @@ cargo test           # Run tests
 
 - Finishing v0.2.7 release (performance, polish, new features)
 - Key areas: wikilinks/backlinks, vim mode, callouts, single-instance, welcome page, Unicode font loading (Phase 1 done)
+- PortableApps.com packaging complete — submit to Beta Testing forum after v0.2.7 release
 - v0.2.8 planned: LSP integration, HarfRust text shaping for complex scripts (Arabic, Bengali, Devanagari)
 - v0.3.0 planned: RTL/BiDi text support, mermaid crate extraction, math rendering
 
 ## Recently Changed
 
+- **2026-02-26**: PortableApps.com Format packaging. Added `FERRITE_DATA_DIR` env var to `config/persistence.rs` (priority 1 before `portable/` folder). Created full PAF directory structure in `portable/FerriteMDPortable/` with `appinfo.ini`, launcher config, help.html, NSIS installer script. Automated in `.github/workflows/release.yml` — installs NSIS via choco, generates icons from source, updates version from git tag, compiles `.paf.exe`, sends through SignPath, attaches to GitHub Release.
 - **2026-02-25**: Fixed preview list item wrapping (#82): (1) Bug 1 — empty list item (`- `) caused paragraph above to render as heading. Comrak treats single-dash + whitespace as setext heading underline. Added `fix_false_setext_headings()` post-processing in `parser.rs`. (2) Bug 2 — list items used `TextEdit::singleline` which cannot wrap. Changed all 4 list-item TextEdit locations to `multiline` with custom `LayoutJob` layouter, `desired_rows(1)`, and newline stripping.
 - **2026-02-23**: Fixed table rendering in `widgets.rs`: (1) Background alignment — replaced pre-painted backgrounds with Shape::Noop placeholder technique, painting actual-rect backgrounds after row renders. (2) Cell layout — changed from inherited `left_to_right` to explicit `top_down` so vertical padding works. (3) Removed `set_max_size` height constraint. (4) Added column resizing — draggable separators with proportional width persistence in `TableEditState.custom_col_widths`, double-click reset, min-width enforcement.
 - **2026-02-23**: Implemented Unicode Complex Script Font Loading (Phase 1). Extended `fonts.rs` with lazy loading for 11 script families (Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic, Southeast Asian) — 22 Unicode ranges, per-script AtomicBool flags, platform-specific system font candidates, `ComplexScriptDetection`/`ComplexScriptLoadSpec` structs, 17 tests. Triggers in `app/mod.rs` (per-frame + deferred file open) and `app/central_panel.rs` (IME). Font rebuild automatically includes already-loaded complex script fonts via `from_loaded_flags()`.

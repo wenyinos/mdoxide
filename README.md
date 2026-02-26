@@ -1,5 +1,7 @@
 # Ferrite
 
+**English** | [简体中文](README.zh-CN.md)
+
 <div align="center">
 
 [![Website](https://img.shields.io/badge/website-getferrite.dev-blue?style=flat-square)](https://getferrite.dev)
