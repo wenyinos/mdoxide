@@ -802,24 +802,16 @@ impl<'a> MarkdownEditor<'a> {
         };
         
         let scroll_output = scroll_area.show(ui, |ui| {
-            // Push the content hash as an ID scope so all inner widgets
-            // get unique IDs when content changes
             ui.push_id(content_hash, |ui| {
-                // Wrap content in horizontal layout for centering when max_line_width is set
                 ui.horizontal(|ui| {
-                    // Add left margin for centering
                     if content_margin > 0.0 {
                         ui.add_space(content_margin);
                     }
                     
-                    // Container for the actual content with optional width constraint
-                    // Use pre-calculated effective width (already capped to available space)
                     let content_width = effective_content_width.unwrap_or(ui.available_width());
                     ui.vertical(|ui| {
-                        // Constrain the content width
                         ui.set_max_width(content_width);
                         
-                        // Minimal spacing - let individual elements control their margins
                         ui.spacing_mut().item_spacing = Vec2::new(4.0, 1.0);
 
                         // Render all children of the document root
@@ -1388,12 +1380,13 @@ fn render_heading(
         mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
     });
 
+    let available_width = ui.available_width();
     let (has_focus, selection) = ui
         .horizontal(|ui| {
-            ui.add_space(4.0); // Small left indent for headings
+            ui.set_max_width(available_width);
+            ui.add_space(4.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
-                // Get or initialize the edit buffer from egui memory
                 let mut edit_buffer = ui.memory_mut(|mem| {
                     mem.data
                         .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
@@ -1406,7 +1399,7 @@ fn render_heading(
                     .text_color(colors.heading)
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(f32::INFINITY);
+                    .desired_width(ui.available_width());
 
                 let output = text_edit.show(ui);
 
@@ -1503,11 +1496,12 @@ fn render_heading_with_structural_keys(
         mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
     });
 
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
         ui.add_space(4.0);
 
         if let Some(editable) = edit_state.get_node_mut(node_id) {
-            // Get or initialize the edit buffer from egui memory
             let mut edit_buffer = ui.memory_mut(|mem| {
                 mem.data
                     .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
@@ -1521,10 +1515,9 @@ fn render_heading_with_structural_keys(
                     .text_color(colors.heading)
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(f32::INFINITY),
+                    .desired_width(ui.available_width()),
             );
 
-            // Note: Structural key handling disabled for now to fix editing bugs
             let _ = structural_state;
             
             let has_focus = response.has_focus();
@@ -1599,17 +1592,15 @@ fn render_paragraph_with_structural_keys(
 
         let widget_id = formatted_para_id.with("text_edit");
 
+        let available_width = ui.available_width();
         ui.horizontal(|ui| {
-            // Base indent + list indent (CJK indent handled differently per mode)
+            ui.set_max_width(available_width);
             ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if para_edit_state.editing {
-                // EDIT MODE: Custom layouter for CJK first-line indent.
-                // LayoutJob::append() leading_space adds space before the first character
-                // only; wrapped lines start flush left — true first-line indent in TextEdit.
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
-                let cjk_leading = cjk_indent; // 0.0 when Off — no-op
+                let cjk_leading = cjk_indent;
                 let mut layouter =
                     move |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let mut job = egui::text::LayoutJob::default();
@@ -1635,7 +1626,6 @@ fn render_paragraph_with_structural_keys(
                     .desired_rows(1)
                     .layouter(&mut layouter);
 
-                // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
                 let response = output.response.clone();
 
@@ -1784,12 +1774,12 @@ fn render_paragraph_with_structural_keys(
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
+        let available_width = ui.available_width();
         ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
             ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
-                // Custom layouter for CJK first-line indent via LayoutJob leading_space.
-                // When cjk_indent is 0.0 the leading_space is a no-op.
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
@@ -1813,13 +1803,12 @@ fn render_paragraph_with_structural_keys(
                     .text_color(colors.text)
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(f32::INFINITY)
+                    .desired_width(ui.available_width())
                     .desired_rows(1)
                     .layouter(&mut layouter);
 
                 let response = ui.add(text_edit);
 
-                // Note: Structural key handling disabled for now
                 let _ = structural_state;
 
                 if response.changed() {
@@ -1849,11 +1838,9 @@ fn render_blockquote_with_structural_keys(
     const BORDER_WIDTH: f32 = 4.0;
     const BORDER_GAP: f32 = 8.0;
     
-    // Render content first, then paint the border using the actual measured height.
-    // Previously, the border was allocated with ui.available_height() before content
-    // was laid out, which could produce an incorrectly-sized border.
+    let available_width = ui.available_width();
     let group_response = ui.horizontal(|ui| {
-        // Reserve space for indent + border + gap, content follows
+        ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
         ui.vertical(|ui| {
@@ -2005,11 +1992,12 @@ fn render_callout_with_structural_keys(
         let title_text = custom_title.unwrap_or(callout_type.display_name());
         let icon = callout_type.icon();
 
+        let available_width = ui.available_width();
         let inner = ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
             ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
             ui.vertical(|ui| {
-                // Title row with icon and collapse toggle
                 let title_row = ui.horizontal(|ui| {
                     ui.label(
                         RichText::new(icon)
@@ -2253,14 +2241,15 @@ fn render_list_item_with_structural_keys(
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+
         // Total indentation: base + nested
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
         let marker = if is_task {
-            // Task list: ASCII-style checkbox (non-interactive for now)
-            // Will be made interactive in v0.3.0 with custom editor widget
             if task_checked {
                 "[x]"
             } else {
@@ -2268,7 +2257,6 @@ fn render_list_item_with_structural_keys(
             }
             .to_string()
         } else {
-            // Regular list marker
             match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
@@ -2292,9 +2280,6 @@ fn render_list_item_with_structural_keys(
         // Render item content
         if has_inline_formatting {
             if let Some(para) = para_node {
-                // Create unique ID using para.start_line (matches content extraction)
-                // AND item_index for additional uniqueness guarantee
-                // FIX: Previously used node.start_line which could differ from para.start_line
                 let formatted_item_id = ui
                     .id()
                     .with("formatted_list_item_sk")
@@ -2314,18 +2299,42 @@ fn render_list_item_with_structural_keys(
                 let widget_id = formatted_item_id.with("text_edit");
 
                 if item_edit_state.editing {
-                    // EDIT MODE: Show TextEdit with raw markdown
-                    let text_edit = TextEdit::singleline(&mut item_edit_state.edit_text)
+                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
+                    let font_family_for_layout = font_family.clone();
+                    let text_color = colors.text;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
+                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .desired_width(ui.available_width())
-                        .margin(egui::vec2(0.0, 2.0));
+                        .desired_rows(1)
+                        .margin(egui::vec2(0.0, 2.0))
+                        .layouter(&mut layouter);
 
                     // Use show() to get TextEditOutput for cursor manipulation
                     let mut output = text_edit.show(ui);
                     let response = output.response.clone();
+
+                    // Strip newlines that multiline TextEdit inserts on Enter
+                    if item_edit_state.edit_text.contains('\n') {
+                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                    }
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
@@ -2484,21 +2493,43 @@ fn render_list_item_with_structural_keys(
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
-            // Simple text - editable
+            // Simple text - editable with wrapping
             if let Some(editable) = edit_state.get_node_mut(node_id) {
                 let widget_id = ui.id().with("list_item_text_sk").with(start_line);
 
-                let response = ui.add(
-                    TextEdit::singleline(&mut editable.text)
-                        .id(widget_id)
-                        .font(FontId::new(font_size, font_family))
-                        .text_color(colors.text)
-                        .frame(false)
-                        .desired_width(f32::INFINITY)
-                        .clip_text(false),
-                );
+                let font_family_for_layout = font_family.clone();
+                let text_color = colors.text;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            0.0,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut editable.text)
+                    .id(widget_id)
+                    .font(FontId::new(font_size, font_family))
+                    .text_color(colors.text)
+                    .frame(false)
+                    .desired_width(ui.available_width())
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
-                // Note: Structural key handling disabled for now
+                let response = ui.add(text_edit);
+
+                // Strip newlines — list items should not contain literal newlines
+                if editable.text.contains('\n') {
+                    editable.text = editable.text.replace('\n', "");
+                }
+
                 let _ = structural_state;
 
                 if response.changed() {
@@ -2585,15 +2616,14 @@ fn render_paragraph(
         let widget_id = formatted_para_id.with("text_edit");
 
         if para_edit_state.editing {
-            // EDIT MODE: Custom layouter for CJK first-line indent.
-            // LayoutJob::append() leading_space adds space before the first character
-            // only; wrapped lines start flush left — true first-line indent in TextEdit.
+            let available_width = ui.available_width();
             ui.horizontal(|ui| {
+                ui.set_max_width(available_width);
                 ui.add_space(4.0 + indent_level as f32 * 20.0);
 
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
-                let cjk_leading = cjk_indent; // 0.0 when Off — no-op
+                let cjk_leading = cjk_indent;
                 let mut layouter =
                     move |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let mut job = egui::text::LayoutJob::default();
@@ -2619,7 +2649,6 @@ fn render_paragraph(
                     .desired_rows(1)
                     .layouter(&mut layouter);
 
-                // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
                 let response = output.response.clone();
 
@@ -2685,16 +2714,13 @@ fn render_paragraph(
                 });
             });
         } else {
-            // DISPLAY MODE: Use horizontal_wrapped for proper text wrapping
-            // Apply base indent first, then use horizontal_wrapped for content
             let base_indent = 4.0 + indent_level as f32 * 20.0;
             
-            // Add base left indent using vertical layout with horizontal for indent
+            let available_width_display = ui.available_width();
             let display_response = ui.horizontal(|ui| {
-                // Add consistent left indent (same as headers and simple paragraphs)
+                ui.set_max_width(available_width_display);
                 ui.add_space(base_indent);
                 
-                // Use scope to limit horizontal_wrapped to remaining width
                 ui.scope(|ui| {
                     ui.horizontal_wrapped(|ui| {
                         // CJK first-line indent: spacer at start (first line only)
@@ -2782,13 +2808,13 @@ fn render_paragraph(
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
+        let available_width = ui.available_width();
         let (has_focus, selection, changed, new_text) = ui
             .horizontal(|ui| {
+                ui.set_max_width(available_width);
                 ui.add_space(4.0 + indent_level as f32 * 20.0);
 
                 if let Some(editable) = edit_state.get_node_mut(node_id) {
-                    // Custom layouter for CJK first-line indent via LayoutJob leading_space.
-                    // When cjk_indent is 0.0 the leading_space is a no-op.
                     let font_family_clone = font_family.clone();
                     let text_color = colors.text;
                     let cjk_leading = cjk_indent;
@@ -2812,7 +2838,7 @@ fn render_paragraph(
                         .text_color(colors.text)
                         .frame(false)
                         .margin(egui::vec2(0.0, 0.0))
-                        .desired_width(f32::INFINITY)
+                        .desired_width(ui.available_width())
                         .desired_rows(1)
                         .layouter(&mut layouter);
 
@@ -3465,17 +3491,11 @@ fn render_blockquote(
     // Create a stable ID for this blockquote's scroll area
     let blockquote_id = egui::Id::new(("blockquote", node.start_line));
     
-    // Render content first, then paint the border using the actual measured height.
-    // Previously, the border was allocated with ui.available_height() before content
-    // was laid out, which could produce an incorrectly-sized border.
+    let available_width = ui.available_width();
     let group_response = ui.horizontal(|ui| {
-        // Reserve space for indent + border + gap, content follows
+        ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
-        // Wrap blockquote content in horizontal scroll area to prevent width overflow.
-        // This ensures long content scrolls horizontally instead of expanding
-        // the parent layout and breaking max_line_width for subsequent content.
-        // See: ROADMAP.md "Blockquote/code block overflow"
         egui::ScrollArea::horizontal()
             .id_source(blockquote_id)
             .auto_shrink([false, false])
@@ -3541,10 +3561,11 @@ fn render_callout(
         let title_text = custom_title.unwrap_or(callout_type.display_name());
         let icon = callout_type.icon();
 
+        let available_width = ui.available_width();
         let inner = ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
             ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
-            // Wrap callout content in horizontal scroll area (like blockquotes)
             egui::ScrollArea::horizontal()
                 .id_source("scroll")
                 .auto_shrink([false, false])
@@ -3839,14 +3860,15 @@ fn render_list_item(
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    let available_width = ui.available_width();
     let focus_info: (bool, Option<(usize, usize)>, Option<usize>) = ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+
         // Total indentation: base + nested
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
         let marker = if is_task {
-            // Task list: ASCII-style checkbox (non-interactive for now)
-            // Will be made interactive in v0.3.0 with custom editor widget
             if task_checked {
                 "[x]"
             } else {
@@ -3854,7 +3876,6 @@ fn render_list_item(
             }
             .to_string()
         } else {
-            // Regular list marker
             match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
@@ -3897,18 +3918,42 @@ fn render_list_item(
                 let widget_id = formatted_item_id.with("text_edit");
 
                 if item_edit_state.editing {
-                    // EDIT MODE: Show TextEdit with raw markdown
-                    let text_edit = TextEdit::singleline(&mut item_edit_state.edit_text)
+                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
+                    let font_family_for_layout = font_family.clone();
+                    let text_color = colors.text;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
+                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .desired_width(ui.available_width())
-                        .margin(egui::vec2(0.0, 2.0));
+                        .desired_rows(1)
+                        .margin(egui::vec2(0.0, 2.0))
+                        .layouter(&mut layouter);
 
                     // Use show() to get TextEditOutput for cursor manipulation
                     let mut output = text_edit.show(ui);
                     let response = output.response.clone();
+
+                    // Strip newlines that multiline TextEdit inserts on Enter
+                    if item_edit_state.edit_text.contains('\n') {
+                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                    }
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
@@ -4056,15 +4101,38 @@ fn render_list_item(
                 
                 let widget_id = ui.id().with("list_item_text").with(start_line);
 
-                let text_edit = TextEdit::singleline(&mut edit_buffer)
+                let font_family_for_layout = font_family.clone();
+                let text_color = colors.text;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            0.0,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut edit_buffer)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.text)
                     .frame(false)
-                    .desired_width(f32::INFINITY)
-                    .clip_text(false);
+                    .desired_width(ui.available_width())
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
                 let output = text_edit.show(ui);
+
+                // Strip newlines — list items should not contain literal newlines
+                if edit_buffer.contains('\n') {
+                    edit_buffer = edit_buffer.replace('\n', "");
+                }
 
                 let has_focus = output.response.has_focus();
                 let selection = if has_focus {
@@ -4081,7 +4149,6 @@ fn render_list_item(
                     None
                 };
 
-                // Update edit buffer in memory
                 ui.memory_mut(|mem| {
                     mem.data.insert_temp(edit_buffer_id, edit_buffer.clone());
                     mem.data.insert_temp(edit_tracking_id, has_focus);
@@ -4277,10 +4344,11 @@ fn update_table_in_source(
 
 /// Render front matter (YAML/TOML header).
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
-    // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
     
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT);
         
         egui::Frame::none()
@@ -4300,8 +4368,8 @@ fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, conte
                         .font(FontId::monospace(font_size * 0.9))
                         .text_color(colors.code_text)
                         .frame(false)
-                        .desired_width(f32::INFINITY)
-                        .interactive(false), // Front matter editing disabled for now
+                        .desired_width(ui.available_width())
+                        .interactive(false),
                 );
             });
     });

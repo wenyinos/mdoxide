@@ -392,6 +392,12 @@ pub fn parse_markdown_with_options(
     // Note: Callout nodes are NOT BlockQuote nodes, so they won't be merged.
     merge_consecutive_blockquotes(&mut converted_root);
 
+    // FIX: Comrak treats "- " (single dash + optional whitespace) as a setext
+    // heading underline, but in a markdown editor the user is almost always
+    // starting a list item. Detect these false setext headings and convert
+    // them back to Paragraph + List(Item).
+    fix_false_setext_headings(&mut converted_root, markdown);
+
     // Extract wikilinks from Text nodes: [[target]] and [[target|display text]]
     // This must run after all block-level transformations are complete.
     extract_wikilinks(&mut converted_root);
@@ -453,6 +459,86 @@ fn merge_consecutive_blockquotes(node: &mut MarkdownNode) {
         } else {
             i += 1;
         }
+    }
+}
+
+/// Fix false setext headings that are actually empty list items.
+///
+/// Comrak interprets `"Some text\n- "` as a setext heading (level 2) because
+/// a single `-` followed by optional whitespace is a valid setext underline.
+/// However, in a markdown editor, the user is almost always starting a list
+/// item when they type `- `. This function detects such cases and converts
+/// the heading back to a Paragraph followed by a List containing an empty Item.
+fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
+    // Recursively process children first
+    for child in &mut node.children {
+        fix_false_setext_headings(child, source);
+    }
+
+    let source_lines: Vec<&str> = source.lines().collect();
+
+    let mut i = 0;
+    let mut replacements: Vec<(usize, Vec<MarkdownNode>)> = Vec::new();
+
+    while i < node.children.len() {
+        let child = &node.children[i];
+        if let MarkdownNodeType::Heading {
+            level: HeadingLevel::H2,
+            setext: true,
+        } = &child.node_type
+        {
+            // Check the underline: the last line of this heading's source range
+            // should be the setext underline. If it's a single `-` (possibly
+            // with trailing whitespace), this is a false setext heading.
+            let underline_idx = child.end_line.saturating_sub(1); // 1-indexed to 0-indexed
+            if let Some(underline) = source_lines.get(underline_idx) {
+                let trimmed = underline.trim();
+                if trimmed == "-" {
+                    // This is a false setext heading — it's actually a paragraph
+                    // followed by the start of a list item.
+                    let heading_start = child.start_line;
+                    let heading_end = child.end_line;
+                    let children = child.children.clone();
+
+                    let mut paragraph = MarkdownNode {
+                        node_type: MarkdownNodeType::Paragraph,
+                        children,
+                        start_line: heading_start,
+                        end_line: heading_end.saturating_sub(1).max(heading_start),
+                    };
+                    // If the paragraph ends up with the same start/end as heading,
+                    // adjust so it doesn't include the underline line
+                    if paragraph.end_line >= heading_end {
+                        paragraph.end_line = heading_end.saturating_sub(1).max(heading_start);
+                    }
+
+                    let list_item = MarkdownNode {
+                        node_type: MarkdownNodeType::Item,
+                        children: Vec::new(),
+                        start_line: heading_end,
+                        end_line: heading_end,
+                    };
+
+                    let list = MarkdownNode {
+                        node_type: MarkdownNodeType::List {
+                            list_type: ListType::Bullet,
+                            tight: true,
+                        },
+                        children: vec![list_item],
+                        start_line: heading_end,
+                        end_line: heading_end,
+                    };
+
+                    replacements.push((i, vec![paragraph, list]));
+                }
+            }
+        }
+        i += 1;
+    }
+
+    // Apply replacements in reverse order so indices remain valid
+    for (idx, replacement) in replacements.into_iter().rev() {
+        node.children.splice(idx..=idx, replacement);
     }
 }
 

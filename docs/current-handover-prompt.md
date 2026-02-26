@@ -1,4 +1,4 @@
-# Handover: i18n Empty-String Bug (All Non-EN Locales) + List Wrapping Bug
+# Handover: Preview List Item Wrapping Bug (Two Root Causes)
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file - only update when explicitly requested
@@ -11,7 +11,133 @@
 
 ---
 
-## Current Task (Priority): Remove Empty-String Translations from All Locale Files
+## Current Task (Priority): Fix Preview List Item Wrapping
+
+- **Priority**: Critical
+- **Status**: In progress — root causes identified, fixes not yet implemented
+- **GitHub Issue**: [#82](https://github.com/OlaProeis/Ferrite/issues/82)
+- **Test file**: `test_md/test_wrap_debug.md` (paragraph + list items)
+- **Affects**: Rendered view and split view (right panel). Raw editor view is NOT affected.
+
+### The Bug (User-Observed Behavior, 4 Stages)
+
+1. **Plain paragraph only** — wraps correctly in rendered view. No issues.
+2. **Type `-` to start a list item (empty, no content yet)** — the paragraph text ABOVE suddenly renders as a **heading** (large/bold). Text wrapping breaks for everything in the rendered pane.
+3. **Type short content in the list item (e.g. `- s`)** — text returns to normal appearance. Paragraph wraps again. Short list item looks okay.
+4. **Type long text in the list item** — the **list item text refuses to wrap** and extends as a single line beyond the pane edge. Content after the list item also may lose wrapping.
+
+### Root Causes (Two Distinct Bugs)
+
+#### Bug 1: Empty List Item Causes Heading Mis-Render (PARSER/RENDER BUG)
+
+When the user types just `- ` (dash-space, no text content yet), the **paragraph above** the list suddenly renders as a heading with large/bold text. This is NOT a wrapping bug — it's a **rendering dispatch issue**.
+
+**Hypothesis**: When the markdown content is `"Some paragraph text\n- "`, comrak may parse the `- ` differently (perhaps as a setext-style heading underline, or the empty list item causes node structure changes). The render dispatch in `render_node()` (line ~1164 in `editor.rs`) then hits the `MarkdownNodeType::Heading` branch for what should be a `Paragraph`.
+
+**Investigation needed**:
+- Add a debug log in `render_node()` at line 1164 to print `node.node_type` for EVERY node rendered
+- Parse `"Some text\n- "` through `parse_markdown()` (in `src/markdown/parser.rs` line 356) and inspect the resulting AST
+- Determine whether comrak produces a `Heading` node or if our `convert_node()` function misinterprets the structure
+- Also test with `"Some text\n- s"` to see how the AST differs when content is present
+
+**Parser files**:
+- `src/markdown/parser.rs` — `parse_markdown()` (line 356), `convert_node()` function
+- Uses `comrak` crate for parsing, then converts to internal AST
+
+#### Bug 2: List Items Use `TextEdit::singleline` (WRAPPING BUG)
+
+`TextEdit::singleline` **fundamentally cannot wrap text**. It always renders as a single horizontal line. This is the confirmed root cause for list items not wrapping even when the width is correctly constrained.
+
+**Confirmed locations** (6 total `TextEdit::singleline` calls in `editor.rs`):
+
+| Line | Context | Action Needed |
+|------|---------|---------------|
+| ~1396 | `render_heading` structural keys path | Headings — correct to be singleline |
+| ~1512 | `render_heading` regular path | Headings — correct to be singleline |
+| ~2303 | `render_list_item_with_structural_keys` EDIT MODE | Change to `multiline` |
+| ~2477 | `render_list_item_with_structural_keys` simple text | Change to `multiline` |
+| ~3875 | `render_list_item` EDIT MODE | Change to `multiline` |
+| ~4033 | `render_list_item` simple text | Change to `multiline` |
+
+The two heading locations are correct as singleline. The **four list item locations** must be changed from `TextEdit::singleline` to `TextEdit::multiline` with proper `desired_width(ui.available_width())`.
+
+**Important**: When switching to `TextEdit::multiline`, also need to:
+- Ensure `.desired_width(ui.available_width())` is set (already present)
+- Remove `.clip_text(false)` if present (multiline handles overflow differently)
+- May need a custom `layouter` for wrapping (see how `render_paragraph` does it with `LayoutJob`)
+- Test that Enter key handling still works correctly (singleline treats Enter as "submit"; multiline inserts newline — may need to intercept this for list items)
+
+### What Was Already Fixed (This Session)
+
+**The `ui.horizontal()` + `set_max_width()` pattern** was applied to 14 locations in `editor.rs`:
+- All `ui.horizontal()` blocks now capture `available_width` before entering, then call `ui.set_max_width(available_width)` inside
+- All `TextEdit::desired_width(f32::INFINITY)` calls were changed to `desired_width(ui.available_width())`
+- **This fix WORKS for paragraphs** — confirmed visually that paragraphs wrap correctly in split view with `avail_w=807/808` and `content_w=807/808`
+- The width constraint pipeline in `show_rendered_editor()` is correct: `ScrollArea` → `push_id` → `horizontal` (centering) → `vertical` with `set_max_width(content_width)` → render nodes
+
+**Affected functions that were patched**:
+- `render_list_item_with_structural_keys` — `ui.horizontal()` blocks
+- `render_list_item` — `ui.horizontal()` blocks
+- `render_paragraph` — all code paths (simple text, formatted, etc.)
+- `render_blockquote`, `render_callout`, `render_heading`, `render_front_matter`
+
+### The Fix Plan (What To Do Next)
+
+#### Step 1: Investigate Bug 1 (Parser/Heading Mis-Render)
+
+1. Write a small test or debug log that parses `"Some text\n- "` and `"Some text\n- s"` through `parse_markdown()` and prints the resulting AST node types
+2. Determine whether `comrak` produces a Heading or if `convert_node()` misinterprets
+3. If it's a comrak issue, may need to add post-parse fixup in `parse_markdown_with_options()` (around line 386-397)
+4. If it's a rendering dispatch issue, fix the match arm in `render_node()`
+
+#### Step 2: Fix Bug 2 (singleline → multiline)
+
+1. Change the 4 list-item `TextEdit::singleline` calls to `TextEdit::multiline`
+2. Add proper `desired_width` and potentially a custom `layouter` for text wrapping
+3. Handle Enter key behavior — multiline TextEdit inserts newlines, but list items should probably:
+   - Treat Enter as "create new list item" or "finish editing"
+   - Not allow literal newlines inside a single list item
+4. Test with the 4-stage scenario described above
+
+#### Step 3: Remove Debug Artifacts
+
+The visible debug banner (`ui.colored_label(Color32::YELLOW, ...)`) has already been removed. Verify no other debug logging remains.
+
+#### Step 4: Verify
+
+- Test the 4 stages described in "The Bug" section
+- Test with `test_md/test_wrap_debug.md` and `test_md/test_table_wrapping.md`
+- Test in both Rendered view mode AND Split view mode
+- Test `max_line_width` setting is respected
+- Verify headings still render correctly (they should remain `singleline`)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/markdown/editor.rs` | Main rendering — `render_node()` ~1153, `render_list_item()` ~3724, `render_list_item_with_structural_keys()` ~2145, `render_paragraph()` ~2526, `show_rendered_editor()` ~671 |
+| `src/markdown/parser.rs` | Markdown parsing — `parse_markdown()` ~356, `convert_node()`, uses comrak |
+| `test_md/test_wrap_debug.md` | Test file with paragraph + list items |
+| `test_md/test_table_wrapping.md` | Test file for table wrapping (also useful) |
+
+### Width Propagation (Confirmed Working)
+
+The width pipeline in `show_rendered_editor()` is:
+```
+Panel width (e.g., 808px)
+  → ScrollArea::vertical().auto_shrink([false, false])
+    → ui.push_id(content_hash)
+      → ui.horizontal() (centering with content_margin)
+        → ui.vertical() with ui.set_max_width(content_width)
+          → render_node() for each child
+            → available_width correctly propagated (~807px confirmed)
+```
+
+The `effective_content_width` is calculated from `max_line_width` setting when set, capped to `ui.available_width()`. Debug confirmed: `avail_w=807/808`, `content_w=807/808`, `eff=Some(807)`.
+
+---
+
+## Also Pending: Remove Empty-String Translations from All Locale Files
 
 **All non-English locale files contain empty-string values (`""`) that display as blank text instead of falling back to English.**
 - **Priority**: High (user-facing — UI shows blank labels/text in German, Chinese, and others)
@@ -26,8 +152,6 @@ UI elements show **blank/empty text** instead of translated or English fallback 
 
 `rust_i18n`'s `fallback = "en"` only triggers when a key is **completely absent** from a locale file. An empty string `""` is treated as a **valid translation** — it displays nothing.
 
-In the previous session, missing keys were added to locale files with `""` as placeholder values. This backfired: instead of falling back to English, the UI now shows blank text.
-
 **Empty string counts per file:**
 
 | File | Empty `""` values | Status |
@@ -40,43 +164,17 @@ In the previous session, missing keys were added to locale files with `""` as pl
 | `locales/et.yaml` | 727 | **Broken** |
 | `locales/pt.yaml` | 717 | **Broken** |
 
-### How i18n Works Here
-
-- **Crate**: `rust_i18n`; macro `t!("key.path")`; keys live in `locales/*.yaml`.
-- **Loading**: Compile-time (`rust_i18n::i18n!("locales", fallback = "en");` in `src/main.rs`). **Full rebuild required** after YAML edits.
-- **Fallback**: Added in previous session. When a key is **missing** from a locale, it falls back to `en.yaml`. But empty strings `""` are **not** missing — they are valid values that show nothing.
-- **Key rule**: If a translation doesn't exist, the key must be **omitted entirely** (not present in the file), so the fallback mechanism works.
-
 ### The Fix
 
 **For every non-English locale file**, remove all lines where the value is an empty string `""`. Keep the YAML structure valid (parent keys with children stay, but leaf keys with `""` values must go).
 
-**Approach** (in order of priority — fix de and zh_Hans first as user-reported):
+**Important rules:**
+- **Do NOT edit `locales/en.yaml`** or **`locales/ja.yaml`**
+- **Do NOT replace empty strings with English text** — just delete the entire line
+- **Keep parent keys** that still have non-empty children
+- **Preserve all existing translations** — only remove lines where the value is literally `""`
 
-1. **`locales/de.yaml`** — Remove all `key: ""` lines. This file has real German translations for most keys; the 246 empty strings are newer keys added as placeholders. Simply deleting those lines will make them fall back to English.
-
-2. **`locales/zh_Hans.yaml`** — Same approach: remove all `key: ""` lines. The 282 empty strings are placeholders; existing Chinese translations should be preserved.
-
-3. **Remaining files** (`es.yaml`, `et.yaml`, `nb_NO.yaml`, `pt.yaml`) — Same pattern. These have even more empty strings (553–727) because they had fewer translations to begin with.
-
-**Important rules for the fix:**
-- **Do NOT edit `locales/en.yaml`** — it is the reference and must not be changed.
-- **Do NOT edit `locales/ja.yaml`** — it is working correctly with zero empty strings.
-- **Do NOT replace empty strings with English text** — just delete the entire line. The fallback mechanism handles it.
-- **Keep parent keys** that still have non-empty children. Only remove leaf-level `key: ""` entries.
-- **Preserve all existing translations** — only remove lines where the value is literally `""`.
-- After removing empty strings, verify that all remaining values are **double-quoted** strings. Unquoted non-ASCII values can cause YAML parsing failures.
-
-### Verification
-
-After editing each file:
-1. Run `cargo build` to recompile (locales load at compile time).
-2. Run the app, switch to the language, and check:
-   - Settings nav labels (Terminal, About) show English fallback or translated text (not blank).
-   - Outline tabs (Links, Hub) show text (not blank).
-   - No raw keys visible (like `settings.terminal.title`).
-
-### Key Files
+### Key Files (i18n)
 
 | File | Purpose |
 |------|---------|
@@ -86,68 +184,17 @@ After editing each file:
 | `locales/et.yaml` | Estonian — 727 empty strings to remove |
 | `locales/nb_NO.yaml` | Norwegian — 606 empty strings to remove |
 | `locales/pt.yaml` | Portuguese — 717 empty strings to remove |
-| `locales/en.yaml` | **Reference — DO NOT EDIT** |
-| `locales/ja.yaml` | **Working — DO NOT EDIT** |
 | `src/main.rs` | Has `fallback = "en"` already configured (line 30) |
-
-### What Was Already Done (Previous Session)
-
-1. **`src/main.rs`**: Added `fallback = "en"` to `rust_i18n::i18n!()` macro — this is the single most important fix enabling graceful degradation.
-2. **`locales/ja.yaml`**: Complete rewrite — all values have actual Japanese translations, no empty strings. **This is why Japanese works.**
-3. **`locales/de.yaml`**: Rewritten to match `en.yaml` structure, but new/untranslated keys were set to `""` instead of being omitted — **this is why German is still broken**.
-4. **Other locale files**: Missing sections were added with `""` placeholders — same problem.
-
-### Lesson Learned
-
-**Never use empty strings as translation placeholders.** If a translation doesn't exist, omit the key entirely so `rust_i18n`'s fallback mechanism provides the English string. Empty strings are valid translations that show nothing.
-
----
-
-## Also Pending: Preview List Item Text Wrapping Bug
-
-**Fix Preview Text Wrapping — List Items Break All Wrapping**
-- **Priority**: Critical
-- **Status**: Not started
-- **GitHub Issue**: [#82](https://github.com/OlaProeis/Ferrite/issues/82)
-- **Test file**: `test_md/test_table_wrapping.md` (or create a new list-focused test file)
-
-### The Bug
-
-In the split/preview markdown editor, list items break text wrapping for themselves and all subsequent content. The `max_line_width` setting is also ignored once a list item is present.
-
-### Observed Behavior (4 stages)
-
-1. **Plain text only** — wraps correctly in both editor and preview. No issues.
-2. **Add a `-` to start a list (no content yet)** — the paragraph text ABOVE the list marker suddenly renders as a heading/bold in the preview, and text wrapping breaks entirely in the preview pane.
-3. **Type short content for the list item** — preview partially recovers; looks okay with short text.
-4. **Long text in the list item** — the list item itself refuses to wrap, and ALL content after it also stops wrapping. The `max_line_width` setting is completely ignored.
-
-### Root Cause
-
-List item rendering uses `ui.horizontal()` so the layout expands to fit content and does not respect parent width. Same pattern as the table bug that was fixed by capturing `ui.available_width()` and constraining the inner widget.
-
-### Where the Bug Lives
-
-Two code paths in `src/markdown/editor.rs`:
-1. **`render_list_item_with_structural_keys()`** — ~line 2145, ~2256 `ui.horizontal()` + `TextEdit::multiline` with `desired_width(f32::INFINITY)`
-2. **`render_list_item()`** — ~line 3724, same pattern
-
-Both need the same fix: capture available width before horizontal, pass constrained width to TextEdit. See table fix in `render_table()` for reference. Formatted list display path ~2687 (`horizontal_wrapped`) may also need verification.
-
-### Key Files (list wrapping)
-
-| File | Purpose |
-|------|---------|
-| `src/markdown/editor.rs` | `render_list_item_with_structural_keys()` ~2145–2400, `render_list_item()` ~3724–3900, list containers, formatted display ~2687 |
 
 ---
 
 ## Recently Completed
 
-- **Japanese i18n fix** — Full rewrite of `ja.yaml` with all values translated and properly quoted; zero empty strings
+- **Paragraph wrapping fix** — Applied `set_max_width` + `desired_width(ui.available_width())` to all `ui.horizontal()` blocks in rendered editor; paragraphs now wrap correctly
+- **Width pipeline verified** — Debug confirmed `avail_w=807/808` flows correctly through ScrollArea → vertical → render_node
+- **Japanese i18n fix** — Full rewrite of `ja.yaml` with all values translated and properly quoted
 - **Fallback locale** — Added `fallback = "en"` to `rust_i18n::i18n!()` in `src/main.rs`
-- **Locale structure alignment** — All locale files now match `en.yaml` key structure (but with empty string problem)
-- **Table background & layout fix** — Shape::Noop placeholder technique for backgrounds, `top_down` cell layout, removed max-height constraint
+- **Table background & layout fix** — Shape::Noop, `top_down` cell layout, removed max-height constraint
 - **Column resizing** — Draggable column separators with proportional width persistence
 - **Table wrapping foundation** — manual layout with proportional column widths, text wrapping via `TextEdit::multiline` + `LayoutJob`
 
