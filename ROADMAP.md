@@ -22,6 +22,7 @@
 - [x] **List item text not wrapping in preview** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Long list item text extended beyond the pane edge instead of wrapping in rendered/split view. All 4 list-item `TextEdit` widgets used `singleline` (cannot wrap). Changed to `multiline` with custom `LayoutJob` layouter, `desired_rows(1)`, and newline stripping so Enter doesn't insert literal newlines in list items.
 - [x] **Empty list item causes heading mis-render** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Typing `- ` after a paragraph caused the paragraph to render as a heading. Comrak interprets a single `-` + whitespace as a setext heading underline. Added `fix_false_setext_headings()` post-processing in `parser.rs` to convert these back to Paragraph + List(Item).
 - [x] **Windows IME backspace deleting editor text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Pressing Backspace during Chinese/Japanese/Korean IME composition deleted already-committed characters. Raw `Key::Backspace` events are now suppressed while IME composition is active.
+- [ ] **macOS Release .app Bundle** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release workflow ships raw binary instead of .app bundle, causing Gatekeeper to block launch. Fix CI to package `target/release/bundle/osx/Ferrite.app` instead of raw binary.
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
 #### Markdown Linking
@@ -52,6 +53,13 @@
 #### Table Editing
 - [x] **Table background & layout fix** - Replaced pre-painted backgrounds with Shape::Noop placeholder technique. Backgrounds use actual rendered row dimensions, fixing gaps/overlap/text-outside-bounds. Cell layout direction corrected from inherited `left_to_right` to `top_down` for proper vertical padding.
 - [x] **Column resizing** - Draggable column separators with resize cursor, visual guide line, min-width enforcement (40px), proportional scaling on window resize, double-click to reset to auto widths. Custom widths stored in egui memory per table via `TableEditState.custom_col_widths`.
+
+#### Frontmatter Editor (Basic) ([#94](https://github.com/OlaProeis/Ferrite/issues/94))
+- [ ] **Visual frontmatter panel** - Side panel for editing YAML frontmatter as key-value pairs with form-like interface.
+- [ ] **Basic field type support** - String, date, and list (tags) field types with appropriate input widgets.
+- [ ] **New file templates** - Optional frontmatter templates when creating new markdown files.
+
+*Note: This is initial/basic frontmatter support. Advanced features (project-wide tag autocomplete, SSG-specific field types like slug/permalink, template system) planned for future releases.*
 
 #### UI Declutter & Edge Toggles
 - [ ] **Move format toolbar to editor bottom** - Markdown formatting buttons (bold, italic, code, headings, lists, etc.) moved from the ribbon to a collapsible toolbar at the bottom of the raw editor area. Visible in Raw and Split modes for markdown files. Collapse/expand via chevron toggle. Reduces ribbon clutter significantly.
@@ -95,6 +103,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ### Deferred to v0.2.7
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
+
+### Platform & Distribution
+- [ ] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release ships raw binary instead of .app bundle, causing Gatekeeper to block launch on macOS. Workaround: `xattr -d com.apple.quarantine ferrite` in terminal. Fix in progress for v0.2.7.
 
 ### Rendered View Limitations
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
