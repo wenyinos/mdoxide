@@ -100,15 +100,21 @@
 ### FerriteEditor Limitations
 With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
 
+- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
 - [x] **IME backspace deleting text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Fixed in v0.2.7. Backspace during IME composition no longer deletes editor text.
 
 ### Deferred to v0.2.7
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
 
+### Platform & Distribution
+- [ ] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release ships raw binary instead of .app bundle, causing Gatekeeper to block launch on macOS. Workaround: `xattr -d com.apple.quarantine ferrite` in terminal. Fix in progress for v0.2.7.
+
 ### Rendered View Limitations
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
 
 ---
+
+## Planned Features 
 
 ### v0.2.8 - UI, Accessibility & Text Shaping
 
@@ -117,7 +123,21 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 - [ ] **HarfRust integration for FerriteEditor** - Integrate [HarfRust](https://github.com/harfbuzz/harfrust) (pure-Rust HarfBuzz port, v0.5.0+) into the FerriteEditor rendering pipeline for production-quality text shaping. Converts Unicode codepoint sequences into correctly positioned, contextually-formed glyphs for all scripts including Arabic (contextual forms: initial/medial/final/isolated), Bengali (conjunct consonants, vowel reordering), Devanagari, Tamil, and other Indic scripts.
 - [ ] **Shaped galley cache** - Extend `LineCache` to store shaped text runs (glyph IDs + positions) instead of raw character galleys. Invalidation on content change, font change, or viewport resize.
-- [ ] **Arabic/Bengali test corpus** - Sample documents for verification with native readers.
+- [ ] **Grapheme-cluster-aware cursor** - Replace character-based cursor movement with grapheme-cluster-aware navigation using `unicode-segmentation`. A single visual "character" in Bengali or Arabic may span multiple Unicode codepoints — cursor must step over the entire cluster.
+- [ ] **Shaped text measurement** - Update word wrap, line width calculation, and scroll offset computation to use shaped advance widths instead of per-character metrics.
+
+*Note: Phase 2 provides correct rendering of all complex scripts in the Raw editor (FerriteEditor). Text direction remains LTR — Arabic/Hebrew text will be shaped correctly (ligatures, contextual forms) but displayed left-to-right. Full RTL layout requires Phase 3 (v0.3.0). WYSIWYG/rendered view inherits egui's text pipeline and will not benefit until egui itself adds shaping support or Phase 4.*
+
+*Background: egui (as of 0.33) uses `ab_glyph` which does glyph-by-glyph rendering with no shaping. PR [#5784](https://github.com/emilk/egui/pull/5784) to integrate Parley is stalled (Nov 2025). We cannot wait for upstream — HarfRust integration in our custom editor widget is the pragmatic path.*
+
+#### LSP Integration (Language Server Protocol)
+*Plan: [docs/lsp-integration-plan.md](docs/lsp-integration-plan.md)*
+
+- [ ] **Phase 1: Infrastructure** — Auto-detect language server by file extension; spawn server as child process via stdio on workspace open; graceful fallback with dismissable notification if not installed; server lifecycle (start, restart on crash, shutdown on close); LSP toggle per workspace (opt-in, off by default); status bar indicator (ready / indexing / not found).
+- [ ] **Phase 2: Inline diagnostics** — Error/warning squiggles under text with hover tooltip; incremental document sync (changed ranges only); diagnostic count in status bar (e.g. 2 errors, 1 warning).
+- [ ] **Phase 3: Hover & Go to Definition** — Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click).
+- [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
+- [ ] **Settings** — Per-language server path override; all processing local (no network calls).
 
 #### Traditional Menu Bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
 - [ ] **Alt-key menu access** - Traditional File/Edit/View menus toggled via Alt key (VS Code style).
@@ -142,8 +162,25 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ---
 
-### v0.3.0 - Mermaid Crate + Markdown Enhancements
-**Focus:** Extracting the Mermaid renderer as a standalone crate and improving markdown rendering.
+### v0.3.0 - Mermaid Crate, Markdown Enhancements & Full RTL/BiDi
+**Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, and completing right-to-left and bidirectional text support.
+
+#### 0. Unicode & Complex Script Support (Phase 3 & 4: RTL, BiDi, WYSIWYG)
+*Depends on: Phase 2 text shaping from v0.2.8*
+
+**Phase 3: Right-to-Left Layout & Bidirectional Text**
+- [ ] **RTL text layout in FerriteEditor** - Render Arabic, Hebrew, and other RTL scripts right-to-left within lines. Shaped glyph runs are placed from the right edge; line alignment respects detected paragraph direction.
+- [ ] **Unicode BiDi algorithm** - Implement the Unicode Bidirectional Algorithm (UAX #9) via the `unicode-bidi` crate for mixed-direction text (e.g., English embedded in Arabic). Resolves embedding levels, reorders glyph runs per line, and handles directional isolates/overrides.
+- [ ] **RTL cursor navigation** - Arrow keys move in visual order (left arrow moves left visually, regardless of text direction). Home/End respect paragraph direction. Selection handles disjoint byte ranges in BiDi text.
+- [ ] **RTL selection rendering** - Selection highlighting for BiDi text may produce multiple visual rectangles per logical selection range. Click-to-position respects visual glyph boundaries.
+- [ ] **RTL line wrapping** - Word wrap respects script direction. Break opportunities follow UAX #14 (Unicode Line Breaking Algorithm) for correct behavior with Arabic, Hebrew, Thai, and other scripts.
+
+**Phase 4: WYSIWYG & UI Chrome**
+- [ ] **Shaped text in WYSIWYG editor** - Integrate text shaping into the rendered markdown view (`markdown/editor.rs`). RichText labels use shaped runs for correct Arabic/Bengali rendering in headings, paragraphs, lists, and tables.
+- [ ] **Shaped text in Mermaid diagrams** - Update `TextMeasurer` to use shaped advance widths so diagram node labels render complex scripts correctly.
+- [ ] **UI label shaping** - If egui has native shaping by this point (via Parley or direct HarfRust integration), adopt it. Otherwise, provide a shaping wrapper for critical UI surfaces (file tree, outline panel, status bar) where non-Latin file/heading names appear.
+
+*Note: Full RTL+BiDi is one of the hardest problems in text editing. This phase has high risk in cursor positioning, selection handling, and find/replace with mixed-direction text. Thorough testing with real Arabic, Hebrew, and Bengali content is essential.*
 
 #### 1. Mermaid Crate Extraction
 - [ ] **Standalone crate** - Backend-agnostic architecture with SVG, PNG, and egui outputs.
@@ -161,11 +198,11 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Manual layout support**
   - Comment-based position hints: `%% @pos <node_id> <x> <y>`
   - Drag-to-reposition in rendered view with source auto-update
-  - Export option to strip layout hints ("Export clean")
+  - Export option to strip layout hints (“Export clean”)
 
 #### 3. Markdown Enhancements
-- [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with auto-completion.
-- [ ] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file.
+- [x] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with click-to-navigate. *(Completed in v0.2.7)*
+- [x] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file with graph-based indexing. *(Completed in v0.2.7)*
 
 #### 4. HTML Rendering (GitHub Parity)
 **Phase 1 – Block Elements**
@@ -174,27 +211,21 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] `<kbd>`, `<sup>`, `<sub>`, `<img width/height>`
 **Phase 3 – Advanced**
 - [ ] Nested HTML, HTML tables
-*Note: Safe subset only (no scripts, styles, ifframes).*
+*Note: Safe subset only (no scripts, styles, iframes).*
 
 #### 5. Platform & Distribution
 **Windows**
 - [ ] Inno Setup installer
-- [ ] File associations (`.md`, `.json`, `.yaml`, `.toml`)
-- [ ] Context menu integration
-- [ ] Optional add-to-PATH
+- [x] File associations (`.md`, `.json`, `.yaml`, `.toml`) — done via MSI installer (v0.2.7)
+- [x] Context menu integration — done via MSI installer (v0.2.7)
+- [x] Optional add-to-PATH — done via MSI installer (v0.2.7)
+- [x] PortableApps.com listing — PAF packaging and CI automation done (v0.2.7); forum submission pending
 **macOS**
 - [ ] App signing & notarization
 
-#### Mermaid Authoring Improvements
+#### 6. Mermaid Authoring Improvements
 - [ ] **Mermaid authoring hints** ([#4](https://github.com/OlaProeis/Ferrite/issues/4))  
   Inline hints and validation feedback when editing Mermaid diagrams to catch syntax errors and common mistakes early.
-
-#### 1. Mermaid Crate Extraction
-- [ ] **Standalone crate** - Backend-agnostic architecture with SVG, PNG, and egui outputs.
-- [ ] **Public API** - `parse()`, `layout()`, `render()` pipeline.
-
-#### 2. Markdown Enhancements
-- [ ] **GitHub-style HTML** - Render `<div align>`, `<details>`, `<kbd>`, etc.
 
 ---
 
@@ -225,7 +256,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 **XLSX**
 - [ ] Sheet selector, table rendering
 - [ ] Basic number/date formatting
-- [ ] Window freezing for large sheets
 - [ ] Lazy loading for large sheets
 **OpenDocument**
 - [ ] ODT / ODS viewing with shared renderers
@@ -235,9 +265,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] Abstract providers (fonts, highlighting, folding)
 - [ ] Delimiter matcher included
 - [ ] Documentation and examples
-
-- [ ] **Math Rendering Engine** - Parse and render `$inline$` and `$$display$$` LaTeX math.
-- [ ] **Office Document Support** - Read-only view for DOCX and XLSX files (rendered as flowing text/tables, not paginated).
 
 ---
 
@@ -268,18 +295,19 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ### Headless Editor Library
 - [ ] Framework-agnostic core extraction
 - [ ] Abstract rendering backends (egui, wgpu, SVG)
-- [ ] Advanced text layout integration (e.g., Parley)
+- [ ] Advanced text layout integration (HarfRust/skrifa, with Parley as future option)
 
 **Note:** These are ideas under consideration.
-
-- **Persistent Undo History:** Save undo stack to disk.
-- **Plugin System:** Lua or WASM based extensions.
-- **Headless Editor Library:** Extract `FerriteEditor` as a standalone Rust crate.
-- **Additional Formats:** Jupyter Notebooks (`.ipynb`), EPUB, LaTeX source (`.tex`).
 
 ---
 
 ## Recently Completed ✅
+
+### v0.2.7 (Feb 2026) - Performance, Features & Polish
+Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, PortableApps.com Format packaging with automated CI build, Nix/NixOS flake support, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), flowchart modular refactoring, window control redesign, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), 13+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
+
+### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
+**First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.
 
 ### v0.2.6 (Released Jan 2026) - Custom Text Editor
 **The critical rewrite.** Replaced the default egui editor with a custom-built virtual scrolling editor engine.
