@@ -28,6 +28,7 @@
 With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
 
 - [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
+- [ ] **Display corruption on unsaved files after extended use** - Text in untitled/unsaved files may render as garbled symbols or corrupted glyphs after Ferrite has been left open for an extended period. The underlying text data is intact (selecting, copying, and pasting restores normal display). Likely a glyph cache, font atlas, or rendering state issue that accumulates over time. Requires investigation into memory/cache lifecycle.
 
 ### Deferred to v0.2.7
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
@@ -41,6 +42,12 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ### v0.2.7 - Performance, Features & Polish
 **Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
+
+#### Bug Fixes
+- [ ] **Task List Checkbox Rendering** ([#95](https://github.com/OlaProeis/Ferrite/issues/95))  
+  Fix task list checkboxes showing as ASCII text (`[ ]` / `[x]`) instead of proper checkbox UI elements in rendered view. Also suppress bullet point markers for task list items.
+- [ ] **Open Folder in Flatpak** ([#96](https://github.com/OlaProeis/Ferrite/issues/96))  
+  Fix "Open Folder" not working unless a file from that folder is already open. Likely Flatpak sandboxing issue - add better error handling and portal-based file access fallback.
 
 #### Markdown Linking
 - [ ] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax.
