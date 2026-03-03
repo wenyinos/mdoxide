@@ -49,7 +49,9 @@ pub fn create_light_visuals() -> Visuals {
     // ─────────────────────────────────────────────────────────────────────────
     // Text Colors
     // ─────────────────────────────────────────────────────────────────────────
-    visuals.override_text_color = None; // Let widgets decide
+    // Use theme primary so all widget text (slider values, combobox, drag value,
+    // labels) has readable contrast on light background in both themes.
+    visuals.override_text_color = Some(colors.text.primary);
     visuals.warn_fg_color = colors.ui.warning;
     visuals.error_fg_color = colors.ui.error;
     visuals.hyperlink_color = colors.text.link;
@@ -90,10 +92,14 @@ pub fn create_light_visuals() -> Visuals {
     // ─────────────────────────────────────────────────────────────────────────
     // Widget Styling (Active/Pressed)
     // ─────────────────────────────────────────────────────────────────────────
+    // NOTE: `active.fg_stroke.color` is also returned by `Visuals::strong_text_color()`
+    // which egui uses for `RichText::strong()`. Using WHITE here would make all
+    // `.strong()` labels invisible on light backgrounds. We use the primary text
+    // color which has good contrast on both the accent bg_fill and light panels.
     visuals.widgets.active.bg_fill = colors.ui.accent;
     visuals.widgets.active.weak_bg_fill = colors.base.selected;
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, colors.ui.accent_hover);
-    visuals.widgets.active.fg_stroke = Stroke::new(2.0, Color32::WHITE);
+    visuals.widgets.active.fg_stroke = Stroke::new(2.0, colors.text.primary);
     visuals.widgets.active.rounding = Rounding::same(spacing.sm);
 
     // ─────────────────────────────────────────────────────────────────────────

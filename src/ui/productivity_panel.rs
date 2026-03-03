@@ -6,6 +6,7 @@
 //! - AutoSave helper for debounced writes
 //! - Workspace-scoped persistence functions
 
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -346,6 +347,51 @@ pub fn load_note(workspace_root: &Path, name: &str) -> String {
     std::fs::read_to_string(&note_path).unwrap_or_default()
 }
 
+/// Delete a note from .ferrite/notes/{name}.txt
+pub fn delete_note(workspace_root: &Path, name: &str) -> std::io::Result<()> {
+    let safe_name = name.replace(['/', '\\'], "_").replace("..", "_");
+    let note_path = workspace_root
+        .join(".ferrite")
+        .join("notes")
+        .join(format!("{}.txt", safe_name));
+
+    if note_path.exists() {
+        std::fs::remove_file(&note_path)?;
+    }
+
+    Ok(())
+}
+
+/// Rename a note from old_name to new_name in .ferrite/notes/
+pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std::io::Result<()> {
+    let safe_old = old_name.replace(['/', '\\'], "_").replace("..", "_");
+    let safe_new = new_name.replace(['/', '\\'], "_").replace("..", "_");
+
+    if safe_new.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            t!("productivity.notes.empty_name").to_string(),
+        ));
+    }
+
+    let notes_dir = workspace_root.join(".ferrite").join("notes");
+    let old_path = notes_dir.join(format!("{}.txt", safe_old));
+    let new_path = notes_dir.join(format!("{}.txt", safe_new));
+
+    if new_path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            t!("productivity.notes.duplicate_name").to_string(),
+        ));
+    }
+
+    if old_path.exists() {
+        std::fs::rename(&old_path, &new_path)?;
+    }
+
+    Ok(())
+}
+
 /// List available notes in workspace
 pub fn list_notes(workspace_root: &Path) -> Vec<String> {
     let notes_dir = workspace_root.join(".ferrite").join("notes");
@@ -411,6 +457,18 @@ pub struct ProductivityPanel {
 
     /// Flag to indicate tasks need saving
     tasks_dirty: bool,
+
+    /// Whether we're currently editing a note name (rename mode)
+    renaming_note: bool,
+
+    /// Buffer for the new note name during rename
+    rename_buffer: String,
+
+    /// Whether a note delete confirmation is pending
+    delete_confirming: bool,
+
+    /// Flag set when the user clicks "Dock" in the floating window
+    dock_requested: bool,
 }
 
 impl ProductivityPanel {
@@ -426,7 +484,18 @@ impl ProductivityPanel {
             available_notes: vec!["default".to_string()],
             auto_save: AutoSave::new(1000),
             tasks_dirty: false,
+            renaming_note: false,
+            rename_buffer: String::new(),
+            delete_confirming: false,
+            dock_requested: false,
         }
+    }
+
+    /// Check if the user requested to dock the panel (and consume the flag).
+    pub fn take_dock_request(&mut self) -> bool {
+        let requested = self.dock_requested;
+        self.dock_requested = false;
+        requested
     }
 
     /// Set the workspace root and load data.
@@ -519,262 +588,364 @@ impl ProductivityPanel {
         }
     }
 
-    /// Render the productivity panel.
+    /// Render the productivity panel content inline (for docked mode in outline panel).
+    ///
+    /// Returns true if a repaint is needed (timer active).
+    pub fn show_content(&mut self, ui: &mut eframe::egui::Ui, ctx: &eframe::egui::Context) -> bool {
+        let mut needs_repaint = false;
+
+        // Show message if no workspace
+        if self.workspace_root.is_none() {
+            ui.label(eframe::egui::RichText::new(t!("productivity.workspace_hint").to_string())
+                .weak()
+                .italics());
+            ui.separator();
+        }
+
+        // TASKS SECTION
+        ui.heading(t!("productivity.tasks.title").to_string());
+
+        // Completed tasks counter
+        let completed = self.tasks.iter().filter(|t| t.completed).count();
+        let total = self.tasks.len();
+        if total > 0 {
+            ui.label(t!("productivity.tasks.progress", completed = completed, total = total).to_string());
+        }
+
+        // New task input
+        ui.horizontal(|ui| {
+            let response = ui.add(
+                eframe::egui::TextEdit::singleline(&mut self.new_task_input)
+                    .hint_text(t!("productivity.tasks.input_hint").to_string())
+                    .desired_width(ui.available_width() - 50.0)
+            );
+
+            if ui.button(t!("productivity.tasks.add").to_string()).clicked()
+                || (response.lost_focus() && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
+            {
+                self.add_task();
+            }
+        });
+
+        // Keyboard shortcut hint
+        ui.label(eframe::egui::RichText::new(t!("productivity.tasks.tip").to_string()).small().weak());
+
+        ui.add_space(4.0);
+
+        // Task list with scroll area
+        eframe::egui::ScrollArea::vertical()
+            .id_source("tasks_scroll")
+            .max_height(200.0)
+            .show(ui, |ui| {
+                let mut to_delete: Option<usize> = None;
+                let mut to_move_up: Option<usize> = None;
+                let mut to_move_down: Option<usize> = None;
+                let tasks_len = self.tasks.len();
+
+                for (i, task) in self.tasks.iter_mut().enumerate() {
+                    ui.horizontal(|ui| {
+                        // Move up button (disabled for first item)
+                        ui.add_enabled_ui(i > 0, |ui| {
+                            if ui.small_button("^").on_hover_text(t!("productivity.tasks.move_up").to_string()).clicked() {
+                                to_move_up = Some(i);
+                            }
+                        });
+
+                        // Move down button (disabled for last item)
+                        ui.add_enabled_ui(i < tasks_len - 1, |ui| {
+                            if ui.small_button("v").on_hover_text(t!("productivity.tasks.move_down").to_string()).clicked() {
+                                to_move_down = Some(i);
+                            }
+                        });
+
+                        // Checkbox
+                        if ui.checkbox(&mut task.completed, "").changed() {
+                            self.tasks_dirty = true;
+                        }
+
+                        // Priority indicator
+                        match task.priority {
+                            2 => { ui.colored_label(eframe::egui::Color32::RED, "!!"); }
+                            1 => { ui.colored_label(eframe::egui::Color32::YELLOW, "!"); }
+                            _ => {}
+                        }
+
+                        // Task text (strikethrough if completed)
+                        let text = if task.completed {
+                            eframe::egui::RichText::new(&task.text).strikethrough()
+                        } else {
+                            eframe::egui::RichText::new(&task.text)
+                        };
+                        ui.label(text);
+
+                        // Delete button (right-aligned)
+                        ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
+                            if ui.small_button("x").clicked() {
+                                to_delete = Some(i);
+                            }
+                        });
+                    });
+                }
+
+                // Handle moves after the loop
+                if let Some(i) = to_move_up {
+                    if i > 0 {
+                        self.tasks.swap(i, i - 1);
+                        self.tasks_dirty = true;
+                    }
+                }
+                if let Some(i) = to_move_down {
+                    if i < self.tasks.len() - 1 {
+                        self.tasks.swap(i, i + 1);
+                        self.tasks_dirty = true;
+                    }
+                }
+
+                if let Some(index) = to_delete {
+                    self.delete_task(index);
+                }
+
+                if self.tasks.is_empty() {
+                    ui.label(eframe::egui::RichText::new(t!("productivity.tasks.empty").to_string()).weak());
+                }
+            });
+
+        ui.separator();
+
+        // POMODORO SECTION
+        ui.heading(t!("productivity.pomodoro.title").to_string());
+
+        ui.horizontal(|ui| {
+            // Timer display
+            let time_text = self.timer.format_remaining();
+            let label = if self.timer.is_work() {
+                t!("productivity.pomodoro.work", time = time_text).to_string()
+            } else if self.timer.is_break() {
+                t!("productivity.pomodoro.break_label", time = time_text).to_string()
+            } else {
+                t!("productivity.pomodoro.ready").to_string()
+            };
+
+            ui.label(eframe::egui::RichText::new(label).size(24.0).strong());
+
+            // Cycles counter
+            if self.timer.cycles() > 0 {
+                ui.label(t!("productivity.pomodoro.cycles", count = self.timer.cycles()).to_string());
+            }
+        });
+
+        ui.horizontal(|ui| {
+            if self.timer.is_active() {
+                if ui.button(t!("productivity.pomodoro.stop").to_string()).clicked() {
+                    self.timer.stop();
+                }
+
+                // Request repaint for countdown
+                ctx.request_repaint_after(Duration::from_secs(1));
+                needs_repaint = true;
+
+                // Check completion
+                if self.timer.is_complete() {
+                    // Play notification sound using the re-exported function
+                    crate::terminal::play_notification(None);
+
+                    // Auto-transition
+                    if self.timer.is_work() {
+                        self.timer.increment_cycle();
+                        self.timer.start_break();
+                    } else {
+                        self.timer.stop();
+                    }
+                }
+            } else {
+                if ui.button(t!("productivity.pomodoro.start_work").to_string()).clicked() {
+                    self.timer.start_work();
+                }
+                if ui.button(t!("productivity.pomodoro.start_break").to_string()).clicked() {
+                    self.timer.start_break();
+                }
+            }
+        });
+
+        ui.separator();
+
+        // NOTES SECTION
+        ui.heading(t!("productivity.notes.title").to_string());
+
+        // Note selector with rename/delete
+        if self.available_notes.len() > 1 || self.workspace_root.is_some() {
+            // Rename mode
+            if self.renaming_note {
+                ui.horizontal(|ui| {
+                    ui.label(t!("productivity.notes.name_label").to_string());
+                    let response = ui.add(
+                        eframe::egui::TextEdit::singleline(&mut self.rename_buffer)
+                            .desired_width(ui.available_width() - 80.0)
+                    );
+
+                    if ui.small_button(t!("productivity.notes.ok").to_string()).on_hover_text(t!("productivity.notes.confirm_rename").to_string()).clicked()
+                        || (response.lost_focus() && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
+                    {
+                        let new_name = self.rename_buffer.trim().to_string();
+                        if !new_name.is_empty() && new_name != self.current_note {
+                            if let Some(ref root) = self.workspace_root {
+                                // Save current content first
+                                let _ = save_note(root, &self.current_note, &self.notes_content);
+                                if let Err(e) = rename_note(root, &self.current_note, &new_name) {
+                                    log::warn!("Failed to rename note: {}", e);
+                                } else {
+                                    // Update available notes list
+                                    if let Some(pos) = self.available_notes.iter().position(|n| n == &self.current_note) {
+                                        self.available_notes[pos] = new_name.clone();
+                                    }
+                                    self.current_note = new_name;
+                                }
+                            }
+                        }
+                        self.renaming_note = false;
+                    }
+
+                    if ui.small_button("X").on_hover_text(t!("productivity.notes.cancel_rename").to_string()).clicked() {
+                        self.renaming_note = false;
+                    }
+                });
+            } else {
+                ui.horizontal(|ui| {
+                    ui.label(t!("productivity.notes.note_label").to_string());
+                    eframe::egui::ComboBox::from_id_source("note_selector")
+                        .selected_text(&self.current_note)
+                        .show_ui(ui, |ui| {
+                            for note in &self.available_notes.clone() {
+                                if ui.selectable_label(self.current_note == *note, note).clicked() {
+                                    // Save current note before switching
+                                    if let Some(ref root) = self.workspace_root {
+                                        if self.auto_save.take_pending().is_some() || !self.notes_content.is_empty() {
+                                            let _ = save_note(root, &self.current_note, &self.notes_content);
+                                        }
+                                        self.current_note = note.clone();
+                                        self.notes_content = load_note(root, &self.current_note);
+                                    }
+                                    // Reset edit states on note switch
+                                    self.renaming_note = false;
+                                    self.delete_confirming = false;
+                                }
+                            }
+                        });
+
+                    // New note button
+                    if ui.small_button("+").on_hover_text(t!("productivity.notes.new_note").to_string()).clicked() {
+                        let new_name = format!("note_{}", self.available_notes.len() + 1);
+                        self.available_notes.push(new_name.clone());
+                        if let Some(ref root) = self.workspace_root {
+                            let _ = save_note(root, &self.current_note, &self.notes_content);
+                        }
+                        self.current_note = new_name;
+                        self.notes_content = String::new();
+                        self.renaming_note = false;
+                        self.delete_confirming = false;
+                    }
+
+                    // Rename button
+                    if ui.small_button("Rn").on_hover_text(t!("productivity.notes.rename_note").to_string()).clicked() {
+                        self.rename_buffer = self.current_note.clone();
+                        self.renaming_note = true;
+                        self.delete_confirming = false;
+                    }
+
+                    // Delete button
+                    if self.available_notes.len() > 1 {
+                        if self.delete_confirming {
+                            if ui.small_button(t!("productivity.notes.confirm").to_string())
+                                .on_hover_text(t!("productivity.notes.confirm_delete").to_string())
+                                .clicked()
+                            {
+                                if let Some(ref root) = self.workspace_root {
+                                    let _ = delete_note(root, &self.current_note);
+                                    self.available_notes.retain(|n| n != &self.current_note);
+                                    self.current_note = self.available_notes.first()
+                                        .cloned()
+                                        .unwrap_or_else(|| "default".to_string());
+                                    self.notes_content = load_note(root, &self.current_note);
+                                }
+                                self.delete_confirming = false;
+                            }
+                        } else if ui.small_button("🗑").on_hover_text(t!("productivity.notes.delete_note").to_string()).clicked() {
+                            self.delete_confirming = true;
+                            self.renaming_note = false;
+                        }
+                    }
+                });
+            }
+        }
+
+        // Notes text area
+        let response = ui.add(
+            eframe::egui::TextEdit::multiline(&mut self.notes_content)
+                .desired_rows(8)
+                .hint_text(t!("productivity.notes.input_hint").to_string())
+                .desired_width(f32::INFINITY)
+        );
+
+        if response.changed() {
+            self.auto_save.mark_edited(self.notes_content.clone());
+        }
+
+        // Auto-save check
+        if self.auto_save.should_save() {
+            if let (Some(ref root), Some(content)) = (&self.workspace_root, self.auto_save.take_pending()) {
+                if let Err(e) = save_note(root, &self.current_note, &content) {
+                    log::warn!("Failed to auto-save note: {}", e);
+                }
+            }
+        }
+
+        // Save tasks if dirty (debounced by frame rate)
+        if self.tasks_dirty {
+            if let Some(ref root) = self.workspace_root {
+                if let Err(e) = save_tasks(root, &self.tasks) {
+                    log::warn!("Failed to save tasks: {}", e);
+                }
+                self.tasks_dirty = false;
+            }
+        }
+
+        needs_repaint
+    }
+
+    /// Render the productivity panel as a floating window (detached mode).
     ///
     /// Returns true if the panel requested a repaint (timer active).
     pub fn show(&mut self, ctx: &eframe::egui::Context, visible: &mut bool) -> bool {
         let was_visible = *visible;
         let mut needs_repaint = false;
 
-        eframe::egui::Window::new("Productivity Hub")
+        eframe::egui::Window::new(t!("productivity.title").to_string())
             .open(visible)
             .default_width(350.0)
             .min_width(250.0)
             .resizable(true)
             .show(ctx, |ui| {
-                // Show message if no workspace
-                if self.workspace_root.is_none() {
-                    ui.label(eframe::egui::RichText::new("Open a workspace to enable task and note persistence")
-                        .weak()
-                        .italics());
-                    ui.separator();
-                }
-
-                // TASKS SECTION
-                ui.heading("Tasks");
-
-                // Completed tasks counter
-                let completed = self.tasks.iter().filter(|t| t.completed).count();
-                let total = self.tasks.len();
-                if total > 0 {
-                    ui.label(format!("{}/{} completed", completed, total));
-                }
-
-                // New task input
+                // Dock button to re-attach to outline panel
                 ui.horizontal(|ui| {
-                    let response = ui.add(
-                        eframe::egui::TextEdit::singleline(&mut self.new_task_input)
-                            .hint_text("Type task or - [ ] task...")
-                            .desired_width(ui.available_width() - 50.0)
-                    );
-
-                    if ui.button("Add").clicked()
-                        || (response.lost_focus() && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
-                    {
-                        self.add_task();
-                    }
-                });
-
-                // Keyboard shortcut hint
-                ui.label(eframe::egui::RichText::new("Tip: Use - [ ] for checkbox, ! or !! for priority").small().weak());
-
-                ui.add_space(4.0);
-
-                // Task list with scroll area
-                eframe::egui::ScrollArea::vertical()
-                    .id_source("tasks_scroll")
-                    .max_height(200.0)
-                    .show(ui, |ui| {
-                        let mut to_delete: Option<usize> = None;
-                        let mut to_move_up: Option<usize> = None;
-                        let mut to_move_down: Option<usize> = None;
-                        let tasks_len = self.tasks.len();
-
-                        for (i, task) in self.tasks.iter_mut().enumerate() {
-                            ui.horizontal(|ui| {
-                                // Move up button (disabled for first item)
-                                ui.add_enabled_ui(i > 0, |ui| {
-                                    if ui.small_button("^").on_hover_text("Move up").clicked() {
-                                        to_move_up = Some(i);
-                                    }
-                                });
-
-                                // Move down button (disabled for last item)
-                                ui.add_enabled_ui(i < tasks_len - 1, |ui| {
-                                    if ui.small_button("v").on_hover_text("Move down").clicked() {
-                                        to_move_down = Some(i);
-                                    }
-                                });
-
-                                // Checkbox
-                                if ui.checkbox(&mut task.completed, "").changed() {
-                                    self.tasks_dirty = true;
-                                }
-
-                                // Priority indicator
-                                match task.priority {
-                                    2 => { ui.colored_label(eframe::egui::Color32::RED, "!!"); }
-                                    1 => { ui.colored_label(eframe::egui::Color32::YELLOW, "!"); }
-                                    _ => {}
-                                }
-
-                                // Task text (strikethrough if completed)
-                                let text = if task.completed {
-                                    eframe::egui::RichText::new(&task.text).strikethrough()
-                                } else {
-                                    eframe::egui::RichText::new(&task.text)
-                                };
-                                ui.label(text);
-
-                                // Delete button (right-aligned)
-                                ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
-                                    if ui.small_button("x").clicked() {
-                                        to_delete = Some(i);
-                                    }
-                                });
-                            });
-                        }
-
-                        // Handle moves after the loop
-                        if let Some(i) = to_move_up {
-                            if i > 0 {
-                                self.tasks.swap(i, i - 1);
-                                self.tasks_dirty = true;
-                            }
-                        }
-                        if let Some(i) = to_move_down {
-                            if i < self.tasks.len() - 1 {
-                                self.tasks.swap(i, i + 1);
-                                self.tasks_dirty = true;
-                            }
-                        }
-
-                        if let Some(index) = to_delete {
-                            self.delete_task(index);
-                        }
-
-                        if self.tasks.is_empty() {
-                            ui.label(eframe::egui::RichText::new("No tasks yet").weak());
+                    ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                eframe::egui::Button::new(
+                                    eframe::egui::RichText::new(t!("productivity.notes.dock").to_string())
+                                        .size(10.0)
+                                        .weak(),
+                                )
+                                .frame(false),
+                            )
+                            .on_hover_text(t!("productivity.notes.dock_tooltip").to_string())
+                            .clicked()
+                        {
+                            self.dock_requested = true;
                         }
                     });
-
-                ui.separator();
-
-                // POMODORO SECTION
-                ui.heading("Pomodoro Timer");
-
-                ui.horizontal(|ui| {
-                    // Timer display
-                    let time_text = self.timer.format_remaining();
-                    let label = if self.timer.is_work() {
-                        format!("Work: {}", time_text)
-                    } else if self.timer.is_break() {
-                        format!("Break: {}", time_text)
-                    } else {
-                        "Ready".to_string()
-                    };
-
-                    ui.label(eframe::egui::RichText::new(label).size(24.0).strong());
-
-                    // Cycles counter
-                    if self.timer.cycles() > 0 {
-                        ui.label(format!("Cycles: {}", self.timer.cycles()));
-                    }
                 });
 
-                ui.horizontal(|ui| {
-                    if self.timer.is_active() {
-                        if ui.button("Stop").clicked() {
-                            self.timer.stop();
-                        }
-
-                        // Request repaint for countdown
-                        ctx.request_repaint_after(Duration::from_secs(1));
-                        needs_repaint = true;
-
-                        // Check completion
-                        if self.timer.is_complete() {
-                            // Play notification sound using the re-exported function
-                            crate::terminal::play_notification(None);
-
-                            // Auto-transition
-                            if self.timer.is_work() {
-                                self.timer.increment_cycle();
-                                self.timer.start_break();
-                            } else {
-                                self.timer.stop();
-                            }
-                        }
-                    } else {
-                        if ui.button("Start Work (25m)").clicked() {
-                            self.timer.start_work();
-                        }
-                        if ui.button("Start Break (5m)").clicked() {
-                            self.timer.start_break();
-                        }
-                    }
-                });
-
-                ui.separator();
-
-                // NOTES SECTION
-                ui.heading("Quick Notes");
-
-                // Note selector (if multiple notes exist)
-                if self.available_notes.len() > 1 || self.workspace_root.is_some() {
-                    ui.horizontal(|ui| {
-                        ui.label("Note:");
-                        eframe::egui::ComboBox::from_id_source("note_selector")
-                            .selected_text(&self.current_note)
-                            .show_ui(ui, |ui| {
-                                for note in &self.available_notes.clone() {
-                                    if ui.selectable_label(self.current_note == *note, note).clicked() {
-                                        // Save current note before switching
-                                        if let Some(ref root) = self.workspace_root {
-                                            if self.auto_save.take_pending().is_some() || !self.notes_content.is_empty() {
-                                                let _ = save_note(root, &self.current_note, &self.notes_content);
-                                            }
-                                            self.current_note = note.clone();
-                                            self.notes_content = load_note(root, &self.current_note);
-                                        }
-                                    }
-                                }
-                            });
-
-                        // New note button
-                        if ui.small_button("+").clicked() {
-                            // Create a new note with a unique name
-                            let new_name = format!("note_{}", self.available_notes.len() + 1);
-                            self.available_notes.push(new_name.clone());
-                            if let Some(ref root) = self.workspace_root {
-                                let _ = save_note(root, &self.current_note, &self.notes_content);
-                            }
-                            self.current_note = new_name;
-                            self.notes_content = String::new();
-                        }
-                    });
-                }
-
-                // Notes text area
-                let response = ui.add(
-                    eframe::egui::TextEdit::multiline(&mut self.notes_content)
-                        .desired_rows(8)
-                        .hint_text("Type your notes here...")
-                        .desired_width(f32::INFINITY)
-                );
-
-                if response.changed() {
-                    self.auto_save.mark_edited(self.notes_content.clone());
-                }
-
-                // Auto-save check
-                if self.auto_save.should_save() {
-                    if let (Some(ref root), Some(content)) = (&self.workspace_root, self.auto_save.take_pending()) {
-                        if let Err(e) = save_note(root, &self.current_note, &content) {
-                            log::warn!("Failed to auto-save note: {}", e);
-                        }
-                    }
-                }
-
-                // Save tasks if dirty (debounced by frame rate)
-                if self.tasks_dirty {
-                    if let Some(ref root) = self.workspace_root {
-                        if let Err(e) = save_tasks(root, &self.tasks) {
-                            log::warn!("Failed to save tasks: {}", e);
-                        }
-                        self.tasks_dirty = false;
-                    }
-                }
+                needs_repaint = self.show_content(ui, ctx);
             });
 
         // Save when panel closes (was visible, now hidden)

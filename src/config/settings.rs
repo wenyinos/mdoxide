@@ -631,7 +631,7 @@ impl ShortcutCommand {
             // Formatting
             ShortcutCommand::FormatBold => KeyBinding::new(M::ctrl(), B),
             ShortcutCommand::FormatItalic => KeyBinding::new(M::ctrl(), I),
-            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl(), Backtick),
+            ShortcutCommand::FormatInlineCode => KeyBinding::new(M::ctrl_shift(), Backtick),
             ShortcutCommand::FormatCodeBlock => KeyBinding::new(M::ctrl_shift(), C),
             ShortcutCommand::FormatLink => KeyBinding::new(M::ctrl(), K),
             ShortcutCommand::FormatImage => KeyBinding::new(M::ctrl_shift(), K),
@@ -651,7 +651,7 @@ impl ShortcutCommand {
             // Other
             ShortcutCommand::OpenSettings => KeyBinding::new(M::ctrl(), Comma),
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
-            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), E),
+            ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
             ShortcutCommand::InsertToc => KeyBinding::new(M::ctrl_shift(), U),
         }
     }
@@ -754,6 +754,12 @@ pub enum Language {
     /// Simplified Chinese (简体中文)
     #[serde(rename = "zh-Hans")]
     ChineseSimplified,
+    /// German (Deutsch)
+    #[serde(rename = "de")]
+    German,
+    /// Japanese (日本語)
+    #[serde(rename = "ja")]
+    Japanese,
 }
 
 impl Language {
@@ -762,6 +768,8 @@ impl Language {
         match self {
             Language::English => "en",
             Language::ChineseSimplified => "zh_Hans",
+            Language::German => "de",
+            Language::Japanese => "ja",
         }
     }
 
@@ -770,6 +778,32 @@ impl Language {
         match self {
             Language::English => "English",
             Language::ChineseSimplified => "简体中文",
+            Language::German => "Deutsch",
+            Language::Japanese => "日本語",
+        }
+    }
+
+    /// Latin-only name for use in the language selector dropdown.
+    /// Avoids loading CJK fonts just to render the selector; always legible.
+    pub fn selector_display_name(&self) -> &'static str {
+        match self {
+            Language::English => "English",
+            Language::ChineseSimplified => "Chinese (Simplified)",
+            Language::German => "German",
+            Language::Japanese => "Japanese",
+        }
+    }
+
+    /// Returns the CJK font needed for this language's UI, if any.
+    ///
+    /// When the user switches to a CJK language, the UI labels (from i18n)
+    /// contain CJK characters that require the corresponding font to be loaded.
+    /// Returns `None` for non-CJK languages (English, German, etc.).
+    pub fn required_cjk_font(&self) -> Option<CjkFontPreference> {
+        match self {
+            Language::ChineseSimplified => Some(CjkFontPreference::SimplifiedChinese),
+            Language::Japanese => Some(CjkFontPreference::Japanese),
+            _ => None,
         }
     }
 
@@ -778,6 +812,8 @@ impl Language {
         &[
             Language::English,
             Language::ChineseSimplified,
+            Language::German,
+            Language::Japanese,
         ]
     }
 
@@ -809,6 +845,8 @@ impl Language {
         match primary_lang {
             "en" => Some(Language::English),
             "zh" => Some(Language::ChineseSimplified),
+            "de" => Some(Language::German),
+            "ja" => Some(Language::Japanese),
             _ => None,
         }
     }
@@ -1193,7 +1231,7 @@ pub enum CjkFontPreference {
 }
 
 impl CjkFontPreference {
-    /// Get the display name for the preference.
+    /// Get the display name for the preference (may include native script).
     pub fn display_name(&self) -> &'static str {
         match self {
             CjkFontPreference::Auto => "Auto (System Locale)",
@@ -1201,6 +1239,18 @@ impl CjkFontPreference {
             CjkFontPreference::SimplifiedChinese => "Simplified Chinese (简体中文)",
             CjkFontPreference::TraditionalChinese => "Traditional Chinese (繁體中文)",
             CjkFontPreference::Japanese => "Japanese (日本語)",
+        }
+    }
+
+    /// Latin-only name for use in the CJK preference dropdown.
+    /// Avoids loading CJK fonts just to render the selector; always legible.
+    pub fn selector_display_name(&self) -> &'static str {
+        match self {
+            CjkFontPreference::Auto => "Auto (System Locale)",
+            CjkFontPreference::Korean => "Korean (Hangul)",
+            CjkFontPreference::SimplifiedChinese => "Simplified Chinese",
+            CjkFontPreference::TraditionalChinese => "Traditional Chinese",
+            CjkFontPreference::Japanese => "Japanese",
         }
     }
 
@@ -1287,7 +1337,7 @@ impl ViewMode {
         match self {
             ViewMode::Raw => "📝",
             ViewMode::Rendered => "👁",
-            ViewMode::Split => "⫿",
+            ViewMode::Split => "▌▐", // Left + right half blocks (split panes); widely supported
         }
     }
 
@@ -1591,6 +1641,13 @@ pub struct Settings {
     pub syntax_theme: String,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Format Toolbar
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether the format toolbar at the bottom of the raw editor is visible
+    #[serde(default = "default_true")]
+    pub format_toolbar_visible: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Outline Panel
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether the outline panel is visible
@@ -1778,6 +1835,16 @@ pub struct Settings {
     pub snippets_enabled: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Vim Mode Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether Vim keybinding mode is enabled.
+    /// When enabled, the editor uses modal editing (Normal/Insert/Visual modes)
+    /// with Vim-style keybindings (hjkl, dd, yy, p, i, Esc, v/V, /search).
+    /// Default editing behavior is preserved when disabled.
+    #[serde(default)]
+    pub vim_mode: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Keyboard Shortcuts Settings
     // ─────────────────────────────────────────────────────────────────────────
     /// Custom keyboard shortcuts configuration.
@@ -1860,6 +1927,10 @@ pub struct Settings {
     /// Whether the productivity hub (tasks/pomodoro/notes) panel is visible
     #[serde(default)]
     pub productivity_panel_visible: bool,
+
+    /// Whether the productivity hub is docked in the outline panel (true) or floating (false)
+    #[serde(default = "default_true")]
+    pub productivity_panel_docked: bool,
 }
 
 impl Default for Settings {
@@ -1893,6 +1964,9 @@ impl Default for Settings {
 
             // Syntax Highlighting
             syntax_theme: String::from("base16-ocean.dark"),
+
+            // Format Toolbar
+            format_toolbar_visible: true, // Shown by default
 
             // Outline Panel
             outline_enabled: false, // Hidden by default
@@ -1964,6 +2038,9 @@ impl Default for Settings {
             // Snippets Settings
             snippets_enabled: true, // Snippet expansion enabled by default
 
+            // Vim Mode Settings
+            vim_mode: false, // Disabled by default (standard editing preserved)
+
             // Keyboard Shortcuts Settings
             keyboard_shortcuts: KeyboardShortcuts::default(),
 
@@ -1996,6 +2073,7 @@ impl Default for Settings {
             database_panel_visible: false,
             ssh_panel_visible: false,
             productivity_panel_visible: false,
+            productivity_panel_docked: true,
         }
     }
 }
@@ -2523,7 +2601,7 @@ mod tests {
         assert_eq!(ViewMode::Split.label(), "Split");
         assert_eq!(ViewMode::Raw.icon(), "📝");
         assert_eq!(ViewMode::Rendered.icon(), "👁");
-        assert_eq!(ViewMode::Split.icon(), "⫿");
+        assert_eq!(ViewMode::Split.icon(), "▌▐");
     }
 
     #[test]
@@ -3155,8 +3233,6 @@ mod tests {
         // Currently unsupported locales
         assert_eq!(Language::from_locale_code("ko"), None);
         assert_eq!(Language::from_locale_code("fr"), None);
-        assert_eq!(Language::from_locale_code("ja"), None);
-        assert_eq!(Language::from_locale_code("de"), None);
     }
 
     #[test]
@@ -3165,6 +3241,15 @@ mod tests {
         assert_eq!(Language::from_locale_code("zh-CN"), Some(Language::ChineseSimplified));
         assert_eq!(Language::from_locale_code("zh_Hans"), Some(Language::ChineseSimplified));
         assert_eq!(Language::from_locale_code("zh"), Some(Language::ChineseSimplified));
+
+        // German
+        assert_eq!(Language::from_locale_code("de"), Some(Language::German));
+        assert_eq!(Language::from_locale_code("de-DE"), Some(Language::German));
+        assert_eq!(Language::from_locale_code("de_AT"), Some(Language::German));
+
+        // Japanese
+        assert_eq!(Language::from_locale_code("ja"), Some(Language::Japanese));
+        assert_eq!(Language::from_locale_code("ja-JP"), Some(Language::Japanese));
     }
 
     #[test]
@@ -3587,6 +3672,7 @@ mod tests {
         assert_eq!(settings.database_panel_visible, false);
         assert_eq!(settings.ssh_panel_visible, false);
         assert_eq!(settings.productivity_panel_visible, false);
+        assert_eq!(settings.productivity_panel_docked, true);
     }
 
     #[test]

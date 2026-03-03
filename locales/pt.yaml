@@ -1,0 +1,132 @@
+# Ferrite - English (Base Language)
+# This file contains all user-facing strings for internationalization.
+# Naming convention: category.subcategory.key (e.g., menu.file.open)
+
+# Application metadata
+app:
+  name: "Ferrite"
+
+# Menu bar items
+menu:
+  file:
+    label: "Arquivo"
+    open: "Abrir..."
+    save: "Salvar"
+    save_as: "Salvar Como..."
+    recent: "Arquivos Recentes"
+    export: "Exportar"
+    export_html: "Exportar para HTML..."
+    export_clipboard: "Copiar como HTML"
+  edit:
+    label: "Editar"
+  format:
+    label: "Formatar"
+
+# Toolbar buttons
+
+# View mode labels
+
+# Status bar
+
+# File dialogs
+  # File operation dialogs
+  # Go to Line dialog
+
+# Settings panel
+    # CJK Paragraph Indentation
+
+# Find and Replace panel
+
+# Outline panel
+
+# Document statistics
+
+# File tree / Sidebar
+
+# Quick switcher
+
+# Search in files
+
+# About dialog
+  # Links section
+  # Built with section
+  # License section
+
+# Keyboard shortcuts
+  # Categories
+  # Command names (used in keyboard settings panel)
+    # File operations
+    # Navigation
+    # View
+    # Edit
+    # Search
+    # Formatting
+    # Folding
+    # Other
+  # File shortcuts (for help panel)
+  # Edit shortcuts (for help panel)
+  # View shortcuts (for help panel)
+  # Formatting shortcuts (for help panel)
+  # Workspace shortcuts (for help panel)
+  # Navigation shortcuts (for help panel)
+
+# Error messages
+
+# Notifications / Toasts
+
+# Tree viewer (JSON/YAML/TOML)
+
+# Git integration
+
+# Accessibility
+
+# Recovery and session dialogs
+
+# Common buttons and actions
+
+# Code blocks and widgets
+
+# CSV Viewer
+
+# Pipeline panel
+
+# Encoding
+
+# Tab context menu
+
+# Mermaid diagrams
+
+# Table of Contents
+
+# Formatting toolbar tooltips
+
+# Workspace
+
+# Zen mode
+
+# Log levels (for settings)
+
+# Drag and drop
+
+# Time relative strings
+
+# Tooltips
+
+# Ribbon toolbar additions
+
+# NOTE: New keys were added to notification, status, outline, and widgets sections in en.yaml (v0.2.7).
+# These keys will fall back to English until translated. Check en.yaml for reference.
+
+# Welcome page (first launch)
+
+# Terminal panel
+
+# Productivity panel
+
+# Echo/AI placeholder (development)
+
+# Title bar
+
+# Error dialogs
+
+# File dialog titles and filters

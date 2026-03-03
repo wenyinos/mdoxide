@@ -1,6 +1,6 @@
 [package]
 name = "ferrite"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 description = "A fast, lightweight text editor for Markdown, JSON, and more"
 repository = "https://github.com/OlaProeis/Ferrite"
@@ -52,8 +52,8 @@ walkdir = "2"
 # Git integration (no SSH/HTTPS - we only need local repo status)
 git2 = { version = "0.19", default-features = false }
 
-# Icon loading
-image = { version = "0.25", default-features = false, features = ["png"] }
+# Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 font-kit = "0.14.3"
 
 # Internationalization
@@ -86,6 +86,9 @@ chardetng = "0.1"
 portable-pty = "0.8"
 vte = "0.13"
 ctrlc = "3.5.1"
+
+# HTTP client for update checking (lightweight, blocking)
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
 
 # Async runtime for background workers (optional, feature-gated)
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync", "time"], optional = true }

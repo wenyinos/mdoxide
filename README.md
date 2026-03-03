@@ -1,5 +1,7 @@
 # Ferrite
 
+**English** | [简体中文](README.zh-CN.md)
+
 <div align="center">
 
 [![Website](https://img.shields.io/badge/website-getferrite.dev-blue?style=flat-square)](https://getferrite.dev)
@@ -18,24 +20,26 @@ A fast, lightweight text editor for Markdown, JSON, YAML, and TOML files. Built 
 > ⚠️ **Platform Note:** Ferrite is developed and tested on **Windows** and **Linux**. macOS support is experimental. If you encounter issues, please [report them](https://github.com/OlaProeis/Ferrite/issues).
 
 <details>
-<summary><strong>🛡️ Antivirus False Positives</strong></summary>
+<summary><strong>🛡️ Code Signing & Antivirus</strong></summary>
 
-Some antivirus software (particularly Windows Defender) may flag Ferrite as suspicious. **This is a false positive.** Here's why it happens and what we've done about it:
+Starting with v0.2.6.1, **all Windows releases are digitally signed** with a certificate from [SignPath Foundation](https://signpath.org). This means:
 
-### Why This Happens
-- **Live Pipeline feature**: Ferrite's pipeline feature lets you pipe document content through shell commands (like `jq` or `grep`). This uses `cmd.exe /C` on Windows, which ML-based antivirus detection can mistake for trojan behavior.
-- **Rust compilation patterns**: Rust binaries can trigger heuristic detections due to their unique compilation characteristics.
+- **Windows SmartScreen** recognizes the publisher — no more "Unknown publisher" warnings
+- **Antivirus false positives** are significantly reduced thanks to the trusted code signature
+- **Integrity verification** — you can verify that the binary hasn't been tampered with
 
-### What We've Done
-- **Reported to Microsoft**: We've submitted Ferrite to Microsoft's Security Intelligence portal as a false positive (January 2026).
-- **Adjusted build settings**: We've modified our release profile to avoid patterns that trigger ML detection (disabled symbol stripping, switched from size to speed optimization).
-- **Open source transparency**: All code is publicly auditable at [github.com/OlaProeis/Ferrite](https://github.com/OlaProeis/Ferrite).
+### Previous False Positives
+Older unsigned builds may still trigger antivirus detections. This was caused by:
+- **Live Pipeline feature**: Uses `cmd.exe /C` on Windows for shell commands, which ML-based detection can misidentify
+- **Rust compilation patterns**: Rust binaries can trigger heuristic detections due to unique characteristics
 
-### If You're Affected
+We've addressed this through code signing, build profile adjustments (disabled symbol stripping, speed optimization), and reporting to Microsoft's Security Intelligence portal.
+
+### If You're Still Affected
 If Windows Defender quarantines Ferrite:
-1. **Verify the source**: Only download from [official GitHub releases](https://github.com/OlaProeis/Ferrite/releases)
-2. **Add an exclusion**: Windows Security → Virus & threat protection → Exclusions → Add the Ferrite executable
-3. **Check VirusTotal**: Upload the file to [VirusTotal](https://www.virustotal.com) - legitimate Ferrite builds should show clean or near-clean results from most scanners
+1. **Upgrade**: Download the latest signed release from [GitHub Releases](https://github.com/OlaProeis/Ferrite/releases)
+2. **Verify the signature**: Right-click `ferrite.exe` → Properties → Digital Signatures → should show "SignPath Foundation"
+3. **Check VirusTotal**: Upload the file to [VirusTotal](https://www.virustotal.com) — signed builds should show clean results
 
 Ferrite does **NOT** access passwords, browser data, or make network connections. The application is fully offline and only accesses files you explicitly open.
 
@@ -84,9 +88,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.6 Released:** **New Custom Editor Engine** with massive performance improvements for large files (80MB file uses ~80MB RAM, was 460MB+), **Multi-Cursor Editing** (Ctrl+Click to add cursors), **Code Folding** with content hiding (click ▶/▼ indicators), improved IME/CJK input, and cursor blink/auto-focus fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.7 (in progress):** **Welcome page** for first-launch configuration (theme, language, editor prefs). **Wikilinks** and **backlinks panel**. **GitHub-style callouts**. Image rendering in preview. **Nix/NixOS flake support**. Flowchart modular refactor. Multiple scrollbar and word-wrap crash fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 📦 **v0.2.5.3 Highlights:** View Mode Segmented Control, 100+ syntax languages, 25+ syntax themes, Flathub submission.
+> 📦 **v0.2.6 Highlights:** New Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
 ## Features
 
@@ -104,7 +108,7 @@ This transparency is intentional — I want others to learn from (and improve up
 - **Zen Mode** - Distraction-free writing with centered text column
 
 ### Editor Features
-- **Syntax Highlighting** - Full-file syntax highlighting for 40+ languages (Rust, Python, JavaScript, Go, etc.)
+- **Syntax Highlighting** - Full-file syntax highlighting for 100+ languages (Rust, Python, JavaScript, Go, TypeScript, PowerShell, and more)
 - **Code Folding** - Fold/unfold regions with gutter indicators (▶/▼) for headings, code blocks, and lists; collapsed content is hidden
 - **Semantic Minimap** - Navigation panel with clickable header labels, content type indicators, and text density bars (switchable to VS Code-style pixel view)
 - **Multi-Cursor Editing** - Ctrl+Click to add multiple cursors; type, delete, and navigate at all positions simultaneously
@@ -243,6 +247,27 @@ yay -Sy ferrite
 yay -Sy ferrite-bin
 ```
 
+#### Nix / NixOS (official flake)
+
+```bash
+# Run Ferrite directly from GitHub (no install)
+nix run github:OlaProeis/Ferrite
+
+# Drop into a shell that exposes ferrite in PATH
+nix shell github:OlaProeis/Ferrite
+```
+
+From a local clone:
+
+```bash
+# Build package output
+nix build .#ferrite
+./result/bin/ferrite
+
+# Enter development shell (Rust toolchain + system deps)
+nix develop
+```
+
 #### Other Linux (tar.gz)
 
 ```bash
@@ -259,6 +284,8 @@ tar -xzf ferrite-linux-x64.tar.gz
 
 - **Rust 1.70+** - Install from [rustup.rs](https://rustup.rs/)
 - **Platform-specific dependencies:**
+
+**Nix users:** you can skip manual dependency installation and use `nix develop` from the repository root (see `flake.nix`).
 
 **Windows:**
 - Visual Studio Build Tools 2019+ with C++ workload
@@ -489,6 +516,9 @@ cargo clippy
 cargo test
 cargo build
 
+# Optional (Nix users): validate flake outputs
+nix flake check
+
 # Commit and push
 git commit -m "feat: your feature description"
 git push origin feature/your-feature
@@ -498,7 +528,7 @@ git push origin feature/your-feature
 
 ## Tech Stack
 
-Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, and syntect for syntax highlighting.
+Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, ropey for rope-based text editing, and syntect for syntax highlighting.
 
 <details>
 <summary><strong>Full tech stack</strong></summary>
@@ -507,14 +537,27 @@ Built with Rust 1.70+, egui/eframe for GUI, comrak for Markdown parsing, and syn
 |-----------|------------|
 | Language | Rust 1.70+ |
 | GUI Framework | egui 0.28 + eframe 0.28 |
+| Text Buffer | ropey 1.6 (rope data structure) |
 | Markdown Parser | comrak 0.22 |
-| Syntax Highlighting | syntect 5.1 |
+| Syntax Highlighting | syntect 5.1 + two-face 0.5 |
 | Git Integration | git2 0.19 |
+| Terminal PTY | portable-pty 0.8 |
+| Terminal ANSI Parser | vte 0.13 |
+| Encoding Detection | encoding_rs 0.8 + chardetng 0.1 |
+| Internationalization | rust-i18n 3 + sys-locale 0.3 |
 | CLI Parsing | clap 4 |
 | File Dialogs | rfd 0.14 |
 | Clipboard | arboard 3 |
 | File Watching | notify 6 |
 | Fuzzy Matching | fuzzy-matcher 0.3 |
+| HTTP Client | ureq 2 (update checker) |
+| Hashing | blake3 1.5 (Mermaid caching) |
+| Date/Time | chrono 0.4 |
+| CSV Parsing | csv 1.3 |
+| Color Palette | palette 0.7 |
+| Font Enumeration | font-kit 0.14 |
+| Allocator (Windows) | mimalloc 0.1 |
+| Allocator (Unix) | tikv-jemallocator 0.6 |
 
 </details>
 
@@ -539,7 +582,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Cursor](https://cursor.com) - AI-powered code editor
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) - AI task management for development workflows
 
+### Contributors
+- [@liuxiaopai-ai](https://github.com/liuxiaopai-ai) — Nix/NixOS flake support for reproducible builds and dev shells ([PR #92](https://github.com/OlaProeis/Ferrite/pull/92))
+- [@blizzard007dev](https://github.com/blizzard007dev) — Welcome page for first-launch configuration ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80))
+- [@wolverin0](https://github.com/wolverin0) — Integrated Terminal Workspace & Productivity Hub ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74))
+- [@abcd-ca](https://github.com/abcd-ca) — Delete Line, Move Line, macOS file associations ([PR #29](https://github.com/OlaProeis/Ferrite/pull/29), [#30](https://github.com/OlaProeis/Ferrite/pull/30))
+- [@SteelCrab](https://github.com/SteelCrab) — CJK character rendering ([PR #8](https://github.com/OlaProeis/Ferrite/pull/8))
+
 </details>
+
+## Sponsors
+
+<table>
+  <tr>
+    <td>
+      <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite" target="_blank"><img src="https://signpath.org/assets/favicon-50x50.png" alt="SignPath" width="50" height="50" /></a>
+    </td>
+    <td>
+      Free code signing on Windows provided by <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath.io</a>, certificate by <a href="https://signpath.org/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath Foundation</a>
+    </td>
+  </tr>
+</table>
 
 ---
 

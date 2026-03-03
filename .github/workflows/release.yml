@@ -1,8 +1,12 @@
 # Release workflow - builds and publishes when a version tag is pushed
 # Usage: git tag v0.1.0 && git push --tags
 #
-# This workflow builds for all platforms, signs Windows artifacts via SignPath,
-# and creates a GitHub release with all artifacts.
+# This workflow builds for all platforms, signs Windows artifacts via SignPath
+# (production certificate from SignPath Foundation), and creates a GitHub release.
+#
+# Required secrets:
+#   SIGNPATH_API_TOKEN        - API token from SignPath.io (submitter permissions)
+#   SIGNPATH_ORGANIZATION_ID  - Organization ID from SignPath.io dashboard
 
 name: Release
 
@@ -78,6 +82,42 @@ jobs:
       - name: Copy MSI to workspace root
         run: copy target\wix\*.msi .\ferrite-windows-x64.msi
 
+      - name: Build PortableApps.com installer
+        shell: pwsh
+        run: |
+          # Extract version from tag (strip leading 'v')
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          Write-Output "Building PAF installer for version $version"
+
+          # Generate PAF icons from the existing 256px source icon
+          pip install --quiet Pillow
+          python -c @"
+          from PIL import Image
+          src = 'assets/icons/icon_256.png'
+          dst = 'portable/FerriteMDPortable/App/AppInfo'
+          img = Image.open(src).convert('RGBA')
+          for size, name in [(16,'appicon_16.png'),(32,'appicon_32.png'),(128,'appicon_128.png')]:
+              img.resize((size,size), Image.Resampling.LANCZOS).save(f'{dst}/{name}','PNG')
+          sizes = [(16,16),(32,32),(48,48),(256,256)]
+          imgs = [img.resize(s, Image.Resampling.LANCZOS) for s in sizes]
+          imgs[0].save(f'{dst}/appicon.ico', format='ICO', sizes=sizes, append_images=imgs[1:])
+          "@
+
+          # Update appinfo.ini version fields to match the release tag
+          $appinfo = Get-Content portable/FerriteMDPortable/App/AppInfo/appinfo.ini -Raw
+          $appinfo = $appinfo -replace 'PackageVersion=.*', "PackageVersion=$version.0"
+          $appinfo = $appinfo -replace 'DisplayVersion=.*', "DisplayVersion=$version"
+          Set-Content -Path portable/FerriteMDPortable/App/AppInfo/appinfo.ini -Value $appinfo -NoNewline
+
+          # Copy the release binary into the PAF structure
+          Copy-Item target\release\ferrite.exe portable\FerriteMDPortable\App\Ferrite\ferrite.exe
+
+          # Compile the .paf.exe installer with NSIS
+          choco install nsis -y --no-progress
+          $nsisExe = "C:\Program Files (x86)\NSIS\makensis.exe"
+          & $nsisExe /DAPPVERSION=$version portable\installer.nsi
+          Copy-Item "portable\FerriteMDPortable_${version}_English.paf.exe" .\ferrite-portableapps.paf.exe
+
       # Upload Windows artifacts together for SignPath signing
       - name: Upload unsigned Windows artifacts for signing
         id: upload-unsigned-windows
@@ -87,22 +127,27 @@ jobs:
           path: |
             ferrite-portable-windows-x64.zip
             ferrite-windows-x64.msi
+            ferrite-portableapps.paf.exe
 
   # Sign Windows artifacts with SignPath (OSS code signing)
   sign-windows:
     name: Sign Windows Artifacts
     needs: [build-windows]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for SignPath trusted build verification (OIDC)
+      actions: read      # Required for SignPath to read job details
+      contents: read     # Required for SignPath to download artifacts
     
     steps:
       - name: Submit to SignPath
         id: signpath
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
           project-slug: 'Ferrite'
-          signing-policy-slug: 'test-signing'
+          signing-policy-slug: 'release-signing'
           github-artifact-id: '${{ needs.build-windows.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: 'signed'
@@ -121,6 +166,12 @@ jobs:
         with:
           name: ferrite-windows-msi
           path: signed/ferrite-windows-x64.msi
+
+      - name: Upload signed PortableApps installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrite-portableapps
+          path: signed/ferrite-portableapps.paf.exe
 
   build-linux:
     name: Build Linux
@@ -292,6 +343,17 @@ jobs:
         with:
           name: ferrite-macos-x64
 
+      - name: Download signed PortableApps installer
+        uses: actions/download-artifact@v4
+        with:
+          name: ferrite-portableapps
+
+      - name: Rename PortableApps installer with version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          mv ferrite-portableapps.paf.exe "FerriteMDPortable_${VERSION}_English.paf.exe"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -307,3 +369,4 @@ jobs:
             ferrite-editor.x86_64.rpm
             ferrite-macos-arm64.tar.gz
             ferrite-macos-x64.tar.gz
+            FerriteMDPortable_*_English.paf.exe

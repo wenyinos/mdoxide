@@ -5,6 +5,7 @@
 
 use crate::terminal::{TerminalManager, TerminalWidget, TerminalLayout, MoveDirection, SoundNotifier};
 use eframe::egui::{self, Color32, Id, Ui};
+use rust_i18n::t;
 
 /// Represents which drop zone is being hovered during a drag operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +94,10 @@ pub struct TerminalPanelState {
     pub last_auto_save: Option<std::time::Instant>,
     /// Sound notifier for prompt detection
     pub sound_notifier: SoundNotifier,
+    /// Pending error message to display as toast (consumed by app after show())
+    pub pending_error: Option<String>,
+    /// IDs of terminals that have been reported as exited (to avoid duplicate toasts)
+    exited_terminal_ids: std::collections::HashSet<usize>,
 }
 
 impl Default for TerminalPanelState {
@@ -119,6 +124,8 @@ impl Default for TerminalPanelState {
             workspace_layout_loaded: false,
             last_auto_save: None,
             sound_notifier: SoundNotifier::new(),
+            pending_error: None,
+            exited_terminal_ids: std::collections::HashSet::new(),
         }
     }
 }
@@ -155,6 +162,52 @@ impl TerminalPanelState {
         self.visible = false;
     }
 
+    /// Take the pending error message (if any), clearing it.
+    /// Call this after show() to display errors via toast.
+    pub fn take_error(&mut self) -> Option<String> {
+        self.pending_error.take()
+    }
+
+    /// Set an error message with a user-friendly recovery hint.
+    fn report_error(&mut self, operation: &str, error: &str) {
+        let hint = Self::recovery_hint(error);
+        let user_msg = t!("terminal.error.format", operation = operation, hint = hint).to_string();
+        log::error!("{}: {}", operation, error);
+        self.pending_error = Some(user_msg);
+    }
+
+    /// Generate a user-friendly recovery hint based on the error message.
+    fn recovery_hint(error: &str) -> &'static str {
+        let error_lower = error.to_lowercase();
+        if error_lower.contains("spawn") || error_lower.contains("not found") || error_lower.contains("no such file") {
+            "Check that the shell is installed and the path is correct"
+        } else if error_lower.contains("pty") || error_lower.contains("pseudo") {
+            "PTY allocation failed. Try closing other terminals or restarting the app"
+        } else if error_lower.contains("permission") || error_lower.contains("access denied") {
+            "Permission denied. Check that you have access to run the shell"
+        } else if error_lower.contains("writer") || error_lower.contains("reader") {
+            "Terminal I/O failed. Try closing and reopening the terminal"
+        } else if error_lower.contains("layout") || error_lower.contains("split") {
+            "Failed to modify terminal layout"
+        } else {
+            "An unexpected error occurred. Try restarting the terminal"
+        }
+    }
+
+    /// Check for terminals that have exited and return their info for notification.
+    /// Call this periodically (e.g., after poll_all) to detect dead terminals.
+    pub fn check_exited_terminals(&mut self) -> Vec<String> {
+        let mut exited = Vec::new();
+
+        for (id, is_running, title) in self.manager.terminal_statuses() {
+            if !is_running && !self.exited_terminal_ids.contains(&id) {
+                self.exited_terminal_ids.insert(id);
+                exited.push(t!("terminal.process_exited", title = title).to_string());
+            }
+        }
+        exited
+    }
+
     /// Initialize the first terminal if needed.
     /// First tries to load workspace layout from .ferrite/terminal-layout.json,
     /// otherwise creates a new default terminal.
@@ -175,7 +228,7 @@ impl TerminalPanelState {
                     log::info!("Terminal initialized in {:?}", self.working_dir);
                 }
                 Err(e) => {
-                    log::error!("Failed to initialize terminal: {}", e);
+                    self.report_error("Failed to start terminal", &e);
                 }
             }
         }
@@ -379,7 +432,7 @@ impl TerminalPanelState {
         }).collect();
 
         let workspace = crate::terminal::SavedWorkspace {
-            name: "Workspace".to_string(),
+            name: t!("terminal.workspace.default_name").to_string(),
             tabs,
             floating_windows,
             active_tab_index: self.manager.active_index(),
@@ -469,7 +522,7 @@ impl TerminalPanel {
                 let (screen_arc, is_waiting) = if let Some(terminal) = manager.terminal_mut_by_id(*id) {
                     (terminal.screen().clone(), terminal.is_waiting_for_input())
                 } else {
-                    ui.label("Terminal not found");
+                    ui.label(t!("terminal.not_found").to_string());
                     return false;
                 };
 
@@ -1270,7 +1323,7 @@ fn handle_shortcuts(
                             }
 
                             tab_response.context_menu(|ui: &mut Ui| {
-                                if ui.button("New Terminal Here").clicked() {
+                                if ui.button(t!("terminal.new_terminal_here").to_string()).clicked() {
                                     use crate::terminal::ShellType;
                                     match state.manager.create_terminal(ShellType::Default, state.working_dir.clone()) {
                                         Ok(id) => {
@@ -1282,55 +1335,55 @@ fn handle_shortcuts(
                                             }
                                             state.terminal_has_focus = true;
                                         }
-                                        Err(e) => log::error!("Failed to duplicate terminal: {}", e),
+                                        Err(e) => state.report_error("Failed to create terminal", &e),
                                     }
                                     ui.close_menu();
                                 }
                                 ui.separator();
-                                if ui.button("Maximize Active Pane").clicked() {
+                                if ui.button(t!("terminal.maximize_active_pane").to_string()).clicked() {
                                     if let Some(active_id) = state.manager.focused_terminal_id() {
                                         state.maximized_terminal_id = Some(active_id);
                                     }
                                     ui.close_menu();
                                 }
-                                if ui.button("Pop out terminal").clicked() {
+                                if ui.button(t!("terminal.pop_out").to_string()).clicked() {
                                     state.pop_out_request = Some((*idx, None));
                                     ui.close_menu();
                                 }
                                 ui.separator();
-                                if ui.button("Split Horizontal").clicked() {
+                                if ui.button(t!("terminal.split_horizontal").to_string()).clicked() {
                                     use crate::terminal::{ShellType, Direction};
                                     if let Err(e) = state.manager.split_pane(Direction::Horizontal, ShellType::Default, state.working_dir.clone()) {
-                                        log::error!("Failed to split horizontal: {}", e);
+                                        state.report_error("Failed to split pane", &e);
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
                                     ui.close_menu();
                                 }
-                                if ui.button("Split Vertical").clicked() {
+                                if ui.button(t!("terminal.split_vertical").to_string()).clicked() {
                                     use crate::terminal::{ShellType, Direction};
                                     if let Err(e) = state.manager.split_pane(Direction::Vertical, ShellType::Default, state.working_dir.clone()) {
-                                        log::error!("Failed to split vertical: {}", e);
+                                        state.report_error("Failed to split pane", &e);
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
                                     ui.close_menu();
                                 }
                                 ui.separator();
-                                if ui.button("Rename").clicked() {
+                                if ui.button(t!("terminal.rename").to_string()).clicked() {
                                     state.renaming_index = Some(*idx);
                                     state.rename_buffer = title.to_string();
                                     ui.close_menu();
                                 }
-                                if ui.button("Close").clicked() {
+                                if ui.button(t!("terminal.close").to_string()).clicked() {
                                     state.close_tab_request = Some(*idx);
                                     ui.close_menu();
                                 }
-                                if ui.button("Close Pane").clicked() {
+                                if ui.button(t!("terminal.close_pane").to_string()).clicked() {
                                     state.manager.close_focused_pane();
                                     ui.close_menu();
                                 }
-                                if ui.button("Close Others").clicked() {
+                                if ui.button(t!("terminal.close_others").to_string()).clicked() {
                                     for i in (0..state.manager.terminal_count()).rev() {
                                         if i != *idx {
                                             state.manager.close_terminal(i);
@@ -1339,7 +1392,7 @@ fn handle_shortcuts(
                                     ui.close_menu();
                                 }
                                 ui.separator();
-                                if ui.button("Scatter to Windows").clicked() {
+                                if ui.button(t!("terminal.scatter_to_windows").to_string()).clicked() {
                                     let monitors = crate::terminal::detect_monitors();
                                     let active_idx = *idx;
                                     let count = state.manager.terminal_count();
@@ -1356,7 +1409,7 @@ fn handle_shortcuts(
                                         if let Some(layout) = state.manager.remove_tab(*target_idx) {
                                             let leaf = layout.first_leaf();
                                             let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
-                                            let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| "Terminal".to_string());
+                                            let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| t!("terminal.fallback_title").to_string());
                                             
                                             // Choose monitor (round-robin)
                                             let monitor_idx = (i + 1) % monitors.len();
@@ -1383,16 +1436,16 @@ fn handle_shortcuts(
                                     ui.close_menu();
                                 }
                                 ui.separator();
-                                ui.menu_button("Watch Mode", |ui| {
+                                ui.menu_button(t!("terminal.menu.watch_mode").to_string(), |ui| {
                                     if let Some(terminal) = state.manager.terminal_mut(*idx) {
                                         if let Some(path) = terminal.watched_path() {
-                                            ui.label(format!("Watching: {}", path.display()));
-                                            if ui.button("Stop Watching").clicked() {
+                                            ui.label(t!("terminal.watching", path = path.display().to_string()).to_string());
+                                            if ui.button(t!("terminal.stop_watching").to_string()).clicked() {
                                                 terminal.set_watch(None, None);
                                                 ui.close_menu();
                                             }
                                         } else {
-                                            if ui.button("Watch Workspace Root").clicked() {
+                                            if ui.button(t!("terminal.watch_workspace_root").to_string()).clicked() {
                                                 if let Some(root) = state.working_dir.clone() {
                                                     let cmd = if !settings.terminal_startup_command.is_empty() {
                                                         settings.terminal_startup_command.clone()
@@ -1406,7 +1459,7 @@ fn handle_shortcuts(
                                         }
                                     }
                                 });
-                                if ui.button("Export Output as HTML...").clicked() {
+                                if ui.button(t!("terminal.export_html").to_string()).clicked() {
                                     if let Some(terminal) = state.manager.terminal(*idx) {
                                         let html = terminal.export_html(&theme);
                                         if let Some(path) = rfd::FileDialog::new()
@@ -1447,7 +1500,7 @@ fn handle_shortcuts(
                     if let Some(layout) = state.manager.remove_tab(idx) {
                         let leaf = layout.first_leaf();
                         let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
-                        let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| "Terminal".to_string());
+                        let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| t!("terminal.fallback_title").to_string());
 
                         state.floating_windows.push(FloatingWindow {
                             id,
@@ -1516,13 +1569,13 @@ fn handle_shortcuts(
                             }
                             state.terminal_has_focus = true; // Auto-focus new terminal
                         }
-                        Err(e) => log::error!("Failed to create PowerShell terminal: {}", e),
+                        Err(e) => state.report_error("Failed to create terminal", &e),
                     }
                 }
 
                 // Right-click: show menu with all options
                 new_btn.context_menu(|ui| {
-                    if ui.button("PowerShell").clicked() {
+                    if ui.button(t!("terminal.shell.powershell").to_string()).clicked() {
                         match state.manager.create_terminal(ShellType::PowerShell, state.working_dir.clone()) {
                             Ok(id) => {
                                 if !settings.terminal_startup_command.is_empty() {
@@ -1533,11 +1586,11 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create PowerShell terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create PowerShell terminal", &e),
                         }
                         ui.close_menu();
                     }
-                    if ui.button("CMD").clicked() {
+                    if ui.button(t!("terminal.shell.cmd").to_string()).clicked() {
                         match state.manager.create_terminal(ShellType::Cmd, state.working_dir.clone()) {
                             Ok(id) => {
                                 if !settings.terminal_startup_command.is_empty() {
@@ -1548,11 +1601,11 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create CMD terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create CMD terminal", &e),
                         }
                         ui.close_menu();
                     }
-                    if ui.button("WSL").clicked() {
+                    if ui.button(t!("terminal.shell.wsl").to_string()).clicked() {
                         match state.manager.create_terminal(ShellType::Wsl, state.working_dir.clone()) {
                             Ok(id) => {
                                 if !settings.terminal_startup_command.is_empty() {
@@ -1563,41 +1616,41 @@ fn handle_shortcuts(
                                 }
                                 state.terminal_has_focus = true;
                             }
-                            Err(e) => log::error!("Failed to create WSL terminal: {}", e),
+                            Err(e) => state.report_error("Failed to create WSL terminal", &e),
                         }
                         ui.close_menu();
                     }
                     ui.separator();
-                    ui.menu_button("Layouts", |ui| {
-                        if ui.button("2 Columns").clicked() {
+                    ui.menu_button(t!("terminal.menu.layouts").to_string(), |ui| {
+                        if ui.button(t!("terminal.layout.columns_2").to_string()).clicked() {
                             if let Err(e) = state.manager.create_grid_layout(1, 2, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
                             ui.close_menu();
                         }
-                        if ui.button("2 Rows").clicked() {
+                        if ui.button(t!("terminal.layout.rows_2").to_string()).clicked() {
                             if let Err(e) = state.manager.create_grid_layout(2, 1, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
                             ui.close_menu();
                         }
-                        if ui.button("2x2 Grid").clicked() {
+                        if ui.button(t!("terminal.layout.grid_2x2").to_string()).clicked() {
                             if let Err(e) = state.manager.create_grid_layout(2, 2, ShellType::Default, state.working_dir.clone()) {
-                                log::error!("Failed to create layout: {}", e);
+                                state.report_error("Failed to create terminal layout", &e);
                             } else {
                                 state.terminal_has_focus = true;
                             }
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("Save Current Layout...").clicked() {
-                            if let Some(saved) = state.manager.save_active_layout("Custom Layout".to_string()) {
+                        if ui.button(t!("terminal.layout.save_layout").to_string()).clicked() {
+                            if let Some(saved) = state.manager.save_active_layout(t!("terminal.layout.custom_layout").to_string()) {
                                 if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Terminal Layout", &["json"])
+                                    .add_filter(&t!("terminal.filter.terminal_layout").to_string(), &["json"])
                                     .set_file_name("layout.json")
                                     .save_file() 
                                 {
@@ -1608,15 +1661,15 @@ fn handle_shortcuts(
                             }
                             ui.close_menu();
                         }
-                        if ui.button("Load Layout...").clicked() {
+                        if ui.button(t!("terminal.layout.load_layout").to_string()).clicked() {
                             if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("Terminal Layout", &["json"])
+                                .add_filter(&t!("terminal.filter.terminal_layout").to_string(), &["json"])
                                 .pick_file() 
                             {
                                 if let Ok(json) = std::fs::read_to_string(path) {
                                     if let Ok(saved) = serde_json::from_str::<crate::terminal::SavedLayout>(&json) {
                                         if let Err(e) = state.manager.load_layout(saved) {
-                                            log::error!("Failed to load layout: {}", e);
+                                            state.report_error("Failed to load terminal layout", &e);
                                         } else {
                                             state.terminal_has_focus = true;
                                         }
@@ -1626,8 +1679,8 @@ fn handle_shortcuts(
                             ui.close_menu();
                         }
                         ui.separator();
-                        ui.menu_button("Workspaces", |ui| {
-                            if ui.button("Scatter All Tabs").clicked() {
+                        ui.menu_button(t!("terminal.menu.workspaces").to_string(), |ui| {
+                            if ui.button(t!("terminal.workspace.scatter_all").to_string()).clicked() {
                                 let active_idx = state.manager.active_index();
                                 let count = state.manager.terminal_count();
                                 let mut to_pop = Vec::new();
@@ -1643,7 +1696,7 @@ fn handle_shortcuts(
                                     if let Some(layout) = state.manager.remove_tab(*idx) {
                                         let leaf = layout.first_leaf();
                                         let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
-                                        let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| "Terminal".to_string());
+                                        let title = state.manager.terminal_mut_by_id(leaf).map(|t| t.title().to_string()).unwrap_or_else(|| t!("terminal.fallback_title").to_string());
                                         
                                         let offset = (i as f32 + 1.0) * 40.0;
                                         let pos = Some(egui::pos2(100.0 + offset, 100.0 + offset));
@@ -1665,21 +1718,21 @@ fn handle_shortcuts(
                             let workspace_layout_path = state.get_workspace_layout_path();
                             let can_save_workspace = workspace_layout_path.is_some();
 
-                            if ui.add_enabled(can_save_workspace, egui::Button::new("Save as Workspace Layout")).clicked() {
+                            if ui.add_enabled(can_save_workspace, egui::Button::new(t!("terminal.layout.save_workspace_layout").to_string())).clicked() {
                                 if state.save_workspace_layout() {
                                     log::info!("Saved workspace layout to .ferrite/terminal-layout.json");
                                 }
                                 ui.close_menu();
                             }
                             if !can_save_workspace {
-                                ui.label("(No workspace root set)");
+                                ui.label(t!("terminal.no_workspace_root").to_string());
                             }
 
                             ui.separator();
 
-                            if ui.button("Save Workspace...").clicked() {
+                            if ui.button(t!("terminal.workspace.save").to_string()).clicked() {
                                 let tabs: Vec<_> = state.manager.tabs().iter().enumerate().map(|(i, layout)| {
-                                    state.manager.save_layout(layout, format!("Tab {}", i+1))
+                                    state.manager.save_layout(layout, t!("terminal.tab_name", index = i+1).to_string())
                                 }).collect();
 
                                 let floating_windows: Vec<_> = state.floating_windows.iter().map(|fw| {
@@ -1692,14 +1745,14 @@ fn handle_shortcuts(
                                 }).collect();
 
                                 let workspace = crate::terminal::SavedWorkspace {
-                                    name: "Workspace".to_string(),
+                                    name: t!("terminal.workspace.default_name").to_string(),
                                     tabs,
                                     floating_windows,
                                     active_tab_index: state.manager.active_index(),
                                 };
 
                                 if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Ferrite Workspace", &["json"])
+                                    .add_filter(&t!("terminal.filter.ferrite_workspace").to_string(), &["json"])
                                     .set_file_name("workspace.json")
                                     .save_file()
                                 {
@@ -1710,9 +1763,9 @@ fn handle_shortcuts(
                                 ui.close_menu();
                             }
                             
-                            if ui.button("Load Workspace...").clicked() {
+                            if ui.button(t!("terminal.workspace.load").to_string()).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Ferrite Workspace", &["json"])
+                                    .add_filter(&t!("terminal.filter.ferrite_workspace").to_string(), &["json"])
                                     .pick_file() 
                                 {
                                     if let Ok(json) = std::fs::read_to_string(path) {
@@ -1737,7 +1790,7 @@ fn handle_shortcuts(
                                                     }
                                                     state.terminal_has_focus = true;
                                                 }
-                                                Err(e) => log::error!("Failed to load workspace: {}", e),
+                                                Err(e) => state.report_error("Failed to load workspace layout", &e),
                                             }
                                         }
                                     }
@@ -1745,9 +1798,9 @@ fn handle_shortcuts(
                                 ui.close_menu();
                             }
                         });
-                        ui.menu_button("Macros", |ui| {
+                        ui.menu_button(t!("terminal.menu.macros").to_string(), |ui| {
                             if settings.terminal_macros.is_empty() {
-                                ui.label("No macros saved.");
+                                ui.label(t!("terminal.no_macros").to_string());
                             } else {
                                 let mut names: Vec<_> = settings.terminal_macros.keys().collect();
                                 names.sort();
@@ -1786,7 +1839,7 @@ fn handle_shortcuts(
                         .min_size(egui::vec2(24.0, 24.0)),
                     );
 
-                    if close_btn.clone().on_hover_text("Close terminal panel").clicked() {
+                    if close_btn.clone().on_hover_text(t!("terminal.close_panel_tooltip").to_string()).clicked() {
                         output.closed = true;
                         state.hide();
                     }
@@ -1854,7 +1907,7 @@ fn handle_shortcuts(
                     
                     ui.allocate_ui_at_rect(btn_rect, |ui| {
                         ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::from_rgba_premultiplied(0, 0, 0, 200);
-                        if ui.add(egui::Button::new("Restore ⤢").fill(Color32::from_rgba_premultiplied(50, 50, 50, 230))).clicked() {
+                        if ui.add(egui::Button::new(t!("terminal.restore").to_string()).fill(Color32::from_rgba_premultiplied(50, 50, 50, 230))).clicked() {
                             state.maximized_terminal_id = None;
                         }
                     });
@@ -1865,7 +1918,7 @@ fn handle_shortcuts(
                 // No terminal - show placeholder
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        egui::RichText::new("No terminal. Click + to create one.")
+                        egui::RichText::new(&t!("terminal.no_terminal").to_string())
                             .color(text_color)
                             .size(14.0),
                     );
@@ -1902,20 +1955,20 @@ fn handle_shortcuts(
             let mut close_dialog = true; // Stay open by default
             let mut confirm_close = false;
 
-            egui::Window::new("Close Terminal?")
+            egui::Window::new(t!("terminal.close_terminal_title").to_string())
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ui.ctx(), |ui| {
-                    ui.label("This terminal has a running process.");
-                    ui.label("Closing it will terminate the process.");
+                    ui.label(t!("terminal.running_process_warning").to_string());
+                    ui.label(t!("terminal.terminate_warning").to_string());
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        if ui.button("Close Terminal").clicked() {
+                        if ui.button(t!("terminal.close_terminal").to_string()).clicked() {
                             confirm_close = true;
                             close_dialog = false;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(t!("terminal.cancel").to_string()).clicked() {
                             close_dialog = false;
                         }
                     });

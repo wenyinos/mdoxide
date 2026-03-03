@@ -15,6 +15,8 @@ use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 use log::warn;
 use palette::{IntoColor, Oklch, Srgb};
 use rust_i18n::t;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +49,11 @@ const MIN_ROWS_FOR_HEADER_DETECTION: usize = 2;
 
 /// Number of extra rows to render above/below visible area for smooth scrolling
 const VIRTUAL_SCROLL_BUFFER: usize = 5;
+
+/// Number of extra rows to cache beyond the render buffer for lazy parsing.
+/// Wider cache window = fewer re-parses during scrolling.
+/// Total cached rows ≈ visible + 2*(VIRTUAL_SCROLL_BUFFER + LAZY_CACHE_BUFFER).
+const LAZY_CACHE_BUFFER: usize = 50;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tabular File Type
@@ -488,6 +495,217 @@ pub fn parse_csv_with_delimiter(content: &str, delimiter: u8) -> Result<CsvData,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lazy CSV Parsing (byte-offset indexing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Lightweight row index for lazy CSV parsing.
+///
+/// Instead of parsing every row into `Vec<Vec<String>>`, this struct stores
+/// only the byte offset where each row begins. Actual row data is parsed
+/// on demand for visible rows only, keeping memory low for 100MB+ files.
+///
+/// Memory comparison for a 1M-row CSV:
+/// - Full parse: ~100–200MB (String allocations per cell)
+/// - Row index:  ~8MB (8 bytes per row offset)
+#[derive(Debug, Clone)]
+pub struct CsvRowIndex {
+    /// Byte offset of each row start in the source content.
+    /// `row_offsets[i]` is the byte position where row i begins.
+    pub row_offsets: Vec<u64>,
+    /// Total number of rows in the CSV.
+    pub row_count: usize,
+    /// Maximum number of columns detected across sampled rows.
+    pub num_columns: usize,
+    /// Calculated column widths (in characters), sampled from first N rows.
+    pub column_widths: Vec<usize>,
+    /// First row data (always kept for header detection/display).
+    pub first_row: Vec<String>,
+}
+
+/// Cached window of parsed visible rows for lazy-rendered CSV data.
+/// Stores a range of parsed rows around the current viewport to avoid
+/// re-parsing on every frame during scrolling.
+#[derive(Debug, Clone)]
+struct CachedVisibleRows {
+    /// Start row index in the full file (inclusive).
+    start_row: usize,
+    /// End row index in the full file (exclusive).
+    end_row: usize,
+    /// Parsed rows for this range.
+    rows: Vec<Vec<String>>,
+}
+
+/// Fast content hash for cache invalidation.
+///
+/// For large content (>8KB), samples the beginning and end to avoid
+/// hashing the entire 100MB+ buffer while still detecting changes.
+fn hash_content_bytes(content: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    content.len().hash(&mut hasher);
+    if content.len() > 8192 {
+        content[..4096].hash(&mut hasher);
+        content[content.len() - 4096..].hash(&mut hasher);
+    } else {
+        content.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// Build a row offset index from CSV content.
+///
+/// Scans the entire content recording byte offsets per row, and samples
+/// the first 1000 rows for column width calculation. This is O(N) in file
+/// size but only allocates 8 bytes per row (vs full string parsing).
+///
+/// # Arguments
+/// * `content` - Raw CSV file bytes
+/// * `delimiter` - The delimiter byte (comma, tab, etc.)
+pub fn build_csv_row_index(content: &[u8], delimiter: u8) -> Result<CsvRowIndex, CsvParseError> {
+    let mut reader = csv::ReaderBuilder::new()
+        .delimiter(delimiter)
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(content);
+
+    let mut row_offsets: Vec<u64> = Vec::new();
+    let mut max_columns: usize = 0;
+    let mut column_widths: Vec<usize> = Vec::new();
+    let mut first_row: Vec<String> = Vec::new();
+
+    const WIDTH_SAMPLE_ROWS: usize = 1000;
+
+    let mut record = csv::ByteRecord::new();
+    let mut row_idx: usize = 0;
+
+    loop {
+        // Capture byte offset BEFORE reading (position of the next record)
+        let byte_offset = reader.position().byte();
+
+        match reader.read_byte_record(&mut record) {
+            Ok(true) => {
+                row_offsets.push(byte_offset);
+                let col_count = record.len();
+                max_columns = max_columns.max(col_count);
+
+                // Always keep first row for header detection/display
+                if row_idx == 0 {
+                    first_row = record
+                        .iter()
+                        .map(|f| String::from_utf8_lossy(f).to_string())
+                        .collect();
+                }
+
+                // Sample column widths from first N rows
+                if row_idx < WIDTH_SAMPLE_ROWS {
+                    while column_widths.len() < col_count {
+                        column_widths.push(0);
+                    }
+                    for (ci, field) in record.iter().enumerate() {
+                        let char_count = String::from_utf8_lossy(field).chars().count();
+                        column_widths[ci] = column_widths[ci].max(char_count);
+                    }
+                }
+
+                row_idx += 1;
+            }
+            Ok(false) => break,
+            Err(e) => {
+                warn!("CSV index build error at row {}: {}", row_idx, e);
+                return Err(CsvParseError {
+                    message: e.to_string(),
+                    line: Some(row_idx + 1),
+                });
+            }
+        }
+    }
+
+    // Cap column widths
+    for width in &mut column_widths {
+        *width = (*width).clamp(3, MAX_CELL_CHARS);
+    }
+
+    // Normalize first_row to have max_columns entries
+    while first_row.len() < max_columns {
+        first_row.push(String::new());
+    }
+
+    Ok(CsvRowIndex {
+        row_offsets,
+        row_count: row_idx,
+        num_columns: max_columns,
+        column_widths,
+        first_row,
+    })
+}
+
+/// Parse a specific range of rows from CSV content using the row index.
+///
+/// Only parses rows in `[start_row, end_row)` range by slicing the content
+/// at the known byte offsets and running the CSV parser on just that slice.
+///
+/// # Arguments
+/// * `content` - Raw CSV file bytes
+/// * `delimiter` - The delimiter byte
+/// * `index` - Row offset index built by `build_csv_row_index`
+/// * `start_row` - First row to parse (inclusive, 0-based)
+/// * `end_row` - Last row to parse (exclusive)
+pub fn parse_csv_row_range(
+    content: &[u8],
+    delimiter: u8,
+    index: &CsvRowIndex,
+    start_row: usize,
+    end_row: usize,
+) -> Vec<Vec<String>> {
+    if start_row >= index.row_count || start_row >= end_row {
+        return Vec::new();
+    }
+
+    let end_row = end_row.min(index.row_count);
+    let start_byte = index.row_offsets[start_row] as usize;
+    let end_byte = if end_row < index.row_count {
+        index.row_offsets[end_row] as usize
+    } else {
+        content.len()
+    };
+
+    // Bounds check
+    if start_byte >= content.len() || start_byte >= end_byte {
+        return Vec::new();
+    }
+    let end_byte = end_byte.min(content.len());
+
+    let slice = &content[start_byte..end_byte];
+
+    let mut reader = csv::ReaderBuilder::new()
+        .delimiter(delimiter)
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(slice);
+
+    let expected_count = end_row - start_row;
+    let mut rows = Vec::with_capacity(expected_count);
+
+    for result in reader.records() {
+        match result {
+            Ok(record) => {
+                let mut row: Vec<String> = record.iter().map(|s| s.to_string()).collect();
+                // Normalize to num_columns
+                while row.len() < index.num_columns {
+                    row.push(String::new());
+                }
+                rows.push(row);
+            }
+            Err(e) => {
+                warn!("CSV row range parse error: {}", e);
+                break;
+            }
+        }
+    }
+
+    rows
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CSV Viewer State
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -498,7 +716,7 @@ pub struct CsvViewerState {
     pub show_raw: bool,
     /// Large file warning dismissed
     large_file_warning_dismissed: bool,
-    /// Cached parsed data
+    /// Cached parsed data (used for small files < LARGE_FILE_THRESHOLD)
     cached_data: Option<CsvData>,
     /// Content hash for cache invalidation
     content_hash: u64,
@@ -511,6 +729,12 @@ pub struct CsvViewerState {
     detected_has_header: Option<bool>,
     /// Manual override for header row (None = use auto-detected)
     header_override: Option<bool>,
+    /// Cached row index for lazy parsing (used for large files >= LARGE_FILE_THRESHOLD).
+    /// Only stores byte offsets per row — actual rows are parsed on demand.
+    cached_index: Option<CsvRowIndex>,
+    /// Cached window of parsed visible rows for lazy rendering.
+    /// Updated when the viewport scrolls beyond the cached range.
+    cached_visible: Option<CachedVisibleRows>,
 }
 
 impl CsvViewerState {
@@ -523,6 +747,8 @@ impl CsvViewerState {
     #[allow(dead_code)] // Public API for cache management
     pub fn invalidate_cache(&mut self) {
         self.cached_data = None;
+        self.cached_index = None;
+        self.cached_visible = None;
         self.content_hash = 0;
         // Also clear detected delimiter since content changed
         self.detected_delimiter = None;
@@ -536,8 +762,10 @@ impl CsvViewerState {
     /// Set a manual delimiter override.
     pub fn set_delimiter(&mut self, delimiter: u8) {
         self.delimiter_override = Some(delimiter);
-        // Invalidate cache when delimiter changes
+        // Invalidate all caches when delimiter changes
         self.cached_data = None;
+        self.cached_index = None;
+        self.cached_visible = None;
         self.content_hash = 0;
     }
 
@@ -545,6 +773,8 @@ impl CsvViewerState {
     pub fn clear_delimiter_override(&mut self) {
         self.delimiter_override = None;
         self.cached_data = None;
+        self.cached_index = None;
+        self.cached_visible = None;
         self.content_hash = 0;
     }
 
@@ -760,6 +990,253 @@ pub struct CsvViewerOutput {
     pub headers_auto_detected: bool,
 }
 
+/// Render a single row of CSV cells (standalone function for use by both full and lazy paths).
+fn render_row_cells(
+    ui: &mut Ui,
+    row: &[String],
+    is_header: bool,
+    row_idx: usize,
+    row_bg: Color32,
+    colors: &CsvViewerColors,
+    pixel_widths: &[f32],
+    row_height: f32,
+    font_size: f32,
+) {
+    const TABLE_LEFT_PADDING: f32 = 8.0;
+    const COLUMN_COLOR_BLEND: f32 = 0.35;
+
+    ui.add_space(TABLE_LEFT_PADDING);
+    for (col_idx, cell) in row.iter().enumerate() {
+        let col_width = pixel_widths.get(col_idx).copied().unwrap_or(MIN_COLUMN_WIDTH);
+        let cell_width = col_width + COLUMN_PADDING;
+
+        let display_text = truncate_cell(cell, MAX_CELL_CHARS);
+        let is_truncated = display_text.len() < cell.len();
+
+        let text_color = if is_header {
+            colors.header_text
+        } else {
+            colors.cell_text
+        };
+
+        // Apply column color blend if rainbow is enabled
+        let cell_bg = colors.cell_background(row_bg, col_idx, COLUMN_COLOR_BLEND);
+
+        // Allocate space for the cell and get its rect
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::new(cell_width, row_height), Sense::hover());
+
+        // Paint the cell background (only if visible)
+        if ui.is_rect_visible(rect) {
+            ui.painter().rect_filled(rect, 0.0, cell_bg);
+
+            // Draw text centered vertically in the cell
+            let text_pos = egui::pos2(
+                rect.min.x + 4.0, // Small left padding for text
+                rect.center().y - font_size / 2.0,
+            );
+            ui.painter().text(
+                text_pos,
+                egui::Align2::LEFT_TOP,
+                &display_text,
+                egui::FontId::proportional(font_size),
+                text_color,
+            );
+        }
+
+        // Show tooltip for truncated cells
+        if is_truncated && response.hovered() {
+            let tooltip_id = if is_header {
+                egui::Id::new(("csv_header_tooltip", col_idx))
+            } else {
+                egui::Id::new(("csv_tooltip", row_idx, col_idx))
+            };
+            egui::show_tooltip_at_pointer(ui.ctx(), ui.layer_id(), tooltip_id, |ui| {
+                ui.set_max_width(400.0);
+                ui.label(cell);
+            });
+        }
+    }
+    ui.add_space(TABLE_LEFT_PADDING);
+}
+
+/// Render the table view for large files using lazy row parsing.
+///
+/// Instead of receiving pre-parsed `CsvData`, this function uses the row index
+/// to parse only the visible rows on demand. Parsed rows are cached in
+/// `state.cached_visible` and reused until the viewport scrolls beyond the
+/// cached range.
+fn show_table_view_lazy(
+    content_bytes: &[u8],
+    delimiter: u8,
+    index: &CsvRowIndex,
+    state: &mut CsvViewerState,
+    ui: &mut Ui,
+    colors: &CsvViewerColors,
+    has_headers: bool,
+    font_size: f32,
+) -> f32 {
+    const TABLE_LEFT_PADDING: f32 = 8.0;
+
+    // Calculate pixel widths from character widths
+    let char_width = font_size * 0.6;
+    let pixel_widths: Vec<f32> = index
+        .column_widths
+        .iter()
+        .map(|&w| (w as f32 * char_width).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH))
+        .collect();
+
+    let total_width: f32 = pixel_widths.iter().sum::<f32>()
+        + (index.num_columns as f32 * COLUMN_PADDING)
+        + TABLE_LEFT_PADDING * 2.0;
+
+    let row_height = font_size + 8.0;
+
+    // Determine header row and data row count
+    let (header_row, data_row_count) = if has_headers && index.row_count > 0 {
+        (Some(&index.first_row), index.row_count - 1)
+    } else {
+        (None, index.row_count)
+    };
+
+    // Show row count info for large files
+    if data_row_count > 1000 {
+        ui.horizontal(|ui| {
+            ui.add_space(TABLE_LEFT_PADDING);
+            ui.colored_label(
+                colors.truncated_indicator,
+                format!("ℹ {} rows total (lazy-parsed)", index.row_count),
+            );
+        });
+        ui.add_space(4.0);
+    }
+
+    let header_height = if header_row.is_some() {
+        row_height + 1.0
+    } else {
+        0.0
+    };
+    let total_content_height = header_height + (data_row_count as f32 * row_height);
+
+    // Data rows start at this file-row offset (skip header if present)
+    let data_offset = if has_headers { 1usize } else { 0usize };
+
+    let scroll_output = ScrollArea::both()
+        .auto_shrink([false, false])
+        .show_viewport(ui, |ui, viewport| {
+            ui.set_min_width(total_width);
+            ui.set_min_height(total_content_height);
+            ui.spacing_mut().item_spacing.y = 0.0;
+
+            // Calculate visible data-row range from viewport
+            let first_visible_row = if viewport.min.y <= header_height {
+                0
+            } else {
+                ((viewport.min.y - header_height) / row_height).floor() as usize
+            };
+            let visible_row_count =
+                (viewport.height() / row_height).ceil() as usize + VIRTUAL_SCROLL_BUFFER * 2;
+            let last_visible_row = (first_visible_row + visible_row_count).min(data_row_count);
+
+            let render_start = first_visible_row.saturating_sub(VIRTUAL_SCROLL_BUFFER);
+            let render_end = (last_visible_row + VIRTUAL_SCROLL_BUFFER).min(data_row_count);
+
+            // Map data-row indices to file-row indices
+            let file_render_start = render_start + data_offset;
+            let file_render_end = render_end + data_offset;
+
+            // Check if cached visible rows cover the needed range
+            let needs_reparse = match &state.cached_visible {
+                Some(cache) => {
+                    cache.start_row > file_render_start || cache.end_row < file_render_end
+                }
+                None => true,
+            };
+
+            if needs_reparse {
+                // Parse a wider window for smooth scrolling (LAZY_CACHE_BUFFER extra on each side)
+                let fetch_start = file_render_start.saturating_sub(LAZY_CACHE_BUFFER);
+                let fetch_end = (file_render_end + LAZY_CACHE_BUFFER).min(index.row_count);
+
+                let rows = parse_csv_row_range(content_bytes, delimiter, index, fetch_start, fetch_end);
+                state.cached_visible = Some(CachedVisibleRows {
+                    start_row: fetch_start,
+                    end_row: fetch_end,
+                    rows,
+                });
+            }
+
+            let cache = state.cached_visible.as_ref().unwrap();
+
+            // Render header row (always at top of content)
+            if let Some(header) = header_row {
+                let header_bg = colors.header_bg;
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    render_row_cells(
+                        ui,
+                        header,
+                        true,
+                        0,
+                        header_bg,
+                        colors,
+                        &pixel_widths,
+                        row_height,
+                        font_size,
+                    );
+                });
+                ui.separator();
+            }
+
+            // Allocate space for rows before visible range
+            if render_start > 0 {
+                ui.allocate_space(Vec2::new(total_width, render_start as f32 * row_height));
+            }
+
+            // Render only visible rows from cache
+            for data_row_idx in render_start..render_end {
+                let file_row_idx = data_row_idx + data_offset;
+                let cache_idx = file_row_idx.saturating_sub(cache.start_row);
+
+                if let Some(row) = cache.rows.get(cache_idx) {
+                    let bg_color = if data_row_idx % 2 == 0 {
+                        colors.row_even_bg
+                    } else {
+                        colors.row_odd_bg
+                    };
+                    let original_row_idx = if has_headers {
+                        data_row_idx + 1
+                    } else {
+                        data_row_idx
+                    };
+
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        render_row_cells(
+                            ui,
+                            row,
+                            false,
+                            original_row_idx,
+                            bg_color,
+                            colors,
+                            &pixel_widths,
+                            row_height,
+                            font_size,
+                        );
+                    });
+                }
+            }
+
+            // Allocate space for rows after visible range
+            let remaining_rows = data_row_count.saturating_sub(render_end);
+            if remaining_rows > 0 {
+                ui.allocate_space(Vec2::new(total_width, remaining_rows as f32 * row_height));
+            }
+        });
+
+    scroll_output.state.offset.y
+}
+
 /// CSV viewer widget.
 pub struct CsvViewer<'a> {
     content: &'a str,
@@ -866,23 +1343,95 @@ impl<'a> CsvViewer<'a> {
         if self.state.show_raw {
             output.scroll_offset = self.show_raw_view(ui);
         } else {
-            match parse_csv_with_delimiter(self.content, delimiter) {
-                Ok(data) => {
-                    // Detect headers if not already detected (and no override)
-                    if self.state.detected_has_header.is_none() && !data.rows.is_empty() {
-                        let detected = detect_header_row(&data.rows);
-                        self.state.set_detected_has_header(detected);
-                        // Update output with actual detected value
-                        output.has_headers = self.state.has_headers();
-                        output.headers_auto_detected = !self.state.has_header_override();
-                    }
+            let content_bytes = self.content.as_bytes();
+            let content_hash = hash_content_bytes(content_bytes);
+            let needs_rebuild = self.state.content_hash != content_hash;
 
-                    output.scroll_offset = self.show_table_view(ui, &data, &colors, self.state.has_headers());
+            if is_large {
+                // ━━━ LAZY PARSING PATH for large files (≥1MB) ━━━
+                // Build row offset index instead of parsing all rows.
+                // Only visible rows are parsed on demand during rendering.
+                if needs_rebuild || self.state.cached_index.is_none() {
+                    match build_csv_row_index(content_bytes, delimiter) {
+                        Ok(index) => {
+                            // Detect headers from first few rows
+                            if self.state.detected_has_header.is_none() && index.row_count > 0 {
+                                let sample_count = index.row_count.min(5);
+                                let sample = parse_csv_row_range(
+                                    content_bytes,
+                                    delimiter,
+                                    &index,
+                                    0,
+                                    sample_count,
+                                );
+                                let detected = detect_header_row(&sample);
+                                self.state.set_detected_has_header(detected);
+                            }
+                            self.state.cached_index = Some(index);
+                            self.state.cached_visible = None;
+                            self.state.cached_data = None;
+                            self.state.content_hash = content_hash;
+                        }
+                        Err(e) => {
+                            self.show_parse_error(ui, &e, &colors);
+                            output.scroll_offset = self.show_raw_view(ui);
+                            return output;
+                        }
+                    }
                 }
-                Err(e) => {
-                    self.show_parse_error(ui, &e, &colors);
-                    output.scroll_offset = self.show_raw_view(ui);
+
+                output.has_headers = self.state.has_headers();
+                output.headers_auto_detected = !self.state.has_header_override();
+                let has_headers = self.state.has_headers();
+
+                // Take index out temporarily to avoid borrow conflict with &mut state
+                let index = self.state.cached_index.take().unwrap();
+
+                output.scroll_offset = show_table_view_lazy(
+                    content_bytes,
+                    delimiter,
+                    &index,
+                    self.state,
+                    ui,
+                    &colors,
+                    has_headers,
+                    self.font_size,
+                );
+
+                // Put index back
+                self.state.cached_index = Some(index);
+            } else {
+                // ━━━ FULL PARSE PATH for small files (<1MB) with caching ━━━
+                // Parse all rows once and cache. Re-parse only when content changes.
+                if needs_rebuild || self.state.cached_data.is_none() {
+                    match parse_csv_with_delimiter(self.content, delimiter) {
+                        Ok(data) => {
+                            if self.state.detected_has_header.is_none() && !data.rows.is_empty() {
+                                let detected = detect_header_row(&data.rows);
+                                self.state.set_detected_has_header(detected);
+                            }
+                            self.state.cached_data = Some(data);
+                            self.state.cached_index = None;
+                            self.state.cached_visible = None;
+                            self.state.content_hash = content_hash;
+                        }
+                        Err(e) => {
+                            self.show_parse_error(ui, &e, &colors);
+                            output.scroll_offset = self.show_raw_view(ui);
+                            return output;
+                        }
+                    }
                 }
+
+                output.has_headers = self.state.has_headers();
+                output.headers_auto_detected = !self.state.has_header_override();
+                let has_headers = self.state.has_headers();
+
+                // Take data out temporarily for borrow safety
+                let data = self.state.cached_data.take().unwrap();
+                output.scroll_offset =
+                    self.show_table_view(ui, &data, &colors, has_headers);
+                self.state.cached_data = Some(data);
             }
         }
 
@@ -1038,7 +1587,7 @@ impl<'a> CsvViewer<'a> {
         scroll_output.state.offset.y
     }
 
-    /// Render a single row of cells.
+    /// Render a single row of cells (delegates to standalone `render_row_cells`).
     fn render_row(
         &self,
         ui: &mut Ui,
@@ -1050,65 +1599,17 @@ impl<'a> CsvViewer<'a> {
         pixel_widths: &[f32],
         row_height: f32,
     ) {
-        const TABLE_LEFT_PADDING: f32 = 8.0;
-        const COLUMN_COLOR_BLEND: f32 = 0.35;
-
-        ui.add_space(TABLE_LEFT_PADDING);
-        for (col_idx, cell) in row.iter().enumerate() {
-            let col_width = pixel_widths.get(col_idx).copied().unwrap_or(MIN_COLUMN_WIDTH);
-            let cell_width = col_width + COLUMN_PADDING;
-
-            let display_text = truncate_cell(cell, MAX_CELL_CHARS);
-            let is_truncated = display_text.len() < cell.len();
-
-            let text_color = if is_header { colors.header_text } else { colors.cell_text };
-
-            // Apply column color blend if rainbow is enabled
-            let cell_bg = colors.cell_background(row_bg, col_idx, COLUMN_COLOR_BLEND);
-
-            // Allocate space for the cell and get its rect
-            let (rect, response) = ui.allocate_exact_size(
-                Vec2::new(cell_width, row_height),
-                Sense::hover(),
-            );
-
-            // Paint the cell background (only if visible)
-            if ui.is_rect_visible(rect) {
-                ui.painter().rect_filled(rect, 0.0, cell_bg);
-                
-                // Draw text centered vertically in the cell
-                let text_pos = egui::pos2(
-                    rect.min.x + 4.0, // Small left padding for text
-                    rect.center().y - self.font_size / 2.0,
-                );
-                ui.painter().text(
-                    text_pos,
-                    egui::Align2::LEFT_TOP,
-                    &display_text,
-                    egui::FontId::proportional(self.font_size),
-                    text_color,
-                );
-            }
-
-            // Show tooltip for truncated cells
-            if is_truncated && response.hovered() {
-                let tooltip_id = if is_header {
-                    egui::Id::new(("csv_header_tooltip", col_idx))
-                } else {
-                    egui::Id::new(("csv_tooltip", row_idx, col_idx))
-                };
-                egui::show_tooltip_at_pointer(
-                    ui.ctx(),
-                    ui.layer_id(),
-                    tooltip_id,
-                    |ui| {
-                        ui.set_max_width(400.0);
-                        ui.label(cell);
-                    },
-                );
-            }
-        }
-        ui.add_space(TABLE_LEFT_PADDING);
+        render_row_cells(
+            ui,
+            row,
+            is_header,
+            row_idx,
+            row_bg,
+            colors,
+            pixel_widths,
+            row_height,
+            self.font_size,
+        );
     }
 }
 
@@ -1679,5 +2180,272 @@ mod tests {
     fn test_virtual_scroll_buffer_constant() {
         // Verify the virtual scroll buffer is set appropriately
         assert_eq!(VIRTUAL_SCROLL_BUFFER, 5);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Lazy CSV Parsing (byte-offset indexing) Tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_build_row_index_simple() {
+        let csv = b"name,age,city\nAlice,30,NYC\nBob,25,LA";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        assert_eq!(index.row_count, 3);
+        assert_eq!(index.num_columns, 3);
+        assert_eq!(index.row_offsets.len(), 3);
+        assert_eq!(index.first_row, vec!["name", "age", "city"]);
+        // First row starts at byte 0
+        assert_eq!(index.row_offsets[0], 0);
+        // Column widths should be reasonable
+        assert!(index.column_widths.len() >= 3);
+    }
+
+    #[test]
+    fn test_build_row_index_tsv() {
+        let tsv = b"name\tage\tcity\nAlice\t30\tNYC\nBob\t25\tLA";
+        let index = build_csv_row_index(tsv, b'\t').unwrap();
+
+        assert_eq!(index.row_count, 3);
+        assert_eq!(index.num_columns, 3);
+        assert_eq!(index.first_row, vec!["name", "age", "city"]);
+    }
+
+    #[test]
+    fn test_build_row_index_empty() {
+        let csv = b"";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        assert_eq!(index.row_count, 0);
+        assert_eq!(index.num_columns, 0);
+        assert!(index.row_offsets.is_empty());
+    }
+
+    #[test]
+    fn test_build_row_index_large() {
+        // Build index for 10,000 rows
+        let mut csv = String::with_capacity(500_000);
+        csv.push_str("id,name,value\n");
+        for i in 0..10_000 {
+            csv.push_str(&format!("{},Name{},{:.2}\n", i, i, i as f64 * 1.5));
+        }
+
+        let index = build_csv_row_index(csv.as_bytes(), b',').unwrap();
+
+        assert_eq!(index.row_count, 10_001); // header + 10,000 data rows
+        assert_eq!(index.num_columns, 3);
+        assert_eq!(index.row_offsets.len(), 10_001);
+        assert_eq!(index.first_row, vec!["id", "name", "value"]);
+    }
+
+    #[test]
+    fn test_parse_row_range_full() {
+        let csv = b"name,age,city\nAlice,30,NYC\nBob,25,LA";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        // Parse all rows
+        let rows = parse_csv_row_range(csv, b',', &index, 0, 3);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0], vec!["name", "age", "city"]);
+        assert_eq!(rows[1], vec!["Alice", "30", "NYC"]);
+        assert_eq!(rows[2], vec!["Bob", "25", "LA"]);
+    }
+
+    #[test]
+    fn test_parse_row_range_partial() {
+        let csv = b"name,age,city\nAlice,30,NYC\nBob,25,LA\nCharlie,35,SF";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        // Parse only rows 1-2 (Alice and Bob, skipping header)
+        let rows = parse_csv_row_range(csv, b',', &index, 1, 3);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0], vec!["Alice", "30", "NYC"]);
+        assert_eq!(rows[1], vec!["Bob", "25", "LA"]);
+    }
+
+    #[test]
+    fn test_parse_row_range_last_row() {
+        let csv = b"a,b\n1,2\n3,4\n5,6";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        // Parse only the last row
+        let rows = parse_csv_row_range(csv, b',', &index, 3, 4);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0], vec!["5", "6"]);
+    }
+
+    #[test]
+    fn test_parse_row_range_empty() {
+        let csv = b"a,b\n1,2\n3,4";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        // Empty range
+        let rows = parse_csv_row_range(csv, b',', &index, 2, 2);
+        assert!(rows.is_empty());
+
+        // Out of bounds
+        let rows = parse_csv_row_range(csv, b',', &index, 10, 20);
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_parse_row_range_with_quotes() {
+        let csv = br#"name,desc
+"Alice","Has a comma, here"
+"Bob","Normal"
+"Charlie","Quotes ""inside"""
+"#;
+        let index = build_csv_row_index(csv, b',').unwrap();
+        assert_eq!(index.row_count, 4);
+
+        // Parse row 1 (Alice)
+        let rows = parse_csv_row_range(csv, b',', &index, 1, 2);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], "Alice");
+        assert_eq!(rows[0][1], "Has a comma, here");
+
+        // Parse row 3 (Charlie with escaped quotes)
+        let rows = parse_csv_row_range(csv, b',', &index, 3, 4);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], "Charlie");
+        assert_eq!(rows[0][1], "Quotes \"inside\"");
+    }
+
+    #[test]
+    fn test_parse_row_range_large_dataset() {
+        // Build a 5000-row CSV
+        let mut csv = String::with_capacity(200_000);
+        csv.push_str("id,value\n");
+        for i in 0..5000 {
+            csv.push_str(&format!("{},{}\n", i, i * 10));
+        }
+
+        let content = csv.as_bytes();
+        let index = build_csv_row_index(content, b',').unwrap();
+        assert_eq!(index.row_count, 5001);
+
+        // Parse rows 2500-2510 (middle of file)
+        let rows = parse_csv_row_range(content, b',', &index, 2500, 2510);
+        assert_eq!(rows.len(), 10);
+        // Row 2500 (0-indexed) = data row 2499 (since row 0 is header)
+        assert_eq!(rows[0][0], "2499");
+        assert_eq!(rows[0][1], "24990");
+    }
+
+    #[test]
+    fn test_row_index_column_widths_sampled() {
+        // Column widths should be sampled from first 1000 rows
+        let mut csv = String::with_capacity(200_000);
+        csv.push_str("col1,col2\n");
+        for i in 0..500 {
+            csv.push_str(&format!("{},x\n", i));
+        }
+        for i in 500..1000 {
+            csv.push_str(&format!("{},longer_value_here\n", i));
+        }
+        for i in 1000..2000 {
+            csv.push_str(&format!("{},this_is_a_very_long_value_that_exceeds_sample\n", i));
+        }
+
+        let index = build_csv_row_index(csv.as_bytes(), b',').unwrap();
+        assert_eq!(index.row_count, 2001);
+        // Column widths sampled from first 1000 rows, capped at MAX_CELL_CHARS
+        assert!(index.column_widths[1] > 0);
+        assert!(index.column_widths[1] <= MAX_CELL_CHARS);
+    }
+
+    #[test]
+    fn test_row_index_flexible_columns() {
+        let csv = b"a,b,c\n1,2\n3,4,5,6";
+        let index = build_csv_row_index(csv, b',').unwrap();
+
+        // Should detect max column count (4)
+        assert_eq!(index.num_columns, 4);
+        // First row should be normalized to 4 columns
+        assert_eq!(index.first_row.len(), 4);
+    }
+
+    #[test]
+    fn test_hash_content_bytes_consistency() {
+        let content = b"some csv content";
+        let hash1 = hash_content_bytes(content);
+        let hash2 = hash_content_bytes(content);
+        assert_eq!(hash1, hash2);
+
+        let different = b"different content";
+        let hash3 = hash_content_bytes(different);
+        assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn test_hash_content_bytes_large() {
+        // Large content uses sampling (beginning + end)
+        let content = vec![b'x'; 20_000];
+        let hash1 = hash_content_bytes(&content);
+
+        let mut modified = content.clone();
+        modified[10_000] = b'y'; // Modify the middle (outside sample)
+        let hash2 = hash_content_bytes(&modified);
+        // Middle change might not be detected (by design for speed)
+        // This is acceptable — the hash is for fast invalidation, not cryptographic
+
+        // But changing the beginning or end should produce different hash
+        let mut modified_start = content.clone();
+        modified_start[100] = b'z';
+        let hash3 = hash_content_bytes(&modified_start);
+        assert_ne!(hash1, hash3);
+
+        let mut modified_end = content.clone();
+        modified_end[19_900] = b'z';
+        let hash4 = hash_content_bytes(&modified_end);
+        assert_ne!(hash1, hash4);
+    }
+
+    #[test]
+    fn test_lazy_cache_buffer_constant() {
+        assert_eq!(LAZY_CACHE_BUFFER, 50);
+    }
+
+    #[test]
+    fn test_csv_viewer_state_lazy_cache_invalidation() {
+        let mut state = CsvViewerState::new();
+
+        // Simulate building a cached index
+        state.cached_index = Some(CsvRowIndex {
+            row_offsets: vec![0, 10, 20],
+            row_count: 3,
+            num_columns: 2,
+            column_widths: vec![5, 5],
+            first_row: vec!["a".to_string(), "b".to_string()],
+        });
+        state.cached_visible = Some(CachedVisibleRows {
+            start_row: 0,
+            end_row: 3,
+            rows: vec![vec!["1".to_string(), "2".to_string()]],
+        });
+        state.content_hash = 12345;
+
+        // Invalidate cache should clear everything
+        state.invalidate_cache();
+        assert!(state.cached_index.is_none());
+        assert!(state.cached_visible.is_none());
+        assert_eq!(state.content_hash, 0);
+    }
+
+    #[test]
+    fn test_csv_viewer_state_delimiter_clears_lazy_cache() {
+        let mut state = CsvViewerState::new();
+        state.cached_index = Some(CsvRowIndex {
+            row_offsets: vec![0],
+            row_count: 1,
+            num_columns: 1,
+            column_widths: vec![3],
+            first_row: vec!["a".to_string()],
+        });
+
+        // Setting delimiter should clear lazy cache
+        state.set_delimiter(b';');
+        assert!(state.cached_index.is_none());
+        assert!(state.cached_visible.is_none());
     }
 }

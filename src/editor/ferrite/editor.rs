@@ -190,6 +190,13 @@ pub struct FerriteEditor {
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether auto-close brackets is enabled (e.g., typing '(' inserts '()').
     pub(crate) auto_close_brackets: bool,
+    // ─────────────────────────────────────────────────────────────────────────
+    // Vim Mode
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Whether Vim modal editing is enabled.
+    pub(crate) vim_mode_enabled: bool,
+    /// Persistent Vim editing state (mode, yank register, pending operator).
+    pub(crate) vim_state: super::vim::VimState,
 }
 
 impl Default for FerriteEditor {
@@ -259,6 +266,9 @@ impl FerriteEditor {
             content_offset_x: 0.0,
             // Auto-close brackets (default off, configured via EditorWidget)
             auto_close_brackets: false,
+            // Vim mode (default off, configured via EditorWidget)
+            vim_mode_enabled: false,
+            vim_state: super::vim::VimState::new(),
         }
     }
 
@@ -325,6 +335,43 @@ impl FerriteEditor {
             content_offset_x: 0.0,
             // Auto-close brackets (default off, configured via EditorWidget)
             auto_close_brackets: false,
+            // Vim mode (default off, configured via EditorWidget)
+            vim_mode_enabled: false,
+            vim_state: super::vim::VimState::new(),
+        }
+    }
+
+    /// Replace the buffer content while preserving editor state (view, syntax, etc.).
+    ///
+    /// This is used when external changes (e.g., WYSIWYG editing, file reload) modify
+    /// tab.content and the FerriteEditor needs to be updated without full recreation.
+    /// Unlike `from_string()`, this preserves:
+    /// - ViewState (scroll position, viewport)
+    /// - Syntax highlighting configuration
+    /// - Font settings
+    /// - Fold state configuration (folds are cleared since content changed)
+    /// - Search state
+    ///
+    /// The cursor is clamped to valid bounds after content replacement.
+    pub fn set_content(&mut self, content: &str) {
+        self.buffer = TextBuffer::from_string(content);
+        self.history = EditHistory::new();
+        self.line_cache.invalidate();
+        self.content_dirty = true;
+        self.fold_state = FoldState::new();
+        // Clamp all selections to valid bounds
+        let max_line = self.buffer.line_count().saturating_sub(1);
+        for sel in &mut self.selections {
+            sel.anchor.line = sel.anchor.line.min(max_line);
+            sel.head.line = sel.head.line.min(max_line);
+            let anchor_line_len = self.buffer.get_line(sel.anchor.line)
+                .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
+                .unwrap_or(0);
+            sel.anchor.column = sel.anchor.column.min(anchor_line_len);
+            let head_line_len = self.buffer.get_line(sel.head.line)
+                .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
+                .unwrap_or(0);
+            sel.head.column = sel.head.column.min(head_line_len);
         }
     }
 
@@ -790,6 +837,10 @@ impl FerriteEditor {
             return false;
         }
 
+        // Force a new undo group so formatting is always a discrete undo entry,
+        // separate from any prior typing within the 500ms grouping window.
+        self.history.break_group();
+
         // Record the entire text replacement as a single undo operation
         // This captures the full before/after state for proper undo
         self.history.record_operation(EditOperation::Delete {
@@ -800,6 +851,9 @@ impl FerriteEditor {
             pos: 0,
             text: result.text.clone(),
         });
+
+        // Close the formatting undo group so subsequent typing starts a new group
+        self.history.break_group();
 
         // Replace buffer content
         // Clear existing content and insert new
@@ -885,6 +939,10 @@ impl FerriteEditor {
             return false;
         }
 
+        // Force a new undo group so formatting is always a discrete undo entry,
+        // separate from any prior typing within the 500ms grouping window.
+        self.history.break_group();
+
         // Record the entire text replacement as a single undo operation
         self.history.record_operation(EditOperation::Delete {
             pos: 0,
@@ -894,6 +952,9 @@ impl FerriteEditor {
             pos: 0,
             text: result.text.clone(),
         });
+
+        // Close the formatting undo group so subsequent typing starts a new group
+        self.history.break_group();
 
         // Replace buffer content
         let old_len = self.buffer.len();
@@ -1269,14 +1330,16 @@ impl FerriteEditor {
         }
         
         // Clear cache if content changed
-        // NOTE: We only invalidate the line cache, NOT the wrap_info.
+        // NOTE: We only invalidate the line cache, NOT the full wrap_info.
         // Clearing wrap_info causes flickering because y-position calculations
         // alternate between two different methods on consecutive frames.
-        // The wrap_info will be updated as we render each line anyway.
+        // Instead, we TRUNCATE wrap_info to match the current line count, which
+        // removes stale entries for deleted lines while preserving valid ones.
         if self.content_dirty {
             self.line_cache.invalidate();
-            // Don't clear wrap_info here - it causes flickering!
-            // self.view.clear_wrap_info();
+            // Truncate stale wrap_info entries (don't full-clear to avoid flickering)
+            let current_lines = self.buffer.line_count();
+            self.view.truncate_wrap_info(current_lines);
             self.content_dirty = false;
         }
 
@@ -1395,7 +1458,7 @@ impl FerriteEditor {
         
         // Build a map of y-positions for all lines we need to render
         // This ensures consistent positioning regardless of cached state
-        let mut line_y_positions: Vec<f32> = Vec::with_capacity(end_line - start_line);
+        let mut line_y_positions: Vec<f32> = Vec::with_capacity(end_line.saturating_sub(start_line));
         
         // Calculate y for lines from start_line to end_line
         // First, calculate cumulative heights from first_visible backwards to start_line
@@ -1504,17 +1567,29 @@ impl FerriteEditor {
                 if self.wrap_enabled {
                     let galley = if use_syntax {
                         // Syntax-highlighted wrapped galley
-                        let lang = self.syntax_language.as_deref().unwrap();
-                        let segments = self.highlight_line(display_content, lang);
-                        self.line_cache.get_galley_highlighted(
+                        // Check cache first to avoid expensive highlighting on every frame
+                        let wrap_width_opt = Some(effective_wrap_width);
+                        if let Some(cached) = self.line_cache.get_cached_highlighted_galley(
                             display_content,
-                            &segments,
-                            &painter,
-                            font_id.clone(),
+                            &font_id,
                             text_color,
                             self.syntax_theme_hash,
-                            Some(effective_wrap_width),
-                        )
+                            wrap_width_opt,
+                        ) {
+                            cached
+                        } else {
+                            let lang = self.syntax_language.as_deref().unwrap();
+                            let segments = self.highlight_line(display_content, lang);
+                            self.line_cache.get_galley_highlighted(
+                                display_content,
+                                &segments,
+                                &painter,
+                                font_id.clone(),
+                                text_color,
+                                self.syntax_theme_hash,
+                                wrap_width_opt,
+                            )
+                        }
                     } else {
                         // Plain wrapped galley
                         self.line_cache.get_galley_wrapped(
@@ -1543,17 +1618,28 @@ impl FerriteEditor {
 
                     if use_syntax {
                         // Syntax-highlighted non-wrapped galley
-                        let lang = self.syntax_language.as_deref().unwrap();
-                        let segments = self.highlight_line(display_content, lang);
-                        let galley = self.line_cache.get_galley_highlighted(
+                        // Check cache first to avoid expensive highlighting on every frame
+                        let galley = if let Some(cached) = self.line_cache.get_cached_highlighted_galley(
                             display_content,
-                            &segments,
-                            &painter,
-                            font_id.clone(),
+                            &font_id,
                             text_color,
                             self.syntax_theme_hash,
-                            None, // No wrap
-                        );
+                            None,
+                        ) {
+                            cached
+                        } else {
+                            let lang = self.syntax_language.as_deref().unwrap();
+                            let segments = self.highlight_line(display_content, lang);
+                            self.line_cache.get_galley_highlighted(
+                                display_content,
+                                &segments,
+                                &painter,
+                                font_id.clone(),
+                                text_color,
+                                self.syntax_theme_hash,
+                                None, // No wrap
+                            )
+                        };
                         // Track max line width for horizontal scrollbar
                         max_line_width = max_line_width.max(galley.size().x);
                         painter.galley(egui::Pos2::new(x, y), galley, text_color);
@@ -1575,9 +1661,11 @@ impl FerriteEditor {
             }
         }
 
-        // Rebuild height cache after updating wrap info
+        // Rebuild height cache after updating wrap info (only when wrap_info changed)
+        // and advance scrollbar smoothing every frame for smooth transitions
         if self.wrap_enabled {
             self.view.rebuild_height_cache(total_lines);
+            self.view.advance_scrollbar_smoothing(total_lines);
         }
 
         // Render selection backgrounds (before cursors) - handles all selections
@@ -2006,6 +2094,15 @@ impl FerriteEditor {
                     }
                 }
                 
+                // Skip keyboard and text events during active IME composition.
+                // When composing (e.g., Chinese pinyin), keys like Backspace modify the
+                // composition buffer inside the IME — they must not also modify editor text.
+                if self.ime_enabled {
+                    if matches!(event, egui::Event::Key { .. } | egui::Event::Text(_)) {
+                        continue;
+                    }
+                }
+
                 // Handle egui's Copy/Cut events (generated by OS or egui itself)
                 match event {
                     egui::Event::Copy => {
@@ -2119,6 +2216,63 @@ impl FerriteEditor {
                     }
                 }
                 
+                // ── Vim mode interception ─────────────────────────────────────
+                // When Vim mode is active, route key events through VimState first.
+                // In Normal/Visual mode most keys are consumed by Vim; in Insert
+                // mode, only Escape is consumed (everything else passes through).
+                if self.vim_mode_enabled {
+                    // Vim intercepts Key events
+                    if let egui::Event::Key { key, pressed: true, modifiers, .. } = event {
+                        let idx = self.primary_selection_index.min(self.selections.len().saturating_sub(1));
+                        let mut sel = self.selections.get(idx).copied().unwrap_or_else(Selection::start);
+
+                        let vim_result = self.vim_state.handle_key(
+                            *key, modifiers, &mut self.buffer, &mut sel, &mut self.view,
+                        );
+
+                        if let Some(s) = self.selections.get_mut(idx) {
+                            *s = sel;
+                        }
+
+                        match vim_result {
+                            super::vim::VimKeyResult::Handled(result) => {
+                                match result {
+                                    InputResult::TextChanged => {
+                                        self.content_dirty = true;
+                                        self.reset_cursor_blink();
+                                        self.view.ensure_line_visible(
+                                            self.primary_selection().head.line,
+                                            self.buffer.line_count(),
+                                        );
+                                    }
+                                    InputResult::CursorMoved => {
+                                        self.reset_cursor_blink();
+                                        self.view.ensure_line_visible(
+                                            self.primary_selection().head.line,
+                                            self.buffer.line_count(),
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                                continue;
+                            }
+                            super::vim::VimKeyResult::Consumed => {
+                                continue;
+                            }
+                            super::vim::VimKeyResult::Passthrough => {
+                                // Fall through to normal handling below
+                            }
+                        }
+                    }
+
+                    // In Normal/Visual mode, suppress text insertion events
+                    if let egui::Event::Text(_) = event {
+                        if !self.vim_state.should_insert_text() {
+                            continue;
+                        }
+                    }
+                }
+
                 // Handle paste event - multi-cursor paste
                 if let egui::Event::Paste(text) = event {
                     self.insert_text_at_all_cursors(text);
@@ -2231,13 +2385,20 @@ impl FerriteEditor {
         // Scrollbars fade out completely when mouse leaves the editor area
         // ═══════════════════════════════════════════════════════════════════════
         let viewport_height = self.view.viewport_height();
-        let content_height = self.view.total_content_height(total_lines);
+        // Use smoothed content height for scrollbar to prevent jumping
+        let scrollbar_height = self.view.scrollbar_content_height(total_lines);
+        
+        // Request repaint while scrollbar height is still smoothing toward target
+        let actual_height = self.view.total_content_height(total_lines);
+        if (scrollbar_height - actual_height).abs() > 1.0 {
+            ui.ctx().request_repaint();
+        }
         
         // Check if mouse is over the editor area (for scrollbar visibility)
         let mouse_over_editor = ui.rect_contains_pointer(rect);
         
         // Only show vertical scrollbar if content exceeds viewport
-        if content_height > viewport_height && viewport_height > 0.0 {
+        if scrollbar_height > viewport_height && viewport_height > 0.0 {
             Self::render_scrollbar(
                 ui,
                 &painter,
@@ -2246,15 +2407,11 @@ impl FerriteEditor {
                 true, // vertical
                 gutter_width + gutter_padding,
                 viewport_height,
-                content_height,
-                self.view.first_visible_line() as f32 * self.view.line_height() + self.view.scroll_offset_y(),
+                scrollbar_height,
+                self.view.current_scroll_y(),
                 mouse_over_editor,
                 |target_scroll| {
-                    let line_height = self.view.line_height();
-                    if line_height > 0.0 {
-                        let target_line = (target_scroll / line_height) as usize;
-                        self.view.scroll_to_line(target_line);
-                    }
+                    self.view.scroll_to_absolute(target_scroll, total_lines);
                 },
             );
         }
@@ -2747,6 +2904,25 @@ impl FerriteEditor {
     /// (to avoid interfering with contractions like "don't").
     pub fn set_auto_close_brackets(&mut self, enabled: bool) {
         self.auto_close_brackets = enabled;
+    }
+
+    /// Enables or disables Vim modal editing mode.
+    /// When enabled, the editor uses Normal/Insert/Visual modes with Vim keybindings.
+    /// When transitioning from enabled to disabled, resets Vim state to Normal mode.
+    pub fn set_vim_mode(&mut self, enabled: bool) {
+        if self.vim_mode_enabled && !enabled {
+            self.vim_state = super::vim::VimState::new();
+        }
+        self.vim_mode_enabled = enabled;
+    }
+
+    /// Returns the current Vim mode if Vim editing is enabled.
+    pub fn vim_mode(&self) -> Option<super::vim::VimMode> {
+        if self.vim_mode_enabled {
+            Some(self.vim_state.mode)
+        } else {
+            None
+        }
     }
 
     /// Takes the fold toggle line if a fold was toggled this frame.

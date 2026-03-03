@@ -110,6 +110,10 @@ pub enum RibbonAction {
     // Terminal
     /// Toggle terminal panel visibility
     ToggleTerminal,
+
+    // Productivity
+    /// Toggle productivity hub visibility
+    ToggleProductivity,
 }
 
 /// Ribbon UI state and rendering.
@@ -186,8 +190,8 @@ impl Ribbon {
         can_redo: bool,
         _can_save: bool,
         has_editor: bool,
-        formatting_state: Option<&FormattingState>,
-        outline_enabled: bool,
+        _formatting_state: Option<&FormattingState>,
+        _outline_enabled: bool,
         _sync_scroll_enabled: bool,
         is_workspace_mode: bool,
         file_type: FileType,
@@ -328,199 +332,10 @@ impl Ribbon {
             ui.add_space(4.0);
 
             // ═══════════════════════════════════════════════════════════════════
-            // Format Group (Adaptive based on file type)
+            // Format Group (Structured data only - markdown formatting moved to
+            // bottom toolbar in the editor area)
             // ═══════════════════════════════════════════════════════════════════
-            if file_type.is_markdown() {
-                // Markdown formatting buttons
-                if !self.collapsed {
-                    ui.label(
-                        RichText::new(t!("menu.format.label").to_string())
-                            .size(10.0)
-                            .color(theme_colors.text.muted),
-                    );
-                }
-
-                // Get formatting state for button highlighting
-                let is_bold = formatting_state.map(|s| s.is_bold).unwrap_or(false);
-                let is_italic = formatting_state.map(|s| s.is_italic).unwrap_or(false);
-                let is_code = formatting_state.map(|s| s.is_inline_code).unwrap_or(false);
-
-                // Bold button
-                if format_button(
-                    ui,
-                    "B",
-                    &MarkdownFormatCommand::Bold.tooltip(),
-                    has_editor,
-                    is_bold,
-                    is_dark,
-                    true,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::Bold));
-                }
-
-                // Italic button
-                if format_button(
-                    ui,
-                    "I",
-                    &MarkdownFormatCommand::Italic.tooltip(),
-                    has_editor,
-                    is_italic,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::Italic));
-                }
-
-                // Inline code button
-                if format_button(
-                    ui,
-                    "<>",
-                    &MarkdownFormatCommand::InlineCode.tooltip(),
-                    has_editor,
-                    is_code,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::InlineCode));
-                }
-
-                // Link button
-                let is_link = formatting_state.map(|s| s.is_link).unwrap_or(false);
-                if format_button(
-                    ui,
-                    "[~]",
-                    &MarkdownFormatCommand::Link.tooltip(),
-                    has_editor,
-                    is_link,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::Link));
-                }
-
-                ui.add_space(2.0);
-
-                // Heading dropdown/buttons (compact)
-                let current_heading = formatting_state.and_then(|s| s.heading_level);
-                let heading_label = current_heading
-                    .map(|h| format!("H{}", h as u8))
-                    .unwrap_or_else(|| "H".to_string());
-
-                egui::ComboBox::from_id_source("heading_dropdown")
-                    .selected_text(RichText::new(heading_label).size(12.0))
-                    .width(40.0)
-                    .show_ui(ui, |ui| {
-                        for level in 1..=6u8 {
-                            let is_selected =
-                                current_heading.map(|h| h as u8 == level).unwrap_or(false);
-                            let label = t!("ribbon.heading_level", level = level).to_string();
-                            if ui
-                                .selectable_label(is_selected, &label)
-                                .on_hover_text(format!("{}+{}", modifier_symbol(), level))
-                                .clicked()
-                            {
-                                action = Some(RibbonAction::Format(
-                                    MarkdownFormatCommand::Heading(level),
-                                ));
-                            }
-                        }
-                    });
-
-                ui.add_space(2.0);
-
-                // List buttons
-                let is_bullet = formatting_state.map(|s| s.is_bullet_list).unwrap_or(false);
-                let is_numbered = formatting_state
-                    .map(|s| s.is_numbered_list)
-                    .unwrap_or(false);
-
-                if format_button(
-                    ui,
-                    "-",
-                    &MarkdownFormatCommand::BulletList.tooltip(),
-                    has_editor,
-                    is_bullet,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::BulletList));
-                }
-
-                if format_button(
-                    ui,
-                    "1.",
-                    &MarkdownFormatCommand::NumberedList.tooltip(),
-                    has_editor,
-                    is_numbered,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::NumberedList));
-                }
-
-                // Blockquote button
-                let is_quote = formatting_state.map(|s| s.is_blockquote).unwrap_or(false);
-                if format_button(
-                    ui,
-                    ">",
-                    &MarkdownFormatCommand::Blockquote.tooltip(),
-                    has_editor,
-                    is_quote,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::Blockquote));
-                }
-
-                // Code block button
-                let is_code_block = formatting_state.map(|s| s.is_code_block).unwrap_or(false);
-                if format_button(
-                    ui,
-                    "{}",
-                    &MarkdownFormatCommand::CodeBlock.tooltip(),
-                    has_editor,
-                    is_code_block,
-                    is_dark,
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::Format(MarkdownFormatCommand::CodeBlock));
-                }
-
-                ui.add_space(2.0);
-
-                // Table of Contents button
-                if icon_button(
-                    ui,
-                    "☰",
-                    &format!("Insert/Update Table of Contents ({}+Shift+U)", modifier_symbol()),
-                    has_editor,
-                    is_dark,
-                )
-                .clicked()
-                {
-                    action = Some(RibbonAction::InsertToc);
-                }
-
-                ui.add_space(4.0);
-                vertical_separator(ui, separator_color, self.height() - 8.0);
-                ui.add_space(4.0);
-            } else if file_type.is_structured() {
+            if file_type.is_structured() {
                 // Structured data buttons (JSON/YAML/TOML)
                 if !self.collapsed {
                     ui.label(
@@ -585,26 +400,7 @@ impl Ribbon {
                 action = Some(RibbonAction::FindReplace);
             }
 
-            // Outline toggle
-            let outline_icon = if outline_enabled { "📑" } else { "📋" };
-            let outline_tooltip: String = if file_type.is_markdown() {
-                if outline_enabled {
-                    format!("Hide Outline ({}+Shift+O)", modifier_symbol())
-                } else {
-                    format!("Show Outline ({}+Shift+O)", modifier_symbol())
-                }
-            } else if file_type.is_structured() {
-                if outline_enabled {
-                    t!("ribbon.hide_info_panel").to_string()
-                } else {
-                    t!("ribbon.show_info_panel").to_string()
-                }
-            } else {
-                t!("ribbon.toggle_outline").to_string()
-            };
-            if icon_button(ui, outline_icon, &outline_tooltip, true, is_dark).clicked() {
-                action = Some(RibbonAction::ToggleOutline);
-            }
+            // Note: Outline toggle removed from ribbon - now accessible via side panel toggle strip
 
             ui.add_space(4.0);
             vertical_separator(ui, separator_color, self.height() - 8.0);
@@ -661,6 +457,7 @@ impl Ribbon {
                 action = Some(RibbonAction::ToggleTerminal);
             }
 
+            // Note: Productivity Hub button removed - accessible via side panel toggle strip
             // Note: Settings Group removed - controls moved to title bar and Settings panel
         });
 
@@ -729,89 +526,7 @@ fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str, enabled: bool, is_dark: b
     btn.on_hover_text(tooltip)
 }
 
-/// Render a format button with active state highlighting.
-#[allow(clippy::too_many_arguments)]
-fn format_button(
-    ui: &mut Ui,
-    icon: &str,
-    tooltip: &str,
-    enabled: bool,
-    active: bool,
-    is_dark: bool,
-    bold_text: bool,
-) -> Response {
-    let text_color = if enabled {
-        if is_dark {
-            Color32::from_rgb(220, 220, 220)
-        } else {
-            Color32::from_rgb(50, 50, 50)
-        }
-    } else if is_dark {
-        Color32::from_rgb(100, 100, 100)
-    } else {
-        Color32::from_rgb(160, 160, 160)
-    };
-
-    let active_bg = if is_dark {
-        Color32::from_rgb(70, 90, 120)
-    } else {
-        Color32::from_rgb(200, 220, 240)
-    };
-
-    let hover_bg = if is_dark {
-        Color32::from_rgb(60, 60, 60)
-    } else {
-        Color32::from_rgb(220, 220, 220)
-    };
-
-    let mut text = RichText::new(icon).size(12.0).color(text_color);
-    if bold_text {
-        text = text.strong();
-    }
-
-    let btn = ui.add_enabled(
-        enabled,
-        egui::Button::new(text)
-            .frame(false)
-            .min_size(Vec2::new(24.0, 22.0)),
-    );
-
-    if active && enabled {
-        ui.painter()
-            .rect_filled(btn.rect, egui::Rounding::same(3.0), active_bg);
-
-        let font_id = if bold_text {
-            egui::FontId::new(12.0, egui::FontFamily::Name("Inter-Bold".into()))
-        } else {
-            egui::FontId::proportional(12.0)
-        };
-        ui.painter().text(
-            btn.rect.center(),
-            egui::Align2::CENTER_CENTER,
-            icon,
-            font_id,
-            text_color,
-        );
-    } else if btn.hovered() && enabled {
-        ui.painter()
-            .rect_filled(btn.rect, egui::Rounding::same(3.0), hover_bg);
-
-        let font_id = if bold_text {
-            egui::FontId::new(12.0, egui::FontFamily::Name("Inter-Bold".into()))
-        } else {
-            egui::FontId::proportional(12.0)
-        };
-        ui.painter().text(
-            btn.rect.center(),
-            egui::Align2::CENTER_CENTER,
-            icon,
-            font_id,
-            text_color,
-        );
-    }
-
-    btn.on_hover_text(tooltip)
-}
+// Note: format_button was removed - markdown formatting buttons moved to format_toolbar.rs
 
 /// Draw a vertical separator line.
 fn vertical_separator(ui: &mut Ui, color: Color32, height: f32) {

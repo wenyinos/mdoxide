@@ -404,6 +404,46 @@ impl LineCache {
         galley
     }
 
+    /// Checks if a syntax-highlighted galley is already cached, returning it if so.
+    ///
+    /// This allows callers to skip the expensive syntax highlighting step when the
+    /// galley is already cached. If this returns `None`, the caller should perform
+    /// syntax highlighting and then call `get_galley_highlighted` to create and cache
+    /// the galley.
+    ///
+    /// # Arguments
+    /// * `line_content` - The raw text content of the line
+    /// * `font_id` - The font to use for the galley
+    /// * `default_color` - Fallback color for text
+    /// * `syntax_theme_hash` - Hash of the current syntax theme
+    /// * `wrap_width` - Optional wrap width for word wrapping
+    ///
+    /// # Returns
+    /// `Some(Arc<Galley>)` if cached, `None` if highlighting is needed.
+    pub fn get_cached_highlighted_galley(
+        &mut self,
+        line_content: &str,
+        font_id: &FontId,
+        default_color: Color32,
+        syntax_theme_hash: u64,
+        wrap_width: Option<f32>,
+    ) -> Option<Arc<Galley>> {
+        let key = CacheKey::new_highlighted(
+            line_content,
+            font_id,
+            default_color,
+            syntax_theme_hash,
+            wrap_width,
+        );
+
+        if let Some(galley) = self.cache.get(&key).cloned() {
+            self.update_lru_order(key);
+            Some(galley)
+        } else {
+            None
+        }
+    }
+
     /// Gets a cached galley with word wrapping enabled.
     ///
     /// This method creates a galley that wraps text at the specified width.

@@ -5,10 +5,12 @@
 
 use crate::config::{CjkFontPreference, EditorFont, KeyBinding, KeyboardShortcuts, KeyCode, KeyModifiers, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme, ViewMode};
 use crate::terminal::MonitorInfo;
+use crate::update::{self, UpdateCheckResult, UpdateState};
 use crate::fonts;
 use crate::markdown::syntax::get_available_themes;
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
+use std::sync::mpsc;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Localized Display Helpers
@@ -20,28 +22,6 @@ fn font_description(font: &EditorFont) -> String {
         EditorFont::Inter => t!("settings.editor.font_inter_desc").to_string(),
         EditorFont::JetBrainsMono => t!("settings.editor.font_jetbrains_desc").to_string(),
         EditorFont::Custom(_) => t!("settings.editor.custom_font_desc").to_string(),
-    }
-}
-
-/// Get localized CJK preference display name
-fn cjk_display_name(pref: &CjkFontPreference) -> String {
-    match pref {
-        CjkFontPreference::Auto => t!("settings.editor.cjk_auto").to_string(),
-        CjkFontPreference::Korean => t!("settings.editor.cjk_korean").to_string(),
-        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese").to_string(),
-        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese").to_string(),
-        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese").to_string(),
-    }
-}
-
-/// Get localized CJK preference description
-fn cjk_description(pref: &CjkFontPreference) -> String {
-    match pref {
-        CjkFontPreference::Auto => t!("settings.editor.cjk_auto_desc").to_string(),
-        CjkFontPreference::Korean => t!("settings.editor.cjk_korean_desc").to_string(),
-        CjkFontPreference::SimplifiedChinese => t!("settings.editor.cjk_simplified_chinese_desc").to_string(),
-        CjkFontPreference::TraditionalChinese => t!("settings.editor.cjk_traditional_chinese_desc").to_string(),
-        CjkFontPreference::Japanese => t!("settings.editor.cjk_japanese_desc").to_string(),
     }
 }
 
@@ -130,6 +110,7 @@ pub enum SettingsSection {
     Files,
     Keyboard,
     Terminal,
+    About,
 }
 
 impl SettingsSection {
@@ -140,7 +121,8 @@ impl SettingsSection {
             SettingsSection::Editor => t!("settings.editor.title"),
             SettingsSection::Files => t!("settings.files.title"),
             SettingsSection::Keyboard => t!("settings.keyboard.title"),
-            SettingsSection::Terminal => std::borrow::Cow::Borrowed("Terminal"), // TODO: i18n
+            SettingsSection::Terminal => t!("settings.terminal.title"),
+            SettingsSection::About => t!("settings.about.title"),
         }
         .to_string()
     }
@@ -153,6 +135,7 @@ impl SettingsSection {
             SettingsSection::Files => "📁",
             SettingsSection::Keyboard => "⌨",
             SettingsSection::Terminal => ">_",
+            SettingsSection::About => "ℹ",
         }
     }
 }
@@ -180,7 +163,7 @@ pub struct KeyCaptureState {
 }
 
 /// Settings panel state and rendering.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SettingsPanel {
     /// Currently active settings section.
     active_section: SettingsSection,
@@ -192,6 +175,10 @@ pub struct SettingsPanel {
     conflict_warning: Option<(ShortcutCommand, String)>,
     /// Cached monitor info
     cached_monitor_info: Option<Vec<MonitorInfo>>,
+    /// Current update check state
+    update_state: UpdateState,
+    /// Receiver for background update check result
+    update_check_rx: Option<mpsc::Receiver<UpdateCheckResult>>,
 }
 
 impl Default for SettingsPanel {
@@ -209,6 +196,8 @@ impl SettingsPanel {
             keyboard_filter: String::new(),
             conflict_warning: None,
             cached_monitor_info: None,
+            update_state: UpdateState::default(),
+            update_check_rx: None,
         }
     }
 
@@ -282,6 +271,7 @@ impl SettingsPanel {
                             SettingsSection::Files,
                             SettingsSection::Keyboard,
                             SettingsSection::Terminal,
+                            SettingsSection::About,
                         ] {
                             let selected = self.active_section == section;
                             let text = format!("{} {}", section.icon(), section.label());
@@ -346,6 +336,9 @@ impl SettingsPanel {
                                             output.changed = true;
                                         }
                                     }
+                                    SettingsSection::About => {
+                                        self.show_about_section(ui, ctx);
+                                    }
                                 }
                             });
                     });
@@ -380,18 +373,143 @@ impl SettingsPanel {
         output
     }
 
+    /// Render the settings panel inline within a tab (not as a modal window).
+    ///
+    /// This is used when settings are displayed as a special tab in the main
+    /// editor area, giving more screen real estate than the modal version.
+    pub fn show_inline(
+        &mut self,
+        ui: &mut Ui,
+        settings: &mut Settings,
+        is_dark: bool,
+    ) -> SettingsPanelOutput {
+        let mut output = SettingsPanelOutput::default();
+
+        let available = ui.available_size();
+        let sidebar_width = 160.0;
+
+        ui.horizontal(|ui| {
+            // Left side: Section tabs
+            ui.vertical(|ui| {
+                ui.set_min_width(sidebar_width);
+                ui.set_max_width(sidebar_width);
+                ui.set_min_height(available.y - 50.0);
+
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(format!("⚙ {}", t!("settings.title")))
+                        .size(18.0)
+                        .strong(),
+                );
+                ui.add_space(12.0);
+
+                for section in [
+                    SettingsSection::Appearance,
+                    SettingsSection::Editor,
+                    SettingsSection::Files,
+                    SettingsSection::Keyboard,
+                    SettingsSection::Terminal,
+                    SettingsSection::About,
+                ] {
+                    let selected = self.active_section == section;
+                    let text = format!("{} {}", section.icon(), section.label());
+
+                    let btn = ui.add_sized(
+                        [sidebar_width - 16.0, 32.0],
+                        egui::SelectableLabel::new(
+                            selected,
+                            RichText::new(text).size(14.0),
+                        ),
+                    );
+
+                    if btn.clicked() {
+                        self.active_section = section;
+                        if section != SettingsSection::Keyboard {
+                            self.key_capture = None;
+                            self.conflict_warning = None;
+                        }
+                    }
+                }
+
+                // Reset button at the bottom of sidebar
+                ui.add_space(16.0);
+                ui.separator();
+                ui.add_space(8.0);
+                if ui
+                    .add_sized(
+                        [sidebar_width - 16.0, 28.0],
+                        egui::Button::new(format!("↺ {}", t!("settings.reset_all"))),
+                    )
+                    .on_hover_text(t!("settings.reset_tooltip"))
+                    .clicked()
+                {
+                    output.reset_requested = true;
+                }
+            });
+
+            ui.separator();
+
+            // Right side: Section content (fills remaining space)
+            ui.vertical(|ui| {
+                let content_width = (available.x - sidebar_width - 24.0).max(300.0);
+                ui.set_min_width(content_width);
+
+                egui::ScrollArea::vertical()
+                    .id_source(format!("settings_inline_scroll_{:?}", self.active_section))
+                    .show(ui, |ui| {
+                        ui.set_min_width(content_width - 16.0);
+                        ui.add_space(8.0);
+
+                        match self.active_section {
+                            SettingsSection::Appearance => {
+                                if self.show_appearance_section(ui, settings, is_dark) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Editor => {
+                                if self.show_editor_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Files => {
+                                if self.show_files_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Keyboard => {
+                                if self.show_keyboard_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::Terminal => {
+                                if self.show_terminal_section(ui, settings) {
+                                    output.changed = true;
+                                }
+                            }
+                            SettingsSection::About => {
+                                let ctx = ui.ctx().clone();
+                                self.show_about_section(ui, &ctx);
+                            }
+                        }
+                    });
+            });
+        });
+
+        output
+    }
+
     /// Show the Terminal settings section.
     ///
     /// Returns true if any setting was changed.
     fn show_terminal_section(&mut self, ui: &mut Ui, settings: &mut Settings) -> bool {
         let mut changed = false;
 
-        ui.heading("Terminal"); // TODO: i18n
+        ui.heading(t!("settings.terminal.title").to_string());
         ui.add_space(8.0);
 
         // Terminal Enabled
         if ui
-            .checkbox(&mut settings.terminal_enabled, "Enable Integrated Terminal") // TODO: i18n
+            .checkbox(&mut settings.terminal_enabled, t!("settings.terminal.enable").to_string())
             .changed()
         {
             changed = true;
@@ -403,7 +521,7 @@ impl SettingsPanel {
 
         // Terminal Font Size
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Font Size").strong()); // TODO: i18n
+            ui.label(RichText::new(t!("settings.terminal.font_size").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{}px", settings.terminal_font_size as u32));
         });
@@ -427,7 +545,7 @@ impl SettingsPanel {
 
         // Scrollback Lines
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Scrollback Lines").strong()); // TODO: i18n
+            ui.label(RichText::new(t!("settings.terminal.scrollback").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{}", settings.terminal_scrollback_lines));
         });
@@ -453,8 +571,8 @@ impl SettingsPanel {
 
         // Copy on Select
         if ui
-            .checkbox(&mut settings.terminal_copy_on_select, "Copy Selection Automatically") // TODO: i18n
-            .on_hover_text("Automatically copy text to clipboard when selecting with mouse")
+            .checkbox(&mut settings.terminal_copy_on_select, t!("settings.terminal.copy_selection").to_string())
+            .on_hover_text(t!("settings.terminal.copy_selection_tooltip").to_string())
             .changed()
         {
             changed = true;
@@ -465,7 +583,7 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Terminal Theme
-        ui.label(RichText::new("Terminal Theme").strong());
+        ui.label(RichText::new(t!("settings.terminal.theme").to_string()).strong());
         ui.add_space(4.0);
         
         egui::ComboBox::from_id_source("terminal_theme_combo")
@@ -484,7 +602,7 @@ impl SettingsPanel {
 
         // Terminal Opacity
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Background Opacity").strong());
+            ui.label(RichText::new(t!("settings.terminal.opacity").to_string()).strong());
             ui.add_space(8.0);
             ui.label(format!("{:.0}%", settings.terminal_opacity * 100.0));
         });
@@ -499,11 +617,11 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Terminal Startup Command
-        ui.label(RichText::new("Startup Command").strong());
-        ui.label(RichText::new("Command to run when opening a new terminal (e.g. 'echo Hello')").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.startup_command").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.startup_command_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
-        if ui.add(egui::TextEdit::singleline(&mut settings.terminal_startup_command).hint_text("Optional")).changed() {
+        if ui.add(egui::TextEdit::singleline(&mut settings.terminal_startup_command).hint_text(t!("settings.terminal.startup_command_hint").to_string())).changed() {
             changed = true;
         }
 
@@ -512,8 +630,8 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Monitor Information
-        ui.label(RichText::new("Detected Monitors").strong());
-        ui.label(RichText::new("Detected display layout for window distribution").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.monitors").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.monitors_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
         if self.cached_monitor_info.is_none() {
@@ -528,9 +646,9 @@ impl SettingsPanel {
             .show(ui, |ui| {
                 for (i, m) in monitors.iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(format!("Monitor {}:", i + 1));
+                        ui.label(t!("settings.terminal.monitor_label", index = i + 1).to_string());
                         ui.label(RichText::new(&m.name).strong());
-                        ui.label(format!("({}x{} at {},{})", m.width as u32, m.height as u32, m.x as i32, m.y as i32));
+                        ui.label(t!("settings.terminal.monitor_geometry", width = m.width as u32, height = m.height as u32, x = m.x as i32, y = m.y as i32).to_string());
                     });
                 }
             });
@@ -541,7 +659,7 @@ impl SettingsPanel {
 
         // Breathing color
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Breathing Indicator Color").strong());
+            ui.label(RichText::new(t!("settings.terminal.breathing_color").to_string()).strong());
             ui.add_space(8.0);
             if ui.color_edit_button_srgba(&mut settings.terminal_breathing_color).changed() {
                 changed = true;
@@ -553,12 +671,12 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Prompt patterns
-        ui.label(RichText::new("Custom Prompt Patterns").strong());
-        ui.label(RichText::new("Regex patterns to detect terminal prompt (one per line)").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.prompt_patterns").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.prompt_patterns_desc").to_string()).small().weak());
         ui.add_space(4.0);
         
         let mut patterns_text = settings.terminal_prompt_patterns.join("\n");
-        if ui.add(egui::TextEdit::multiline(&mut patterns_text).desired_rows(3).hint_text("e.g. ^\\w+@\\w+:")).changed() {
+        if ui.add(egui::TextEdit::multiline(&mut patterns_text).desired_rows(3).hint_text(t!("settings.terminal.prompt_patterns_hint").to_string())).changed() {
             settings.terminal_prompt_patterns = patterns_text.lines().map(|s| s.to_string()).filter(|s| !s.is_empty()).collect();
             changed = true;
         }
@@ -568,7 +686,7 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Auto-load
-        if ui.checkbox(&mut settings.terminal_auto_load_layout, "Auto-load Layout").on_hover_text("Automatically load 'terminal_layout.json' from project root").changed() {
+        if ui.checkbox(&mut settings.terminal_auto_load_layout, t!("settings.terminal.auto_load_layout").to_string()).on_hover_text(t!("settings.terminal.auto_load_layout_tooltip").to_string()).changed() {
             changed = true;
         }
 
@@ -577,20 +695,20 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Sound Notification
-        ui.label(RichText::new("Sound Notification").strong());
-        ui.label(RichText::new("Play a sound when terminal is waiting for input").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.sound_notification").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.sound_notification_desc").to_string()).small().weak());
         ui.add_space(4.0);
 
-        if ui.checkbox(&mut settings.terminal_sound_enabled, "Enable Sound on Prompt").on_hover_text("Play a notification sound when terminal detects a prompt (waiting for input)").changed() {
+        if ui.checkbox(&mut settings.terminal_sound_enabled, t!("settings.terminal.enable_sound").to_string()).on_hover_text(t!("settings.terminal.enable_sound_tooltip").to_string()).changed() {
             changed = true;
         }
 
         if settings.terminal_sound_enabled {
             ui.add_space(4.0);
             ui.indent("sound_file_settings", |ui| {
-                ui.label(RichText::new("Custom Sound File (optional)").small());
+                ui.label(RichText::new(t!("settings.terminal.custom_sound").to_string()).small());
                 let mut sound_path = settings.terminal_sound_file.clone().unwrap_or_default();
-                if ui.add(egui::TextEdit::singleline(&mut sound_path).hint_text("Leave empty for system beep")).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut sound_path).hint_text(t!("settings.terminal.custom_sound_hint").to_string())).changed() {
                     settings.terminal_sound_file = if sound_path.is_empty() {
                         None
                     } else {
@@ -606,15 +724,210 @@ impl SettingsPanel {
         ui.add_space(8.0);
 
         // Focus on Detect
-        ui.label(RichText::new("Auto-Focus on Input").strong());
-        ui.label(RichText::new("Automatically switch to terminal when it starts waiting for input").small().weak());
+        ui.label(RichText::new(t!("settings.terminal.auto_focus").to_string()).strong());
+        ui.label(RichText::new(t!("settings.terminal.auto_focus_desc").to_string()).small().weak());
         ui.add_space(4.0);
 
-        if ui.checkbox(&mut settings.terminal_focus_on_detect, "Focus Terminal on Prompt").on_hover_text("Automatically focus a terminal when it transitions from running to waiting for input").changed() {
+        if ui.checkbox(&mut settings.terminal_focus_on_detect, t!("settings.terminal.focus_on_prompt").to_string()).on_hover_text(t!("settings.terminal.focus_on_prompt_tooltip").to_string()).changed() {
             changed = true;
         }
 
         changed
+    }
+
+    /// Show the About section with version info and update check.
+    fn show_about_section(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        // Poll for update check result if we have a pending check
+        if let Some(rx) = &self.update_check_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    UpdateCheckResult::UpToDate => {
+                        self.update_state = UpdateState::UpToDate;
+                    }
+                    UpdateCheckResult::UpdateAvailable {
+                        version,
+                        release_url,
+                        ..
+                    } => {
+                        self.update_state = UpdateState::UpdateAvailable {
+                            version,
+                            release_url,
+                        };
+                    }
+                    UpdateCheckResult::Error(msg) => {
+                        self.update_state = UpdateState::Error(msg);
+                    }
+                }
+                self.update_check_rx = None;
+            }
+        }
+
+        // Request repaint while checking so we poll the channel
+        if matches!(self.update_state, UpdateState::Checking) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+
+        ui.heading(t!("settings.about.title"));
+        ui.add_space(8.0);
+
+        // Application info
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Ferrite").strong().size(16.0));
+            ui.label(
+                RichText::new(format!("v{}", update::current_version()))
+                    .monospace()
+                    .size(14.0),
+            );
+        });
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!("settings.about.description"))
+                .weak()
+                .small(),
+        );
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Check for Updates section
+        ui.label(RichText::new(t!("settings.about.updates")).strong());
+        ui.add_space(8.0);
+
+        match &self.update_state {
+            UpdateState::Idle => {
+                if ui
+                    .button(format!("🔄 {}", t!("settings.about.check_for_updates")))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::Checking => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(t!("settings.about.checking"));
+                });
+            }
+            UpdateState::UpToDate => {
+                let success_color = if ui.visuals().dark_mode {
+                    Color32::from_rgb(75, 210, 100)
+                } else {
+                    Color32::from_rgb(40, 167, 69)
+                };
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("✓ {}", t!("settings.about.up_to_date")))
+                            .color(success_color),
+                    );
+                });
+                ui.add_space(8.0);
+                if ui
+                    .small_button(t!("settings.about.check_again"))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::UpdateAvailable {
+                version,
+                release_url,
+            } => {
+                let version = version.clone();
+                let url = release_url.clone();
+
+                egui::Frame::none()
+                    .fill(ui.visuals().faint_bg_color)
+                    .rounding(6.0)
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(format!("🎉 {}", t!("settings.about.update_available")))
+                                .strong()
+                                .size(14.0),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(format!(
+                            "{}: v{} → v{}",
+                            t!("settings.about.new_version"),
+                            update::current_version(),
+                            version
+                        ));
+                        ui.add_space(8.0);
+                        if ui
+                            .button(format!("🌐 {}", t!("settings.about.view_release")))
+                            .clicked()
+                        {
+                            let _ = open::that(&url);
+                        }
+                    });
+                ui.add_space(8.0);
+                if ui
+                    .small_button(t!("settings.about.check_again"))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+            UpdateState::Error(msg) => {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("⚠ {}", t!("settings.about.check_failed")))
+                            .color(ui.visuals().error_fg_color),
+                    );
+                });
+                ui.label(RichText::new(msg).small().weak());
+                ui.add_space(8.0);
+                if ui
+                    .button(format!("🔄 {}", t!("settings.about.try_again")))
+                    .clicked()
+                {
+                    self.update_state = UpdateState::Checking;
+                    self.update_check_rx = Some(update::spawn_update_check());
+                }
+            }
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Links
+        ui.label(RichText::new(t!("settings.about.links")).strong());
+        ui.add_space(4.0);
+
+        if ui
+            .link(format!("📦 {}", t!("settings.about.all_releases")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite/releases");
+        }
+        if ui
+            .link(format!("🐛 {}", t!("settings.about.report_issue")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite/issues");
+        }
+        if ui
+            .link(format!("📖 {}", t!("settings.about.source_code")))
+            .clicked()
+        {
+            let _ = open::that("https://github.com/OlaProeis/Ferrite");
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // License
+        ui.label(
+            RichText::new(t!("settings.about.license"))
+                .small()
+                .weak(),
+        );
     }
 
     /// Show the Appearance settings section.
@@ -788,7 +1101,7 @@ impl SettingsPanel {
                 if !font_found {
                     ui.label(
                         RichText::new(t!("settings.editor.font_not_found"))
-                            .color(Color32::RED)
+                            .color(ui.visuals().error_fg_color)
                             .small(),
                     );
                 }
@@ -810,10 +1123,10 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         egui::ComboBox::from_id_source("cjk_preference_combo")
-            .selected_text(cjk_display_name(&settings.cjk_font_preference))
+            .selected_text(settings.cjk_font_preference.selector_display_name().to_string())
             .show_ui(ui, |ui| {
                 for pref in CjkFontPreference::all() {
-                    let label = format!("{} - {}", cjk_display_name(pref), cjk_description(pref));
+                    let label = format!("{} - {}", pref.selector_display_name(), pref.description());
                     if ui
                         .selectable_value(&mut settings.cjk_font_preference, *pref, label)
                         .changed()
@@ -907,11 +1220,11 @@ impl SettingsPanel {
 
         let current_lang = settings.language;
         egui::ComboBox::from_id_source("language_combo")
-            .selected_text(format!("🌐 {}", current_lang.native_name()))
+            .selected_text(format!("🌐 {}", current_lang.selector_display_name()))
             .show_ui(ui, |ui| {
                 for lang in Language::all() {
                     if ui
-                        .selectable_value(&mut settings.language, *lang, lang.native_name())
+                        .selectable_value(&mut settings.language, *lang, lang.selector_display_name())
                         .changed()
                     {
                         // Apply language change immediately
@@ -994,6 +1307,16 @@ impl SettingsPanel {
                 if ui
                     .checkbox(&mut settings.use_spaces, t!("settings.editor.use_spaces"))
                     .on_hover_text(t!("settings.editor.use_spaces_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.end_row();
+
+                // Row 5: Vim Mode
+                if ui
+                    .checkbox(&mut settings.vim_mode, t!("settings.editor.vim_mode"))
+                    .on_hover_text(t!("settings.editor.vim_mode_tooltip"))
                     .changed()
                 {
                     changed = true;
@@ -1431,9 +1754,10 @@ impl SettingsPanel {
 
         // Show conflict warning if any
         if let Some((cmd, msg)) = &self.conflict_warning {
+            let warn_color = ui.visuals().warn_fg_color;
             ui.horizontal(|ui| {
-                ui.label(RichText::new("⚠").color(Color32::YELLOW));
-                ui.label(RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg)).color(Color32::YELLOW));
+                ui.label(RichText::new("⚠").color(warn_color));
+                ui.label(RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg)).color(warn_color));
             });
             ui.add_space(4.0);
         }
@@ -1560,10 +1884,10 @@ impl SettingsPanel {
         }
 
         // Scrollable area for shortcuts list
+        // Uses available height - the outer container (modal or inline tab) handles overflow
         let filter_lower = self.keyboard_filter.to_lowercase();
 
         egui::ScrollArea::vertical()
-            .max_height(280.0)
             .show(ui, |ui| {
                 for (category, commands) in KeyboardShortcuts::commands_by_category() {
                     // Filter commands by search term
@@ -1664,6 +1988,7 @@ mod tests {
         assert_eq!(SettingsSection::Editor.label(), "Editor");
         assert_eq!(SettingsSection::Files.label(), "Files");
         assert_eq!(SettingsSection::Terminal.label(), "Terminal");
+        assert_eq!(SettingsSection::About.label(), "About");
     }
 
     #[test]
@@ -1672,6 +1997,7 @@ mod tests {
         assert_eq!(SettingsSection::Editor.icon(), "📝");
         assert_eq!(SettingsSection::Files.icon(), "📁");
         assert_eq!(SettingsSection::Terminal.icon(), ">_");
+        assert_eq!(SettingsSection::About.icon(), "ℹ");
     }
 
     #[test]

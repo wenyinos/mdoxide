@@ -315,8 +315,10 @@ fn apply_inline_format(
             suffix,
             &text[end..]
         );
+        // Preserve selection over the formatted text (including delimiters)
+        let new_start = start;
         let new_end = start + prefix.len() + selected_text.len() + suffix.len();
-        FormatResult::with_cursor(new_text, new_end)
+        FormatResult::with_selection(new_text, new_start, new_end)
     }
 }
 
@@ -794,6 +796,8 @@ mod tests {
         let result = apply_raw_format("Hello world", Some((0, 5)), MarkdownFormatCommand::Bold);
         assert_eq!(result.text, "**Hello** world");
         assert!(result.applied);
+        // Selection should be preserved over the formatted text
+        assert_eq!(result.selection, Some((0, 9))); // "**Hello**"
     }
 
     #[test]
@@ -1011,6 +1015,65 @@ mod tests {
         let tooltip = MarkdownFormatCommand::Bold.tooltip();
         assert!(tooltip.contains("Bold"));
         assert!(tooltip.contains("Ctrl+B"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Selection Preservation Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_bold_preserves_selection() {
+        // Select 'world' at position 6..11 → becomes '**world**' at 6..15
+        let result = apply_raw_format("Hello world", Some((6, 11)), MarkdownFormatCommand::Bold);
+        assert_eq!(result.text, "Hello **world**");
+        assert_eq!(result.selection, Some((6, 15)));
+    }
+
+    #[test]
+    fn test_italic_preserves_selection() {
+        // Select 'world' → becomes '*world*'
+        let result =
+            apply_raw_format("Hello world", Some((6, 11)), MarkdownFormatCommand::Italic);
+        assert_eq!(result.text, "Hello *world*");
+        assert_eq!(result.selection, Some((6, 13)));
+    }
+
+    #[test]
+    fn test_inline_code_preserves_selection() {
+        // Select 'code' → becomes '`code`'
+        let result =
+            apply_raw_format("some code here", Some((5, 9)), MarkdownFormatCommand::InlineCode);
+        assert_eq!(result.text, "some `code` here");
+        assert_eq!(result.selection, Some((5, 11)));
+    }
+
+    #[test]
+    fn test_strikethrough_preserves_selection() {
+        // Select 'old' → becomes '~~old~~'
+        let result =
+            apply_raw_format("the old text", Some((4, 7)), MarkdownFormatCommand::Strikethrough);
+        assert_eq!(result.text, "the ~~old~~ text");
+        assert_eq!(result.selection, Some((4, 11)));
+    }
+
+    #[test]
+    fn test_bold_toggle_off_preserves_selection() {
+        // Select '**Hello**' → toggle off → 'Hello' selected
+        let result =
+            apply_raw_format("**Hello** world", Some((0, 9)), MarkdownFormatCommand::Bold);
+        assert_eq!(result.text, "Hello world");
+        assert!(!result.applied);
+        assert_eq!(result.selection, Some((0, 5))); // "Hello" selected
+    }
+
+    #[test]
+    fn test_surrounding_bold_toggle_off_preserves_selection() {
+        // Cursor inside **Hello** with just 'Hello' selected → remove surrounding **
+        let result =
+            apply_raw_format("**Hello** world", Some((2, 7)), MarkdownFormatCommand::Bold);
+        assert_eq!(result.text, "Hello world");
+        assert!(!result.applied);
+        assert_eq!(result.selection, Some((0, 5))); // "Hello" selected
     }
 
     // ─────────────────────────────────────────────────────────────────────────

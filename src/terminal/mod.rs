@@ -830,6 +830,15 @@ impl TerminalManager {
         !self.tabs.is_empty()
     }
 
+    /// Get IDs and running status of all terminals.
+    /// Returns pairs of (terminal_id, is_running, title).
+    pub fn terminal_statuses(&self) -> Vec<(usize, bool, String)> {
+        self.terminals
+            .iter()
+            .map(|(&id, t)| (id, t.is_running(), t.title().to_string()))
+            .collect()
+    }
+
     /// Poll all terminals for new data.
     /// Returns true if any terminal had new data.
     pub fn poll_all(&mut self) -> bool {

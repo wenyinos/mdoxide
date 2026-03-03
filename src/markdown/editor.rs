@@ -53,16 +53,18 @@ use crate::markdown::ast_ops::{
     outdent_list_item, split_list_item, split_paragraph, EditContext, EditNodeType, StructuralEdit,
 };
 use crate::markdown::parser::{
-    parse_markdown, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
+    parse_markdown, CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
 use crate::markdown::widgets::{
     CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
     RenderedLinkState, RenderedLinkWidget, TableData, TableEditState, WidgetColors,
 };
 use eframe::egui::{
-    self, Color32, FontId, Key, Response, RichText, ScrollArea, TextEdit, Ui, Vec2,
+    self, Color32, ColorImage, FontId, Key, Response, RichText, ScrollArea, TextEdit,
+    TextureHandle, TextureOptions, Ui, Vec2,
 };
 use log::{debug, warn};
+use std::path::{Path, PathBuf};
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Editor Mode
@@ -103,6 +105,9 @@ pub struct MarkdownEditorOutput {
     /// Line-to-Y mappings for rendered mode (source_line -> rendered_y)
     /// Used for accurate scroll sync between Raw and Rendered modes
     pub line_mappings: Vec<LineMapping>,
+    /// Wikilink target that was clicked (for navigation).
+    /// When set, the caller should resolve this target to a file path and open it.
+    pub wikilink_clicked: Option<String>,
 }
 
 /// Maps a source line range to a rendered Y position range.
@@ -435,6 +440,18 @@ pub struct MarkdownEditor<'a> {
     zen_max_column_width: f32,
     /// CJK paragraph first-line indentation
     paragraph_indent: ParagraphIndent,
+    /// File context for wikilink resolution (current file dir + workspace root)
+    wikilink_context: Option<WikilinkContext>,
+}
+
+/// Context for resolving wikilinks to actual files during rendering.
+/// Stored in egui memory per-frame so `render_wikilink` can check file existence.
+#[derive(Debug, Clone)]
+pub struct WikilinkContext {
+    /// Directory of the currently open file (for relative resolution)
+    pub current_dir: Option<PathBuf>,
+    /// Workspace root (for workspace-wide resolution)
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl<'a> MarkdownEditor<'a> {
@@ -454,6 +471,7 @@ impl<'a> MarkdownEditor<'a> {
             zen_mode: false,
             zen_max_column_width: 80.0,
             paragraph_indent: ParagraphIndent::Off,
+            wikilink_context: None,
         }
     }
 
@@ -542,6 +560,16 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn paragraph_indent(mut self, indent: ParagraphIndent) -> Self {
         self.paragraph_indent = indent;
+        self
+    }
+
+    /// Set the wikilink resolution context (current file directory and workspace root).
+    ///
+    /// When provided, wikilinks that cannot be resolved to existing files are
+    /// rendered with a distinct "broken link" visual style.
+    #[must_use]
+    pub fn wikilink_context(mut self, ctx: WikilinkContext) -> Self {
+        self.wikilink_context = Some(ctx);
         self
     }
 
@@ -635,6 +663,7 @@ impl<'a> MarkdownEditor<'a> {
             content_height: scroll_output.content_size.y,
             viewport_height: scroll_output.inner_rect.height(),
             line_mappings: Vec::new(), // Raw mode doesn't need line mappings
+            wikilink_clicked: None, // Raw mode doesn't have clickable wikilinks
         }
     }
 
@@ -655,6 +684,16 @@ impl<'a> MarkdownEditor<'a> {
             mem.data
                 .remove::<bool>(egui::Id::new("link_click_consumed_this_frame"));
         });
+
+        // Store wikilink resolution context in egui memory so render_wikilink can access it
+        if let Some(ctx) = &self.wikilink_context {
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(
+                    egui::Id::new("wikilink_resolution_context"),
+                    ctx.clone(),
+                );
+            });
+        }
 
         // Parse the markdown content
         let doc = match parse_markdown(self.content) {
@@ -763,24 +802,16 @@ impl<'a> MarkdownEditor<'a> {
         };
         
         let scroll_output = scroll_area.show(ui, |ui| {
-            // Push the content hash as an ID scope so all inner widgets
-            // get unique IDs when content changes
             ui.push_id(content_hash, |ui| {
-                // Wrap content in horizontal layout for centering when max_line_width is set
                 ui.horizontal(|ui| {
-                    // Add left margin for centering
                     if content_margin > 0.0 {
                         ui.add_space(content_margin);
                     }
                     
-                    // Container for the actual content with optional width constraint
-                    // Use pre-calculated effective width (already capped to available space)
                     let content_width = effective_content_width.unwrap_or(ui.available_width());
                     ui.vertical(|ui| {
-                        // Constrain the content width
                         ui.set_max_width(content_width);
                         
-                        // Minimal spacing - let individual elements control their margins
                         ui.spacing_mut().item_spacing = Vec2::new(4.0, 1.0);
 
                         // Render all children of the document root
@@ -893,6 +924,17 @@ impl<'a> MarkdownEditor<'a> {
         // Get focused element info for formatting commands
         let focused_element = edit_state.get_focused_element(&original_content);
 
+        // Check if a wikilink was clicked this frame
+        let wikilink_id = egui::Id::new("wikilink_clicked_target");
+        let wikilink_clicked = ui.memory(|mem| {
+            mem.data.get_temp::<String>(wikilink_id)
+        });
+        if wikilink_clicked.is_some() {
+            ui.memory_mut(|mem| {
+                mem.data.remove::<String>(wikilink_id);
+            });
+        }
+
         MarkdownEditorOutput {
             response: scroll_output.inner,
             changed,
@@ -903,6 +945,7 @@ impl<'a> MarkdownEditor<'a> {
             content_height: scroll_output.content_size.y,
             viewport_height: scroll_output.inner_rect.height(),
             line_mappings,
+            wikilink_clicked,
         }
     }
 }
@@ -977,6 +1020,27 @@ fn render_node_with_structural_keys(
                 paragraph_indent,
             );
         }
+        MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } => {
+            render_callout_with_structural_keys(
+                ui,
+                node,
+                source,
+                edit_state,
+                structural_state,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                *callout_type,
+                title.as_deref(),
+                *collapsed,
+            );
+        }
         MarkdownNodeType::List { list_type, .. } => {
             render_list_with_structural_keys(
                 ui,
@@ -1021,6 +1085,9 @@ fn render_node_with_structural_keys(
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
         MarkdownNodeType::Strong => {
             render_styled_inline(
                 ui,
@@ -1062,6 +1129,9 @@ fn render_node_with_structural_keys(
                     paragraph_indent,
                 );
             }
+        }
+        MarkdownNodeType::Image { url, title } => {
+            render_image(ui, node, colors, font_size, url, title);
         }
         MarkdownNodeType::Item => {
             // List items are handled by render_list_with_structural_keys
@@ -1137,6 +1207,26 @@ fn render_node(
                 paragraph_indent,
             );
         }
+        MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } => {
+            render_callout(
+                ui,
+                node,
+                source,
+                edit_state,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                *callout_type,
+                title.as_deref(),
+                *collapsed,
+            );
+        }
         MarkdownNodeType::List { list_type, .. } => {
             render_list(
                 ui,
@@ -1180,6 +1270,9 @@ fn render_node(
         MarkdownNodeType::Link { url, title } => {
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
         MarkdownNodeType::Strong => {
             // Render strong (bold) with proper style accumulation for nested formatting
             render_styled_inline(
@@ -1221,6 +1314,9 @@ fn render_node(
                     paragraph_indent,
                 );
             }
+        }
+        MarkdownNodeType::Image { url, title } => {
+            render_image(ui, node, colors, font_size, url, title);
         }
         MarkdownNodeType::Item => {
             // Handled by render_list
@@ -1284,12 +1380,13 @@ fn render_heading(
         mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
     });
 
+    let available_width = ui.available_width();
     let (has_focus, selection) = ui
         .horizontal(|ui| {
-            ui.add_space(4.0); // Small left indent for headings
+            ui.set_max_width(available_width);
+            ui.add_space(4.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
-                // Get or initialize the edit buffer from egui memory
                 let mut edit_buffer = ui.memory_mut(|mem| {
                     mem.data
                         .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
@@ -1302,7 +1399,7 @@ fn render_heading(
                     .text_color(colors.heading)
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(f32::INFINITY);
+                    .desired_width(ui.available_width());
 
                 let output = text_edit.show(ui);
 
@@ -1399,11 +1496,12 @@ fn render_heading_with_structural_keys(
         mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
     });
 
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
         ui.add_space(4.0);
 
         if let Some(editable) = edit_state.get_node_mut(node_id) {
-            // Get or initialize the edit buffer from egui memory
             let mut edit_buffer = ui.memory_mut(|mem| {
                 mem.data
                     .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
@@ -1417,10 +1515,9 @@ fn render_heading_with_structural_keys(
                     .text_color(colors.heading)
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(f32::INFINITY),
+                    .desired_width(ui.available_width()),
             );
 
-            // Note: Structural key handling disabled for now to fix editing bugs
             let _ = structural_state;
             
             let has_focus = response.has_focus();
@@ -1457,15 +1554,17 @@ fn render_paragraph_with_structural_keys(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
-    // Check if paragraph contains special inline elements
+    // Check if paragraph contains special inline elements (including images)
     let has_inline_elements = node.children.iter().any(|c| {
         matches!(
             c.node_type,
             MarkdownNodeType::Link { .. }
+                | MarkdownNodeType::Wikilink { .. }
                 | MarkdownNodeType::Strong
                 | MarkdownNodeType::Emphasis
                 | MarkdownNodeType::Strikethrough
                 | MarkdownNodeType::Code(_)
+                | MarkdownNodeType::Image { .. }
         )
     });
 
@@ -1493,16 +1592,30 @@ fn render_paragraph_with_structural_keys(
 
         let widget_id = formatted_para_id.with("text_edit");
 
+        let available_width = ui.available_width();
         ui.horizontal(|ui| {
-            // Base indent + list indent (CJK indent handled differently per mode)
+            ui.set_max_width(available_width);
             ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if para_edit_state.editing {
-                // EDIT MODE: Add CJK indent (applies to all lines - egui TextEdit limitation)
-                if cjk_indent > 0.0 {
-                    ui.add_space(cjk_indent);
-                }
-                // Show TextEdit with raw markdown
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -1510,9 +1623,9 @@ fn render_paragraph_with_structural_keys(
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
-                    .desired_rows(1);
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
-                // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
                 let response = output.response.clone();
 
@@ -1661,22 +1774,41 @@ fn render_paragraph_with_structural_keys(
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
+        let available_width = ui.available_width();
         ui.horizontal(|ui| {
-            // Base indent + list indent + CJK paragraph indent
-            ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+            ui.set_max_width(available_width);
+            ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
-                let response = ui.add(
-                    TextEdit::multiline(&mut editable.text)
-                        .font(FontId::new(font_size, font_family.clone()))
-                        .text_color(colors.text)
-                        .frame(false)
-                        .margin(egui::vec2(0.0, 0.0))
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(1),
-                );
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut editable.text)
+                    .font(FontId::new(font_size, font_family.clone()))
+                    .text_color(colors.text)
+                    .frame(false)
+                    .margin(egui::vec2(0.0, 0.0))
+                    .desired_width(ui.available_width())
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
-                // Note: Structural key handling disabled for now
+                let response = ui.add(text_edit);
+
                 let _ = structural_state;
 
                 if response.changed() {
@@ -1703,16 +1835,13 @@ fn render_blockquote_with_structural_keys(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
     
-    ui.horizontal(|ui| {
-        // Base indent first
-        ui.add_space(BASE_INDENT);
-        
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, colors.quote_border);
-
-        ui.add_space(8.0);
+    let available_width = ui.available_width();
+    let group_response = ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+        ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
         ui.vertical(|ui| {
             for child in &node.children {
@@ -1733,6 +1862,215 @@ fn render_blockquote_with_structural_keys(
             }
         });
     });
+
+    // Paint the quote border using the actual rendered content height
+    let rect = group_response.response.rect;
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+}
+
+/// Get the color scheme for a callout type.
+/// Returns (border_color, background_color, icon_color) for both dark and light themes.
+fn callout_colors(callout_type: CalloutType, is_dark: bool) -> (Color32, Color32, Color32) {
+    // Background uses from_rgba_unmultiplied for correct subtle tinting.
+    // Alpha ~25 out of 255 gives a gentle wash behind the content.
+    match callout_type {
+        CalloutType::Note => {
+            if is_dark {
+                (
+                    Color32::from_rgb(56, 132, 244),   // border
+                    Color32::from_rgba_unmultiplied(56, 132, 244, 25),  // bg
+                    Color32::from_rgb(88, 166, 255),   // icon/title
+                )
+            } else {
+                (
+                    Color32::from_rgb(9, 105, 218),
+                    Color32::from_rgba_unmultiplied(9, 105, 218, 20),
+                    Color32::from_rgb(9, 105, 218),
+                )
+            }
+        }
+        CalloutType::Tip => {
+            if is_dark {
+                (
+                    Color32::from_rgb(63, 185, 80),
+                    Color32::from_rgba_unmultiplied(63, 185, 80, 25),
+                    Color32::from_rgb(63, 185, 80),
+                )
+            } else {
+                (
+                    Color32::from_rgb(26, 127, 55),
+                    Color32::from_rgba_unmultiplied(26, 127, 55, 20),
+                    Color32::from_rgb(26, 127, 55),
+                )
+            }
+        }
+        CalloutType::Warning => {
+            if is_dark {
+                (
+                    Color32::from_rgb(210, 153, 34),
+                    Color32::from_rgba_unmultiplied(210, 153, 34, 25),
+                    Color32::from_rgb(210, 153, 34),
+                )
+            } else {
+                (
+                    Color32::from_rgb(154, 103, 0),
+                    Color32::from_rgba_unmultiplied(154, 103, 0, 20),
+                    Color32::from_rgb(154, 103, 0),
+                )
+            }
+        }
+        CalloutType::Caution => {
+            if is_dark {
+                (
+                    Color32::from_rgb(218, 190, 36),
+                    Color32::from_rgba_unmultiplied(218, 190, 36, 25),
+                    Color32::from_rgb(218, 190, 36),
+                )
+            } else {
+                (
+                    Color32::from_rgb(155, 130, 10),
+                    Color32::from_rgba_unmultiplied(155, 130, 10, 20),
+                    Color32::from_rgb(155, 130, 10),
+                )
+            }
+        }
+        CalloutType::Important => {
+            if is_dark {
+                (
+                    Color32::from_rgb(219, 97, 109),
+                    Color32::from_rgba_unmultiplied(219, 97, 109, 25),
+                    Color32::from_rgb(219, 97, 109),
+                )
+            } else {
+                (
+                    Color32::from_rgb(191, 57, 67),
+                    Color32::from_rgba_unmultiplied(191, 57, 67, 20),
+                    Color32::from_rgb(191, 57, 67),
+                )
+            }
+        }
+    }
+}
+
+/// Render a callout (GitHub-style admonition) with structural key support.
+fn render_callout_with_structural_keys(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    structural_state: &mut StructuralEditState,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    callout_type: CalloutType,
+    custom_title: Option<&str>,
+    default_collapsed: bool,
+) {
+    const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
+
+    let is_dark = colors.background.r() < 128;
+    let (border_color, bg_color, title_color) = callout_colors(callout_type, is_dark);
+
+    // Scope all child widget IDs under a unique ID to prevent collisions
+    // between multiple callouts. Using (start_line, end_line) for uniqueness.
+    let scope_id = ("callout_struct", node.start_line, node.end_line);
+
+    let group_response = ui.push_id(scope_id, |ui| {
+        let callout_id = ui.make_persistent_id("collapsed");
+        let is_collapsed = ui.data_mut(|d| {
+            *d.get_persisted_mut_or(callout_id, default_collapsed)
+        });
+
+        let title_text = custom_title.unwrap_or(callout_type.display_name());
+        let icon = callout_type.icon();
+
+        let available_width = ui.available_width();
+        let inner = ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
+            ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
+
+            ui.vertical(|ui| {
+                let title_row = ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(icon)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size)),
+                    );
+
+                    let arrow = if is_collapsed { "▶" } else { "▼" };
+                    ui.label(
+                        RichText::new(arrow)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size * 0.7)),
+                    );
+
+                    ui.label(
+                        RichText::new(title_text)
+                            .color(title_color)
+                            .font(FontId::proportional(font_size))
+                            .strong(),
+                    );
+                });
+
+                // Place a clickable rect over the title row for collapse toggle
+                let title_rect = title_row.response.rect;
+                let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
+                if click_response.clicked() {
+                    ui.data_mut(|d| {
+                        let val = d.get_persisted_mut_or(callout_id, default_collapsed);
+                        *val = !*val;
+                    });
+                }
+                // Show pointer cursor on hover
+                if click_response.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+
+                if !is_collapsed {
+                    ui.add_space(2.0);
+                    for child in &node.children {
+                        render_node_with_structural_keys(
+                            ui,
+                            child,
+                            source,
+                            edit_state,
+                            structural_state,
+                            colors,
+                            font_size,
+                            editor_font,
+                            indent_level + 1,
+                            None,
+                            None,
+                            paragraph_indent,
+                        );
+                    }
+                }
+            });
+        });
+        inner.response
+    });
+
+    // Paint styled background and left border
+    let rect = group_response.response.rect;
+    let content_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    );
+    ui.painter().rect_filled(content_rect, 4.0, bg_color);
+
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list with structural key support for items.
@@ -1836,7 +2174,7 @@ fn render_list_item_with_structural_keys(
         .filter(|c| matches!(c.node_type, MarkdownNodeType::List { .. }))
         .collect();
 
-    // Check if paragraph has inline formatting (bold, italic, line breaks, etc.)
+    // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
     // and would display them as replacement characters (□). See GitHub issue #41.
     let has_inline_formatting = para_node
@@ -1848,7 +2186,9 @@ fn render_list_item_with_structural_keys(
                         | MarkdownNodeType::Emphasis
                         | MarkdownNodeType::Strikethrough
                         | MarkdownNodeType::Link { .. }
+                        | MarkdownNodeType::Wikilink { .. }
                         | MarkdownNodeType::Code(_)
+                        | MarkdownNodeType::Image { .. }
                         | MarkdownNodeType::LineBreak
                 )
             })
@@ -1901,14 +2241,15 @@ fn render_list_item_with_structural_keys(
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+
         // Total indentation: base + nested
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
         let marker = if is_task {
-            // Task list: ASCII-style checkbox (non-interactive for now)
-            // Will be made interactive in v0.3.0 with custom editor widget
             if task_checked {
                 "[x]"
             } else {
@@ -1916,7 +2257,6 @@ fn render_list_item_with_structural_keys(
             }
             .to_string()
         } else {
-            // Regular list marker
             match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
@@ -1940,9 +2280,6 @@ fn render_list_item_with_structural_keys(
         // Render item content
         if has_inline_formatting {
             if let Some(para) = para_node {
-                // Create unique ID using para.start_line (matches content extraction)
-                // AND item_index for additional uniqueness guarantee
-                // FIX: Previously used node.start_line which could differ from para.start_line
                 let formatted_item_id = ui
                     .id()
                     .with("formatted_list_item_sk")
@@ -1962,18 +2299,42 @@ fn render_list_item_with_structural_keys(
                 let widget_id = formatted_item_id.with("text_edit");
 
                 if item_edit_state.editing {
-                    // EDIT MODE: Show TextEdit with raw markdown
-                    let text_edit = TextEdit::singleline(&mut item_edit_state.edit_text)
+                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
+                    let font_family_for_layout = font_family.clone();
+                    let text_color = colors.text;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
+                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .desired_width(ui.available_width())
-                        .margin(egui::vec2(0.0, 2.0));
+                        .desired_rows(1)
+                        .margin(egui::vec2(0.0, 2.0))
+                        .layouter(&mut layouter);
 
                     // Use show() to get TextEditOutput for cursor manipulation
                     let mut output = text_edit.show(ui);
                     let response = output.response.clone();
+
+                    // Strip newlines that multiline TextEdit inserts on Enter
+                    if item_edit_state.edit_text.contains('\n') {
+                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                    }
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
@@ -2132,21 +2493,43 @@ fn render_list_item_with_structural_keys(
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
-            // Simple text - editable
+            // Simple text - editable with wrapping
             if let Some(editable) = edit_state.get_node_mut(node_id) {
                 let widget_id = ui.id().with("list_item_text_sk").with(start_line);
 
-                let response = ui.add(
-                    TextEdit::singleline(&mut editable.text)
-                        .id(widget_id)
-                        .font(FontId::new(font_size, font_family))
-                        .text_color(colors.text)
-                        .frame(false)
-                        .desired_width(f32::INFINITY)
-                        .clip_text(false),
-                );
+                let font_family_for_layout = font_family.clone();
+                let text_color = colors.text;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            0.0,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut editable.text)
+                    .id(widget_id)
+                    .font(FontId::new(font_size, font_family))
+                    .text_color(colors.text)
+                    .frame(false)
+                    .desired_width(ui.available_width())
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
-                // Note: Structural key handling disabled for now
+                let response = ui.add(text_edit);
+
+                // Strip newlines — list items should not contain literal newlines
+                if editable.text.contains('\n') {
+                    editable.text = editable.text.replace('\n', "");
+                }
+
                 let _ = structural_state;
 
                 if response.changed() {
@@ -2192,15 +2575,17 @@ fn render_paragraph(
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
 ) {
-    // Check if paragraph contains any special inline elements (links, formatting)
+    // Check if paragraph contains any special inline elements (links, formatting, images)
     let has_inline_elements = node.children.iter().any(|c| {
         matches!(
             c.node_type,
             MarkdownNodeType::Link { .. }
+                | MarkdownNodeType::Wikilink { .. }
                 | MarkdownNodeType::Strong
                 | MarkdownNodeType::Emphasis
                 | MarkdownNodeType::Strikethrough
                 | MarkdownNodeType::Code(_)
+                | MarkdownNodeType::Image { .. }
         )
     });
 
@@ -2231,12 +2616,29 @@ fn render_paragraph(
         let widget_id = formatted_para_id.with("text_edit");
 
         if para_edit_state.editing {
-            // EDIT MODE: Use horizontal layout with TextEdit
+            let available_width = ui.available_width();
             ui.horizontal(|ui| {
-                // Base indent + list indent + CJK indent (all lines - egui limitation)
-                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+                ui.set_max_width(available_width);
+                ui.add_space(4.0 + indent_level as f32 * 20.0);
 
-                // Show TextEdit with raw markdown
+                let font_family_clone = font_family.clone();
+                let text_color = colors.text;
+                let cjk_leading = cjk_indent;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -2244,9 +2646,9 @@ fn render_paragraph(
                     .frame(false)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
-                    .desired_rows(1);
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
-                // Use show() to get TextEditOutput for cursor manipulation
                 let mut output = text_edit.show(ui);
                 let response = output.response.clone();
 
@@ -2312,16 +2714,13 @@ fn render_paragraph(
                 });
             });
         } else {
-            // DISPLAY MODE: Use horizontal_wrapped for proper text wrapping
-            // Apply base indent first, then use horizontal_wrapped for content
             let base_indent = 4.0 + indent_level as f32 * 20.0;
             
-            // Add base left indent using vertical layout with horizontal for indent
+            let available_width_display = ui.available_width();
             let display_response = ui.horizontal(|ui| {
-                // Add consistent left indent (same as headers and simple paragraphs)
+                ui.set_max_width(available_width_display);
                 ui.add_space(base_indent);
                 
-                // Use scope to limit horizontal_wrapped to remaining width
                 ui.scope(|ui| {
                     ui.horizontal_wrapped(|ui| {
                         // CJK first-line indent: spacer at start (first line only)
@@ -2409,19 +2808,39 @@ fn render_paragraph(
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
 
+        let available_width = ui.available_width();
         let (has_focus, selection, changed, new_text) = ui
             .horizontal(|ui| {
-                // Add base left indent + list indent + CJK paragraph indent
-                ui.add_space(4.0 + indent_level as f32 * 20.0 + cjk_indent);
+                ui.set_max_width(available_width);
+                ui.add_space(4.0 + indent_level as f32 * 20.0);
 
                 if let Some(editable) = edit_state.get_node_mut(node_id) {
+                    let font_family_clone = font_family.clone();
+                    let text_color = colors.text;
+                    let cjk_leading = cjk_indent;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                cjk_leading,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_clone.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
                     let text_edit = TextEdit::multiline(&mut editable.text)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .margin(egui::vec2(0.0, 0.0))
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(1);
+                        .desired_width(ui.available_width())
+                        .desired_rows(1)
+                        .layouter(&mut layouter);
 
                     let output = text_edit.show(ui);
 
@@ -2746,6 +3165,10 @@ fn render_inline_node(
             render_link(ui, node, source, edit_state, colors, font_size, url, title);
         }
 
+        MarkdownNodeType::Wikilink { target, display } => {
+            render_wikilink(ui, colors, font_size, target, display.as_deref());
+        }
+
         MarkdownNodeType::Strong => {
             // Add bold to the style and render children with accumulated styles
             let new_style = style.with_bold();
@@ -2805,6 +3228,12 @@ fn render_inline_node(
                     .font(FontId::monospace(font_size * 0.9))
                     .background_color(colors.code_bg),
             );
+        }
+
+        MarkdownNodeType::Image { url, title } => {
+            // Images break out of the inline flow - end the current row and render as block
+            ui.end_row();
+            render_image(ui, node, colors, font_size, url, title);
         }
 
         MarkdownNodeType::SoftBreak => {
@@ -3056,25 +3485,17 @@ fn render_blockquote(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
     
     // Create a stable ID for this blockquote's scroll area
     let blockquote_id = egui::Id::new(("blockquote", node.start_line));
     
-    ui.horizontal(|ui| {
-        // Base indent first
-        ui.add_space(BASE_INDENT);
-        
-        // Quote border
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(4.0, ui.available_height()), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, colors.quote_border);
+    let available_width = ui.available_width();
+    let group_response = ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+        ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
-        ui.add_space(8.0);
-
-        // Wrap blockquote content in horizontal scroll area to prevent width overflow.
-        // This ensures long content scrolls horizontally instead of expanding
-        // the parent layout and breaking max_line_width for subsequent content.
-        // See: ROADMAP.md "Blockquote/code block overflow"
         egui::ScrollArea::horizontal()
             .id_source(blockquote_id)
             .auto_shrink([false, false])
@@ -3096,6 +3517,132 @@ fn render_blockquote(
                 });
             });
     });
+
+    // Paint the quote border using the actual rendered content height
+    let rect = group_response.response.rect;
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+}
+
+/// Render a callout (GitHub-style admonition) in non-structural mode.
+fn render_callout(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    callout_type: CalloutType,
+    custom_title: Option<&str>,
+    default_collapsed: bool,
+) {
+    const BASE_INDENT: f32 = 4.0;
+    const BORDER_WIDTH: f32 = 4.0;
+    const BORDER_GAP: f32 = 8.0;
+
+    let is_dark = colors.background.r() < 128;
+    let (border_color, bg_color, title_color) = callout_colors(callout_type, is_dark);
+
+    // Scope all child widget IDs under a unique ID to prevent collisions
+    let scope_id = ("callout_render", node.start_line, node.end_line);
+
+    let group_response = ui.push_id(scope_id, |ui| {
+        let callout_id = ui.make_persistent_id("collapsed");
+        let is_collapsed = ui.data_mut(|d| {
+            *d.get_persisted_mut_or(callout_id, default_collapsed)
+        });
+
+        let title_text = custom_title.unwrap_or(callout_type.display_name());
+        let icon = callout_type.icon();
+
+        let available_width = ui.available_width();
+        let inner = ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
+            ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
+
+            egui::ScrollArea::horizontal()
+                .id_source("scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        // Title row with icon and collapse toggle
+                        let title_row = ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(icon)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size)),
+                            );
+
+                            let arrow = if is_collapsed { "▶" } else { "▼" };
+                            ui.label(
+                                RichText::new(arrow)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size * 0.7)),
+                            );
+
+                            ui.label(
+                                RichText::new(title_text)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size))
+                                    .strong(),
+                            );
+                        });
+
+                        // Place a clickable rect over the title row for collapse toggle
+                        let title_rect = title_row.response.rect;
+                        let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
+                        if click_response.clicked() {
+                            ui.data_mut(|d| {
+                                let val = d.get_persisted_mut_or(callout_id, default_collapsed);
+                                *val = !*val;
+                            });
+                        }
+                        // Show pointer cursor on hover
+                        if click_response.hovered() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+
+                        if !is_collapsed {
+                            ui.add_space(2.0);
+                            for child in &node.children {
+                                render_node(
+                                    ui,
+                                    child,
+                                    source,
+                                    edit_state,
+                                    colors,
+                                    font_size,
+                                    editor_font,
+                                    indent_level + 1,
+                                    paragraph_indent,
+                                );
+                            }
+                        }
+                    });
+                });
+        });
+        inner.response
+    });
+
+    // Paint styled background and left border
+    let rect = group_response.response.rect;
+    let content_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    );
+    ui.painter().rect_filled(content_rect, 4.0, bg_color);
+
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
+        Vec2::new(BORDER_WIDTH, rect.height()),
+    );
+    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list (ordered or unordered).
@@ -3245,7 +3792,7 @@ fn render_list_item(
         .filter(|c| matches!(c.node_type, MarkdownNodeType::List { .. }))
         .collect();
 
-    // Check if paragraph has inline formatting (bold, italic, line breaks, etc.)
+    // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
     // and would display them as replacement characters (□). See GitHub issue #41.
     let has_inline_formatting = para_node
@@ -3257,7 +3804,9 @@ fn render_list_item(
                         | MarkdownNodeType::Emphasis
                         | MarkdownNodeType::Strikethrough
                         | MarkdownNodeType::Link { .. }
+                        | MarkdownNodeType::Wikilink { .. }
                         | MarkdownNodeType::Code(_)
+                        | MarkdownNodeType::Image { .. }
                         | MarkdownNodeType::LineBreak
                 )
             })
@@ -3311,14 +3860,15 @@ fn render_list_item(
     let nested_indent = indent_level as f32 * 20.0;
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
+    let available_width = ui.available_width();
     let focus_info: (bool, Option<(usize, usize)>, Option<usize>) = ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
+
         // Total indentation: base + nested
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
         let marker = if is_task {
-            // Task list: ASCII-style checkbox (non-interactive for now)
-            // Will be made interactive in v0.3.0 with custom editor widget
             if task_checked {
                 "[x]"
             } else {
@@ -3326,7 +3876,6 @@ fn render_list_item(
             }
             .to_string()
         } else {
-            // Regular list marker
             match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
@@ -3369,18 +3918,42 @@ fn render_list_item(
                 let widget_id = formatted_item_id.with("text_edit");
 
                 if item_edit_state.editing {
-                    // EDIT MODE: Show TextEdit with raw markdown
-                    let text_edit = TextEdit::singleline(&mut item_edit_state.edit_text)
+                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
+                    let font_family_for_layout = font_family.clone();
+                    let text_color = colors.text;
+                    let mut layouter =
+                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                            let mut job = egui::text::LayoutJob::default();
+                            job.wrap.max_width = wrap_width;
+                            job.append(
+                                text,
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                    color: text_color,
+                                    ..Default::default()
+                                },
+                            );
+                            ui.fonts(|f| f.layout_job(job))
+                        };
+                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
                         .frame(false)
                         .desired_width(ui.available_width())
-                        .margin(egui::vec2(0.0, 2.0));
+                        .desired_rows(1)
+                        .margin(egui::vec2(0.0, 2.0))
+                        .layouter(&mut layouter);
 
                     // Use show() to get TextEditOutput for cursor manipulation
                     let mut output = text_edit.show(ui);
                     let response = output.response.clone();
+
+                    // Strip newlines that multiline TextEdit inserts on Enter
+                    if item_edit_state.edit_text.contains('\n') {
+                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                    }
 
                     // Request focus if needed (first frame after entering edit mode)
                     if item_edit_state.needs_focus {
@@ -3528,15 +4101,38 @@ fn render_list_item(
                 
                 let widget_id = ui.id().with("list_item_text").with(start_line);
 
-                let text_edit = TextEdit::singleline(&mut edit_buffer)
+                let font_family_for_layout = font_family.clone();
+                let text_color = colors.text;
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            0.0,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                let text_edit = TextEdit::multiline(&mut edit_buffer)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.text)
                     .frame(false)
-                    .desired_width(f32::INFINITY)
-                    .clip_text(false);
+                    .desired_width(ui.available_width())
+                    .desired_rows(1)
+                    .layouter(&mut layouter);
 
                 let output = text_edit.show(ui);
+
+                // Strip newlines — list items should not contain literal newlines
+                if edit_buffer.contains('\n') {
+                    edit_buffer = edit_buffer.replace('\n', "");
+                }
 
                 let has_focus = output.response.has_focus();
                 let selection = if has_focus {
@@ -3553,7 +4149,6 @@ fn render_list_item(
                     None
                 };
 
-                // Update edit buffer in memory
                 ui.memory_mut(|mem| {
                     mem.data.insert_temp(edit_buffer_id, edit_buffer.clone());
                     mem.data.insert_temp(edit_tracking_id, has_focus);
@@ -3680,25 +4275,17 @@ fn render_table(
             .clone()
     });
 
-    // Wrap table in horizontal scroll area to prevent width overflow.
-    // This ensures wide tables scroll horizontally instead of expanding
-    // the parent layout and breaking max_line_width for subsequent content.
-    let output = ui.horizontal(|ui| {
-        ui.add_space(BASE_INDENT);
-        
-        egui::ScrollArea::horizontal()
-            .id_source(table_id.with("scroll"))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                EditableTable::new(&mut table_data)
-                    .font_size(font_size)
-                    .colors(widget_colors)
-                    .with_controls(true)
-                    .with_alignment_controls(true)
-                    .id(table_id)
-                    .show(ui)
-            }).inner
-    }).inner;
+    // Capture available width BEFORE any layout changes
+    let table_avail_width = (ui.available_width() - BASE_INDENT).max(100.0);
+
+    let output = EditableTable::new(&mut table_data)
+        .font_size(font_size)
+        .colors(widget_colors)
+        .with_controls(true)
+        .with_alignment_controls(true)
+        .id(table_id)
+        .max_width(table_avail_width)
+        .show(ui);
 
     // Update stored data if changed
     if output.changed {
@@ -3757,10 +4344,11 @@ fn update_table_in_source(
 
 /// Render front matter (YAML/TOML header).
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
-    // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
     
+    let available_width = ui.available_width();
     ui.horizontal(|ui| {
+        ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT);
         
         egui::Frame::none()
@@ -3780,8 +4368,8 @@ fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, conte
                         .font(FontId::monospace(font_size * 0.9))
                         .text_color(colors.code_text)
                         .frame(false)
-                        .desired_width(f32::INFINITY)
-                        .interactive(false), // Front matter editing disabled for now
+                        .desired_width(ui.available_width())
+                        .interactive(false),
                 );
             });
     });
@@ -3868,6 +4456,386 @@ fn render_link(
             node.start_line, text, url, output.text, output.url, output.is_autolink
         );
     }
+}
+
+/// Render a wikilink as a clickable label.
+///
+/// Wikilinks are rendered as colored, underlined text (like internal links).
+/// If a `WikilinkContext` is available in egui memory, the target is checked
+/// for existence — broken links are styled with a dimmed red color.
+/// Clicking navigates to the target file. The target is stored in egui memory
+/// and picked up by `MarkdownEditorOutput::wikilink_clicked`.
+fn render_wikilink(
+    ui: &mut Ui,
+    colors: &EditorColors,
+    font_size: f32,
+    target: &str,
+    display: Option<&str>,
+) {
+    let label_text = display.unwrap_or(target);
+
+    // Check if target file exists (using context stored in egui memory)
+    let target_exists = ui.memory(|mem| {
+        mem.data
+            .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
+    })
+    .map(|ctx| wikilink_target_exists(target, ctx.current_dir.as_deref(), ctx.workspace_root.as_deref()))
+    .unwrap_or(true); // Default to "exists" if no context is available
+
+    // Color: green-ish blue for valid links, dimmed red for broken links
+    let wikilink_color = if target_exists {
+        Color32::from_rgb(
+            colors.link.r().saturating_sub(30),
+            colors.link.g(),
+            colors.link.b().saturating_add(20).min(255),
+        )
+    } else {
+        // Broken link: dimmed red/orange
+        Color32::from_rgb(200, 100, 100)
+    };
+
+    let mut rich = RichText::new(label_text)
+        .color(wikilink_color)
+        .font(FontId::proportional(font_size))
+        .underline();
+
+    if !target_exists {
+        rich = rich.strikethrough();
+    }
+
+    let link_response = ui.add(
+        egui::Label::new(rich).sense(egui::Sense::click()),
+    );
+
+    let link_rect = link_response.rect;
+
+    // Hand cursor on hover
+    if link_response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    // Use manual pointer check (same pattern as RenderedLinkWidget) because
+    // the parent paragraph's ui.interact() call swallows Label::clicked().
+    let (primary_released, pointer_pos) = ui.input(|i| {
+        (i.pointer.primary_released(), i.pointer.interact_pos())
+    });
+    let was_clicked =
+        primary_released && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
+
+    // Tooltip showing the target and status
+    let tooltip = if !target_exists {
+        if display.is_some() {
+            format!("[[{}]]\nFile not found", target)
+        } else {
+            "File not found".to_string()
+        }
+    } else if display.is_some() {
+        format!("[[{}]]\nClick to open", target)
+    } else {
+        "Click to open".to_string()
+    };
+    link_response.on_hover_text(tooltip);
+
+    // On click: store target in egui memory for the output to pick up,
+    // and also mark click as consumed so parent doesn't enter edit mode
+    if was_clicked {
+        let target_owned = target.to_string();
+        ui.memory_mut(|mem| {
+            mem.data
+                .insert_temp(egui::Id::new("wikilink_clicked_target"), target_owned);
+            mem.data
+                .insert_temp(egui::Id::new("link_click_consumed_this_frame"), true);
+        });
+    }
+}
+
+/// Quick check whether a wikilink target can be resolved to an existing file.
+/// Used during rendering to style broken links differently.
+fn wikilink_target_exists(
+    target: &str,
+    current_dir: Option<&std::path::Path>,
+    workspace_root: Option<&std::path::Path>,
+) -> bool {
+    let target = target.trim();
+    if target.is_empty() {
+        return false;
+    }
+
+    let check = |dir: &std::path::Path| -> bool {
+        let exact = dir.join(target);
+        if exact.is_file() {
+            return true;
+        }
+        if !target.to_lowercase().ends_with(".md") {
+            let with_md = dir.join(format!("{}.md", target));
+            if with_md.is_file() {
+                return true;
+            }
+        }
+        false
+    };
+
+    if let Some(dir) = current_dir {
+        if check(dir) {
+            return true;
+        }
+    }
+    if let Some(root) = workspace_root {
+        if check(root) {
+            return true;
+        }
+    }
+    false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image Rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Cached image data stored in egui memory to avoid reloading every frame.
+#[derive(Clone)]
+struct CachedImageTexture {
+    texture: TextureHandle,
+    original_width: u32,
+    original_height: u32,
+}
+
+/// Result of attempting to load an image — either success or a description of the failure.
+#[derive(Clone)]
+enum ImageLoadResult {
+    Loaded(CachedImageTexture),
+    Failed(String),
+}
+
+/// Resolve an image URL to an absolute path on disk.
+///
+/// Resolution order:
+/// 1. If URL is a web URL (http/https), returns None (not supported).
+/// 2. If URL is an absolute path, uses it directly.
+/// 3. Resolves relative to the current document's directory.
+/// 4. Falls back to workspace root.
+fn resolve_image_path(url: &str, current_dir: Option<&Path>, workspace_root: Option<&Path>) -> Option<PathBuf> {
+    let url = url.trim();
+    if url.is_empty() {
+        return None;
+    }
+
+    // Skip web URLs — we only support local images
+    if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:") {
+        return None;
+    }
+
+    // Strip leading file:// protocol if present
+    let path_str = url.strip_prefix("file://").unwrap_or(url);
+
+    let path = Path::new(path_str);
+
+    // If absolute path, use directly
+    if path.is_absolute() {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+        return None;
+    }
+
+    // Resolve relative to current document directory
+    if let Some(dir) = current_dir {
+        let resolved = dir.join(path_str);
+        if resolved.is_file() {
+            return Some(resolved);
+        }
+    }
+
+    // Fall back to workspace root
+    if let Some(root) = workspace_root {
+        let resolved = root.join(path_str);
+        if resolved.is_file() {
+            return Some(resolved);
+        }
+    }
+
+    None
+}
+
+/// Load an image from disk, decode it, and create an egui texture.
+fn load_image_texture(ctx: &egui::Context, path: &Path) -> Result<CachedImageTexture, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Failed to decode: {}", e))?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    let pixels: Vec<Color32> = rgba
+        .pixels()
+        .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+
+    let color_image = ColorImage {
+        size: [width as usize, height as usize],
+        pixels,
+    };
+
+    let texture_name = format!("md_img_{}", path.display());
+    let texture = ctx.load_texture(&texture_name, color_image, TextureOptions::LINEAR);
+
+    Ok(CachedImageTexture {
+        texture,
+        original_width: width,
+        original_height: height,
+    })
+}
+
+/// Render a markdown image node.
+///
+/// Resolves the image path relative to the current document, loads and caches
+/// the texture in egui memory, and renders it scaled to fit the available width.
+/// Falls back to showing alt text with a placeholder icon on failure.
+fn render_image(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    colors: &EditorColors,
+    font_size: f32,
+    url: &str,
+    title: &str,
+) {
+    let alt_text = node.text_content();
+
+    // Get file context from egui memory (same context used for wikilinks)
+    let wl_ctx: Option<WikilinkContext> = ui.memory(|mem| {
+        mem.data
+            .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
+    });
+
+    let resolved_path = resolve_image_path(
+        url,
+        wl_ctx.as_ref().and_then(|c| c.current_dir.as_deref()),
+        wl_ctx.as_ref().and_then(|c| c.workspace_root.as_deref()),
+    );
+
+    // Web URLs: show placeholder with link text
+    if url.starts_with("http://") || url.starts_with("https://") {
+        render_image_placeholder(ui, colors, font_size, &alt_text, "Web images not supported");
+        return;
+    }
+
+    let Some(resolved) = resolved_path else {
+        let hint = if url.is_empty() { "No image path" } else { "Image not found" };
+        render_image_placeholder(ui, colors, font_size, &alt_text, hint);
+        return;
+    };
+
+    // Use the resolved path as a stable cache key
+    let cache_id = egui::Id::new("md_image_cache").with(&resolved);
+
+    // Check cache first
+    let cached: Option<ImageLoadResult> = ui.data(|d| d.get_temp(cache_id));
+
+    let load_result = cached.unwrap_or_else(|| {
+        // Load and cache
+        let result = match load_image_texture(ui.ctx(), &resolved) {
+            Ok(tex) => ImageLoadResult::Loaded(tex),
+            Err(msg) => {
+                log::warn!("Failed to load image '{}': {}", url, msg);
+                ImageLoadResult::Failed(msg)
+            }
+        };
+        ui.data_mut(|d| d.insert_temp(cache_id, result.clone()));
+        result
+    });
+
+    match load_result {
+        ImageLoadResult::Loaded(cached_tex) => {
+            let available_width = ui.available_width();
+            let orig_w = cached_tex.original_width as f32;
+            let orig_h = cached_tex.original_height as f32;
+
+            // Scale to fit available width, maintaining aspect ratio
+            let (display_w, display_h) = if orig_w > available_width {
+                let scale = available_width / orig_w;
+                (available_width, orig_h * scale)
+            } else {
+                (orig_w, orig_h)
+            };
+
+            let sized = egui::load::SizedTexture::new(
+                cached_tex.texture.id(),
+                Vec2::new(display_w, display_h),
+            );
+            let image_widget = egui::Image::from_texture(sized);
+            let response = ui.add(image_widget);
+
+            // Show tooltip with alt text and/or title on hover
+            let tooltip = build_image_tooltip(&alt_text, title, url);
+            if !tooltip.is_empty() {
+                response.on_hover_text(tooltip);
+            }
+        }
+        ImageLoadResult::Failed(msg) => {
+            render_image_placeholder(ui, colors, font_size, &alt_text, &msg);
+        }
+    }
+}
+
+/// Build a tooltip string from alt text, title, and URL.
+fn build_image_tooltip(alt_text: &str, title: &str, url: &str) -> String {
+    let mut parts = Vec::new();
+    if !alt_text.is_empty() {
+        parts.push(alt_text.to_string());
+    }
+    if !title.is_empty() && title != alt_text {
+        parts.push(title.to_string());
+    }
+    if !url.is_empty() {
+        parts.push(url.to_string());
+    }
+    parts.join("\n")
+}
+
+/// Render a placeholder for images that couldn't be loaded.
+/// Shows an icon and the alt text (or an error hint).
+fn render_image_placeholder(
+    ui: &mut Ui,
+    colors: &EditorColors,
+    font_size: f32,
+    alt_text: &str,
+    hint: &str,
+) {
+    let frame_color = colors.quote_border;
+    let bg_color = colors.code_bg;
+
+    egui::Frame::none()
+        .fill(bg_color)
+        .stroke(egui::Stroke::new(1.0, frame_color))
+        .rounding(4.0)
+        .inner_margin(egui::Margin::same(8.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                // Image icon
+                ui.label(
+                    RichText::new("\u{1F5BC}") // 🖼 framed picture emoji
+                        .color(frame_color)
+                        .size(font_size * 1.2),
+                );
+
+                ui.vertical(|ui| {
+                    if !alt_text.is_empty() {
+                        ui.label(
+                            RichText::new(alt_text)
+                                .color(colors.text)
+                                .size(font_size)
+                                .italics(),
+                        );
+                    }
+                    ui.label(
+                        RichText::new(hint)
+                            .color(frame_color)
+                            .size(font_size * 0.85),
+                    );
+                });
+            });
+        });
 }
 
 /// Render inline content with accumulated text styles.

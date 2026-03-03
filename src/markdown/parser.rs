@@ -134,6 +134,52 @@ impl From<ComrakTableAlignment> for TableAlignment {
     }
 }
 
+/// Type of GitHub-style callout/admonition block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalloutType {
+    Note,
+    Tip,
+    Warning,
+    Caution,
+    Important,
+}
+
+impl CalloutType {
+    /// Parse a callout type string (case-insensitive).
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "NOTE" => Some(CalloutType::Note),
+            "TIP" => Some(CalloutType::Tip),
+            "WARNING" => Some(CalloutType::Warning),
+            "CAUTION" => Some(CalloutType::Caution),
+            "IMPORTANT" => Some(CalloutType::Important),
+            _ => None,
+        }
+    }
+
+    /// Get the display name for this callout type.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            CalloutType::Note => "Note",
+            CalloutType::Tip => "Tip",
+            CalloutType::Warning => "Warning",
+            CalloutType::Caution => "Caution",
+            CalloutType::Important => "Important",
+        }
+    }
+
+    /// Get the icon character for this callout type.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            CalloutType::Note => "ℹ",
+            CalloutType::Tip => "💡",
+            CalloutType::Warning => "⚠",
+            CalloutType::Caution => "🔶",
+            CalloutType::Important => "❗",
+        }
+    }
+}
+
 /// Represents the type of a markdown node.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MarkdownNodeType {
@@ -141,6 +187,14 @@ pub enum MarkdownNodeType {
     Document,
     /// Block quote (>)
     BlockQuote,
+    /// GitHub-style callout/admonition (> [!TYPE])
+    Callout {
+        callout_type: CalloutType,
+        /// Custom title (if provided), otherwise uses default type name
+        title: Option<String>,
+        /// Whether the callout is collapsed by default (> [!TYPE]-)
+        collapsed: bool,
+    },
     /// List container
     List { list_type: ListType, tight: bool },
     /// List item
@@ -206,6 +260,13 @@ pub enum MarkdownNodeType {
     DescriptionDetails,
     /// Front matter (YAML/TOML)
     FrontMatter(String),
+    /// Wikilink ([[target]] or [[target|display text]])
+    Wikilink {
+        /// The link target (file name or path, without .md extension)
+        target: String,
+        /// Optional display text (if [[target|display]] syntax is used)
+        display: Option<String>,
+    },
 }
 
 /// A node in the markdown AST with position information.
@@ -251,6 +312,9 @@ impl MarkdownNode {
             MarkdownNodeType::Code(t) => output.push_str(t),
             MarkdownNodeType::SoftBreak => output.push(' '),
             MarkdownNodeType::LineBreak => output.push('\n'),
+            MarkdownNodeType::Wikilink { target, display } => {
+                output.push_str(display.as_deref().unwrap_or(target));
+            }
             _ => {}
         }
         for child in &self.children {
@@ -312,7 +376,31 @@ pub fn parse_markdown_with_options(
 
     // Convert comrak AST to our own structure
     let mut front_matter = None;
-    let converted_root = convert_node(root, &mut front_matter)?;
+    let mut converted_root = convert_node(root, &mut front_matter)?;
+
+    // Detect GitHub-style callouts (> [!TYPE]) within blockquotes and convert
+    // them to dedicated Callout nodes for styled rendering.
+    // IMPORTANT: This must run BEFORE merge_consecutive_blockquotes, otherwise
+    // consecutive callouts separated by blank lines get merged into a single
+    // blockquote and only the first [!TYPE] marker is detected.
+    convert_callout_blockquotes(&mut converted_root);
+
+    // Merge consecutive blockquote siblings into a single blockquote node.
+    // This handles the case where the user separates blockquote paragraphs with
+    // blank lines, which comrak parses as separate BlockQuote nodes. Merging
+    // them produces a single continuous blockquote with a single border.
+    // Note: Callout nodes are NOT BlockQuote nodes, so they won't be merged.
+    merge_consecutive_blockquotes(&mut converted_root);
+
+    // FIX: Comrak treats "- " (single dash + optional whitespace) as a setext
+    // heading underline, but in a markdown editor the user is almost always
+    // starting a list item. Detect these false setext headings and convert
+    // them back to Paragraph + List(Item).
+    fix_false_setext_headings(&mut converted_root, markdown);
+
+    // Extract wikilinks from Text nodes: [[target]] and [[target|display text]]
+    // This must run after all block-level transformations are complete.
+    extract_wikilinks(&mut converted_root);
 
     // FIX: Comrak returns line numbers as if frontmatter doesn't exist.
     // When frontmatter is present, we need to calculate the offset and adjust all line numbers.
@@ -328,6 +416,492 @@ pub fn parse_markdown_with_options(
         source: markdown.to_string(),
         front_matter,
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-Processing Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Merge consecutive `BlockQuote` siblings into a single blockquote node.
+///
+/// When the user writes blockquote paragraphs separated by blank lines:
+/// ```markdown
+/// > Line 1
+///
+/// > Line 2
+/// ```
+/// Comrak parses these as two separate `BlockQuote` nodes. This function
+/// merges them into a single continuous blockquote so the renderer draws
+/// one border instead of two.
+fn merge_consecutive_blockquotes(node: &mut MarkdownNode) {
+    // First, recursively process all children (depth-first)
+    for child in &mut node.children {
+        merge_consecutive_blockquotes(child);
+    }
+
+    // Then merge consecutive blockquote siblings at this level
+    if node.children.len() < 2 {
+        return;
+    }
+
+    let mut i = 0;
+    while i < node.children.len().saturating_sub(1) {
+        let is_current_bq = matches!(node.children[i].node_type, MarkdownNodeType::BlockQuote);
+        let is_next_bq = matches!(node.children[i + 1].node_type, MarkdownNodeType::BlockQuote);
+
+        if is_current_bq && is_next_bq {
+            // Merge: move children from the next blockquote into the current one
+            let next = node.children.remove(i + 1);
+            let current = &mut node.children[i];
+            current.end_line = next.end_line;
+            current.children.extend(next.children);
+            // Don't increment i — check if the following sibling is also a blockquote
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// Fix false setext headings that are actually empty list items.
+///
+/// Comrak interprets `"Some text\n- "` as a setext heading (level 2) because
+/// a single `-` followed by optional whitespace is a valid setext underline.
+/// However, in a markdown editor, the user is almost always starting a list
+/// item when they type `- `. This function detects such cases and converts
+/// the heading back to a Paragraph followed by a List containing an empty Item.
+fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
+    // Recursively process children first
+    for child in &mut node.children {
+        fix_false_setext_headings(child, source);
+    }
+
+    let source_lines: Vec<&str> = source.lines().collect();
+
+    let mut i = 0;
+    let mut replacements: Vec<(usize, Vec<MarkdownNode>)> = Vec::new();
+
+    while i < node.children.len() {
+        let child = &node.children[i];
+        if let MarkdownNodeType::Heading {
+            level: HeadingLevel::H2,
+            setext: true,
+        } = &child.node_type
+        {
+            // Check the underline: the last line of this heading's source range
+            // should be the setext underline. If it's a single `-` (possibly
+            // with trailing whitespace), this is a false setext heading.
+            let underline_idx = child.end_line.saturating_sub(1); // 1-indexed to 0-indexed
+            if let Some(underline) = source_lines.get(underline_idx) {
+                let trimmed = underline.trim();
+                if trimmed == "-" {
+                    // This is a false setext heading — it's actually a paragraph
+                    // followed by the start of a list item.
+                    let heading_start = child.start_line;
+                    let heading_end = child.end_line;
+                    let children = child.children.clone();
+
+                    let mut paragraph = MarkdownNode {
+                        node_type: MarkdownNodeType::Paragraph,
+                        children,
+                        start_line: heading_start,
+                        end_line: heading_end.saturating_sub(1).max(heading_start),
+                    };
+                    // If the paragraph ends up with the same start/end as heading,
+                    // adjust so it doesn't include the underline line
+                    if paragraph.end_line >= heading_end {
+                        paragraph.end_line = heading_end.saturating_sub(1).max(heading_start);
+                    }
+
+                    let list_item = MarkdownNode {
+                        node_type: MarkdownNodeType::Item,
+                        children: Vec::new(),
+                        start_line: heading_end,
+                        end_line: heading_end,
+                    };
+
+                    let list = MarkdownNode {
+                        node_type: MarkdownNodeType::List {
+                            list_type: ListType::Bullet,
+                            tight: true,
+                        },
+                        children: vec![list_item],
+                        start_line: heading_end,
+                        end_line: heading_end,
+                    };
+
+                    replacements.push((i, vec![paragraph, list]));
+                }
+            }
+        }
+        i += 1;
+    }
+
+    // Apply replacements in reverse order so indices remain valid
+    for (idx, replacement) in replacements.into_iter().rev() {
+        node.children.splice(idx..=idx, replacement);
+    }
+}
+
+/// Convert `BlockQuote` nodes containing `[!TYPE]` markers into `Callout` nodes.
+///
+/// GitHub-style callouts use the syntax:
+/// ```markdown
+/// > [!NOTE]
+/// > Content here
+/// ```
+/// With optional custom title: `> [!WARNING] Custom Title`
+/// And optional collapsed state: `> [!NOTE]-`
+///
+/// This function handles three cases:
+/// 1. A single blockquote whose first paragraph starts with `[!TYPE]` → convert to Callout
+/// 2. A single blockquote with multiple paragraphs, some starting with `[!TYPE]` → split & convert
+/// 3. Consecutive separate blockquotes (handled naturally since this runs before merge)
+fn convert_callout_blockquotes(node: &mut MarkdownNode) {
+    // Recursively process all children depth-first
+    for child in &mut node.children {
+        convert_callout_blockquotes(child);
+    }
+
+    // Replace children, potentially splitting blockquotes that contain multiple callouts
+    let old_children = std::mem::take(&mut node.children);
+    let mut new_children = Vec::with_capacity(old_children.len());
+
+    for child in old_children {
+        if matches!(child.node_type, MarkdownNodeType::BlockQuote) {
+            new_children.extend(split_and_convert_blockquote(child));
+        } else {
+            new_children.push(child);
+        }
+    }
+
+    node.children = new_children;
+}
+
+/// Check if a paragraph node's first text child starts with a valid `[!TYPE]` marker.
+fn paragraph_starts_with_callout(node: &MarkdownNode) -> bool {
+    if !matches!(node.node_type, MarkdownNodeType::Paragraph) {
+        return false;
+    }
+    if let Some(first_child) = node.children.first() {
+        if let MarkdownNodeType::Text(t) = &first_child.node_type {
+            let trimmed = t.trim_start();
+            if trimmed.starts_with("[!") {
+                if let Some(close_pos) = trimmed.find(']') {
+                    let type_str = &trimmed[2..close_pos];
+                    return CalloutType::from_str(type_str).is_some();
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Process a single blockquote: either convert it to a Callout, split it into
+/// multiple Callout/BlockQuote nodes, or leave it as a plain BlockQuote.
+fn split_and_convert_blockquote(mut blockquote: MarkdownNode) -> Vec<MarkdownNode> {
+    // Find which paragraph children start with [!TYPE]
+    let callout_starts: Vec<usize> = blockquote
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            if paragraph_starts_with_callout(c) {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    match callout_starts.len() {
+        0 => {
+            // Regular blockquote, no callout markers
+            vec![blockquote]
+        }
+        1 if callout_starts[0] == 0 => {
+            // Single callout at the start — convert the whole blockquote
+            if let Some((ct, title, collapsed)) = extract_callout_info(&mut blockquote) {
+                blockquote.node_type = MarkdownNodeType::Callout {
+                    callout_type: ct,
+                    title,
+                    collapsed,
+                };
+            }
+            vec![blockquote]
+        }
+        _ => {
+            // Multiple callout markers (or callout not at start) — split
+            split_blockquote_at_callouts(blockquote, &callout_starts)
+        }
+    }
+}
+
+/// Split a single blockquote into multiple nodes at each `[!TYPE]` paragraph boundary.
+///
+/// This handles the case where the user writes multiple callouts inside a single
+/// blockquote (separated by `>` blank lines but no un-quoted blank lines):
+/// ```markdown
+/// > [!NOTE]
+/// > Note content
+/// >
+/// > [!TIP]
+/// > Tip content
+/// ```
+fn split_blockquote_at_callouts(
+    blockquote: MarkdownNode,
+    callout_starts: &[usize],
+) -> Vec<MarkdownNode> {
+    let base_start = blockquote.start_line;
+    let base_end = blockquote.end_line;
+    let children = blockquote.children;
+    let len = children.len();
+
+    // Build section boundaries: (start_idx, end_idx, is_callout)
+    let mut sections: Vec<(usize, usize, bool)> = Vec::new();
+
+    // Any content before the first callout marker is a regular blockquote
+    if callout_starts[0] > 0 {
+        sections.push((0, callout_starts[0], false));
+    }
+
+    // Each callout section extends from its marker to the next marker (or end)
+    for (i, &start) in callout_starts.iter().enumerate() {
+        let end = callout_starts.get(i + 1).copied().unwrap_or(len);
+        sections.push((start, end, true));
+    }
+
+    sections
+        .iter()
+        .map(|&(start_idx, end_idx, is_callout)| {
+            let section: Vec<MarkdownNode> = children[start_idx..end_idx].to_vec();
+            let s_line = section
+                .first()
+                .map_or(base_start, |c| c.start_line);
+            let e_line = section
+                .last()
+                .map_or(base_end, |c| c.end_line);
+
+            let mut node = MarkdownNode {
+                node_type: MarkdownNodeType::BlockQuote,
+                children: section,
+                start_line: s_line,
+                end_line: e_line,
+            };
+
+            if is_callout {
+                if let Some((ct, title, collapsed)) = extract_callout_info(&mut node) {
+                    node.node_type = MarkdownNodeType::Callout {
+                        callout_type: ct,
+                        title,
+                        collapsed,
+                    };
+                }
+            }
+
+            node
+        })
+        .collect()
+}
+
+/// Try to extract callout info from a blockquote node.
+/// Returns `Some((type, optional_title, collapsed))` if the blockquote
+/// starts with a `[!TYPE]` marker in its first paragraph's first text node.
+/// Also removes the marker text from the AST so only content remains.
+fn extract_callout_info(
+    blockquote: &mut MarkdownNode,
+) -> Option<(CalloutType, Option<String>, bool)> {
+    // The blockquote must have at least one child (a Paragraph)
+    let first_child = blockquote.children.first_mut()?;
+    if !matches!(first_child.node_type, MarkdownNodeType::Paragraph) {
+        return None;
+    }
+
+    // The paragraph's first child should be a Text node
+    let first_text = first_child.children.first_mut()?;
+    let text = match &first_text.node_type {
+        MarkdownNodeType::Text(t) => t.clone(),
+        _ => return None,
+    };
+
+    // Try to match the pattern: [!TYPE] or [!TYPE]- with optional title
+    let trimmed = text.trim_start();
+    if !trimmed.starts_with("[!") {
+        return None;
+    }
+
+    // Find the closing bracket
+    let close_bracket = trimmed.find(']')?;
+    let type_str = &trimmed[2..close_bracket];
+
+    let callout_type = CalloutType::from_str(type_str)?;
+
+    // Check for collapsed marker right after the closing bracket
+    let after_bracket = &trimmed[close_bracket + 1..];
+    let (collapsed, rest) = if after_bracket.starts_with('-') {
+        (true, after_bracket[1..].trim_start())
+    } else {
+        (false, after_bracket.trim_start())
+    };
+
+    // Everything after the marker on the same line is the custom title
+    let title = if rest.is_empty() {
+        None
+    } else {
+        Some(rest.to_string())
+    };
+
+    // Remove the [!TYPE] marker text from the first text node
+    let remaining_text = text[trimmed.len()..].to_string();
+    if remaining_text.is_empty() {
+        // Remove the first text node entirely since it only contained the marker
+        first_child.children.remove(0);
+        // If the paragraph is now empty, remove it too
+        if first_child.children.is_empty() {
+            blockquote.children.remove(0);
+        } else {
+            // If there's a SoftBreak right after the removed text, remove it too
+            if !first_child.children.is_empty()
+                && matches!(first_child.children[0].node_type, MarkdownNodeType::SoftBreak)
+            {
+                first_child.children.remove(0);
+            }
+        }
+    } else {
+        first_text.node_type = MarkdownNodeType::Text(remaining_text);
+    }
+
+    Some((callout_type, title, collapsed))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wikilink Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Recursively walk the AST and split `Text` nodes that contain `[[...]]`
+/// wikilink syntax into a sequence of `Text` and `Wikilink` nodes.
+fn extract_wikilinks(node: &mut MarkdownNode) {
+    // Recurse into children first (depth-first)
+    for child in &mut node.children {
+        extract_wikilinks(child);
+    }
+
+    // Now process this node's direct children: look for Text nodes containing [[...]]
+    let old_children = std::mem::take(&mut node.children);
+    let mut new_children = Vec::with_capacity(old_children.len());
+
+    for child in old_children {
+        if let MarkdownNodeType::Text(ref text) = child.node_type {
+            if text.contains("[[") {
+                let split = split_text_with_wikilinks(text, child.start_line, child.end_line);
+                new_children.extend(split);
+            } else {
+                new_children.push(child);
+            }
+        } else {
+            new_children.push(child);
+        }
+    }
+
+    node.children = new_children;
+}
+
+/// Split a text string containing `[[...]]` patterns into a sequence of
+/// `Text` and `Wikilink` nodes.
+///
+/// Handles:
+/// - `[[target]]` → Wikilink { target, display: None }
+/// - `[[target|display text]]` → Wikilink { target, display: Some("display text") }
+/// - Unclosed `[[` is left as plain text
+fn split_text_with_wikilinks(
+    text: &str,
+    start_line: usize,
+    end_line: usize,
+) -> Vec<MarkdownNode> {
+    let mut result = Vec::new();
+    let mut remaining = text;
+
+    while let Some(open_pos) = remaining.find("[[") {
+        // Push any text before the opening [[
+        if open_pos > 0 {
+            let before = &remaining[..open_pos];
+            result.push(MarkdownNode {
+                node_type: MarkdownNodeType::Text(before.to_string()),
+                children: Vec::new(),
+                start_line,
+                end_line,
+            });
+        }
+
+        let after_open = &remaining[open_pos + 2..];
+
+        // Find the closing ]] — but don't cross newlines
+        if let Some(close_pos) = after_open.find("]]") {
+            let inner = &after_open[..close_pos];
+
+            // Don't allow newlines inside wikilinks
+            if inner.contains('\n') {
+                // Malformed — push the [[ as text and continue
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Text("[[".to_string()),
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+                remaining = after_open;
+                continue;
+            }
+
+            // Parse target and optional display text (split on first |)
+            let (target, display) = if let Some(pipe_pos) = inner.find('|') {
+                let t = inner[..pipe_pos].trim().to_string();
+                let d = inner[pipe_pos + 1..].trim().to_string();
+                (t, if d.is_empty() { None } else { Some(d) })
+            } else {
+                (inner.trim().to_string(), None)
+            };
+
+            // Only create a wikilink if the target is non-empty
+            if !target.is_empty() {
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Wikilink { target, display },
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+            } else {
+                // Empty target like [[]] — push as plain text
+                result.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Text(format!("[[{}]]", inner)),
+                    children: Vec::new(),
+                    start_line,
+                    end_line,
+                });
+            }
+
+            remaining = &after_open[close_pos + 2..];
+        } else {
+            // No closing ]] found — push [[ as text and continue
+            result.push(MarkdownNode {
+                node_type: MarkdownNodeType::Text("[[".to_string()),
+                children: Vec::new(),
+                start_line,
+                end_line,
+            });
+            remaining = after_open;
+        }
+    }
+
+    // Push any remaining text
+    if !remaining.is_empty() {
+        result.push(MarkdownNode {
+            node_type: MarkdownNodeType::Text(remaining.to_string()),
+            children: Vec::new(),
+            start_line,
+            end_line,
+        });
+    }
+
+    result
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1159,5 +1733,295 @@ mod tests {
             has_paragraph,
             "Loose list items should have Paragraph children"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Callout / Admonition Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_note_callout() {
+        let markdown = "> [!NOTE]\n> This is a note";
+        let doc = parse_markdown(markdown).unwrap();
+        assert!(!doc.root.children.is_empty());
+
+        let node = &doc.root.children[0];
+        if let MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } = &node.node_type
+        {
+            assert_eq!(*callout_type, CalloutType::Note);
+            assert!(title.is_none());
+            assert!(!collapsed);
+        } else {
+            panic!("Expected Callout node, got {:?}", node.node_type);
+        }
+
+        // Should have content
+        let text = node.text_content();
+        assert!(
+            text.contains("This is a note"),
+            "Callout should contain content text, got: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_parse_warning_callout_with_custom_title() {
+        let markdown = "> [!WARNING] Custom Title\n> Be careful here";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        if let MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } = &node.node_type
+        {
+            assert_eq!(*callout_type, CalloutType::Warning);
+            assert_eq!(title.as_deref(), Some("Custom Title"));
+            assert!(!collapsed);
+        } else {
+            panic!("Expected Callout node, got {:?}", node.node_type);
+        }
+    }
+
+    #[test]
+    fn test_parse_collapsed_callout() {
+        let markdown = "> [!NOTE]-\n> This is collapsed by default";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        if let MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } = &node.node_type
+        {
+            assert_eq!(*callout_type, CalloutType::Note);
+            assert!(title.is_none());
+            assert!(collapsed, "Should be collapsed by default");
+        } else {
+            panic!("Expected Callout node, got {:?}", node.node_type);
+        }
+    }
+
+    #[test]
+    fn test_parse_collapsed_callout_with_title() {
+        let markdown = "> [!TIP]- Click to expand\n> Hidden content";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        if let MarkdownNodeType::Callout {
+            callout_type,
+            title,
+            collapsed,
+        } = &node.node_type
+        {
+            assert_eq!(*callout_type, CalloutType::Tip);
+            assert_eq!(title.as_deref(), Some("Click to expand"));
+            assert!(collapsed);
+        } else {
+            panic!("Expected Callout node, got {:?}", node.node_type);
+        }
+    }
+
+    #[test]
+    fn test_parse_all_callout_types() {
+        let types = vec![
+            ("NOTE", CalloutType::Note),
+            ("TIP", CalloutType::Tip),
+            ("WARNING", CalloutType::Warning),
+            ("CAUTION", CalloutType::Caution),
+            ("IMPORTANT", CalloutType::Important),
+        ];
+
+        for (type_str, expected_type) in types {
+            let markdown = format!("> [!{}]\n> Content", type_str);
+            let doc = parse_markdown(&markdown).unwrap();
+
+            let node = &doc.root.children[0];
+            if let MarkdownNodeType::Callout { callout_type, .. } = &node.node_type {
+                assert_eq!(
+                    *callout_type, expected_type,
+                    "Failed for type: {}",
+                    type_str
+                );
+            } else {
+                panic!(
+                    "Expected Callout node for {}, got {:?}",
+                    type_str, node.node_type
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_callout_case_insensitive() {
+        // GitHub callout types should be case-insensitive
+        let markdown = "> [!note]\n> lowercase note";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        assert!(
+            matches!(
+                &node.node_type,
+                MarkdownNodeType::Callout {
+                    callout_type: CalloutType::Note,
+                    ..
+                }
+            ),
+            "Callout types should be case-insensitive, got {:?}",
+            node.node_type
+        );
+    }
+
+    #[test]
+    fn test_parse_regular_blockquote_not_callout() {
+        // A regular blockquote should NOT become a callout
+        let markdown = "> Just a regular quote";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        assert!(
+            matches!(node.node_type, MarkdownNodeType::BlockQuote),
+            "Regular blockquote should remain BlockQuote, got {:?}",
+            node.node_type
+        );
+    }
+
+    #[test]
+    fn test_parse_unknown_callout_type_stays_blockquote() {
+        // An unknown type like [!UNKNOWN] should stay as a regular blockquote
+        let markdown = "> [!UNKNOWN]\n> Content";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        assert!(
+            matches!(node.node_type, MarkdownNodeType::BlockQuote),
+            "Unknown callout type should remain BlockQuote, got {:?}",
+            node.node_type
+        );
+    }
+
+    #[test]
+    fn test_callout_with_multiline_content() {
+        let markdown = "> [!NOTE]\n> Line 1\n> Line 2\n> Line 3";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let node = &doc.root.children[0];
+        assert!(
+            matches!(
+                &node.node_type,
+                MarkdownNodeType::Callout {
+                    callout_type: CalloutType::Note,
+                    ..
+                }
+            ),
+            "Expected Callout, got {:?}",
+            node.node_type
+        );
+
+        let text = node.text_content();
+        assert!(text.contains("Line 1"), "Should have Line 1");
+        assert!(text.contains("Line 3"), "Should have Line 3");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wikilink Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_simple_wikilink() {
+        let doc = parse_markdown("Check [[note-b]] for details").unwrap();
+        let para = &doc.root.children[0];
+        assert!(matches!(para.node_type, MarkdownNodeType::Paragraph));
+
+        let has_wikilink = para.children.iter().any(|c| {
+            matches!(
+                &c.node_type,
+                MarkdownNodeType::Wikilink { target, display } if target == "note-b" && display.is_none()
+            )
+        });
+        assert!(has_wikilink, "Should contain a Wikilink node. Children: {:?}",
+            para.children.iter().map(|c| format!("{:?}", c.node_type)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_parse_wikilink_with_display_text() {
+        let doc = parse_markdown("See [[note-b|Custom Text]] here").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilink = para.children.iter().find(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        });
+        assert!(wikilink.is_some(), "Should have a Wikilink node");
+
+        if let MarkdownNodeType::Wikilink { target, display } = &wikilink.unwrap().node_type {
+            assert_eq!(target, "note-b");
+            assert_eq!(display.as_deref(), Some("Custom Text"));
+        }
+    }
+
+    #[test]
+    fn test_parse_wikilink_with_spaces() {
+        let doc = parse_markdown("Open [[My Document]] now").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilink = para.children.iter().find(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        });
+        assert!(wikilink.is_some());
+
+        if let MarkdownNodeType::Wikilink { target, display } = &wikilink.unwrap().node_type {
+            assert_eq!(target, "My Document");
+            assert!(display.is_none());
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_wikilinks() {
+        let doc = parse_markdown("Link [[a]] and [[b|B text]] here").unwrap();
+        let para = &doc.root.children[0];
+
+        let wikilinks: Vec<_> = para.children.iter().filter(|c| {
+            matches!(&c.node_type, MarkdownNodeType::Wikilink { .. })
+        }).collect();
+        assert_eq!(wikilinks.len(), 2, "Should have 2 wikilinks");
+    }
+
+    #[test]
+    fn test_parse_wikilink_text_content() {
+        let doc = parse_markdown("[[note-b|Display]]").unwrap();
+        let text = doc.root.text_content();
+        assert!(text.contains("Display"), "text_content should use display text");
+
+        let doc2 = parse_markdown("[[note-b]]").unwrap();
+        let text2 = doc2.root.text_content();
+        assert!(text2.contains("note-b"), "text_content should fall back to target");
+    }
+
+    #[test]
+    fn test_parse_unclosed_wikilink() {
+        let doc = parse_markdown("This [[unclosed stays as text").unwrap();
+        let text = doc.root.text_content();
+        assert!(text.contains("[["), "Unclosed [[ should remain as text");
+
+        let has_wikilink = doc.root.children.iter().any(|c| {
+            c.children.iter().any(|cc| matches!(&cc.node_type, MarkdownNodeType::Wikilink { .. }))
+        });
+        assert!(!has_wikilink, "Unclosed [[ should NOT produce a Wikilink node");
+    }
+
+    #[test]
+    fn test_parse_empty_wikilink() {
+        let doc = parse_markdown("This [[]] is empty").unwrap();
+        let has_wikilink = doc.root.children.iter().any(|c| {
+            c.children.iter().any(|cc| matches!(&cc.node_type, MarkdownNodeType::Wikilink { .. }))
+        });
+        assert!(!has_wikilink, "Empty [[]] should NOT produce a Wikilink node");
     }
 }

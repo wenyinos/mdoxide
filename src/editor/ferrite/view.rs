@@ -94,6 +94,12 @@ pub struct ViewState {
     cumulative_heights: Vec<f32>,
     /// Cached total content height.
     total_content_height: f32,
+    /// Smoothed content height for scrollbar rendering.
+    /// Lerps toward `total_content_height` to prevent scrollbar jumping
+    /// as new wrap info is discovered for previously unseen lines.
+    scrollbar_content_height: f32,
+    /// Dirty flag: set when wrap_info changes, cleared after rebuild_height_cache.
+    wrap_info_dirty: bool,
     /// When true, uses uniform line heights for all calculations.
     /// Automatically enabled for files > LARGE_FILE_THRESHOLD lines.
     /// This avoids O(N) memory and CPU overhead for very large files.
@@ -127,6 +133,8 @@ impl ViewState {
             wrap_info: Vec::new(),
             cumulative_heights: Vec::new(),
             total_content_height: 0.0,
+            scrollbar_content_height: 0.0,
+            wrap_info_dirty: false,
             use_uniform_heights: false,
         }
     }
@@ -455,6 +463,17 @@ impl ViewState {
             return;
         }
 
+        // CRITICAL: Hard-clamp first_visible_line to valid range FIRST.
+        // After large deletions, first_visible_line can be beyond the new buffer,
+        // and stale wrap_info/cumulative_heights would let it pass through the
+        // tolerance-based clamping below. This prevents downstream panics
+        // (e.g., get_visible_line_range returning start > end → Vec capacity overflow).
+        let max_first_visible = total_lines.saturating_sub(1);
+        if self.first_visible_line > max_first_visible {
+            self.first_visible_line = max_first_visible;
+            self.scroll_offset_y = 0.0;
+        }
+
         // Calculate max scroll correctly: content_height - viewport_height
         // This ensures the last line is fully visible at maximum scroll.
         // Use total_content_height() which accounts for word wrap heights when enabled.
@@ -553,6 +572,84 @@ impl ViewState {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Scrollbar Helpers
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// Returns the current absolute scroll position in pixels from the document top.
+    ///
+    /// This accounts for wrapped line heights when available, providing an accurate
+    /// position for scrollbar rendering.
+    #[must_use]
+    pub fn current_scroll_y(&self) -> f32 {
+        self.get_line_y_offset(self.first_visible_line) + self.scroll_offset_y
+    }
+
+    /// Scrolls to an absolute y-position within the document.
+    ///
+    /// Converts the absolute y-position to the appropriate `first_visible_line`
+    /// and `scroll_offset_y`, accounting for wrapped line heights.
+    ///
+    /// # Arguments
+    /// * `y` - Absolute y-position in pixels from document top
+    /// * `total_lines` - Total number of lines in the document
+    pub fn scroll_to_absolute(&mut self, y: f32, total_lines: usize) {
+        if total_lines == 0 || self.line_height <= 0.0 {
+            self.first_visible_line = 0;
+            self.scroll_offset_y = 0.0;
+            return;
+        }
+
+        let content_height = self.total_content_height(total_lines);
+        let max_absolute = (content_height - self.viewport_height).max(0.0);
+        let clamped = y.clamp(0.0, max_absolute);
+
+        self.first_visible_line = self.y_offset_to_line(clamped, total_lines);
+        let line_start_y = self.get_line_y_offset(self.first_visible_line);
+        self.scroll_offset_y = (clamped - line_start_y).max(0.0);
+
+        // Ensure scroll_offset_y doesn't exceed the current line's height
+        let current_line_height = self.get_line_height(self.first_visible_line);
+        if self.scroll_offset_y >= current_line_height {
+            self.scroll_offset_y = 0.0;
+        }
+    }
+
+    /// Returns the smoothed content height for scrollbar rendering.
+    ///
+    /// This value lerps toward the actual `total_content_height` to prevent
+    /// the scrollbar from jumping as new wrap info is discovered during scrolling.
+    /// For all other calculations (scroll clamping, etc.), use `total_content_height`.
+    #[must_use]
+    pub fn scrollbar_content_height(&self, total_lines: usize) -> f32 {
+        if self.scrollbar_content_height > 0.0 {
+            self.scrollbar_content_height
+        } else {
+            self.total_content_height(total_lines)
+        }
+    }
+
+    /// Advances the scrollbar height smoothing toward the actual content height.
+    ///
+    /// Call this every frame when wrap is enabled so the smoothed scrollbar height
+    /// converges to the actual value even when no wrap_info changes occurred.
+    pub fn advance_scrollbar_smoothing(&mut self, total_lines: usize) {
+        let target = self.total_content_height(total_lines);
+        if target <= 0.0 {
+            return;
+        }
+        if self.scrollbar_content_height <= 0.0 {
+            self.scrollbar_content_height = target;
+        } else {
+            let diff = target - self.scrollbar_content_height;
+            if diff.abs() < 1.0 {
+                self.scrollbar_content_height = target;
+            } else {
+                self.scrollbar_content_height += diff * 0.3;
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Word Wrap Support (Phase 2)
     // ─────────────────────────────────────────────────────────────────────────────
 
@@ -589,6 +686,8 @@ impl ViewState {
         self.wrap_info.clear();
         self.cumulative_heights.clear();
         self.total_content_height = 0.0;
+        self.scrollbar_content_height = 0.0;
+        self.wrap_info_dirty = false;
         // Don't reset use_uniform_heights here - it's based on file size, not wrap state
     }
 
@@ -644,14 +743,22 @@ impl ViewState {
             return;
         }
 
-        // Ensure wrap_info vector is large enough
-        if line >= self.wrap_info.len() {
-            self.wrap_info.resize(line + 1, WrapInfo::default());
-        }
-        self.wrap_info[line] = WrapInfo {
+        let new_info = WrapInfo {
             visual_rows: visual_rows.max(1),
             height: height.max(1.0),
         };
+
+        // Ensure wrap_info vector is large enough
+        if line >= self.wrap_info.len() {
+            self.wrap_info.resize(line + 1, WrapInfo::default());
+            // New entry always counts as dirty
+            self.wrap_info[line] = new_info;
+            self.wrap_info_dirty = true;
+        } else if self.wrap_info[line] != new_info {
+            // Only mark dirty if the value actually changed
+            self.wrap_info[line] = new_info;
+            self.wrap_info_dirty = true;
+        }
     }
 
     /// Rebuilds the cumulative height cache after wrap info changes.
@@ -667,10 +774,11 @@ impl ViewState {
     /// the O(N) cache building and uses uniform heights instead.
     /// This prevents lag when scrolling very large files.
     pub fn rebuild_height_cache(&mut self, total_lines: usize) {
-        // DISABLED: Large file optimization causes rendering regression.
-        // For very large files, this O(N) operation may be slow but is correct.
-        // TODO: Implement proper large file optimization in future task.
-        let _ = total_lines; // Suppress unused warning for threshold check
+        // Skip rebuild if wrap info hasn't changed since last rebuild
+        if !self.wrap_info_dirty {
+            return;
+        }
+        self.wrap_info_dirty = false;
 
         self.use_uniform_heights = false;
         self.cumulative_heights.clear();
@@ -686,6 +794,20 @@ impl ViewState {
         }
 
         self.total_content_height = cumulative;
+
+        // Smooth the scrollbar content height to prevent jumping.
+        // On first build, snap immediately. On subsequent builds, lerp toward target.
+        if self.scrollbar_content_height <= 0.0 {
+            self.scrollbar_content_height = cumulative;
+        } else {
+            // Lerp factor: 0.3 provides smooth transition over ~5-10 frames
+            let diff = cumulative - self.scrollbar_content_height;
+            if diff.abs() < 1.0 {
+                self.scrollbar_content_height = cumulative;
+            } else {
+                self.scrollbar_content_height += diff * 0.3;
+            }
+        }
     }
 
     /// Returns the height of a specific logical line.
@@ -865,6 +987,29 @@ impl ViewState {
         self.wrap_info.clear();
         self.cumulative_heights.clear();
         self.total_content_height = 0.0;
+        self.scrollbar_content_height = 0.0;
+        self.wrap_info_dirty = false;
+    }
+
+    /// Truncates wrap info to match the current line count.
+    ///
+    /// After large deletions, `wrap_info` can have stale entries for lines that
+    /// no longer exist. This removes those entries and marks heights as dirty so
+    /// `rebuild_height_cache` will recompute cumulative heights on the next call.
+    ///
+    /// Unlike `clear_wrap_info()`, this preserves valid entries for lines that
+    /// still exist, avoiding the flickering caused by a full clear.
+    pub fn truncate_wrap_info(&mut self, total_lines: usize) {
+        if self.wrap_info.len() > total_lines {
+            self.wrap_info.truncate(total_lines);
+            self.wrap_info_dirty = true;
+        }
+        // Also truncate cumulative_heights since it's indexed by line
+        if self.cumulative_heights.len() > total_lines + 1 {
+            self.cumulative_heights.truncate(total_lines + 1);
+            // Recompute total_content_height from truncated data
+            self.total_content_height = self.cumulative_heights.last().copied().unwrap_or(0.0);
+        }
     }
 
     /// Returns wrap info for debugging/testing.

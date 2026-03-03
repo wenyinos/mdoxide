@@ -301,6 +301,67 @@ impl AboutPanel {
         output
     }
 
+    /// Render the about/help panel inline within a tab (not as a modal window).
+    ///
+    /// This is used when about/help is displayed as a special tab in the main
+    /// editor area, giving more screen real estate than the modal version.
+    pub fn show_inline(&mut self, ui: &mut Ui, is_dark: bool) {
+        let available = ui.available_size();
+        let sidebar_width = 140.0;
+
+        ui.horizontal(|ui| {
+            // Left side: Section tabs
+            ui.vertical(|ui| {
+                ui.set_min_width(sidebar_width);
+                ui.set_max_width(sidebar_width);
+                ui.set_min_height(available.y - 20.0);
+
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(format!("❓ {}", t!("about.title")))
+                        .size(18.0)
+                        .strong(),
+                );
+                ui.add_space(12.0);
+
+                for section in [AboutSection::About, AboutSection::Shortcuts] {
+                    let selected = self.active_section == section;
+                    let text = format!("{} {}", section.icon(), section.label());
+
+                    let btn = ui.add_sized(
+                        [sidebar_width - 16.0, 32.0],
+                        egui::SelectableLabel::new(
+                            selected,
+                            RichText::new(text).size(14.0),
+                        ),
+                    );
+
+                    if btn.clicked() {
+                        self.active_section = section;
+                    }
+                }
+            });
+
+            ui.separator();
+
+            // Right side: Section content (fills remaining space)
+            ui.vertical(|ui| {
+                let content_width = (available.x - sidebar_width - 24.0).max(300.0);
+                ui.set_min_width(content_width);
+                ui.set_min_height(available.y - 20.0);
+
+                match self.active_section {
+                    AboutSection::About => {
+                        self.show_about_section(ui, is_dark);
+                    }
+                    AboutSection::Shortcuts => {
+                        self.show_shortcuts_section(ui, is_dark);
+                    }
+                }
+            });
+        });
+    }
+
     /// Show the About section with app info and links.
     fn show_about_section(&self, ui: &mut Ui, is_dark: bool) {
         ScrollArea::vertical().show(ui, |ui| {

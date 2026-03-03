@@ -9,14 +9,20 @@
 #![allow(dead_code)]
 #![allow(clippy::redundant_closure)]
 
-use crate::config::{load_config, save_config_silent, Settings, TabInfo, ViewMode};
+use crate::config::{ load_config, save_config_silent, Settings, TabInfo, ViewMode };
 use crate::ui::TabPipelineState;
 use crate::vcs::GitService;
-use crate::workspaces::{filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher};
-use log::{debug, info, warn};
+use crate::workspaces::{ filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher };
+use log::{ debug, info, warn };
+use rust_i18n::t;
 use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::hash::{ Hash, Hasher };
+use std::path::{ Path, PathBuf };
+
+/// File size threshold (bytes) above which a performance warning toast is shown on open.
+/// Kept as a constant for now; can be moved to settings later.
+const LARGE_FILE_THRESHOLD_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content Hashing Helper
@@ -91,6 +97,11 @@ impl FileType {
     /// Check if this is a tabular data file (CSV or TSV).
     pub fn is_tabular(&self) -> bool {
         matches!(self, Self::Csv | Self::Tsv)
+    }
+
+    /// Check if this file type supports split view (raw + rendered side-by-side).
+    pub fn supports_split(&self) -> bool {
+        self.is_markdown() || self.is_tabular()
     }
 
     /// Get a display name for this file type.
@@ -205,8 +216,8 @@ impl Selection {
 
     /// Move the cursor/selection by an offset.
     pub fn offset(self, delta: isize) -> Selection {
-        let new_anchor = (self.anchor as isize + delta).max(0) as usize;
-        let new_head = (self.head as isize + delta).max(0) as usize;
+        let new_anchor = ((self.anchor as isize) + delta).max(0) as usize;
+        let new_head = ((self.head as isize) + delta).max(0) as usize;
         Selection {
             anchor: new_anchor,
             head: new_head,
@@ -394,9 +405,7 @@ impl MultiCursor {
 
     /// Get the primary selection (for status bar, scroll anchoring).
     pub fn primary(&self) -> &Selection {
-        self.selections
-            .get(self.primary_index)
-            .unwrap_or(&self.selections[0])
+        self.selections.get(self.primary_index).unwrap_or(&self.selections[0])
     }
 
     /// Get a mutable reference to the primary selection.
@@ -473,10 +482,10 @@ impl MultiCursor {
     pub fn adjust_after(&mut self, pos: usize, delta: isize) {
         for sel in &mut self.selections {
             if sel.anchor >= pos {
-                sel.anchor = (sel.anchor as isize + delta).max(0) as usize;
+                sel.anchor = ((sel.anchor as isize) + delta).max(0) as usize;
             }
             if sel.head >= pos {
-                sel.head = (sel.head as isize + delta).max(0) as usize;
+                sel.head = ((sel.head as isize) + delta).max(0) as usize;
             }
         }
         self.normalize();
@@ -642,7 +651,7 @@ impl FoldRegion {
         start_line: usize,
         end_line: usize,
         kind: FoldKind,
-        preview: String,
+        preview: String
     ) -> Self {
         Self {
             id,
@@ -661,11 +670,7 @@ impl FoldRegion {
 
     /// Get the number of hidden lines when collapsed.
     pub fn hidden_line_count(&self) -> usize {
-        if self.collapsed {
-            self.end_line.saturating_sub(self.start_line)
-        } else {
-            0
-        }
+        if self.collapsed { self.end_line.saturating_sub(self.start_line) } else { 0 }
     }
 
     /// Check if a line is within this fold region.
@@ -697,8 +702,8 @@ impl FoldRegion {
 
         // If edit is within the region, adjust end line
         if edit_line >= self.start_line && edit_line <= self.end_line {
-            let new_end = self.end_line as isize + delta;
-            if new_end < self.start_line as isize {
+            let new_end = (self.end_line as isize) + delta;
+            if new_end < (self.start_line as isize) {
                 // Region collapsed to invalid state
                 return false;
             }
@@ -707,8 +712,8 @@ impl FoldRegion {
         }
 
         // Edit is before this region, shift both lines
-        let new_start = self.start_line as isize + delta;
-        let new_end = self.end_line as isize + delta;
+        let new_start = (self.start_line as isize) + delta;
+        let new_end = (self.end_line as isize) + delta;
 
         if new_start < 0 || new_end < new_start {
             return false;
@@ -891,7 +896,10 @@ impl FoldState {
 
     /// Get the total number of hidden lines.
     pub fn hidden_line_count(&self) -> usize {
-        self.regions.iter().map(|r| r.hidden_line_count()).sum()
+        self.regions
+            .iter()
+            .map(|r| r.hidden_line_count())
+            .sum()
     }
 
     /// Get all lines that have fold indicators (start lines of regions).
@@ -946,7 +954,10 @@ impl FoldState {
 
     /// Get the number of collapsed folds.
     pub fn collapsed_count(&self) -> usize {
-        self.regions.iter().filter(|r| r.collapsed).count()
+        self.regions
+            .iter()
+            .filter(|r| r.collapsed)
+            .count()
     }
 }
 
@@ -987,6 +998,60 @@ pub const LARGE_FILE_THRESHOLD: usize = 1_000_000; // 1MB
 /// Maximum undo stack size for large files (reduced from 100 to save memory).
 pub const LARGE_FILE_MAX_UNDO: usize = 10;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab Kind (Document vs Special)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Types of special (non-editable) tabs that display application UI.
+///
+/// Special tabs render their own content (settings, help, etc.) instead of a
+/// document editor. They cannot be edited, have no view mode, and never prompt
+/// to save. This is designed to be extensible for future panel types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpecialTabKind {
+    /// Application settings panel
+    Settings,
+    /// About/Help information panel
+    About,
+    /// Application welcome panel
+    Welcome,
+}
+
+impl SpecialTabKind {
+    /// Get the display title for this special tab kind.
+    pub fn title(&self) -> &'static str {
+        match self {
+            SpecialTabKind::Settings => "Settings",
+            SpecialTabKind::About => "About / Help",
+            SpecialTabKind::Welcome => "Welcome",
+        }
+    }
+
+    /// Get the icon for this special tab kind.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            SpecialTabKind::Settings => "⚙",
+            SpecialTabKind::About => "❓",
+            SpecialTabKind::Welcome => "✨",
+        }
+    }
+}
+
+/// The kind of content a tab holds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TabKind {
+    /// Regular document tab (file editing)
+    Document,
+    /// Special non-editable tab (settings, about, etc.)
+    Special(SpecialTabKind),
+}
+
+impl Default for TabKind {
+    fn default() -> Self {
+        TabKind::Document
+    }
+}
+
 ///
 /// This struct holds the complete state of an open document tab,
 /// including content and editing state. Different from `TabInfo` which
@@ -995,6 +1060,8 @@ pub const LARGE_FILE_MAX_UNDO: usize = 10;
 pub struct Tab {
     /// Unique identifier for this tab
     pub id: usize,
+    /// Kind of tab (document or special panel)
+    pub kind: TabKind,
     /// File path (None for unsaved/new documents)
     pub path: Option<PathBuf>,
     /// Document content
@@ -1010,7 +1077,7 @@ pub struct Tab {
     is_large_file: bool,
     /// Multi-cursor state (supports multiple selections/cursors)
     pub cursors: MultiCursor,
-    /// Legacy: Cursor position (line, column) - 0-indexed. 
+    /// Legacy: Cursor position (line, column) - 0-indexed.
     /// Computed from primary cursor, kept for backwards compatibility.
     pub cursor_position: (usize, usize),
     /// Legacy: Text selection range (start_char_index, end_char_index) - None if no selection.
@@ -1099,7 +1166,7 @@ impl Tab {
     /// Compute a 64-bit hash of content for modification detection.
     fn compute_content_hash(content: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::{ Hash, Hasher };
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         hasher.finish()
@@ -1112,6 +1179,7 @@ impl Tab {
     pub fn new(id: usize) -> Self {
         Self {
             id,
+            kind: TabKind::Document,
             path: None,
             content: String::new(),
             original_content: String::new(),
@@ -1159,7 +1227,11 @@ impl Tab {
     /// * `id` - Unique tab identifier
     /// * `auto_save_default` - Whether auto-save is enabled by default
     /// * `default_view_mode` - Default view mode for new tabs (Raw, Rendered, or Split)
-    pub fn new_with_settings(id: usize, auto_save_default: bool, default_view_mode: ViewMode) -> Self {
+    pub fn new_with_settings(
+        id: usize,
+        auto_save_default: bool,
+        default_view_mode: ViewMode
+    ) -> Self {
         let mut tab = Self::new(id);
         tab.auto_save_enabled = auto_save_default;
         tab.view_mode = default_view_mode;
@@ -1174,7 +1246,7 @@ impl Tab {
     pub fn with_file(id: usize, path: PathBuf, content: String) -> Self {
         let file_type = FileType::from_path(&path);
         let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
-        
+
         // For large files, store hash instead of full content to save memory
         let (original_content, original_content_hash, max_undo_size) = if is_large_file {
             log::info!(
@@ -1185,9 +1257,10 @@ impl Tab {
         } else {
             (content.clone(), None, 100)
         };
-        
+
         Self {
             id,
+            kind: TabKind::Document,
             path: Some(path),
             content,
             original_content,
@@ -1247,8 +1320,8 @@ impl Tab {
         let encoding_label = detected.name();
 
         // Check for BOM first - encoding_rs handles this
-        let (content, actual_encoding, _had_errors, had_bom) = if let Some((bom_encoding, bom_len)) =
-            encoding_rs::Encoding::for_bom(&bytes)
+        let (content, actual_encoding, _had_errors, had_bom) = if
+            let Some((bom_encoding, bom_len)) = encoding_rs::Encoding::for_bom(&bytes)
         {
             // BOM detected, use that encoding and skip BOM bytes
             // Use decode_without_bom_handling since we already handled the BOM
@@ -1262,20 +1335,28 @@ impl Tab {
 
         // For large files, store hash instead of full content to save memory
         // Also clear original_bytes for large files - can be reloaded from disk if needed
-        let (original_content, original_content_hash, max_undo_size, original_bytes) = if is_large_file {
+        let (original_content, original_content_hash, max_undo_size, original_bytes) = if
+            is_large_file
+        {
             log::info!(
                 "Opening large file ({} bytes): using hash-based modification detection, reduced undo stack",
                 bytes_len
             );
             // Don't store original_bytes for large files - saves significant memory
             // If user changes encoding, we can reload from disk
-            (String::new(), Some(Self::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO, Vec::new())
+            (
+                String::new(),
+                Some(Self::compute_content_hash(&content)),
+                LARGE_FILE_MAX_UNDO,
+                Vec::new(),
+            )
         } else {
             (content.clone(), None, 100, bytes)
         };
 
         Self {
             id,
+            kind: TabKind::Document,
             path: Some(path),
             content,
             original_content,
@@ -1330,7 +1411,7 @@ impl Tab {
         path: PathBuf,
         content: String,
         auto_save_default: bool,
-        default_view_mode: ViewMode,
+        default_view_mode: ViewMode
     ) -> Self {
         let mut tab = Self::with_file(id, path, content);
         tab.auto_save_enabled = auto_save_default;
@@ -1351,7 +1432,7 @@ impl Tab {
         path: PathBuf,
         bytes: Vec<u8>,
         auto_save_default: bool,
-        default_view_mode: ViewMode,
+        default_view_mode: ViewMode
     ) -> Self {
         let mut tab = Self::with_file_bytes(id, path, bytes);
         tab.auto_save_enabled = auto_save_default;
@@ -1365,23 +1446,27 @@ impl Tab {
     /// File type is detected from the path extension.
     /// Restored tabs don't auto-focus since we're restoring previous state.
     pub fn from_tab_info(id: usize, info: &TabInfo, content: String) -> Self {
-        let file_type = info
-            .path
+        let file_type = info.path
             .as_ref()
             .map(|p| FileType::from_path(p))
             .unwrap_or(FileType::Markdown);
         // Convert legacy cursor position to char index for MultiCursor
-        let cursor_char_idx = line_col_to_char_index(&content, info.cursor_position.0, info.cursor_position.1);
-        
+        let cursor_char_idx = line_col_to_char_index(
+            &content,
+            info.cursor_position.0,
+            info.cursor_position.1
+        );
+
         let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
         let (original_content, original_content_hash, max_undo_size) = if is_large_file {
             (String::new(), Some(Self::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO)
         } else {
             (content.clone(), None, 100)
         };
-        
+
         Self {
             id,
+            kind: TabKind::Document,
             path: info.path.clone(),
             content,
             original_content,
@@ -1424,7 +1509,12 @@ impl Tab {
     }
 
     /// Create a tab from session info with settings-based auto-save.
-    pub fn from_tab_info_with_settings(id: usize, info: &TabInfo, content: String, auto_save_default: bool) -> Self {
+    pub fn from_tab_info_with_settings(
+        id: usize,
+        info: &TabInfo,
+        content: String,
+        auto_save_default: bool
+    ) -> Self {
         let mut tab = Self::from_tab_info(id, info, content);
         tab.auto_save_enabled = auto_save_default;
         tab
@@ -1435,11 +1525,15 @@ impl Tab {
     /// This combines tab info restoration (view mode, split ratio) with
     /// automatic encoding detection from the file bytes.
     /// For large files, uses hash-based modification detection.
-    pub fn from_tab_info_with_bytes(id: usize, info: &TabInfo, bytes: Vec<u8>, auto_save_default: bool) -> Self {
+    pub fn from_tab_info_with_bytes(
+        id: usize,
+        info: &TabInfo,
+        bytes: Vec<u8>,
+        auto_save_default: bool
+    ) -> Self {
         use chardetng::EncodingDetector;
 
-        let file_type = info
-            .path
+        let file_type = info.path
             .as_ref()
             .map(|p| FileType::from_path(p))
             .unwrap_or(FileType::Markdown);
@@ -1453,11 +1547,13 @@ impl Tab {
         let detected = detector.guess(None, true);
 
         // Check for BOM first
-        let (content, actual_encoding, had_bom) = if let Some((bom_encoding, bom_len)) =
-            encoding_rs::Encoding::for_bom(&bytes)
+        let (content, actual_encoding, had_bom) = if
+            let Some((bom_encoding, bom_len)) = encoding_rs::Encoding::for_bom(&bytes)
         {
             // Use decode_without_bom_handling since we already handled the BOM
-            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(
+                &bytes[bom_len..]
+            );
             (decoded.into_owned(), bom_encoding.name(), true)
         } else {
             let (decoded, _, _) = detected.decode(&bytes);
@@ -1465,21 +1561,33 @@ impl Tab {
         };
 
         // Convert legacy cursor position to char index
-        let cursor_char_idx = line_col_to_char_index(&content, info.cursor_position.0, info.cursor_position.1);
+        let cursor_char_idx = line_col_to_char_index(
+            &content,
+            info.cursor_position.0,
+            info.cursor_position.1
+        );
 
         // For large files, store hash instead of full content
-        let (original_content, original_content_hash, max_undo_size, original_bytes) = if is_large_file {
+        let (original_content, original_content_hash, max_undo_size, original_bytes) = if
+            is_large_file
+        {
             log::info!(
                 "Restoring large file ({} bytes): using hash-based modification detection",
                 bytes_len
             );
-            (String::new(), Some(Self::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO, Vec::new())
+            (
+                String::new(),
+                Some(Self::compute_content_hash(&content)),
+                LARGE_FILE_MAX_UNDO,
+                Vec::new(),
+            )
         } else {
             (content.clone(), None, 100, bytes)
         };
 
         Self {
             id,
+            kind: TabKind::Document,
             path: info.path.clone(),
             content,
             original_content,
@@ -1526,6 +1634,10 @@ impl Tab {
     /// For large files (>1MB), uses hash comparison instead of full string comparison
     /// to avoid storing a full copy of the original content.
     pub fn is_modified(&self) -> bool {
+        // Special tabs are never "modified"
+        if self.is_special() {
+            return false;
+        }
         if let Some(hash) = self.original_content_hash {
             // Large file: use hash-based comparison
             Self::compute_content_hash(&self.content) != hash
@@ -1534,7 +1646,7 @@ impl Tab {
             self.content != self.original_content
         }
     }
-    
+
     /// Check if this is a large file that uses memory-optimized storage.
     pub fn is_large_file(&self) -> bool {
         self.is_large_file
@@ -1570,6 +1682,11 @@ impl Tab {
     /// This allows new tabs that haven't been touched to be closed silently,
     /// while still protecting any typed content from accidental loss.
     pub fn should_prompt_to_save(&self) -> bool {
+        // Special tabs never need to save
+        if self.is_special() {
+            return false;
+        }
+
         // Don't prompt for unmodified files
         if !self.is_modified() {
             return false;
@@ -1587,8 +1704,11 @@ impl Tab {
 
     /// Get the display title for this tab.
     pub fn title(&self) -> String {
-        let name = self
-            .path
+        if let TabKind::Special(special) = &self.kind {
+            return format!("{} {}", special.icon(), special.title());
+        }
+
+        let name = self.path
             .as_ref()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
@@ -1599,6 +1719,11 @@ impl Tab {
         } else {
             name.to_string()
         }
+    }
+
+    /// Check if this tab is a special (non-editable) tab.
+    pub fn is_special(&self) -> bool {
+        matches!(self.kind, TabKind::Special(_))
     }
 
     /// Mark the current content as saved (updates original_content or hash).
@@ -1648,7 +1773,8 @@ impl Tab {
     /// not created new). For new documents, this just changes the save encoding.
     pub fn set_encoding(&mut self, new_encoding: &'static str) -> Result<(), String> {
         // Get the encoding from the label
-        let encoding = encoding_rs::Encoding::for_label(new_encoding.as_bytes())
+        let encoding = encoding_rs::Encoding
+            ::for_label(new_encoding.as_bytes())
             .ok_or_else(|| format!("Unknown encoding: {}", new_encoding))?;
 
         // If we have original bytes, re-decode the content
@@ -1669,7 +1795,7 @@ impl Tab {
             self.original_content = self.content.clone();
 
             // If content length changed significantly, reset cursor
-            if (self.content.len() as isize - old_len as isize).abs() > 100 {
+            if ((self.content.len() as isize) - (old_len as isize)).abs() > 100 {
                 self.cursors = MultiCursor::new();
                 self.cursor_position = (0, 0);
             }
@@ -1695,13 +1821,13 @@ impl Tab {
     /// We handle UTF-16 encoding manually using Rust's built-in encode_utf16().
     pub fn encode_content(&self) -> Vec<u8> {
         let encoding_lower = self.current_encoding.to_lowercase();
-        
+
         // Handle UTF-16 specially - encoding_rs doesn't support encoding TO UTF-16
         if encoding_lower == "utf-16le" || encoding_lower == "utf-16-le" {
             let mut result = Vec::new();
             // Add BOM if original had one
             if self.had_bom {
-                result.extend_from_slice(&[0xFF, 0xFE]);
+                result.extend_from_slice(&[0xff, 0xfe]);
             }
             // Encode to UTF-16LE (little endian)
             for code_unit in self.content.encode_utf16() {
@@ -1709,12 +1835,12 @@ impl Tab {
             }
             return result;
         }
-        
+
         if encoding_lower == "utf-16be" || encoding_lower == "utf-16-be" {
             let mut result = Vec::new();
             // Add BOM if original had one
             if self.had_bom {
-                result.extend_from_slice(&[0xFE, 0xFF]);
+                result.extend_from_slice(&[0xfe, 0xff]);
             }
             // Encode to UTF-16BE (big endian)
             for code_unit in self.content.encode_utf16() {
@@ -1722,9 +1848,10 @@ impl Tab {
             }
             return result;
         }
-        
+
         // For all other encodings, use encoding_rs
-        let encoding = encoding_rs::Encoding::for_label(self.current_encoding.as_bytes())
+        let encoding = encoding_rs::Encoding
+            ::for_label(self.current_encoding.as_bytes())
             .unwrap_or(encoding_rs::UTF_8);
 
         let (encoded, _actual_encoding, _had_errors) = encoding.encode(&self.content);
@@ -1746,9 +1873,9 @@ impl Tab {
     /// Get the BOM bytes for a given encoding label.
     fn get_bom_for_encoding(encoding_label: &str) -> &'static [u8] {
         match encoding_label.to_lowercase().as_str() {
-            "utf-8" => &[0xEF, 0xBB, 0xBF],
-            "utf-16le" | "utf-16-le" => &[0xFF, 0xFE],
-            "utf-16be" | "utf-16-be" => &[0xFE, 0xFF],
+            "utf-8" => &[0xef, 0xbb, 0xbf],
+            "utf-16le" | "utf-16-le" => &[0xff, 0xfe],
+            "utf-16be" | "utf-16-be" => &[0xfe, 0xff],
             _ => &[], // Other encodings don't use BOM
         }
     }
@@ -1900,6 +2027,16 @@ impl Tab {
         self.redo_stack.len()
     }
 
+    /// Break the current undo group, ensuring the next edit starts a new undo entry.
+    ///
+    /// This resets the time-based grouping so that the next `record_edit()` call
+    /// will always create a separate undo entry instead of merging with the previous one.
+    /// Used after formatting operations and other discrete actions that should be
+    /// independently undoable.
+    pub fn break_undo_group(&mut self) {
+        self.last_undo_time = None;
+    }
+
     /// Get the content version counter.
     ///
     /// This counter is incremented whenever content is modified externally
@@ -1931,13 +2068,13 @@ impl Tab {
         // Only record if content actually changed
         if old_content != self.content {
             let now = std::time::Instant::now();
-            
+
             // Check if we should merge with the previous undo entry (time-based grouping)
             // Merge if: there's a recent entry AND it was within the threshold
             let should_merge = self.last_undo_time
                 .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
                 .unwrap_or(false);
-            
+
             if should_merge && !self.undo_stack.is_empty() {
                 // Merge: keep the OLD content from the previous entry (the original state)
                 // but don't push a new entry - the existing entry already has the
@@ -1950,7 +2087,7 @@ impl Tab {
                     self.undo_stack.remove(0);
                 }
             }
-            
+
             // Always clear redo stack on new edits and update timestamp
             self.redo_stack.clear();
             self.last_undo_time = Some(now);
@@ -1968,10 +2105,9 @@ impl Tab {
     /// 240MB/second (clone every frame at 60fps) to only cloning after edits.
     pub fn prepare_for_edit(&mut self) {
         if self.pending_undo_state.is_none() {
-            self.pending_undo_state = Some(UndoEntry::new(
-                self.content.clone(),
-                self.cursors.primary().head,
-            ));
+            self.pending_undo_state = Some(
+                UndoEntry::new(self.content.clone(), self.cursors.primary().head)
+            );
         }
     }
 
@@ -1985,12 +2121,12 @@ impl Tab {
     /// * `old_cursor` - The cursor position before the edit (for undo positioning)
     pub fn record_edit_after_change(&mut self, old_cursor: usize) {
         let now = std::time::Instant::now();
-        
+
         // Check if we should merge with the previous undo entry (time-based grouping)
         let should_merge = self.last_undo_time
             .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
             .unwrap_or(false);
-        
+
         if should_merge && !self.undo_stack.is_empty() {
             // Merge: keep pending_undo_state (it has the original content from
             // before the typing session started), don't push a new undo entry.
@@ -2184,31 +2320,35 @@ impl Tab {
 
     /// Find the next occurrence of the given text after the specified position.
     /// Returns (start, end) character indices if found.
-    pub fn find_next_occurrence(&self, search_text: &str, after_pos: usize) -> Option<(usize, usize)> {
+    pub fn find_next_occurrence(
+        &self,
+        search_text: &str,
+        after_pos: usize
+    ) -> Option<(usize, usize)> {
         if search_text.is_empty() {
             return None;
         }
-        
+
         // Search from after_pos to end
         if let Some(rel_pos) = self.content[after_pos..].find(search_text) {
             let start = after_pos + rel_pos;
             let end = start + search_text.len();
             return Some((start, end));
         }
-        
+
         // Wrap around: search from beginning to after_pos
         if let Some(rel_pos) = self.content[..after_pos].find(search_text) {
             let end = rel_pos + search_text.len();
             return Some((rel_pos, end));
         }
-        
+
         None
     }
 
     /// Get the text under the primary cursor (word at cursor if no selection).
     pub fn get_primary_selection_text(&self) -> Option<String> {
         let primary = self.cursors.primary();
-        
+
         if primary.is_selection() {
             // Return selected text
             let (start, end) = primary.range();
@@ -2219,7 +2359,7 @@ impl Tab {
             // No selection: find word at cursor
             return self.word_at_position(primary.head);
         }
-        
+
         None
     }
 
@@ -2233,7 +2373,7 @@ impl Tab {
         let char_pos = pos.min(chars.len().saturating_sub(1));
 
         // Find word boundaries
-        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
+        let is_word_char = |c: char| (c.is_alphanumeric() || c == '_');
 
         // Check if we're on a word character
         if char_pos < chars.len() && !is_word_char(chars[char_pos]) {
@@ -2268,7 +2408,7 @@ impl Tab {
         let chars: Vec<char> = self.content.chars().collect();
         let char_pos = pos.min(chars.len().saturating_sub(1));
 
-        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
+        let is_word_char = |c: char| (c.is_alphanumeric() || c == '_');
 
         // Check if we're on a word character
         if char_pos < chars.len() && !is_word_char(chars[char_pos]) {
@@ -2353,13 +2493,12 @@ impl Tab {
         fold_headings: bool,
         fold_code_blocks: bool,
         fold_lists: bool,
-        fold_indentation: bool,
+        fold_indentation: bool
     ) {
         use crate::editor::folding::detect_fold_regions;
 
         // Remember currently collapsed fold positions
-        let collapsed_lines: std::collections::HashSet<usize> = self
-            .fold_state
+        let collapsed_lines: std::collections::HashSet<usize> = self.fold_state
             .regions()
             .iter()
             .filter(|r| r.collapsed)
@@ -2373,7 +2512,7 @@ impl Tab {
             fold_headings,
             fold_code_blocks,
             fold_lists,
-            fold_indentation,
+            fold_indentation
         );
 
         // Restore collapsed state for matching start lines
@@ -2506,6 +2645,8 @@ pub struct UiState {
     pub zen_mode: bool,
     /// Go to Line dialog state (None = closed)
     pub go_to_line_dialog: Option<crate::ui::GoToLineDialog>,
+    /// Current Vim mode label for status bar display (None = Vim disabled).
+    pub vim_mode_indicator: Option<&'static str>,
 }
 
 /// Actions that may need confirmation before execution.
@@ -2545,6 +2686,261 @@ enum ResolvedContent {
     },
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Backlink Index
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A single backlink entry: a file that references the target file.
+#[derive(Debug, Clone)]
+pub struct BacklinkEntry {
+    /// Absolute path to the file that contains the link
+    pub source_path: PathBuf,
+    /// Display name for the source file (filename without extension)
+    pub display_name: String,
+}
+
+/// In-memory index mapping file names to the files that reference them.
+///
+/// For small workspaces (≤50 files), backlinks are scanned on demand when
+/// the active tab changes. For larger workspaces, the index is built once
+/// on workspace load and updated incrementally on file save events.
+#[derive(Debug, Default)]
+pub struct BacklinkIndex {
+    /// Map from lowercase filename (without extension) → list of files that link to it.
+    /// The key is normalized (lowercase, no extension) to match wikilink resolution.
+    index: HashMap<String, Vec<BacklinkEntry>>,
+    /// Number of files in the workspace when the index was last built.
+    /// Used to decide between on-demand scanning vs cached index.
+    pub file_count: usize,
+    /// Whether the full index has been built (for large workspaces).
+    pub is_built: bool,
+}
+
+impl BacklinkIndex {
+    /// Create a new empty backlink index.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Clear the entire index.
+    pub fn clear(&mut self) {
+        self.index.clear();
+        self.file_count = 0;
+        self.is_built = false;
+    }
+
+    /// Get backlinks for a given filename.
+    ///
+    /// The filename is normalized to lowercase without extension for matching.
+    pub fn get_backlinks(&self, filename: &str) -> Vec<BacklinkEntry> {
+        let key = normalize_filename(filename);
+        self.index.get(&key).cloned().unwrap_or_default()
+    }
+
+    /// Build the full index by scanning all workspace files.
+    ///
+    /// This reads every markdown file in the workspace and extracts wikilinks
+    /// and standard markdown links, building a reverse mapping.
+    pub fn build_from_files(&mut self, files: &[PathBuf]) {
+        self.index.clear();
+        self.file_count = files.len();
+
+        let md_files: Vec<&PathBuf> = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| (e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        for file_path in &md_files {
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                let links = extract_links_from_content(&content);
+                let source_display = file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                for link_target in links {
+                    let key = normalize_filename(&link_target);
+                    let entry = BacklinkEntry {
+                        source_path: file_path.to_path_buf(),
+                        display_name: source_display.clone(),
+                    };
+                    self.index.entry(key).or_default().push(entry);
+                }
+            }
+        }
+
+        self.is_built = true;
+        log::debug!(
+            "Backlink index built: {} files scanned, {} targets indexed",
+            md_files.len(),
+            self.index.len()
+        );
+    }
+
+    /// Incrementally update the index for a single file that was saved.
+    ///
+    /// Removes all old entries from this source file, then re-scans it.
+    pub fn update_file(&mut self, file_path: &Path) {
+        // Remove old entries from this source
+        for entries in self.index.values_mut() {
+            entries.retain(|e| e.source_path != file_path);
+        }
+        // Remove empty keys
+        self.index.retain(|_, v| !v.is_empty());
+
+        // Re-scan the file
+        if let Ok(content) = std::fs::read_to_string(file_path) {
+            let links = extract_links_from_content(&content);
+            let source_display = file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            for link_target in links {
+                let key = normalize_filename(&link_target);
+                let entry = BacklinkEntry {
+                    source_path: file_path.to_path_buf(),
+                    display_name: source_display.clone(),
+                };
+                self.index.entry(key).or_default().push(entry);
+            }
+        }
+    }
+
+    /// Scan a subset of files on demand (for small workspaces or single-file mode).
+    ///
+    /// Returns backlinks for the given target filename by scanning the provided files.
+    pub fn scan_on_demand(
+        target_filename: &str,
+        files: &[PathBuf],
+        target_path: Option<&Path>
+    ) -> Vec<BacklinkEntry> {
+        let target_key = normalize_filename(target_filename);
+        let mut results = Vec::new();
+
+        for file_path in files {
+            // Skip non-markdown files
+            let is_md = file_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| (e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")))
+                .unwrap_or(false);
+            if !is_md {
+                continue;
+            }
+
+            // Skip the target file itself
+            if let Some(tp) = target_path {
+                if file_path == tp {
+                    continue;
+                }
+            }
+
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                let links = extract_links_from_content(&content);
+                for link in &links {
+                    if normalize_filename(link) == target_key {
+                        let display = file_path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        results.push(BacklinkEntry {
+                            source_path: file_path.clone(),
+                            display_name: display,
+                        });
+                        break; // One match per file is enough
+                    }
+                }
+            }
+        }
+
+        results
+    }
+}
+
+/// Normalize a filename for backlink matching.
+/// Removes `.md`/`.markdown` extension (case-insensitive) and converts to lowercase.
+fn normalize_filename(name: &str) -> String {
+    let name = name.trim();
+    let lower = name.to_lowercase();
+    let without_ext = lower
+        .strip_suffix(".md")
+        .or_else(|| lower.strip_suffix(".markdown"))
+        .unwrap_or(&lower);
+    without_ext.to_string()
+}
+
+/// Extract all link targets from markdown content.
+///
+/// Detects:
+/// - `[[target]]` wikilinks
+/// - `[[target|display]]` wikilinks with display text
+/// - `[text](target.md)` standard markdown links to local .md files
+fn extract_links_from_content(content: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+
+    // Extract wikilinks: [[target]] and [[target|display]]
+    let mut remaining = content;
+    while let Some(open) = remaining.find("[[") {
+        let after_open = &remaining[open + 2..];
+        if let Some(close) = after_open.find("]]") {
+            let inner = &after_open[..close];
+            // Don't allow newlines inside wikilinks
+            if !inner.contains('\n') && !inner.is_empty() {
+                // Extract target (before | if present)
+                let target = if let Some(pipe) = inner.find('|') {
+                    inner[..pipe].trim()
+                } else {
+                    inner.trim()
+                };
+                if !target.is_empty() {
+                    targets.push(target.to_string());
+                }
+            }
+            remaining = &after_open[close + 2..];
+        } else {
+            remaining = after_open;
+        }
+    }
+
+    // Extract standard markdown links: [text](target.md)
+    // Only capture local .md file references (not http/https URLs)
+    remaining = content;
+    while let Some(open_paren) = remaining.find("](") {
+        let after_paren = &remaining[open_paren + 2..];
+        if let Some(close_paren) = after_paren.find(')') {
+            let url = after_paren[..close_paren].trim();
+            // Only match local .md links (not URLs)
+            if
+                !url.starts_with("http://") &&
+                !url.starts_with("https://") &&
+                !url.starts_with('#') &&
+                (url.ends_with(".md") || url.ends_with(".markdown"))
+            {
+                // Extract just the filename from the path
+                let filename = Path::new(url)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or(url);
+                targets.push(filename.to_string());
+            }
+            remaining = &after_paren[close_paren + 1..];
+        } else {
+            break;
+        }
+    }
+
+    targets
+}
+
 #[derive(Debug)]
 pub struct AppState {
     /// All open tabs
@@ -2569,6 +2965,8 @@ pub struct AppState {
     pub pending_file_events: Vec<WorkspaceEvent>,
     /// Git integration service
     pub git_service: GitService,
+    /// Backlink index for tracking which files link to which
+    pub backlink_index: BacklinkIndex,
 }
 
 impl AppState {
@@ -2582,10 +2980,7 @@ impl AppState {
     pub fn new() -> Self {
         let settings = load_config();
         info!("AppState initialized with settings");
-        debug!(
-            "Theme: {:?}, View mode: {:?}",
-            settings.theme, settings.view_mode
-        );
+        debug!("Theme: {:?}, View mode: {:?}", settings.theme, settings.view_mode);
 
         let mut state = Self {
             tabs: Vec::new(),
@@ -2599,6 +2994,7 @@ impl AppState {
             workspace_watcher: None,
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
+            backlink_index: BacklinkIndex::new(),
         };
 
         // Try to restore tabs from previous session
@@ -2638,17 +3034,17 @@ impl AppState {
         info!("Restoring {} tab(s) from previous session", tab_infos.len());
 
         let auto_save_default = self.settings.auto_save_enabled_default;
-        
+
         for tab_info in &tab_infos {
             if let Some(path) = &tab_info.path {
                 // Try to read the file as bytes for encoding detection
                 match std::fs::read(path) {
                     Ok(bytes) => {
                         let tab = Tab::from_tab_info_with_bytes(
-                            self.next_tab_id, 
-                            tab_info, 
+                            self.next_tab_id,
+                            tab_info,
                             bytes,
-                            auto_save_default,
+                            auto_save_default
                         );
                         let encoding = tab.current_encoding;
                         self.next_tab_id += 1;
@@ -2681,6 +3077,20 @@ impl AppState {
         }
     }
 
+    /// Open the Welcome tab, or activate it if it already exists.
+    pub fn show_welcome_tab(&mut self) {
+        // If Welcome tab already exists, just activate it.
+        if let Some(i) = self.tabs.iter().position(|t| {
+            matches!(&t.kind, TabKind::Special(SpecialTabKind::Welcome))
+        }) {
+            self.active_tab_index = i;
+            return;
+        }
+
+        // Otherwise create it (this should also set active, but we’ll be safe)
+        self.open_special_tab(SpecialTabKind::Welcome);
+    }
+
     /// Create AppState with custom settings (useful for testing).
     ///
     /// This also restores tabs from `settings.last_open_tabs` if available.
@@ -2697,6 +3107,7 @@ impl AppState {
             workspace_watcher: None,
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
+            backlink_index: BacklinkIndex::new(),
         };
 
         // Try to restore tabs from session data
@@ -2764,16 +3175,53 @@ impl AppState {
         self.next_tab_id += 1;
         self.tabs.push(tab);
         self.active_tab_index = self.tabs.len() - 1;
-        debug!("Created new tab at index {} (auto-save: {}, view_mode: {:?})", 
-            self.active_tab_index, auto_save_default, default_view_mode);
+        debug!(
+            "Created new tab at index {} (auto-save: {}, view_mode: {:?})",
+            self.active_tab_index,
+            auto_save_default,
+            default_view_mode
+        );
+        self.active_tab_index
+    }
+
+    /// Open or focus a special tab (settings, about, etc.).
+    ///
+    /// If a tab of this kind already exists, it will be focused instead of
+    /// creating a duplicate. Returns the index of the (new or existing) tab.
+    pub fn open_special_tab(&mut self, special_kind: SpecialTabKind) -> usize {
+        // Check if a tab of this kind already exists
+        if
+            let Some(index) = self.tabs
+                .iter()
+                .position(|t| { matches!(&t.kind, TabKind::Special(k) if *k == special_kind) })
+        {
+            self.active_tab_index = index;
+            debug!("Focused existing special tab {:?} at index {}", special_kind, index);
+            return index;
+        }
+
+        // Create a new special tab
+        let mut tab = Tab::new(self.next_tab_id);
+        tab.kind = TabKind::Special(special_kind);
+        tab.needs_focus = false; // Special tabs don't need editor focus
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        self.active_tab_index = self.tabs.len() - 1;
+        debug!("Created special tab {:?} at index {}", special_kind, self.active_tab_index);
         self.active_tab_index
     }
 
     /// Open a file in a new tab.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
-    pub fn open_file(&mut self, path: PathBuf) -> Result<usize, std::io::Error> {
-        self.open_file_with_focus(path, true)
+    /// Pass `app_time` when available so a non-blocking performance warning toast
+    /// can be shown for files larger than 10 MB.
+    pub fn open_file(
+        &mut self,
+        path: PathBuf,
+        app_time: Option<f64>
+    ) -> Result<usize, std::io::Error> {
+        self.open_file_with_focus(path, true, app_time)
     }
 
     /// Open a file in a new tab with optional focus control.
@@ -2782,10 +3230,13 @@ impl AppState {
     /// in the background without switching tabs.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
+    /// Pass `app_time` when available so a non-blocking performance warning toast
+    /// can be shown for files larger than 10 MB.
     pub fn open_file_with_focus(
         &mut self,
         path: PathBuf,
         focus: bool,
+        app_time: Option<f64>
     ) -> Result<usize, std::io::Error> {
         // Check if file is already open
         if let Some(index) = self.find_tab_by_path(&path) {
@@ -2798,20 +3249,41 @@ impl AppState {
             return Ok(index);
         }
 
+        // Show non-blocking performance warning for large files before loading
+        if let (Some(time), Ok(meta)) = (app_time, std::fs::metadata(&path)) {
+            let len = meta.len();
+            if len > LARGE_FILE_THRESHOLD_BYTES {
+                let size_mb = len / (1024 * 1024);
+                self.show_toast(
+                    t!(
+                        "notification.large_file_performance",
+                        size = size_mb.to_string()
+                    ).to_string(),
+                    time,
+                    3.0
+                );
+            }
+        }
+
         // Read file as bytes for encoding detection
         let bytes = std::fs::read(&path)?;
 
         // Create new tab with settings-based defaults and encoding detection
         let auto_save_default = self.settings.auto_save_enabled_default;
         let default_view_mode = self.settings.default_view_mode;
-        let tab = Tab::with_file_bytes_and_settings(
+        let mut tab = Tab::with_file_bytes_and_settings(
             self.next_tab_id,
             path.clone(),
             bytes,
             auto_save_default,
-            default_view_mode,
+            default_view_mode
         );
-        
+
+        // If default view mode is Split but file type doesn't support it, fall back to Raw
+        if default_view_mode == ViewMode::Split && !tab.file_type().supports_split() {
+            tab.view_mode = ViewMode::Raw;
+        }
+
         let detected_encoding = tab.current_encoding;
         self.next_tab_id += 1;
         self.tabs.push(tab);
@@ -2819,11 +3291,21 @@ impl AppState {
 
         if focus {
             self.active_tab_index = new_index;
-            info!("Opened file: {} (encoding: {}, auto-save: {}, view_mode: {:?})", 
-                path.display(), detected_encoding, auto_save_default, default_view_mode);
+            info!(
+                "Opened file: {} (encoding: {}, auto-save: {}, view_mode: {:?})",
+                path.display(),
+                detected_encoding,
+                auto_save_default,
+                default_view_mode
+            );
         } else {
-            info!("Opened file: {} (encoding: {}, in background, auto-save: {}, view_mode: {:?})", 
-                path.display(), detected_encoding, auto_save_default, default_view_mode);
+            info!(
+                "Opened file: {} (encoding: {}, in background, auto-save: {}, view_mode: {:?})",
+                path.display(),
+                detected_encoding,
+                auto_save_default,
+                default_view_mode
+            );
         }
 
         // Update recent files and save immediately for persistence
@@ -2838,6 +3320,23 @@ impl AppState {
     /// Find a tab by file path.
     pub fn find_tab_by_path(&self, path: &PathBuf) -> Option<usize> {
         self.tabs.iter().position(|t| t.path.as_ref() == Some(path))
+    }
+
+    /// Swap two tabs by their indices, updating the active tab index if needed.
+    ///
+    /// Returns `true` if the swap was performed.
+    pub fn swap_tabs(&mut self, a: usize, b: usize) -> bool {
+        if a == b || a >= self.tabs.len() || b >= self.tabs.len() {
+            return false;
+        }
+        self.tabs.swap(a, b);
+        // Update active tab index to follow the moved tab
+        if self.active_tab_index == a {
+            self.active_tab_index = b;
+        } else if self.active_tab_index == b {
+            self.active_tab_index = a;
+        }
+        true
     }
 
     /// Set the active tab by index.
@@ -2873,8 +3372,10 @@ impl AppState {
             if tab.should_prompt_to_save() {
                 // Set up confirmation dialog
                 self.ui.show_confirm_dialog = true;
-                self.ui.confirm_dialog_message =
-                    format!("'{}' has unsaved changes. Close anyway?", tab.title());
+                self.ui.confirm_dialog_message = format!(
+                    "'{}' has unsaved changes. Close anyway?",
+                    tab.title()
+                );
                 self.ui.pending_action = Some(PendingAction::CloseTab(index));
                 return false;
             }
@@ -2902,10 +3403,7 @@ impl AppState {
             self.active_tab_index -= 1;
         }
 
-        debug!(
-            "Closed tab {}, active is now {}",
-            index, self.active_tab_index
-        );
+        debug!("Closed tab {}, active is now {}", index, self.active_tab_index);
         true
     }
 
@@ -2935,9 +3433,13 @@ impl AppState {
             .active_tab_mut()
             .ok_or_else(|| crate::error::Error::Application("No active tab".to_string()))?;
 
-        let path = tab.path.clone().ok_or_else(|| {
-            crate::error::Error::Application("No file path set. Use 'Save As' instead.".to_string())
-        })?;
+        let path = tab.path
+            .clone()
+            .ok_or_else(|| {
+                crate::error::Error::Application(
+                    "No file path set. Use 'Save As' instead.".to_string()
+                )
+            })?;
 
         // Encode content using the tab's current encoding
         let encoded_bytes = tab.encode_content();
@@ -3008,10 +3510,11 @@ impl AppState {
     /// Returns `Ok(())` if successful, or an error if the folder can't be opened.
     pub fn open_workspace(&mut self, root: PathBuf) -> Result<(), crate::error::Error> {
         if !root.is_dir() {
-            return Err(crate::error::Error::Application(format!(
-                "Path is not a directory: {}",
-                root.display()
-            )));
+            return Err(
+                crate::error::Error::Application(
+                    format!("Path is not a directory: {}", root.display())
+                )
+            );
         }
 
         info!("Opening workspace: {}", root.display());
@@ -3145,10 +3648,7 @@ impl AppState {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Update settings and mark as dirty.
-    pub fn update_settings<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut Settings),
-    {
+    pub fn update_settings<F>(&mut self, f: F) where F: FnOnce(&mut Settings) {
         f(&mut self.settings);
         self.settings_dirty = true;
     }
@@ -3163,8 +3663,12 @@ impl AppState {
     /// Returns `true` if settings were saved.
     pub fn save_settings_if_dirty(&mut self) -> bool {
         if self.settings_dirty {
-            // Update session restoration data
-            self.settings.last_open_tabs = self.tabs.iter().map(|t| t.to_tab_info()).collect();
+            // Update session restoration data (skip special tabs like settings/about)
+            self.settings.last_open_tabs = self.tabs
+                .iter()
+                .filter(|t| !t.is_special())
+                .map(|t| t.to_tab_info())
+                .collect();
             self.settings.active_tab_index = self.active_tab_index;
 
             if save_config_silent(&self.settings) {
@@ -3192,16 +3696,12 @@ impl AppState {
     /// This creates a complete snapshot of the current editor session,
     /// including all open tabs, their content state, and editor positions.
     pub fn capture_session_state(&self) -> crate::config::SessionState {
-        use crate::config::{hash_content, SessionAppMode, SessionState, SessionTabState};
+        use crate::config::{ hash_content, SessionAppMode, SessionState, SessionTabState };
 
-        let tabs: Vec<SessionTabState> = self
-            .tabs
+        let tabs: Vec<SessionTabState> = self.tabs
             .iter()
             .map(|tab| {
-                let file_mtime = tab
-                    .path
-                    .as_ref()
-                    .and_then(|p| Self::get_file_mtime(p));
+                let file_mtime = tab.path.as_ref().and_then(|p| Self::get_file_mtime(p));
 
                 let original_content_hash = if !tab.is_modified() {
                     Some(hash_content(&tab.content))
@@ -3249,7 +3749,8 @@ impl AppState {
 
         SessionState {
             version: 1,
-            saved_at: std::time::SystemTime::now()
+            saved_at: std::time::SystemTime
+                ::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0),
@@ -3285,7 +3786,7 @@ impl AppState {
     /// Returns `true` if any tabs were restored.
     pub fn restore_from_session_result(
         &mut self,
-        result: &crate::config::SessionRestoreResult,
+        result: &crate::config::SessionRestoreResult
     ) -> bool {
         let Some(session) = &result.session else {
             return false;
@@ -3309,7 +3810,11 @@ impl AppState {
                     ResolvedContent::Recovered(content) => {
                         // Recovery content is UTF-8
                         if let Some(path) = &session_tab.path {
-                            let mut t = Tab::with_file(self.next_tab_id, path.clone(), content.clone());
+                            let mut t = Tab::with_file(
+                                self.next_tab_id,
+                                path.clone(),
+                                content.clone()
+                            );
                             // Set encoding to UTF-8 for recovered content
                             t.detected_encoding = Some("utf-8");
                             t.current_encoding = "utf-8";
@@ -3324,20 +3829,31 @@ impl AppState {
                         if let Some(path) = &session_tab.path {
                             let file_type = FileType::from_path(path);
                             let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
-                            
+
                             // For large files, use hash-based modification detection
-                            let (original_content_str, original_content_hash, max_undo, final_original_bytes) = if is_large_file {
+                            let (
+                                original_content_str,
+                                original_content_hash,
+                                max_undo,
+                                final_original_bytes,
+                            ) = if is_large_file {
                                 log::info!(
                                     "Restoring large file from disk ({} bytes): using hash-based modification detection",
                                     content.len()
                                 );
-                                (String::new(), Some(Tab::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO, Vec::new())
+                                (
+                                    String::new(),
+                                    Some(Tab::compute_content_hash(&content)),
+                                    LARGE_FILE_MAX_UNDO,
+                                    Vec::new(),
+                                )
                             } else {
                                 (content.clone(), None, 100, original_bytes)
                             };
-                            
+
                             let t = Tab {
                                 id: self.next_tab_id,
+                                kind: TabKind::Document,
                                 path: Some(path.clone()),
                                 content,
                                 original_content: original_content_str,
@@ -3392,16 +3908,21 @@ impl AppState {
                 tab.view_mode = session_tab.view_mode;
                 tab.cursor_position = session_tab.cursor_position;
                 tab.scroll_offset = session_tab.scroll_offset;
-                
+
                 // Restore cursor from char index
-                tab.cursors.set_single(crate::state::Selection::cursor(session_tab.cursor_char_index));
+                tab.cursors.set_single(
+                    crate::state::Selection::cursor(session_tab.cursor_char_index)
+                );
                 if let Some((start, end)) = session_tab.selection {
                     tab.cursors.set_single(crate::state::Selection::new(start, end));
                 }
                 tab.sync_cursor_from_primary();
 
                 // If we loaded from recovery content, mark as modified
-                if session_tab.has_unsaved_content && result.recovered_content.contains_key(&session_tab.tab_id) {
+                if
+                    session_tab.has_unsaved_content &&
+                    result.recovered_content.contains_key(&session_tab.tab_id)
+                {
                     // Content was recovered - it's modified relative to what's on disk
                     // The original_content field stays as the disk version
                 }
@@ -3417,7 +3938,8 @@ impl AppState {
             } else {
                 warn!(
                     "Could not restore tab {}: {}",
-                    session_tab.tab_id, session_tab.display_title
+                    session_tab.tab_id,
+                    session_tab.display_title
                 );
             }
         }
@@ -3434,7 +3956,9 @@ impl AppState {
         if let crate::config::SessionAppMode::Workspace { root: Some(root) } = &session.app_mode {
             // Validate the path is not empty
             if root.as_os_str().is_empty() {
-                debug!("Session had workspace mode but path was empty, starting in single-file mode");
+                debug!(
+                    "Session had workspace mode but path was empty, starting in single-file mode"
+                );
             } else {
                 debug!(
                     "Session had workspace mode active, attempting to restore: {}",
@@ -3447,11 +3971,7 @@ impl AppState {
                     .canonicalize()
                     .map(crate::path_utils::normalize_path)
                     .unwrap_or_else(|e| {
-                        debug!(
-                            "Could not canonicalize workspace path {}: {}",
-                            root.display(),
-                            e
-                        );
+                        debug!("Could not canonicalize workspace path {}: {}", root.display(), e);
                         root.clone()
                     });
 
@@ -3502,8 +4022,16 @@ impl AppState {
             "Restored {} of {} tabs from session{}{}",
             restored_count,
             session.tabs.len(),
-            if session.zen_mode { " (Zen Mode enabled)" } else { "" },
-            if self.app_mode.is_workspace() { " (Workspace mode)" } else { "" }
+            if session.zen_mode {
+                " (Zen Mode enabled)"
+            } else {
+                ""
+            },
+            if self.app_mode.is_workspace() {
+                " (Workspace mode)"
+            } else {
+                ""
+            }
         );
 
         restored_count > 0
@@ -3518,7 +4046,7 @@ impl AppState {
     fn resolve_tab_content(
         &self,
         session_tab: &crate::config::SessionTabState,
-        result: &crate::config::SessionRestoreResult,
+        result: &crate::config::SessionRestoreResult
     ) -> Option<ResolvedContent> {
         use chardetng::EncodingDetector;
 
@@ -3526,7 +4054,8 @@ impl AppState {
         if let Some(recovered) = result.recovered_content.get(&session_tab.tab_id) {
             debug!(
                 "Using recovered content for tab {} ({})",
-                session_tab.tab_id, session_tab.display_title
+                session_tab.tab_id,
+                session_tab.display_title
             );
             return Some(ResolvedContent::Recovered(recovered.clone()));
         }
@@ -3542,11 +4071,15 @@ impl AppState {
                         let detected = detector.guess(None, true);
 
                         // Check for BOM first
-                        let (content, encoding, had_bom) = if let Some((bom_encoding, bom_len)) =
-                            encoding_rs::Encoding::for_bom(&bytes)
+                        let (content, encoding, had_bom) = if
+                            let Some((bom_encoding, bom_len)) = encoding_rs::Encoding::for_bom(
+                                &bytes
+                            )
                         {
                             // Use decode_without_bom_handling since we already handled the BOM
-                            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+                            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(
+                                &bytes[bom_len..]
+                            );
                             (decoded.into_owned(), bom_encoding.name(), true)
                         } else {
                             let (decoded, _, _) = detected.decode(&bytes);
@@ -3555,7 +4088,9 @@ impl AppState {
 
                         debug!(
                             "Loaded content from disk for tab {} (encoding: {}, had_bom: {})",
-                            session_tab.tab_id, encoding, had_bom
+                            session_tab.tab_id,
+                            encoding,
+                            had_bom
                         );
                         return Some(ResolvedContent::FromDisk {
                             content,
@@ -3578,10 +4113,7 @@ impl AppState {
 
         // For tabs without a path (unsaved documents), we need recovery content
         if session_tab.path.is_none() && session_tab.has_unsaved_content {
-            debug!(
-                "Unsaved document {} has no recovery content",
-                session_tab.tab_id
-            );
+            debug!("Unsaved document {} has no recovery content", session_tab.tab_id);
             return None;
         }
 
@@ -3590,7 +4122,8 @@ impl AppState {
 
     /// Get file modification time as Unix timestamp.
     fn get_file_mtime(path: &std::path::Path) -> Option<u64> {
-        std::fs::metadata(path)
+        std::fs
+            ::metadata(path)
             .ok()
             .and_then(|m| m.modified().ok())
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
@@ -3617,7 +4150,7 @@ impl AppState {
                     debug!("Exit confirmed");
                 }
                 PendingAction::OpenFile(path) => {
-                    if let Err(e) = self.open_file(path) {
+                    if let Err(e) = self.open_file(path, None) {
                         self.show_error(format!("Failed to open file:\n{}", e));
                     }
                 }
@@ -3691,8 +4224,34 @@ impl AppState {
     }
 
     /// Toggle the about/help panel.
+    ///
+    /// If already viewing the About tab, closes it and returns to the previous tab.
+    /// Otherwise, opens the About tab.
     pub fn toggle_about(&mut self) {
-        self.ui.show_about = !self.ui.show_about;
+        // Check if we're already viewing the About tab
+        if let Some(tab) = self.tabs.get(self.active_tab_index) {
+            if matches!(&tab.kind, TabKind::Special(SpecialTabKind::About)) {
+                // Close it
+                self.force_close_tab(self.active_tab_index);
+                return;
+            }
+        }
+        self.open_special_tab(SpecialTabKind::About);
+    }
+
+    /// Open the settings panel as a tab.
+    ///
+    /// If already viewing the Settings tab, closes it.
+    /// Otherwise, opens the Settings tab.
+    pub fn open_settings_tab(&mut self) {
+        // Check if we're already viewing the Settings tab
+        if let Some(tab) = self.tabs.get(self.active_tab_index) {
+            if matches!(&tab.kind, TabKind::Special(SpecialTabKind::Settings)) {
+                self.force_close_tab(self.active_tab_index);
+                return;
+            }
+        }
+        self.open_special_tab(SpecialTabKind::Settings);
     }
 
     /// Toggle Zen Mode (distraction-free writing).
@@ -3788,26 +4347,14 @@ mod tests {
 
     #[test]
     fn test_file_type_from_path() {
-        assert_eq!(
-            FileType::from_path(Path::new("readme.md")),
-            FileType::Markdown
-        );
-        assert_eq!(
-            FileType::from_path(Path::new("config.json")),
-            FileType::Json
-        );
-        assert_eq!(
-            FileType::from_path(Path::new("docker-compose.yaml")),
-            FileType::Yaml
-        );
+        assert_eq!(FileType::from_path(Path::new("readme.md")), FileType::Markdown);
+        assert_eq!(FileType::from_path(Path::new("config.json")), FileType::Json);
+        assert_eq!(FileType::from_path(Path::new("docker-compose.yaml")), FileType::Yaml);
         assert_eq!(FileType::from_path(Path::new("Cargo.toml")), FileType::Toml);
         assert_eq!(FileType::from_path(Path::new("data.csv")), FileType::Csv);
         assert_eq!(FileType::from_path(Path::new("data.tsv")), FileType::Tsv);
         assert_eq!(FileType::from_path(Path::new("main.rs")), FileType::Unknown);
-        assert_eq!(
-            FileType::from_path(Path::new("no_extension")),
-            FileType::Unknown
-        );
+        assert_eq!(FileType::from_path(Path::new("no_extension")), FileType::Unknown);
     }
 
     #[test]
@@ -3985,14 +4532,20 @@ mod tests {
         assert!(!existing_empty.should_prompt_to_save());
 
         // Case 7: Existing empty file modified - prompt
-        let mut existing_empty_modified =
-            Tab::with_file(6, PathBuf::from("empty.md"), String::new());
+        let mut existing_empty_modified = Tab::with_file(
+            6,
+            PathBuf::from("empty.md"),
+            String::new()
+        );
         existing_empty_modified.set_content("now has content".to_string());
         assert!(existing_empty_modified.should_prompt_to_save());
 
         // Case 8: Saved file, content deleted entirely - prompt (modified)
-        let mut saved_then_cleared =
-            Tab::with_file(7, PathBuf::from("content.md"), "original".to_string());
+        let mut saved_then_cleared = Tab::with_file(
+            7,
+            PathBuf::from("content.md"),
+            "original".to_string()
+        );
         saved_then_cleared.set_content(String::new());
         assert!(saved_then_cleared.should_prompt_to_save());
     }
@@ -4057,6 +4610,10 @@ mod tests {
 
         assert!(tab.can_undo());
         assert_eq!(tab.undo_count(), 1);
+
+        // Break the undo group so the next edit is a separate undo entry
+        // (without this, rapid edits within 500ms are merged into one group)
+        tab.break_undo_group();
 
         // Simulate another edit
         let old_content = tab.content.clone();
@@ -4519,7 +5076,7 @@ mod tests {
             cursor_position: (10, 5),
             scroll_offset: 100.0,
             view_mode: ViewMode::Rendered, // Test restoring rendered mode
-            split_ratio: 0.6,              // Test restoring split ratio
+            split_ratio: 0.6, // Test restoring split ratio
         };
         let content = "# Test Content".to_string();
 
@@ -4531,7 +5088,7 @@ mod tests {
         assert_eq!(tab.cursor_position, (10, 5));
         assert_eq!(tab.scroll_offset, 100.0);
         assert_eq!(tab.view_mode, ViewMode::Rendered); // View mode restored
-        assert_eq!(tab.split_ratio, 0.6);              // Split ratio restored
+        assert_eq!(tab.split_ratio, 0.6); // Split ratio restored
         assert!(!tab.is_modified()); // Content matches original
     }
 
@@ -4610,8 +5167,7 @@ mod tests {
 
         // Write the test file
         let mut file = std::fs::File::create(&temp_file).expect("Failed to create temp file");
-        file.write_all(test_content.as_bytes())
-            .expect("Failed to write temp file");
+        file.write_all(test_content.as_bytes()).expect("Failed to write temp file");
         drop(file);
 
         // Set up settings with this file (with Rendered view mode)
@@ -4651,14 +5207,8 @@ mod tests {
         let temp_file2 = temp_dir.join("ferrite_test_restore2.md");
 
         // Write test files
-        std::fs::File::create(&temp_file1)
-            .unwrap()
-            .write_all(b"# File 1")
-            .unwrap();
-        std::fs::File::create(&temp_file2)
-            .unwrap()
-            .write_all(b"# File 2")
-            .unwrap();
+        std::fs::File::create(&temp_file1).unwrap().write_all(b"# File 1").unwrap();
+        std::fs::File::create(&temp_file2).unwrap().write_all(b"# File 2").unwrap();
 
         let mut settings = Settings::default();
         settings.last_open_tabs = vec![
@@ -4677,7 +5227,7 @@ mod tests {
                 scroll_offset: 0.0,
                 view_mode: ViewMode::Rendered, // Second tab in rendered mode
                 split_ratio: 0.5,
-            },
+            }
         ];
         settings.active_tab_index = 1; // Second tab active
 
@@ -4704,10 +5254,7 @@ mod tests {
         let temp_file = temp_dir.join("ferrite_test_restore_partial.md");
 
         // Write only one test file
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Existing File")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Existing File").unwrap();
 
         let mut settings = Settings::default();
         settings.last_open_tabs = vec![
@@ -4726,7 +5273,7 @@ mod tests {
                 scroll_offset: 0.0,
                 view_mode: ViewMode::Rendered,
                 split_ratio: 0.5,
-            },
+            }
         ];
         settings.active_tab_index = 1;
 
@@ -4752,16 +5299,13 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("ferrite_test_open_focus_true.md");
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Test Content")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Test Content").unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
         let initial_tab_count = state.tab_count();
 
         // Open with focus=true
-        let result = state.open_file_with_focus(temp_file.clone(), true);
+        let result = state.open_file_with_focus(temp_file.clone(), true, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4779,17 +5323,14 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("ferrite_test_open_focus_false.md");
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Background File")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Background File").unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
         let initial_active_index = state.active_tab_index();
         let initial_tab_count = state.tab_count();
 
         // Open with focus=false
-        let result = state.open_file_with_focus(temp_file.clone(), false);
+        let result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4809,15 +5350,12 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("ferrite_test_already_open.md");
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Already Open")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Already Open").unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
 
         // Open the file first
-        let first_result = state.open_file_with_focus(temp_file.clone(), true);
+        let first_result = state.open_file_with_focus(temp_file.clone(), true, None);
         assert!(first_result.is_ok());
         let first_index = first_result.unwrap();
 
@@ -4826,7 +5364,7 @@ mod tests {
         assert_ne!(state.active_tab_index(), first_index);
 
         // Open the same file again with focus=true
-        let second_result = state.open_file_with_focus(temp_file.clone(), true);
+        let second_result = state.open_file_with_focus(temp_file.clone(), true, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4845,15 +5383,12 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("ferrite_test_already_open_no_focus.md");
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Already Open No Focus")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Already Open No Focus").unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
 
         // Open the file first
-        let first_result = state.open_file_with_focus(temp_file.clone(), true);
+        let first_result = state.open_file_with_focus(temp_file.clone(), true, None);
         assert!(first_result.is_ok());
         let first_index = first_result.unwrap();
 
@@ -4863,7 +5398,7 @@ mod tests {
         assert_ne!(new_tab_index, first_index);
 
         // Open the same file again with focus=false
-        let second_result = state.open_file_with_focus(temp_file.clone(), false);
+        let second_result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4882,16 +5417,13 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("ferrite_test_recent_update.md");
-        std::fs::File::create(&temp_file)
-            .unwrap()
-            .write_all(b"# Recent Test")
-            .unwrap();
+        std::fs::File::create(&temp_file).unwrap().write_all(b"# Recent Test").unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
         assert!(state.settings.recent_files.is_empty());
 
         // Open file (either focus mode should update recent files)
-        let result = state.open_file_with_focus(temp_file.clone(), false);
+        let result = state.open_file_with_focus(temp_file.clone(), false, None);
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -4900,5 +5432,193 @@ mod tests {
         // Recent files should now contain the opened file
         assert!(!state.settings.recent_files.is_empty());
         assert_eq!(state.settings.recent_files[0], temp_file);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Backlink Index Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_normalize_filename() {
+        assert_eq!(normalize_filename("MyNote"), "mynote");
+        assert_eq!(normalize_filename("MyNote.md"), "mynote");
+        assert_eq!(normalize_filename("MyNote.markdown"), "mynote");
+        assert_eq!(normalize_filename("  spaces  "), "spaces");
+        assert_eq!(normalize_filename("UPPER.MD"), "upper");
+    }
+
+    #[test]
+    fn test_extract_wikilinks_from_content() {
+        let content = "Check [[note-a]] and [[note-b|Display Text]] for details.";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0], "note-a");
+        assert_eq!(links[1], "note-b");
+    }
+
+    #[test]
+    fn test_extract_standard_links_from_content() {
+        let content = "See [link](other.md) and [another](path/to/file.md) here.";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0], "other.md");
+        assert_eq!(links[1], "file.md");
+    }
+
+    #[test]
+    fn test_extract_links_ignores_urls() {
+        let content = "Visit [link](https://example.com) and [local](note.md).";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0], "note.md");
+    }
+
+    #[test]
+    fn test_extract_links_ignores_anchors() {
+        let content = "Jump to [section](#heading) and [file](doc.md).";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0], "doc.md");
+    }
+
+    #[test]
+    fn test_extract_mixed_links() {
+        let content = "[[wiki-link]] and [text](local.md) and [[another|display]]";
+        let links = extract_links_from_content(content);
+        assert_eq!(links.len(), 3);
+        assert!(links.contains(&"wiki-link".to_string()));
+        assert!(links.contains(&"local.md".to_string()));
+        assert!(links.contains(&"another".to_string()));
+    }
+
+    #[test]
+    fn test_extract_unclosed_wikilink() {
+        let content = "This [[unclosed stays as text";
+        let links = extract_links_from_content(content);
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn test_extract_empty_wikilink() {
+        let content = "Empty [[]] wikilink";
+        let links = extract_links_from_content(content);
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn test_backlink_index_get_and_build() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // Create test files
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+        let file_c = temp_dir.join("note-c.md");
+
+        std::fs::File
+            ::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-b]] here.")
+            .unwrap();
+        std::fs::File::create(&file_b).unwrap().write_all(b"# Note B\nStandalone note.").unwrap();
+        std::fs::File
+            ::create(&file_c)
+            .unwrap()
+            .write_all(b"# Note C\nAlso links to [[note-b]] and [text](note-a.md).")
+            .unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone(), file_c.clone()];
+
+        let mut index = BacklinkIndex::new();
+        index.build_from_files(&files);
+
+        assert!(index.is_built);
+        assert_eq!(index.file_count, 3);
+
+        // note-b should have 2 backlinks (from note-a and note-c)
+        let backlinks_b = index.get_backlinks("note-b");
+        assert_eq!(backlinks_b.len(), 2);
+
+        // note-a should have 1 backlink (from note-c via standard link)
+        let backlinks_a = index.get_backlinks("note-a");
+        assert_eq!(backlinks_a.len(), 1);
+        assert_eq!(backlinks_a[0].source_path, file_c);
+
+        // note-c should have 0 backlinks
+        let backlinks_c = index.get_backlinks("note-c");
+        assert!(backlinks_c.is_empty());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_backlink_index_update_file() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_update_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+
+        std::fs::File
+            ::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-b]].")
+            .unwrap();
+        std::fs::File::create(&file_b).unwrap().write_all(b"# Note B").unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone()];
+
+        let mut index = BacklinkIndex::new();
+        index.build_from_files(&files);
+
+        assert_eq!(index.get_backlinks("note-b").len(), 1);
+
+        // Update file_a to remove the link
+        std::fs::File::create(&file_a).unwrap().write_all(b"# Note A\nNo more links.").unwrap();
+
+        index.update_file(&file_a);
+
+        // note-b should now have 0 backlinks
+        assert_eq!(index.get_backlinks("note-b").len(), 0);
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_backlink_scan_on_demand() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("ferrite_backlink_ondemand_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let file_a = temp_dir.join("note-a.md");
+        let file_b = temp_dir.join("note-b.md");
+        let file_c = temp_dir.join("note-c.md");
+
+        std::fs::File
+            ::create(&file_a)
+            .unwrap()
+            .write_all(b"# Note A\nLinks to [[note-c]].")
+            .unwrap();
+        std::fs::File
+            ::create(&file_b)
+            .unwrap()
+            .write_all(b"# Note B\nAlso links to [[note-c|See C]].")
+            .unwrap();
+        std::fs::File::create(&file_c).unwrap().write_all(b"# Note C\nTarget file.").unwrap();
+
+        let files = vec![file_a.clone(), file_b.clone(), file_c.clone()];
+
+        let backlinks = BacklinkIndex::scan_on_demand("note-c", &files, Some(&file_c));
+        assert_eq!(backlinks.len(), 2);
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
