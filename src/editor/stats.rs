@@ -373,11 +373,17 @@ impl DocumentStats {
                 // Find the closing ]( pattern
                 let rest = &line[i..];
                 if let Some(bracket_end) = rest.find(']') {
-                    if rest.len() > bracket_end + 1 && rest.chars().nth(bracket_end + 1) == Some('(')
-                    {
-                        // Check if there's a closing )
-                        if rest[bracket_end + 2..].contains(')') {
-                            count += 1;
+                    // Use safe slicing with get() to avoid panicking on invalid UTF-8 boundaries
+                    let after_bracket = rest.get(bracket_end + 1..);
+                    if let Some(after) = after_bracket {
+                        if after.starts_with('(') {
+                            // Check if there's a closing )
+                            let after_paren = rest.get(bracket_end + 2..);
+                            if let Some(remainder) = after_paren {
+                                if remainder.contains(')') {
+                                    count += 1;
+                                }
+                            }
                         }
                     }
                 }
@@ -398,12 +404,16 @@ impl DocumentStats {
 
             // Find ]( pattern
             if let Some(bracket_end) = rest.find("](") {
-                // Check for closing )
-                if rest[bracket_end + 2..].contains(')') {
-                    count += 1;
+                // Use safe slicing with get() to avoid panicking on invalid UTF-8 boundaries
+                let after_pattern = rest.get(bracket_end + 2..);
+                if let Some(remainder) = after_pattern {
+                    if remainder.contains(')') {
+                        count += 1;
+                    }
                 }
             }
 
+            // Move past this "![" to find next - use char_indices to be safe
             search_start = abs_pos + 2;
         }
 

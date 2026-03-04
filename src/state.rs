@@ -119,6 +119,55 @@ impl FileType {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Binary File Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Detect if file content appears to be binary (non-text) data.
+///
+/// This function uses heuristics to detect binary content:
+/// 1. Presence of null bytes (strong indicator of binary data)
+/// 2. High ratio of non-printable/control characters
+///
+/// Returns `true` if the content appears to be binary data.
+pub fn is_binary_content(bytes: &[u8]) -> bool {
+    // Empty files are not binary
+    if bytes.is_empty() {
+        return false;
+    }
+
+    // Check for null bytes - strong indicator of binary data
+    if bytes.contains(&0) {
+        return true;
+    }
+
+    // Sample at most 8KB for large files
+    let sample_size = bytes.len().min(8192);
+    let sample = &bytes[..sample_size];
+
+    // Count non-printable characters (excluding common whitespace)
+    let non_printable_count = sample
+        .iter()
+        .filter(|&&b| {
+            // Control characters other than common whitespace
+            b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D
+        })
+        .count();
+
+    // If more than 10% of sampled bytes are non-printable control chars, treat as binary
+    let threshold = sample_size / 10;
+    non_printable_count > threshold
+}
+
+/// Get a human-readable description of why content was detected as binary.
+fn binary_detection_reason(bytes: &[u8]) -> &'static str {
+    if bytes.contains(&0) {
+        "contains null bytes"
+    } else {
+        "has too many non-printable characters"
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Multi-Cursor Support
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3268,6 +3317,20 @@ impl AppState {
         // Read file as bytes for encoding detection
         let bytes = std::fs::read(&path)?;
 
+        // Check for binary files - we can't edit binary data as text
+        if is_binary_content(&bytes) {
+            let reason = binary_detection_reason(&bytes);
+            log::warn!(
+                "Cannot open binary file: {} ({})",
+                path.display(),
+                reason
+            );
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Binary file detected ({}). Use a specialized tool to edit this file.", reason)
+            ));
+        }
+
         // Create new tab with settings-based defaults and encoding detection
         let auto_save_default = self.settings.auto_save_enabled_default;
         let default_view_mode = self.settings.default_view_mode;
@@ -4383,6 +4446,73 @@ mod tests {
         assert_eq!(FileType::Csv.display_name(), "CSV");
         assert_eq!(FileType::Tsv.display_name(), "TSV");
         assert_eq!(FileType::Unknown.display_name(), "Unknown");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Binary File Detection Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_binary_detection_empty() {
+        // Empty files are not binary
+        assert!(!is_binary_content(b""));
+    }
+
+    #[test]
+    fn test_binary_detection_null_bytes() {
+        // Files with null bytes are binary
+        assert!(is_binary_content(b"Hello\x00World"));
+        assert!(is_binary_content(b"\x00"));
+        assert!(is_binary_content(b"\x00\x00\x00"));
+    }
+
+    #[test]
+    fn test_binary_detection_text() {
+        // Plain text is not binary
+        assert!(!is_binary_content(b"Hello, World!"));
+        assert!(!is_binary_content(b"Line 1\nLine 2\nLine 3"));
+        // Unicode text in regular string (not byte string)
+        assert!(!is_binary_content("Special chars: äöü émoji 🎉".as_bytes()));
+    }
+
+    #[test]
+    fn test_binary_detection_markdown() {
+        // Markdown content is not binary
+        let md = b"# Heading\n\nThis is **bold** and _italic_.\n\n- Item 1\n- Item 2";
+        assert!(!is_binary_content(md));
+    }
+
+    #[test]
+    fn test_binary_detection_json() {
+        // JSON content is not binary
+        let json = b"{\"name\": \"test\", \"value\": 123, \"nested\": {\"key\": \"value\"}}";
+        assert!(!is_binary_content(json));
+    }
+
+    #[test]
+    fn test_binary_detection_control_chars() {
+        // Some control characters are allowed (tab, newline, carriage return)
+        assert!(!is_binary_content(b"Tab:\t Newline:\n CR:\r"));
+
+        // But many control characters indicate binary
+        let binary_with_control = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0B, 0x0C, 0x0E, 0x0F];
+        assert!(is_binary_content(&binary_with_control));
+    }
+
+    #[test]
+    fn test_binary_detection_simulated_image() {
+        // Simulate PNG header - contains bytes that are control chars
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        // 0x89, 0x1A are considered control characters (non-printable)
+        let png_like = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D];
+        assert!(is_binary_content(&png_like));
+
+        // Simulate a binary file with high non-printable ratio
+        // JPEG-like with lots of 0xFF bytes and other control chars
+        let binary_data: Vec<u8> = (0..100)
+            .map(|i| if i % 3 == 0 { 0xFF } else { i as u8 })
+            .collect();
+        assert!(is_binary_content(&binary_data));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
