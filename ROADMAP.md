@@ -24,6 +24,8 @@
 - [x] **Windows IME backspace deleting editor text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Pressing Backspace during Chinese/Japanese/Korean IME composition deleted already-committed characters. Raw `Key::Backspace` events are now suppressed while IME composition is active.
 - [x] **Crash when opening binary files as text** - Opening image files (PNG, JPEG, etc.) or other binary data as text documents caused a panic: "byte index is not a char boundary". Fixed with (1) binary file detection using null byte and non-printable character heuristics in `state.rs`, (2) safe string slicing in `editor/stats.rs` using `get()` instead of direct byte indexing. Binary files now show a user-friendly error instead of crashing.
 - [ ] **macOS Release .app Bundle** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release workflow ships raw binary instead of .app bundle, causing Gatekeeper to block launch. Fix CI to package `target/release/bundle/osx/Ferrite.app` instead of raw binary.
+- [ ] **Task List Checkbox Rendering** ([#95](https://github.com/OlaProeis/Ferrite/issues/95)) - Fix task list checkboxes showing as ASCII text (`[ ]` / `[x]`) instead of proper checkbox UI elements in rendered view. Also suppress bullet point markers for task list items.
+- [ ] **Open Folder in Flatpak** ([#96](https://github.com/OlaProeis/Ferrite/issues/96)) - Fix "Open Folder" not working unless a file from that folder is already open. Likely Flatpak sandboxing issue - add better error handling and portal-based file access fallback.
 - [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
 
 #### Markdown Linking
