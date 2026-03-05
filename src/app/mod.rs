@@ -89,6 +89,7 @@ use crate::ui::{
     FileTreeContextAction,
     FileTreePanel,
     GoToLineResult,
+    FrontmatterPanel,
     OutlinePanel,
     ProductivityPanel,
     QuickSwitcher,
@@ -133,6 +134,8 @@ pub struct FerriteApp {
     find_replace_panel: FindReplacePanel,
     /// Outline panel component
     outline_panel: OutlinePanel,
+    /// Frontmatter editing panel (right side)
+    frontmatter_panel: FrontmatterPanel,
     /// Backlinks panel component (rendered inside outline panel)
     backlinks_panel: BacklinksPanel,
     /// File tree panel component (for workspace mode)
@@ -294,7 +297,8 @@ impl FerriteApp {
             fonts::reload_fonts(
                 &cc.egui_ctx,
                 custom_font.as_deref(),
-                state.settings.cjk_font_preference
+                state.settings.cjk_font_preference,
+                Some(&state.settings.complex_script_font_preferences),
             );
             info!("Loaded custom font: {:?}", state.settings.font_family);
         } else {
@@ -339,6 +343,8 @@ impl FerriteApp {
         let outline_panel = OutlinePanel::new()
             .with_width(state.settings.outline_width)
             .with_side(state.settings.outline_side);
+
+        let frontmatter_panel = FrontmatterPanel::new();
 
         // Initialize pipeline panel with saved settings
         let mut pipeline_panel = crate::ui::PipelinePanel::new();
@@ -395,6 +401,7 @@ impl FerriteApp {
             welcome_panel: WelcomePanel::new(),
             find_replace_panel: FindReplacePanel::new(),
             outline_panel,
+            frontmatter_panel,
             backlinks_panel: BacklinksPanel::new(),
             file_tree_panel: FileTreePanel::new(),
             quick_switcher: QuickSwitcher::new(),
@@ -593,7 +600,8 @@ impl FerriteApp {
             content,
             ctx,
             custom_font.as_deref(),
-            self.state.settings.cjk_font_preference
+            self.state.settings.cjk_font_preference,
+            Some(&self.state.settings.complex_script_font_preferences),
         )
     }
 
@@ -607,7 +615,8 @@ impl FerriteApp {
             content,
             ctx,
             custom_font.as_deref(),
-            self.state.settings.cjk_font_preference
+            self.state.settings.cjk_font_preference,
+            Some(&self.state.settings.complex_script_font_preferences),
         )
     }
 
@@ -1578,6 +1587,17 @@ impl FerriteApp {
                 self.backlinks_need_refresh = false;
             }
 
+            // Update frontmatter panel from current content (markdown files only)
+            let is_markdown = self.state.active_tab()
+                .map(|t| t.file_type() == FileType::Markdown)
+                .unwrap_or(false);
+            if is_markdown {
+                let content = self.state.active_tab()
+                    .map(|t| t.content.clone())
+                    .unwrap_or_default();
+                self.frontmatter_panel.update_from_content(&content);
+            }
+
             // Configure and render the outline panel
             self.outline_panel.set_side(self.state.settings.outline_side);
             self.outline_panel.set_current_section(current_section);
@@ -1592,7 +1612,12 @@ impl FerriteApp {
                 } else {
                     None
                 },
-                Some(&self.backlinks_panel)
+                Some(&self.backlinks_panel),
+                if is_markdown {
+                    Some(&mut self.frontmatter_panel)
+                } else {
+                    None
+                },
             );
 
             // Capture output for processing after render
@@ -1609,6 +1634,13 @@ impl FerriteApp {
             outline_close_requested = outline_output.close_requested;
             outline_detach_productivity = outline_output.detach_productivity;
             backlink_navigate_to = outline_output.backlink_navigate_to;
+
+            // Handle frontmatter edits from the outline panel's frontmatter tab
+            if let Some(new_content) = outline_output.frontmatter_new_content {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.content = new_content;
+                }
+            }
 
             // Handle repaint request from productivity panel (e.g. timer)
             if outline_output.needs_repaint {
@@ -1667,6 +1699,8 @@ impl FerriteApp {
         }
 
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
+        // (Frontmatter is now rendered inside the outline panel's FM tab)
+
         // File Tree Panel (workspace mode only) - hidden in Zen Mode
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
         let mut file_tree_file_clicked: Option<std::path::PathBuf> = None;
@@ -2203,6 +2237,14 @@ impl FerriteApp {
                     self.state.settings.productivity_panel_visible =
                         !self.state.settings.productivity_panel_visible;
                 }
+                self.state.mark_settings_dirty();
+            }
+            RibbonAction::ToggleFrontmatter => {
+                debug!("Ribbon: Toggle Frontmatter tab in outline panel");
+                if !self.state.settings.outline_enabled {
+                    self.state.settings.outline_enabled = true;
+                }
+                self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
                 self.state.mark_settings_dirty();
             }
         }

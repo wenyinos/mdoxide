@@ -45,7 +45,7 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::needless_range_loop)]
 
-use crate::config::{EditorFont, MaxLineWidth, ParagraphIndent, Settings, Theme};
+use crate::config::{EditorFont, HeaderSpacing, MaxLineWidth, ParagraphIndent, Settings, Theme};
 use crate::fonts;
 use crate::ui::{render_nav_buttons, NavAction};
 use crate::markdown::ast_ops::{
@@ -440,6 +440,8 @@ pub struct MarkdownEditor<'a> {
     zen_max_column_width: f32,
     /// CJK paragraph first-line indentation
     paragraph_indent: ParagraphIndent,
+    /// Vertical spacing between headers in rendered view
+    header_spacing: HeaderSpacing,
     /// File context for wikilink resolution (current file dir + workspace root)
     wikilink_context: Option<WikilinkContext>,
 }
@@ -471,6 +473,7 @@ impl<'a> MarkdownEditor<'a> {
             zen_mode: false,
             zen_max_column_width: 80.0,
             paragraph_indent: ParagraphIndent::Off,
+            header_spacing: HeaderSpacing::default(),
             wikilink_context: None,
         }
     }
@@ -560,6 +563,13 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn paragraph_indent(mut self, indent: ParagraphIndent) -> Self {
         self.paragraph_indent = indent;
+        self
+    }
+
+    /// Set the vertical spacing between headers in rendered view.
+    #[must_use]
+    pub fn header_spacing(mut self, spacing: HeaderSpacing) -> Self {
+        self.header_spacing = spacing;
         self
     }
 
@@ -831,6 +841,7 @@ impl<'a> MarkdownEditor<'a> {
                                 &self.font_family,
                                 0,
                                 self.paragraph_indent,
+                                self.header_spacing,
                             );
                             
                             // Capture Y position after rendering to get block height
@@ -970,6 +981,7 @@ fn render_node_with_structural_keys(
     parent_list_type: Option<&ListType>,
     list_item_index: Option<usize>,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
 ) {
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
@@ -983,6 +995,7 @@ fn render_node_with_structural_keys(
                 font_size,
                 editor_font,
                 *level,
+                header_spacing,
             );
         }
         MarkdownNodeType::Paragraph => {
@@ -1018,6 +1031,7 @@ fn render_node_with_structural_keys(
                 editor_font,
                 indent_level,
                 paragraph_indent,
+                header_spacing,
             );
         }
         MarkdownNodeType::Callout {
@@ -1036,6 +1050,7 @@ fn render_node_with_structural_keys(
                 editor_font,
                 indent_level,
                 paragraph_indent,
+                header_spacing,
                 *callout_type,
                 title.as_deref(),
                 *collapsed,
@@ -1127,6 +1142,7 @@ fn render_node_with_structural_keys(
                     parent_list_type,
                     list_item_index,
                     paragraph_indent,
+                    header_spacing,
                 );
             }
         }
@@ -1160,6 +1176,7 @@ fn render_node(
     editor_font: &EditorFont,
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
 ) {
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
@@ -1172,6 +1189,7 @@ fn render_node(
                 font_size,
                 editor_font,
                 *level,
+                header_spacing,
             );
         }
         MarkdownNodeType::Paragraph => {
@@ -1205,6 +1223,7 @@ fn render_node(
                 editor_font,
                 indent_level,
                 paragraph_indent,
+                header_spacing,
             );
         }
         MarkdownNodeType::Callout {
@@ -1222,6 +1241,7 @@ fn render_node(
                 editor_font,
                 indent_level,
                 paragraph_indent,
+                header_spacing,
                 *callout_type,
                 title.as_deref(),
                 *collapsed,
@@ -1312,6 +1332,7 @@ fn render_node(
                     editor_font,
                     indent_level,
                     paragraph_indent,
+                    header_spacing,
                 );
             }
         }
@@ -1334,6 +1355,27 @@ fn render_node(
     }
 }
 
+/// Get (top_margin, bottom_margin) in pixels for a heading level and spacing preset.
+fn header_margins(spacing: HeaderSpacing, level: HeadingLevel) -> (f32, f32) {
+    let (base_top, base_bottom) = match level {
+        HeadingLevel::H1 => (8.0, 0.0),
+        HeadingLevel::H2 => (6.0, 0.0),
+        _ => (4.0, 0.0),
+    };
+    match spacing {
+        HeaderSpacing::Compact => (base_top * 0.5, 0.0),
+        HeaderSpacing::Normal => (base_top, base_bottom),
+        HeaderSpacing::Relaxed => (
+            base_top * 1.5,
+            match level {
+                HeadingLevel::H1 => 6.0,
+                HeadingLevel::H2 => 4.0,
+                _ => 2.0,
+            },
+        ),
+    }
+}
+
 /// Render a heading as an editable widget.
 fn render_heading(
     ui: &mut Ui,
@@ -1344,6 +1386,7 @@ fn render_heading(
     base_font_size: f32,
     editor_font: &EditorFont,
     level: HeadingLevel,
+    header_spacing: HeaderSpacing,
 ) {
     let text = node.text_content();
     let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
@@ -1361,12 +1404,8 @@ fn render_heading(
     // Headings use bold font
     let font_family = fonts::get_styled_font_family(true, false, editor_font);
 
-    // Add small top margin for headings (separation from previous content)
-    let top_margin = match level {
-        HeadingLevel::H1 => 8.0,
-        HeadingLevel::H2 => 6.0,
-        _ => 4.0,
-    };
+    // Add top margin for headings (separation from previous content)
+    let (top_margin, bottom_margin) = header_margins(header_spacing, level);
     ui.add_space(top_margin);
 
     // Editable heading text with left indent
@@ -1446,7 +1485,10 @@ fn render_heading(
     if has_focus {
         edit_state.set_focus(node_id, selection);
     }
-    // No bottom margin - heading should be close to following content
+    // Add bottom margin based on header spacing setting
+    if bottom_margin > 0.0 {
+        ui.add_space(bottom_margin);
+    }
 }
 
 /// Render a heading with structural key handling (Enter creates paragraph after).
@@ -1460,6 +1502,7 @@ fn render_heading_with_structural_keys(
     base_font_size: f32,
     editor_font: &EditorFont,
     level: HeadingLevel,
+    header_spacing: HeaderSpacing,
 ) {
     let text = node.text_content();
     let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
@@ -1477,12 +1520,8 @@ fn render_heading_with_structural_keys(
     // Headings use bold font
     let font_family = fonts::get_styled_font_family(true, false, editor_font);
 
-    // Add small top margin for headings
-    let top_margin = match level {
-        HeadingLevel::H1 => 8.0,
-        HeadingLevel::H2 => 6.0,
-        _ => 4.0,
-    };
+    // Add top margin for headings
+    let (top_margin, bottom_margin) = header_margins(header_spacing, level);
     ui.add_space(top_margin);
 
     // Editable heading text with left indent
@@ -1539,6 +1578,10 @@ fn render_heading_with_structural_keys(
             }
         }
     });
+    // Add bottom margin based on header spacing setting
+    if bottom_margin > 0.0 {
+        ui.add_space(bottom_margin);
+    }
 }
 
 /// Render a paragraph with structural key handling (Enter splits paragraph).
@@ -1832,6 +1875,7 @@ fn render_blockquote_with_structural_keys(
     editor_font: &EditorFont,
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
@@ -1858,6 +1902,7 @@ fn render_blockquote_with_structural_keys(
                     None,
                     None,
                     paragraph_indent,
+                    header_spacing,
                 );
             }
         });
@@ -1968,6 +2013,7 @@ fn render_callout_with_structural_keys(
     editor_font: &EditorFont,
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
     callout_type: CalloutType,
     custom_title: Option<&str>,
     default_collapsed: bool,
@@ -2050,6 +2096,7 @@ fn render_callout_with_structural_keys(
                             None,
                             None,
                             paragraph_indent,
+                            header_spacing,
                         );
                     }
                 }
@@ -2177,6 +2224,7 @@ fn render_list_item_with_structural_keys(
     // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
     // and would display them as replacement characters (□). See GitHub issue #41.
+    // Also check for task items which need checkbox rendering
     let has_inline_formatting = para_node
         .map(|p| {
             p.children.iter().any(|c| {
@@ -2190,6 +2238,7 @@ fn render_list_item_with_structural_keys(
                         | MarkdownNodeType::Code(_)
                         | MarkdownNodeType::Image { .. }
                         | MarkdownNodeType::LineBreak
+                        | MarkdownNodeType::TaskItem { .. }
                 )
             })
         })
@@ -2249,15 +2298,38 @@ fn render_list_item_with_structural_keys(
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
-        let marker = if is_task {
-            if task_checked {
-                "[x]"
-            } else {
-                "[ ]"
+        if is_task {
+            // Use egui Checkbox for task list items - now clickable!
+            let mut checked = task_checked;
+            let checkbox_response = ui.checkbox(&mut checked, "");
+
+            // Handle checkbox click - toggle the source
+            if checkbox_response.changed() {
+                // Toggle the task marker in the source
+                if let Some(source_line) = source.lines().nth(node.start_line.saturating_sub(1)) {
+                    let new_line = if task_checked {
+                        // Was checked, now unchecked: [x] -> [ ]
+                        source_line.replace("[x]", "[ ]").replace("[X]", "[ ]")
+                    } else {
+                        // Was unchecked, now checked: [ ] -> [x]
+                        source_line.replace("[ ]", "[x]")
+                    };
+                    update_source_line(source, node.start_line, &new_line);
+
+                    // Mark as modified
+                    let node_id = edit_state.add_node(
+                        para_node.map(|p| p.text_content()).unwrap_or_default(),
+                        node.start_line,
+                        node.end_line,
+                    );
+                    if let Some(editable) = edit_state.get_node_mut(node_id) {
+                        editable.modified = true;
+                    }
+                }
             }
-            .to_string()
+            ui.add_space(2.0);
         } else {
-            match list_type {
+            let marker = match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
                         "\u{2022}" // bullet •
@@ -2267,15 +2339,15 @@ fn render_list_item_with_structural_keys(
                 }
                 .to_string(),
                 ListType::Ordered { delimiter, .. } => format!("{}{}", item_number, delimiter),
-            }
-        };
-        
-        ui.label(
-            RichText::new(&marker)
-                .color(colors.list_marker)
-                .font(FontId::new(font_size, font_family.clone())),
-        );
-        ui.add_space(4.0);
+            };
+
+            ui.label(
+                RichText::new(&marker)
+                    .color(colors.list_marker)
+                    .font(FontId::new(font_size, font_family.clone())),
+            );
+            ui.add_space(4.0);
+        }
 
         // Render item content
         if has_inline_formatting {
@@ -3482,6 +3554,7 @@ fn render_blockquote(
     editor_font: &EditorFont,
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
@@ -3512,6 +3585,7 @@ fn render_blockquote(
                             editor_font,
                             indent_level + 1,
                             paragraph_indent,
+                            header_spacing,
                         );
                     }
                 });
@@ -3538,6 +3612,7 @@ fn render_callout(
     editor_font: &EditorFont,
     indent_level: usize,
     paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
     callout_type: CalloutType,
     custom_title: Option<&str>,
     default_collapsed: bool,
@@ -3621,6 +3696,7 @@ fn render_callout(
                                     editor_font,
                                     indent_level + 1,
                                     paragraph_indent,
+                                    header_spacing,
                                 );
                             }
                         }
@@ -3861,22 +3937,45 @@ fn render_list_item(
     let font_family = fonts::get_styled_font_family(false, false, editor_font);
 
     let available_width = ui.available_width();
-    let focus_info: (bool, Option<(usize, usize)>, Option<usize>) = ui.horizontal(|ui| {
+    let focus_info: (bool, Option<(usize, usize)>, Option<usize>) =     ui.horizontal(|ui| {
         ui.set_max_width(available_width);
 
         // Total indentation: base + nested
         ui.add_space(base_indent + nested_indent);
 
         // Render list marker (bullet, number, or checkbox for tasks)
-        let marker = if is_task {
-            if task_checked {
-                "[x]"
-            } else {
-                "[ ]"
+        if is_task {
+            // Use egui Checkbox for task list items - now clickable!
+            let mut checked = task_checked;
+            let checkbox_response = ui.checkbox(&mut checked, "");
+
+            // Handle checkbox click - toggle the source
+            if checkbox_response.changed() {
+                // Toggle the task marker in the source
+                if let Some(source_line) = source.lines().nth(node.start_line.saturating_sub(1)) {
+                    let new_line = if task_checked {
+                        // Was checked, now unchecked: [x] -> [ ]
+                        source_line.replace("[x]", "[ ]").replace("[X]", "[ ]")
+                    } else {
+                        // Was unchecked, now checked: [ ] -> [x]
+                        source_line.replace("[ ]", "[x]")
+                    };
+                    update_source_line(source, node.start_line, &new_line);
+
+                    // Mark as modified
+                    let node_id = edit_state.add_node(
+                        para_node.map(|p| p.text_content()).unwrap_or_default(),
+                        node.start_line,
+                        node.end_line,
+                    );
+                    if let Some(editable) = edit_state.get_node_mut(node_id) {
+                        editable.modified = true;
+                    }
+                }
             }
-            .to_string()
+            ui.add_space(2.0);
         } else {
-            match list_type {
+            let marker = match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
                         "\u{2022}" // bullet •
@@ -3886,20 +3985,20 @@ fn render_list_item(
                 }
                 .to_string(),
                 ListType::Ordered { delimiter, .. } => format!("{}{}", item_number, delimiter),
-            }
-        };
-        
-        ui.label(
-            RichText::new(&marker)
-                .color(colors.list_marker)
-                .font(FontId::new(font_size, font_family.clone())),
-        );
-        ui.add_space(4.0);
+            };
+
+            ui.label(
+                RichText::new(&marker)
+                    .color(colors.list_marker)
+                    .font(FontId::new(font_size, font_family.clone())),
+            );
+            ui.add_space(4.0);
+        }
 
         // Render item content
         if has_inline_formatting {
             if let Some(para) = para_node {
-                // Create unique ID using para.start_line (matches content extraction) 
+                // Create unique ID using para.start_line (matches content extraction)
                 // AND item_number for additional uniqueness guarantee
                 // FIX: Previously used node.start_line which could differ from para.start_line
                 let formatted_item_id = ui

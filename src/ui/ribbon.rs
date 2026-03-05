@@ -114,6 +114,10 @@ pub enum RibbonAction {
     // Productivity
     /// Toggle productivity hub visibility
     ToggleProductivity,
+
+    // Frontmatter
+    /// Toggle frontmatter editing panel
+    ToggleFrontmatter,
 }
 
 /// Ribbon UI state and rendering.

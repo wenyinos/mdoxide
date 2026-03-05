@@ -458,6 +458,7 @@ pub enum ShortcutCommand {
     OpenAbout,
     ExportHtml,
     InsertToc,
+    ToggleFrontmatter,
 }
 
 impl ShortcutCommand {
@@ -482,7 +483,7 @@ impl ShortcutCommand {
             // Folding
             FoldAll, UnfoldAll, ToggleFoldAtCursor,
             // Other
-            OpenSettings, OpenAbout, ExportHtml, InsertToc,
+            OpenSettings, OpenAbout, ExportHtml, InsertToc, ToggleFrontmatter,
         ]
     }
 
@@ -550,6 +551,7 @@ impl ShortcutCommand {
             ShortcutCommand::OpenAbout => "Open About",
             ShortcutCommand::ExportHtml => "Export HTML",
             ShortcutCommand::InsertToc => "Insert/Update TOC",
+            ShortcutCommand::ToggleFrontmatter => "Toggle Frontmatter Panel",
         }
     }
 
@@ -583,7 +585,7 @@ impl ShortcutCommand {
             ShortcutCommand::FoldAll | ShortcutCommand::UnfoldAll | ShortcutCommand::ToggleFoldAtCursor => "Folding",
 
             ShortcutCommand::OpenSettings | ShortcutCommand::OpenAbout | ShortcutCommand::ExportHtml
-            | ShortcutCommand::InsertToc => "Other",
+            | ShortcutCommand::InsertToc | ShortcutCommand::ToggleFrontmatter => "Other",
         }
     }
 
@@ -653,6 +655,7 @@ impl ShortcutCommand {
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
             ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
             ShortcutCommand::InsertToc => KeyBinding::new(M::ctrl_shift(), U),
+            ShortcutCommand::ToggleFrontmatter => KeyBinding::new(M::ctrl_shift(), M),
         }
     }
 }
@@ -968,6 +971,77 @@ impl ParagraphIndent {
     /// Returns `None` for `Off`.
     pub fn to_css(&self) -> Option<String> {
         self.to_em().map(|em| format!("{}em", em))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Header Spacing Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Vertical spacing between markdown headers (H1-H6) in rendered view.
+///
+/// Controls top margin (before heading) and bottom margin (after heading)
+/// to customize visual density of the document outline.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HeaderSpacing {
+    /// Minimal spacing - compact layout
+    Compact,
+    /// Standard spacing (default)
+    #[default]
+    Normal,
+    /// Generous spacing - relaxed layout
+    Relaxed,
+}
+
+impl HeaderSpacing {
+    /// Get the display name for UI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            HeaderSpacing::Compact => "Compact",
+            HeaderSpacing::Normal => "Normal",
+            HeaderSpacing::Relaxed => "Relaxed",
+        }
+    }
+
+    /// Get a description of the setting.
+    pub fn description(&self) -> &'static str {
+        match self {
+            HeaderSpacing::Compact => "Less space between headers",
+            HeaderSpacing::Normal => "Standard spacing between headers",
+            HeaderSpacing::Relaxed => "More space between headers",
+        }
+    }
+
+    /// Get all preset options.
+    pub fn presets() -> &'static [HeaderSpacing] {
+        &[
+            HeaderSpacing::Compact,
+            HeaderSpacing::Normal,
+            HeaderSpacing::Relaxed,
+        ]
+    }
+
+    /// Get (top_margin, bottom_margin) in pixels for a heading level.
+    /// `level` is 1 for H1, 2 for H2, etc. Base values for Normal: H1 (8,0), H2 (6,0), others (4,0).
+    pub fn margins_for_level(&self, level: u8) -> (f32, f32) {
+        let (base_top, base_bottom) = match level {
+            1 => (8.0, 0.0),
+            2 => (6.0, 0.0),
+            _ => (4.0, 0.0),
+        };
+        match self {
+            HeaderSpacing::Compact => (base_top * 0.5, 0.0),
+            HeaderSpacing::Normal => (base_top, base_bottom),
+            HeaderSpacing::Relaxed => (
+                base_top * 1.5,
+                match level {
+                    1 => 6.0,
+                    2 => 4.0,
+                    _ => 2.0,
+                },
+            ),
+        }
     }
 }
 
@@ -1582,6 +1656,13 @@ pub struct Settings {
     /// Reference: GitHub Issue #15
     pub cjk_font_preference: CjkFontPreference,
 
+    /// Per-script font preferences for complex scripts (Arabic, Bengali, Devanagari, etc.).
+    /// Keys: "arabic", "bengali", "devanagari", "thai", "hebrew", "tamil", "georgian",
+    /// "armenian", "ethiopic", "other_indic", "southeast_asian". Values: system font family name.
+    /// When set, the preferred font is tried first before falling back to platform defaults.
+    #[serde(default)]
+    pub complex_script_font_preferences: std::collections::BTreeMap<String, String>,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Editor Behavior
     // ─────────────────────────────────────────────────────────────────────────
@@ -1659,6 +1740,8 @@ pub struct Settings {
     /// Width of the outline panel in pixels
     pub outline_width: f32,
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Frontmatter Panel
     // ─────────────────────────────────────────────────────────────────────────
     // Sync Scrolling
     // ─────────────────────────────────────────────────────────────────────────
@@ -1826,6 +1909,14 @@ pub struct Settings {
     pub paragraph_indent: ParagraphIndent,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Markdown Rendering Settings
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Vertical spacing between markdown headers (H1-H6) in rendered view.
+    /// Compact = less space, Normal = default, Relaxed = more space.
+    #[serde(default)]
+    pub header_spacing: HeaderSpacing,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Snippets Settings
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether snippet expansion is enabled.
@@ -1943,6 +2034,7 @@ impl Default for Settings {
             font_size: 14.0,
             font_family: EditorFont::default(),
             cjk_font_preference: CjkFontPreference::default(),
+            complex_script_font_preferences: std::collections::BTreeMap::new(),
 
             // Editor Behavior
             word_wrap: true,
@@ -2034,6 +2126,9 @@ impl Default for Settings {
 
             // CJK Paragraph Indentation Settings
             paragraph_indent: ParagraphIndent::default(), // Off by default
+
+            // Markdown Rendering Settings
+            header_spacing: HeaderSpacing::default(), // Normal by default
 
             // Snippets Settings
             snippets_enabled: true, // Snippet expansion enabled by default

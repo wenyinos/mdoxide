@@ -184,7 +184,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev
+          sudo apt-get install -y libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -243,22 +243,25 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
       - name: Generate macOS .icns icon
         run: |
           if [ -d "assets/icons/macos/app.iconset" ]; then
-            iconutil -c icns assets/icons/macos/app.iconset -o assets/icons/macos/app.icns
-            echo "Generated app.icns"
+            iconutil -c icns assets/icons/macos/app.iconset -o assets/icons/macos/Ferrite.icns
+            echo "Generated Ferrite.icns"
           else
             echo "Warning: app.iconset not found, skipping .icns generation"
           fi
 
-      - name: Build release
-        run: cargo build --release
+      - name: Build release bundle
+        run: cargo bundle --release
 
       - name: Create release archive
         run: |
           mkdir release
-          cp target/release/ferrite release/
+          cp -R target/release/bundle/osx/Ferrite.app release/
           tar -czvf ferrite-macos-arm64.tar.gz -C release .
 
       - name: Upload artifact
@@ -280,13 +283,16 @@ jobs:
         with:
           targets: x86_64-apple-darwin
 
-      - name: Build release for Intel
-        run: cargo build --release --target x86_64-apple-darwin
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
+      - name: Build release bundle for Intel
+        run: cargo bundle --release --target x86_64-apple-darwin
 
       - name: Create release archive
         run: |
           mkdir release
-          cp target/x86_64-apple-darwin/release/ferrite release/
+          cp -R target/x86_64-apple-darwin/release/bundle/osx/Ferrite.app release/
           tar -czvf ferrite-macos-x64.tar.gz -C release .
 
       - name: Upload artifact

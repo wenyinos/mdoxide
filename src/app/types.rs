@@ -83,6 +83,8 @@ pub(crate) enum KeyboardAction {
     DeleteLine,
     /// Insert/Update Table of Contents (Ctrl+Shift+U)
     InsertToc,
+    /// Toggle Frontmatter Panel (Ctrl+Shift+M)
+    ToggleFrontmatter,
 }
 
 /// Request to navigate to a heading in the document.

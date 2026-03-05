@@ -7,6 +7,7 @@
 use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
 use crate::ui::backlinks_panel::BacklinksPanel;
+use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, Response, RichText, ScrollArea, Sense, Ui, Vec2};
 use rust_i18n::t;
@@ -52,6 +53,8 @@ pub enum OutlinePanelTab {
     Productivity,
     /// Backlinks view (files linking to the current file)
     Backlinks,
+    /// YAML frontmatter editor (markdown files only)
+    Frontmatter,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +84,8 @@ pub struct OutlinePanelOutput {
     pub needs_repaint: bool,
     /// File path to navigate to from backlinks panel
     pub backlink_navigate_to: Option<std::path::PathBuf>,
+    /// New document content from frontmatter edits
+    pub frontmatter_new_content: Option<String>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,18 +176,6 @@ impl OutlinePanel {
     }
 
     /// Render the outline panel.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The egui context
-    /// * `outline` - The document outline to display
-    /// * `doc_stats` - Optional document statistics (for markdown files)
-    /// * `is_dark` - Whether using dark theme
-    /// * `productivity_panel` - Optional productivity panel to render in the Productivity tab
-    ///
-    /// # Returns
-    ///
-    /// Output indicating any user actions.
     pub fn show(
         &mut self,
         ctx: &egui::Context,
@@ -191,6 +184,7 @@ impl OutlinePanel {
         is_dark: bool,
         productivity_panel: Option<&mut ProductivityPanel>,
         backlinks_panel: Option<&BacklinksPanel>,
+        frontmatter_panel: Option<&mut FrontmatterPanel>,
     ) -> OutlinePanelOutput {
         let mut output = OutlinePanelOutput::default();
 
@@ -231,11 +225,10 @@ impl OutlinePanel {
             Color32::from_rgb(235, 235, 240)
         };
 
-        // Use wider panel when on Productivity tab
-        let is_productivity = self.active_tab == OutlinePanelTab::Productivity;
-        let min_w = if is_productivity { MIN_PANEL_WIDTH_PRODUCTIVITY } else { MIN_PANEL_WIDTH };
-        let max_w = if is_productivity { MAX_PANEL_WIDTH_PRODUCTIVITY } else { MAX_PANEL_WIDTH };
-        let default_w = if is_productivity { self.width.max(MIN_PANEL_WIDTH_PRODUCTIVITY) } else { self.width };
+        let needs_wide = matches!(self.active_tab, OutlinePanelTab::Productivity | OutlinePanelTab::Frontmatter);
+        let min_w = if needs_wide { MIN_PANEL_WIDTH_PRODUCTIVITY } else { MIN_PANEL_WIDTH };
+        let max_w = if needs_wide { MAX_PANEL_WIDTH_PRODUCTIVITY } else { MAX_PANEL_WIDTH };
+        let default_w = if needs_wide { self.width.max(MIN_PANEL_WIDTH_PRODUCTIVITY) } else { self.width };
 
         // Create the side panel
         let panel = match self.side {
@@ -266,13 +259,13 @@ impl OutlinePanel {
                 // Header section with close button
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
-                    let header_text = if is_productivity {
-                        t!("productivity.title").to_string()
-                    } else {
-                        match &outline.outline_type {
+                    let header_text = match self.active_tab {
+                        OutlinePanelTab::Productivity => t!("productivity.title").to_string(),
+                        OutlinePanelTab::Frontmatter => "Frontmatter".to_string(),
+                        _ => match &outline.outline_type {
                             OutlineType::Markdown => t!("outline.panel_title").to_string(),
                             OutlineType::Structured(_) => t!("outline.statistics").to_string(),
-                        }
+                        },
                     };
                     ui.label(
                         RichText::new(header_text)
@@ -316,6 +309,23 @@ impl OutlinePanel {
                         ui.vertical_centered(|ui| {
                             ui.label(
                                 RichText::new(t!("outline.backlinks_unavailable").to_string())
+                                    .size(11.0)
+                                    .color(muted_color)
+                                    .italics(),
+                            );
+                        });
+                    }
+                } else if self.active_tab == OutlinePanelTab::Frontmatter {
+                    if let Some(fm_panel) = frontmatter_panel {
+                        let fm_output = fm_panel.show_content(ui, is_dark);
+                        if fm_output.new_content.is_some() {
+                            output.frontmatter_new_content = fm_output.new_content;
+                        }
+                    } else {
+                        ui.add_space(20.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                RichText::new("Frontmatter editing is only available for Markdown files")
                                     .size(11.0)
                                     .color(muted_color)
                                     .italics(),
@@ -517,6 +527,9 @@ impl OutlinePanel {
                                 OutlinePanelTab::Backlinks => {
                                     // Already handled above, shouldn't reach here
                                 }
+                                OutlinePanelTab::Frontmatter => {
+                                    // Already handled above, shouldn't reach here
+                                }
                             }
                         }
                     }
@@ -695,6 +708,7 @@ impl OutlinePanel {
             (OutlinePanelTab::Outline, "📑", t!("outline.tab_outline").to_string()),
             (OutlinePanelTab::Statistics, "📊", t!("outline.tab_statistics").to_string()),
             (OutlinePanelTab::Backlinks, "🔗", t!("outline.tab_links").to_string()),
+            (OutlinePanelTab::Frontmatter, "📝", "FM".to_string()),
             (OutlinePanelTab::Productivity, "📋", t!("outline.tab_hub").to_string()),
         ];
 

@@ -213,10 +213,14 @@ impl FerriteApp {
     /// Handle the "File > Open Workspace" action.
     ///
     /// Opens a native folder dialog and switches to workspace mode.
+    /// On Linux/Flatpak, rfd uses xdg-desktop-portal automatically, which
+    /// grants the sandbox access to the user-selected directory.
     pub(crate) fn handle_open_workspace(&mut self) {
-        use crate::files::dialogs::open_folder_dialog;
+        use crate::files::dialogs::{is_flatpak, open_folder_dialog};
 
-        // Get initial directory from recent workspaces or recent files
+        // Get initial directory from recent workspaces or recent files.
+        // resolve_initial_dir (inside open_folder_dialog) will fall back to
+        // $HOME if this is None, which is critical for Flatpak's portal dialog.
         let initial_dir = self
             .state
             .settings
@@ -232,9 +236,31 @@ impl FerriteApp {
                     .map(|p| p.to_path_buf())
             });
 
+        if is_flatpak() {
+            debug!("Running in Flatpak sandbox, folder dialog will use xdg-desktop-portal");
+        }
+
         // Open the native folder dialog
         if let Some(folder_path) = open_folder_dialog(initial_dir.as_ref()) {
             info!("Opening workspace: {}", folder_path.display());
+
+            // Verify the folder is accessible (important for Flatpak portal paths)
+            if !folder_path.is_dir() {
+                warn!("Selected path is not accessible as a directory: {}", folder_path.display());
+                if is_flatpak() {
+                    self.state.show_error(
+                        "Could not access the selected folder. The Flatpak sandbox may not have \
+                         permission to read this location. Try selecting a folder inside your home directory."
+                            .to_string(),
+                    );
+                } else {
+                    self.state.show_error(
+                        t!("error.open_workspace_failed", error = "Path is not a directory").to_string(),
+                    );
+                }
+                return;
+            }
+
             match self.state.open_workspace(folder_path.clone()) {
                 Ok(_) => {
                     let time = self.get_app_time();
@@ -280,8 +306,16 @@ impl FerriteApp {
                 }
                 Err(e) => {
                     warn!("Failed to open workspace: {}", e);
-                    self.state
-                        .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
+                    if is_flatpak() {
+                        self.state.show_error(format!(
+                            "Failed to open folder: {}. If running as Flatpak, ensure the folder \
+                             was selected through the file dialog (portal access is required).",
+                            e
+                        ));
+                    } else {
+                        self.state
+                            .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
+                    }
                 }
             }
         } else {

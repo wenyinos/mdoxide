@@ -123,6 +123,9 @@ settings:
     cjk_traditional_chinese_desc: "Prioritize Traditional Chinese glyph variants"
     cjk_japanese: "Japanese (日本語)"
     cjk_japanese_desc: "Prioritize Japanese glyph variants"
+    complex_scripts: "Additional Scripts"
+    complex_scripts_hint: "Pre-select fonts for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, and other scripts. Fonts load on-demand when files with those scripts are opened."
+    complex_script_default: "Default (System)"
     tab_size: "Tab Size"
     spaces: "spaces"
     word_wrap: "Word Wrap"
@@ -177,6 +180,9 @@ settings:
     paragraph_indent_hint: "First-line indentation for CJK typography conventions"
     paragraph_indent_custom: "Custom"
     paragraph_indent_custom_desc: "Custom em value"
+    # Header Spacing (Markdown Rendering)
+    header_spacing: "Header Spacing"
+    header_spacing_hint: "Vertical spacing between headings (H1-H6) in rendered view"
   preview:
     sync_scroll: "Sync Scroll"
     default_view: "Default View Mode"

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Unicode & Complex Script Support
 - **Lazy font loading for complex scripts** - Extends the CJK lazy-loading system to cover 22 Unicode ranges across 11 script families: Arabic (5 sub-ranges), Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, other Indic (Gujarati, Gurmukhi, Kannada, Malayalam, Telugu), and Southeast Asian (Myanmar, Khmer, Sinhala). System fonts are loaded on demand when script characters are detected in file content or IME input (~1-5MB per script vs ~15-20MB for CJK). No new dependencies.
 - **Script detection utility** - `detect_complex_scripts()` and `needs_complex_script_fonts()` with 17 unit tests covering all script families and boundary cases; used to trigger lazy font loading.
+- **Complex script font preferences** - Settings → Appearance → Additional Scripts section for pre-selecting fonts per script (Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, Other Indic, Southeast Asian). User preferences are tried first before platform defaults; persisted in config; fonts load on-demand when files with those scripts are opened.
 
 #### Large File & Performance
 - **Large file detection** - Files >10MB on open show non-blocking performance warning toast
@@ -722,7 +723,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
-- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), complex script font preferences UI, flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix

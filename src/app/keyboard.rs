@@ -66,6 +66,7 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::TogglePipeline, KeyboardAction::TogglePipeline);
             check_shortcut!(ShortcutCommand::ToggleTerminal, KeyboardAction::ToggleTerminal);
             check_shortcut!(ShortcutCommand::ToggleProductivityHub, KeyboardAction::ToggleProductivityHub);
+            check_shortcut!(ShortcutCommand::ToggleFrontmatter, KeyboardAction::ToggleFrontmatter);
 
             // Edit - note: Undo/Redo handled separately, MoveLineUp/Down handled separately
             check_shortcut!(ShortcutCommand::DeleteLine, KeyboardAction::DeleteLine);
@@ -281,6 +282,13 @@ impl FerriteApp {
             }
             KeyboardAction::InsertToc => {
                 self.handle_insert_toc();
+            }
+            KeyboardAction::ToggleFrontmatter => {
+                if !self.state.settings.outline_enabled {
+                    self.state.settings.outline_enabled = true;
+                }
+                self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
+                self.state.mark_settings_dirty();
             }
         });
     }

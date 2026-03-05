@@ -210,7 +210,7 @@ pub fn preload_system_locale_cjk_font(
         };
         
         info!("Preloading CJK font for system locale: {:?}", detected);
-        let fonts = create_font_definitions_with_cjk_spec(None, detected, &spec);
+        let fonts = create_font_definitions_with_cjk_spec(None, detected, &spec, None);
         ctx.set_fonts(fonts);
         bump_font_generation();
         configure_text_styles(ctx);
@@ -271,7 +271,7 @@ pub fn preload_explicit_cjk_font_with_custom(
     };
 
     info!("Preloading CJK font for explicit preference: {:?}", cjk_preference);
-    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
+    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec, None);
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);
@@ -722,9 +722,21 @@ use font_kit::source::SystemSource;
 ///
 /// Returns `Some(FontData)` for the first candidate found on the system.
 fn load_system_font(families: &[&str]) -> Option<FontData> {
-    let source = SystemSource::new();
+    load_system_font_with_preference(None, families)
+}
 
-    for family in families {
+/// Load a system font, trying user preference first (if set), then falling back to candidates.
+fn load_system_font_with_preference(preference: Option<&str>, candidates: &[&str]) -> Option<FontData> {
+    if let Some(pref) = preference {
+        if !pref.is_empty() {
+            if let Some(data) = load_system_font_by_name(pref) {
+                return Some(data);
+            }
+            warn!("Preferred font '{}' not found, falling back to defaults", pref);
+        }
+    }
+    let source = SystemSource::new();
+    for family in candidates {
         info!("Attempting to load system font: {}", family);
         if let Ok(handle) =
             source.select_best_match(&[FamilyName::Title(family.to_string())], &Properties::new())
@@ -732,7 +744,6 @@ fn load_system_font(families: &[&str]) -> Option<FontData> {
             match handle {
                 Handle::Path { path, .. } => {
                     info!("Found system font at: {:?}", path);
-                    // Read file content
                     if let Ok(bytes) = std::fs::read(&path) {
                         return Some(FontData::from_owned(bytes));
                     }
@@ -952,7 +963,7 @@ fn load_chinese_tc_font() -> Option<FontData> {
 // Per-Script Complex Script Font Loading
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn load_arabic_font() -> Option<FontData> {
+fn load_arabic_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Geeza Pro",
         "Al Nile",
@@ -961,10 +972,10 @@ fn load_arabic_font() -> Option<FontData> {
         "Noto Sans Arabic",
         "Noto Naskh Arabic",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_bengali_font() -> Option<FontData> {
+fn load_bengali_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Bangla MN",
         "Bangla Sangam MN",
@@ -972,10 +983,10 @@ fn load_bengali_font() -> Option<FontData> {
         "Vrinda",
         "Noto Sans Bengali",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_devanagari_font() -> Option<FontData> {
+fn load_devanagari_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Devanagari MT",
         "Kohinoor Devanagari",
@@ -983,10 +994,10 @@ fn load_devanagari_font() -> Option<FontData> {
         "Mangal",
         "Noto Sans Devanagari",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_thai_font() -> Option<FontData> {
+fn load_thai_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Thonburi",
         "Sathu",
@@ -994,10 +1005,10 @@ fn load_thai_font() -> Option<FontData> {
         "Tahoma",
         "Noto Sans Thai",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_hebrew_font() -> Option<FontData> {
+fn load_hebrew_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Arial Hebrew",
         "Lucida Grande",
@@ -1005,10 +1016,10 @@ fn load_hebrew_font() -> Option<FontData> {
         "Segoe UI",
         "Noto Sans Hebrew",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_tamil_font() -> Option<FontData> {
+fn load_tamil_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Tamil MN",
         "Tamil Sangam MN",
@@ -1016,25 +1027,25 @@ fn load_tamil_font() -> Option<FontData> {
         "Latha",
         "Noto Sans Tamil",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_georgian_font() -> Option<FontData> {
+fn load_georgian_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = ["Segoe UI", "Noto Sans Georgian"];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_armenian_font() -> Option<FontData> {
+fn load_armenian_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = ["Segoe UI", "Noto Sans Armenian"];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_ethiopic_font() -> Option<FontData> {
+fn load_ethiopic_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = ["Kefa", "Nyala", "Noto Sans Ethiopic"];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_other_indic_font() -> Option<FontData> {
+fn load_other_indic_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Nirmala UI",
         "Noto Sans Gujarati",
@@ -1043,10 +1054,10 @@ fn load_other_indic_font() -> Option<FontData> {
         "Noto Sans Malayalam",
         "Noto Sans Telugu",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
-fn load_southeast_asian_font() -> Option<FontData> {
+fn load_southeast_asian_font(preference: Option<&str>) -> Option<FontData> {
     let candidates = [
         "Myanmar MN",
         "Myanmar Text",
@@ -1054,7 +1065,7 @@ fn load_southeast_asian_font() -> Option<FontData> {
         "Noto Sans Khmer",
         "Noto Sans Sinhala",
     ];
-    load_system_font(&candidates)
+    load_system_font_with_preference(preference, &candidates)
 }
 
 /// Specification of which CJK fonts to load.
@@ -1375,17 +1386,29 @@ const COMPLEX_SCRIPT_FONT_KEYS: &[&str] = &[
     FONT_ETHIOPIC,
 ];
 
+/// Type for per-script font preferences (script_id -> font family name).
+pub type ComplexScriptFontPreferences = std::collections::BTreeMap<String, String>;
+
 /// Load complex script system fonts based on specification.
 fn load_complex_script_fonts_selective(
     fonts: &mut FontDefinitions,
     spec: &ComplexScriptLoadSpec,
+    preferences: Option<&ComplexScriptFontPreferences>,
 ) -> ComplexScriptFontState {
     let mut state = ComplexScriptFontState::default();
 
+    let pref = |key: &str| -> Option<&str> {
+        preferences
+            .and_then(|p| p.get(key))
+            .map(|s| s.as_str())
+            .filter(|s| !s.is_empty())
+    };
+
     macro_rules! load_script {
-        ($spec_field:expr, $loader:ident, $font_key:expr, $state_field:ident, $flag:ident, $name:expr) => {
+        ($spec_field:expr, $loader:ident, $font_key:expr, $state_field:ident, $flag:ident, $name:expr, $pref_key:expr) => {
             if $spec_field {
-                if let Some(data) = $loader() {
+                let p = pref($pref_key);
+                if let Some(data) = $loader(p) {
                     fonts.font_data.insert($font_key.to_owned(), data);
                     state.$state_field = true;
                     if !$flag.load(Ordering::Relaxed) {
@@ -1397,17 +1420,17 @@ fn load_complex_script_fonts_selective(
         };
     }
 
-    load_script!(spec.load_arabic, load_arabic_font, FONT_ARABIC, arabic, ARABIC_FONTS_LOADED, "Arabic");
-    load_script!(spec.load_bengali, load_bengali_font, FONT_BENGALI, bengali, BENGALI_FONTS_LOADED, "Bengali");
-    load_script!(spec.load_devanagari, load_devanagari_font, FONT_DEVANAGARI, devanagari, DEVANAGARI_FONTS_LOADED, "Devanagari");
-    load_script!(spec.load_thai, load_thai_font, FONT_THAI, thai, THAI_FONTS_LOADED, "Thai");
-    load_script!(spec.load_hebrew, load_hebrew_font, FONT_HEBREW, hebrew, HEBREW_FONTS_LOADED, "Hebrew");
-    load_script!(spec.load_tamil, load_tamil_font, FONT_TAMIL, tamil, TAMIL_FONTS_LOADED, "Tamil");
-    load_script!(spec.load_georgian, load_georgian_font, FONT_GEORGIAN, georgian, GEORGIAN_FONTS_LOADED, "Georgian");
-    load_script!(spec.load_armenian, load_armenian_font, FONT_ARMENIAN, armenian, ARMENIAN_FONTS_LOADED, "Armenian");
-    load_script!(spec.load_ethiopic, load_ethiopic_font, FONT_ETHIOPIC, ethiopic, ETHIOPIC_FONTS_LOADED, "Ethiopic");
-    load_script!(spec.load_other_indic, load_other_indic_font, FONT_OTHER_INDIC, other_indic, OTHER_INDIC_FONTS_LOADED, "Other Indic");
-    load_script!(spec.load_southeast_asian, load_southeast_asian_font, FONT_SOUTHEAST_ASIAN, southeast_asian, SOUTHEAST_ASIAN_FONTS_LOADED, "Southeast Asian");
+    load_script!(spec.load_arabic, load_arabic_font, FONT_ARABIC, arabic, ARABIC_FONTS_LOADED, "Arabic", "arabic");
+    load_script!(spec.load_bengali, load_bengali_font, FONT_BENGALI, bengali, BENGALI_FONTS_LOADED, "Bengali", "bengali");
+    load_script!(spec.load_devanagari, load_devanagari_font, FONT_DEVANAGARI, devanagari, DEVANAGARI_FONTS_LOADED, "Devanagari", "devanagari");
+    load_script!(spec.load_thai, load_thai_font, FONT_THAI, thai, THAI_FONTS_LOADED, "Thai", "thai");
+    load_script!(spec.load_hebrew, load_hebrew_font, FONT_HEBREW, hebrew, HEBREW_FONTS_LOADED, "Hebrew", "hebrew");
+    load_script!(spec.load_tamil, load_tamil_font, FONT_TAMIL, tamil, TAMIL_FONTS_LOADED, "Tamil", "tamil");
+    load_script!(spec.load_georgian, load_georgian_font, FONT_GEORGIAN, georgian, GEORGIAN_FONTS_LOADED, "Georgian", "georgian");
+    load_script!(spec.load_armenian, load_armenian_font, FONT_ARMENIAN, armenian, ARMENIAN_FONTS_LOADED, "Armenian", "armenian");
+    load_script!(spec.load_ethiopic, load_ethiopic_font, FONT_ETHIOPIC, ethiopic, ETHIOPIC_FONTS_LOADED, "Ethiopic", "ethiopic");
+    load_script!(spec.load_other_indic, load_other_indic_font, FONT_OTHER_INDIC, other_indic, OTHER_INDIC_FONTS_LOADED, "Other Indic", "other_indic");
+    load_script!(spec.load_southeast_asian, load_southeast_asian_font, FONT_SOUTHEAST_ASIAN, southeast_asian, SOUTHEAST_ASIAN_FONTS_LOADED, "Southeast Asian", "southeast_asian");
 
     if spec.any() {
         info!("Complex script fonts loaded: {:?}", spec);
@@ -1456,7 +1479,7 @@ fn add_complex_script_fallbacks(
 /// - Optional custom system font
 /// - CJK fonts in order based on user preference
 pub fn create_font_definitions() -> FontDefinitions {
-    create_font_definitions_with_settings(None, CjkFontPreference::Auto, true)
+    create_font_definitions_with_settings(None, CjkFontPreference::Auto, true, None)
 }
 
 /// Create font definitions without loading CJK fonts.
@@ -1464,7 +1487,7 @@ pub fn create_font_definitions() -> FontDefinitions {
 /// Use this for faster startup when CJK support is not immediately needed.
 /// Call `load_cjk_for_text()` later when CJK text is detected.
 pub fn create_font_definitions_lazy() -> FontDefinitions {
-    create_font_definitions_with_settings(None, CjkFontPreference::Auto, false)
+    create_font_definitions_with_settings(None, CjkFontPreference::Auto, false, None)
 }
 
 /// Create font definitions with selective CJK font loading.
@@ -1475,6 +1498,7 @@ pub fn create_font_definitions_with_cjk_spec(
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     spec: &CjkLoadSpec,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
 
@@ -1532,7 +1556,7 @@ pub fn create_font_definitions_with_cjk_spec(
 
     // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
     let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
-    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec);
+    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
 
     // Set up Proportional font family
     // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK -> complex scripts
@@ -1666,10 +1690,13 @@ pub fn create_font_definitions_with_cjk_spec(
 /// * `custom_font` - Optional custom system font name to use as primary editor font
 /// * `cjk_preference` - CJK font preference for regional glyph variants
 /// * `load_cjk` - Whether to load CJK fonts immediately (false for lazy loading)
+/// * `complex_script_preferences` - Optional per-script font preferences
+
 pub fn create_font_definitions_with_settings(
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     load_cjk: bool,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
 
@@ -1732,7 +1759,7 @@ pub fn create_font_definitions_with_settings(
 
     // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
     let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
-    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec);
+    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
 
     // Set up Proportional font family
     // Order: Custom (if set) -> Inter -> JetBrains Mono (box-drawing) -> CJK -> complex scripts
@@ -1926,7 +1953,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
 /// This should be called once during application initialization.
 /// Loads all fonts including CJK immediately.
 pub fn setup_fonts(ctx: &egui::Context) {
-    setup_fonts_with_settings(ctx, None, CjkFontPreference::Auto);
+    setup_fonts_with_settings(ctx, None, CjkFontPreference::Auto, None);
 }
 
 /// Apply custom fonts to an egui context with lazy CJK loading.
@@ -1951,12 +1978,19 @@ pub fn setup_fonts_lazy(ctx: &egui::Context) {
 /// * `ctx` - The egui context
 /// * `custom_font` - Optional custom system font name
 /// * `cjk_preference` - CJK font preference for regional glyph variants
+/// * `complex_script_preferences` - Optional per-script font preferences
 pub fn setup_fonts_with_settings(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) {
-    let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
+    let fonts = create_font_definitions_with_settings(
+        custom_font,
+        cjk_preference,
+        true,
+        complex_script_preferences,
+    );
 
     // Defensive fallback: if a non-Auto CJK preference resulted in *no CJK fonts
     // being added to this FontDefinitions*, retry with Auto.
@@ -1970,7 +2004,12 @@ pub fn setup_fonts_with_settings(
             "CJK preference {:?} produced no CJK fonts; falling back to Auto",
             cjk_preference
         );
-        create_font_definitions_with_settings(custom_font, CjkFontPreference::Auto, true)
+        create_font_definitions_with_settings(
+            custom_font,
+            CjkFontPreference::Auto,
+            true,
+            complex_script_preferences,
+        )
     } else {
         fonts
     };
@@ -2025,6 +2064,7 @@ pub fn reload_fonts(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) {
     info!(
         "Reloading fonts with custom_font={:?}, cjk_preference={:?}",
@@ -2045,7 +2085,12 @@ pub fn reload_fonts(
         spec.load_korean, spec.load_japanese, spec.load_chinese_sc, spec.load_chinese_tc
     );
 
-    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
+    let fonts = create_font_definitions_with_cjk_spec(
+        custom_font,
+        cjk_preference,
+        &spec,
+        complex_script_preferences,
+    );
 
     ctx.set_fonts(fonts);
 
@@ -2073,10 +2118,16 @@ pub fn ensure_cjk_fonts_loaded(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> bool {
     // Load all CJK fonts
     info!("Loading all CJK fonts");
-    let fonts = create_font_definitions_with_settings(custom_font, cjk_preference, true);
+    let fonts = create_font_definitions_with_settings(
+        custom_font,
+        cjk_preference,
+        true,
+        complex_script_preferences,
+    );
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);
@@ -2098,6 +2149,7 @@ pub fn ensure_cjk_fonts_loaded(
 /// * `ctx` - The egui context
 /// * `custom_font` - Optional custom system font name
 /// * `cjk_preference` - CJK font preference (used for Han-only text)
+/// * `complex_script_preferences` - Optional per-script font preferences (for font rebuild)
 ///
 /// # Returns
 ///
@@ -2107,6 +2159,7 @@ pub fn load_cjk_for_text(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> bool {
     // Detect which scripts are in the text
     let detection = detect_cjk_scripts(text);
@@ -2134,7 +2187,12 @@ pub fn load_cjk_for_text(
     );
 
     // Rebuild fonts with the new CJK fonts
-    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec);
+    let fonts = create_font_definitions_with_cjk_spec(
+        custom_font,
+        cjk_preference,
+        &spec,
+        complex_script_preferences,
+    );
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);
@@ -2171,8 +2229,15 @@ pub fn check_and_load_cjk_if_needed(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> bool {
-    load_cjk_for_text(text, ctx, custom_font, cjk_preference)
+    load_cjk_for_text(
+        text,
+        ctx,
+        custom_font,
+        cjk_preference,
+        complex_script_preferences,
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2190,6 +2255,7 @@ pub fn load_complex_script_fonts_for_text(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
+    complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> bool {
     let detection = detect_complex_scripts(text);
 
@@ -2262,7 +2328,12 @@ pub fn load_complex_script_fonts_for_text(
         load_chinese_tc: CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed),
     };
 
-    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &cjk_spec);
+    let fonts = create_font_definitions_with_cjk_spec(
+        custom_font,
+        cjk_preference,
+        &cjk_spec,
+        complex_script_preferences,
+    );
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);

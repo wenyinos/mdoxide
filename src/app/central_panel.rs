@@ -945,6 +945,9 @@ impl FerriteApp {
                                 // Get paragraph indent setting (CJK typography)
                                 let paragraph_indent = self.state.settings.paragraph_indent;
 
+                                // Get header spacing setting (Markdown rendering)
+                                let header_spacing = self.state.settings.header_spacing;
+
                                 // Get path for syntax highlighting
                                 let tab_path_for_syntax = self.state
                                     .active_tab()
@@ -1499,6 +1502,7 @@ impl FerriteApp {
                                             .max_line_width(max_line_width)
                                             .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                             .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                            .header_spacing(header_spacing)
                                             .wikilink_context(wl_ctx)
                                             .id(egui::Id::new("split_preview_rendered"))
                                             .pending_scroll_offset(pending_preview_scroll)
@@ -1709,6 +1713,7 @@ impl FerriteApp {
                                 let max_line_width = self.state.settings.max_line_width;
                                 let zen_max_column_width = self.state.settings.zen_max_column_width;
                                 let paragraph_indent = self.state.settings.paragraph_indent;
+                                let header_spacing = self.state.settings.header_spacing;
 
                                 // Collect workspace root before mutable borrow
                                 let ws_root = self.state.workspace_root().cloned();
@@ -1738,6 +1743,7 @@ impl FerriteApp {
                                         .max_line_width(max_line_width) // Apply line width limit
                                         .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
                                         .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                        .header_spacing(header_spacing)
                                         .wikilink_context(wl_ctx)
                                         .id(egui::Id::new("main_editor_rendered"))
                                         .scroll_to_line(scroll_to_line)
@@ -2018,7 +2024,8 @@ impl FerriteApp {
                         crate::fonts::reload_fonts(
                             ui.ctx(),
                             custom_font.as_deref(),
-                            self.state.settings.cjk_font_preference
+                            self.state.settings.cjk_font_preference,
+                            Some(&self.state.settings.complex_script_font_preferences),
                         );
                         info!("Font settings changed, reloaded fonts");
                     }
@@ -2048,7 +2055,8 @@ impl FerriteApp {
                     crate::fonts::reload_fonts(
                         ui.ctx(),
                         None,
-                        crate::config::CjkFontPreference::Auto
+                        crate::config::CjkFontPreference::Auto,
+                        None,
                     );
 
                     let time = self.get_app_time();

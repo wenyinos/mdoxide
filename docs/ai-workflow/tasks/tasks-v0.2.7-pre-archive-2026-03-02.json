@@ -1,0 +1,299 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "11",
+        "title": "Preload explicit CJK font at startup for restored tabs",
+        "description": "Fix CJK rendering issue in restored tabs by preloading the user's preferred CJK font at app initialization when preference is explicitly set.",
+        "details": "In app startup logic (likely `src/main.rs` or `app.rs`), read CJK font preference from settings. If explicit (non-Auto), preload the single font using same logic as Auto+system-locale preloading. Ensure font is available before restoring tabs. Update CJK font loading in `src/editor/ferrite/` or theme/font module to use preloaded font.",
+        "testStrategy": "1. Set CJK preference to explicit (Noto Sans SC). 2. Restart app with Chinese text in restored tabs. 3. Verify Chinese renders correctly in all tabs without switching. 4. Test Auto mode unchanged.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-08T15:47:07.075Z"
+      },
+      {
+        "id": "12",
+        "title": "Implement GitHub-style callouts parsing and rendering",
+        "description": "Add support for GitHub-style admonition blocks like `> [!NOTE]` with color-coded rendering and optional collapsible state.",
+        "details": "Extend markdown parser in `src/markdown/parser.rs` to recognize `> [!TYPE]` and `> [!TYPE] Custom Title` syntax, store type/title/collapsed state in AST. In `src/markdown/widgets.rs`, render styled blocks with icons/colors: NOTE=blue, TIP=green, WARNING=orange, CAUTION=yellow, IMPORTANT=red. Support `> [!NOTE]-` for collapsed-by-default. Add toggle interaction preserving state per block.",
+        "testStrategy": "1. Parse/render `> [!NOTE]\\n> Content` → blue note block. 2. `> [!WARNING] Custom Title` → orange with title. 3. `> [!NOTE]-` → collapsed, expands on click. 4. Verify all 5 types render correctly.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-08T16:31:25.846Z"
+      },
+      {
+        "id": "13",
+        "title": "Add manual Check for Updates button in Settings",
+        "description": "Implement Settings button to fetch latest GitHub release and show update dialog if newer version available.",
+        "details": "In `src/ui/settings.rs`, add \"Check for Updates\" button in About/General section. Use `reqwest` (blocking/async) to fetch `https://api.github.com/repos/OlaProeis/Ferrite/releases/latest`. Parse version, compare with current using semver or string compare. Show toast/dialog with download link if newer. Handle offline/API errors with user-friendly toast.",
+        "testStrategy": "1. Click button → up-to-date toast if current. 2. Mock newer release → dialog with version/download link. 3. Offline → error toast. 4. Verify no auto-checks.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-08T20:08:08.977Z"
+      },
+      {
+        "id": "14",
+        "title": "Implement large file detection and warning toast",
+        "description": "Detect files >10MB on open and show non-blocking performance warning toast.",
+        "details": "In file open flow (`app.rs` or file loading), use `std::fs::metadata(path).map(|m| m.len())` before loading. If >10MB (10*1024*1024), show toast: \"Large file ({size} MB). Performance may be affected.\". Proceed with load regardless. Make threshold configurable in future.",
+        "testStrategy": "1. Open 15MB file → toast shows, file opens. 2. Open <10MB → no toast. 3. Verify non-blocking.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-02-16T15:37:49.001Z"
+      },
+      {
+        "id": "15",
+        "title": "Implement wikilinks parsing, resolution, and navigation",
+        "description": "Add `[[wikilinks]]` and `[[target|display]]` support with relative resolution, spaces in filenames, and click navigation.",
+        "details": "Extend `src/markdown/parser.rs` (pulldown-cmark/custom) to parse `[[target]]`/`[[target|display]]`, store targets. Implement resolver using Tab.content/FerriteEditor buffer: relative to current file/workspace root. Tie-breaker: same-folder-first → shortest path → prompt if ambiguous. Support spaces (`[[My Note]]` → `My Document.md`). Render clickable in split/rendered view, integrate with outline.",
+        "testStrategy": "1. `[[note-b]]`/`[[note-b|Link]]` → clicks open note-b.md, shows display text. 2. Spaces: `[[My Document]]` resolves correctly. 3. Ambiguous → prompt user choice. 4. Broken links handled gracefully.",
+        "priority": "high",
+        "dependencies": [
+          "12"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 8,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Break down into: 1) Extend pulldown-cmark parser for [[wikilinks]] syntax capture, 2) Implement multi-level relative path resolver with same-folder priority and ambiguity handling, 3) Create clickable link rendering in markdown widgets with display text support, 4) Integrate navigation with file opening and outline updates.",
+        "updatedAt": "2026-02-17T15:20:10.285Z"
+      },
+      {
+        "id": "16",
+        "title": "Create backlinks panel with graph-based indexing",
+        "description": "Add panel showing files linking to current file, using in-memory graph for large workspaces.",
+        "details": "Create `src/ui/backlinks_panel.rs` or extend outline_panel.rs. For ≤50 files: scan on tab switch. For >50: build `HashMap<filename, Vec<referencing_files>>` on workspace load, update incrementally on save. Detect `[[current]]` and `[text](current.md)`. Click → navigate to file (scroll to link if possible). Update on tab switch/file change.",
+        "testStrategy": "1. A→B, C→B links → open B shows A,C in panel. 2. Click A → navigates to A. 3. Verify updates on save/tab switch. 4. Test performance >50 files.",
+        "priority": "high",
+        "dependencies": [
+          "15"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 9,
+        "recommendedSubtasks": 5,
+        "expansionPrompt": "Divide into: 1) Implement wikilink and markdown link parser for backlink extraction, 2) Build in-memory HashMap graph index with incremental updates on save, 3) Create backlinks UI panel with file list and click navigation, 4) Add performance scaling for >50 files with lazy scanning, 5) Integrate tab switch and file change reactivity.",
+        "updatedAt": "2026-02-17T16:12:25.515Z"
+      },
+      {
+        "id": "17",
+        "title": "Refactor flowchart into modular components with rendering cache",
+        "description": "Split `src/markdown/mermaid/flowchart.rs` into modules and add texture caching for performance.",
+        "details": "Create: `flowchart/nodes.rs` (shapes/labels), `edges.rs` (routing/arrows), `layout.rs` (positioning/rank), `render.rs` (egui drawing), `mod.rs` (API). Preserve exact behavior. Cache rendered flowchart as egui texture, recompute only on content change (hash diagram AST). Avoid layout every frame.",
+        "testStrategy": "1. All existing flowchart tests pass. 2. Manual Mermaid diagrams render identically. 3. Verify texture cache reduces CPU (profile frames).",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Split into: 1) Extract nodes.rs, edges.rs, layout.rs modules preserving exact behavior, 2) Implement render.rs with egui texture caching based on AST hash, 3) Create mod.rs orchestrator API and verify performance improvements via profiling.",
+        "updatedAt": "2026-02-17T17:21:20.932Z"
+      },
+      {
+        "id": "18",
+        "title": "Implement native macOS window controls and icon polish",
+        "description": "Add macOS traffic-light controls and ensure consistent icons across themes.",
+        "details": "In `src/ui/window.rs`, configure eframe/egui for native macOS window decoration (close/min/maximize traffic lights). Verify icons scale correctly in light/dark themes following HIG. Test cross-platform consistency.",
+        "testStrategy": "1. macOS build → native traffic lights visible. 2. Icons crisp in both themes. 3. Verify Windows/Linux unchanged.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "cancelled",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Separate into: 1) eframe/egui macOS native window decoration configuration, 2) Cross-theme icon scaling verification following HIG.",
+        "updatedAt": "2026-02-18T21:09:47.254Z"
+      },
+      {
+        "id": "19",
+        "title": "Implement lazy CSV row parsing with byte-offset indexing",
+        "description": "For large CSVs, build row offset index and parse only visible rows for virtual scrolling.",
+        "details": "In CSV viewer (`src/` CSV handling), on load: scan file building `Vec<u64>` byte offsets per row. Virtual scroll: parse only visible rows via `buffer[offsets[n]..offsets[n+1]]` using CSV parser. Keep memory low for 100MB+ files. Smooth scrolling.",
+        "testStrategy": "1. Open 100MB CSV → low memory usage. 2. Scroll → smooth, only visible rows parsed. 3. Verify row boundaries correct.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break into: 1) Build row byte-offset index Vec<u64> on large CSV load, 2) Implement virtual scrolling parsing only visible row slices, 3) Ensure smooth scrolling and memory efficiency for 100MB+ files.",
+        "updatedAt": "2026-02-18T16:42:51.758Z"
+      },
+      {
+        "id": "20",
+        "title": "Add Vim mode settings toggle and status bar indicator",
+        "description": "Implement optional Vim mode toggle in settings with mode status display.",
+        "details": "In `src/config/settings.rs`, add vim_mode: bool (default: false). In FerriteEditor (`src/editor/ferrite/`), read setting. Add status bar showing `[NORMAL]`, `[INSERT]`, cursor shape changes. Essential keys: hjkl, dd, yy, p, i, Esc, v/V, /search.",
+        "testStrategy": "1. Toggle on/off → status bar updates. 2. Default: disabled. 3. Verify mode indicator visible.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-02-18T19:03:51.793Z"
+      },
+      {
+        "id": "21",
+        "title": "Implement Vim mode core modal state machine and key handling",
+        "description": "Add Normal/Insert/Visual modes with essential Vim commands and key conflict resolution.",
+        "details": "In `src/editor/ferrite/` or `editor/vim.rs`: modal state machine. Normal: hjkl movement, dd/delete line, yy/yank, p/paste, /search. Insert: normal typing, Esc→Normal. Visual: v char/V line selection, y yank. Key handling: Vim consumes editor keys when active; egui shortcuts (Ctrl+C) take precedence outside Vim keys. Focus priority.",
+        "testStrategy": "1. Normal: hjkl moves, dd deletes line. 2. i→Insert, type, Esc→Normal. 3. v→select, y→yank, p→paste. 4. Ctrl+C still works globally.",
+        "priority": "high",
+        "dependencies": [
+          "20"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 9,
+        "recommendedSubtasks": 5,
+        "expansionPrompt": "Divide into: 1) Modal state machine (Normal/Insert/Visual) architecture, 2) Normal mode movement/commands (hjkl, dd, yy, p, /), 3) Insert/Visual mode handling with transitions, 4) Key conflict resolution with egui shortcuts, 5) Cursor shape and selection integration.",
+        "updatedAt": "2026-02-18T19:03:51.872Z"
+      },
+      {
+        "id": "22",
+        "title": "Add opt-in executable code blocks with Run button",
+        "description": "Implement Run button for shell/python code blocks with security warning and settings.",
+        "details": "In `src/markdown/widgets.rs`, add settings: code_execution_enabled (default:false), timeout_secs:30. First run: show security dialog, store acknowledged. Render ▶ button on ```bash```python blocks when enabled. Click→execute.",
+        "testStrategy": "1. Default: button hidden/disabled. 2. Enable → button appears. 3. First click → security dialog once. 4. Verify settings toggle works.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "deferred",
+        "subtasks": [],
+        "updatedAt": "2026-02-11T11:18:18.262Z"
+      },
+      {
+        "id": "23",
+        "title": "Implement code block execution engine with CWD and timeout",
+        "description": "Execute shell/python scripts in file's directory with 30s timeout and platform detection.",
+        "details": "Create `src/code_execution/` module. Use `std::process::Command`: Shell/Bash→Unix:`sh`/`bash`, Windows:`powershell`/`cmd` or detect `bash.exe`. Python→`python`/`python3`. CWD=file dir (fallback app root). Timeout: `std::thread::spawn` + kill after 30s. Output inline/collapsible below block.",
+        "testStrategy": "1. ```bash echo $PWD``` → shows file dir. 2. Infinite loop → killed at 30s. 3. Windows: runs via powershell/cmd. 4. Relative paths work.",
+        "priority": "high",
+        "dependencies": [
+          "22"
+        ],
+        "status": "deferred",
+        "subtasks": [],
+        "updatedAt": "2026-02-11T11:18:18.268Z"
+      },
+      {
+        "id": "24",
+        "title": "Add welcome view on first run with basic settings",
+        "description": "Show a welcome screen (modal or full view) on first launch or when user has not dismissed it, with word wrap, default view mode (Raw/Rendered/Split), optionally theme/font; 'Do not show again' stored in settings; re-open via Help or Settings.",
+        "details": "Add welcome view in app startup or central UI. Options: word wrap toggle, default view (Raw/Rendered/Split), optionally theme or font size. Checkbox 'Do not show again'; persist as welcome_shown or skip_welcome in config/settings. Show only when no existing settings (first launch) or flag not set. Allow 'Show welcome' from Help or Settings. Use existing Settings struct and persistence.",
+        "testStrategy": "1. First run (no config) → welcome shows. 2. Set options, check Do not show again → next launch no welcome. 3. Re-open from Help/Settings → welcome shows. 4. Settings persist.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-18T21:09:47.709Z"
+      },
+      {
+        "id": "25",
+        "title": "Open file in current window as tab (not new window)",
+        "description": "When double-clicking a file (file tree or OS), open it as a tab in the current Ferrite window instead of opening a new window.",
+        "details": "Ensure file open from file tree (src/ui/file_tree.rs → file_clicked, src/app/mod.rs handling) and from OS (double-click in Explorer / file manager) opens in current window as tab. On Windows/Linux, double-click may spawn new process; consider single-instance or passing path to existing instance. CLI args in main.rs open files as tabs; verify file tree click uses state.open_file() and does not spawn new process.",
+        "testStrategy": "1. Double-click file in file tree → opens as tab in current window. 2. Open file from OS (Explorer double-click) → opens in existing window as tab when possible. 3. No extra Ferrite window per file.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Split into: 1) Fix file tree double-click to use existing window tab opening, 2) Implement single-instance protocol for OS file associations across platforms.",
+        "updatedAt": "2026-02-17T16:28:45.938Z"
+      },
+      {
+        "id": "26",
+        "title": "Windows MSI: optional file associations with user choice",
+        "description": "During Windows MSI install, ask user whether to set Ferrite as default for .md, .txt, .json, etc.; support 'default for all' or per-extension.",
+        "details": "In wix/main.wxs (or WiX UI flow), add optional installer page or checkbox: 'Set Ferrite as default for supported file types (.md, .txt, .json, .yaml, .toml)'. Options: default for all, or per-extension selection. Do not force associations without user consent. Register ProgIds/associations only when user opts in.",
+        "testStrategy": "1. Run MSI → see file association prompt. 2. Opt in → associations set. 3. Opt out → no associations. 4. Verify .md/.txt/.json open with Ferrite when chosen.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 1,
+        "expansionPrompt": "Separate into: 1) WiX installer UI page/checkbox for optional per-extension associations, 2) ProgId registration logic only when user opts in.",
+        "updatedAt": "2026-02-18T21:02:22.979Z"
+      },
+      {
+        "id": "27",
+        "title": "Fix images not displaying in rendered markdown view",
+        "description": "Images in markdown (![](path)) do not show in rendered/split view; fix so images display correctly.",
+        "details": "In src/markdown/ (editor.rs or widgets.rs), resolve image paths relative to document location, load image bytes, render with egui Image. Support common formats (PNG, JPEG, GIF, WebP). Handle missing files and unsupported formats gracefully (placeholder or alt text). Ensure path resolution uses current file directory and workspace root.",
+        "testStrategy": "1. Rendered view: ![](./img.png) and ![](assets/logo.png) show image. 2. Missing file → placeholder or alt. 3. Split view shows images.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Divide into: 1) Implement relative path resolution for markdown images from file/workspace root, 2) egui Image rendering with format support and error handling.",
+        "updatedAt": "2026-02-17T16:49:42.585Z"
+      },
+      {
+        "id": "28",
+        "title": "Add German and Japanese to language settings",
+        "description": "Expose German and Japanese UI languages in Settings; locale files de.yaml and ja.yaml already exist.",
+        "details": "In src/config/settings.rs: add Language::German (locale_code \"de\", native_name \"Deutsch\") and Language::Japanese (locale_code \"ja\", native_name \"日本語\"). Update Language::all(), locale_code(), native_name(), and from_locale_code() to include \"de\" and \"ja\". Serde rename as needed (e.g. zh-Hans style). Settings combo in src/ui/settings.rs will pick them up automatically.",
+        "testStrategy": "1. Settings → Appearance → Language shows Deutsch and 日本語. 2. Select German → UI in German. 3. Select Japanese → UI in Japanese. 4. Persist and restore on restart.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 2,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "",
+        "updatedAt": "2026-02-17T13:43:19.908Z"
+      },
+      {
+        "id": "29",
+        "title": "Always show view mode bar for all editor tabs",
+        "description": "When default view is Split and user opens a file that does not support split view (e.g. .rs), the view mode bar is hidden so mode can only be changed via hotkeys. Always display the view mode bar; for unsupported file types show the two-mode segment (Raw | Rendered).",
+        "details": "In src/app/title_bar.rs the view mode segment is only shown when current_file_type is markdown, structured, or tabular (line ~320). Change to always show for has_editor && !is_special_tab. For file types that support split (markdown, tabular) use segment.show() (3-mode); for structured use segment.show_two_mode(); for all other types (e.g. .rs) also use show_two_mode(ui, current_view_mode, is_dark) so users can switch to Raw or Rendered from the UI. Optionally in open-file flow: when opening a file that does not support split and default_view_mode is Split, set tab.view_mode to Raw so initial state is consistent.",
+        "testStrategy": "1. Set default view to Split. 2. Open a .rs file → view mode bar visible with Raw | Rendered. 3. Switch to Raw and Rendered via bar. 4. Open .md file → 3-mode bar (Raw | Split | Rendered) still works. 5. Hotkey toggle still works for all.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-18T21:20:28.341Z"
+      },
+      {
+        "id": "30",
+        "title": "Fix light mode readability (settings, menus, headlines)",
+        "description": "Several UI elements are not visible in light mode (only readable in dark mode). Affected areas include the settings panel (maximum line width, tab size, other controls), menu/settings headlines and text, and possibly other panels.",
+        "details": "Override_text_color and theme-aware semantic colors were tried but did not resolve the issue. Investigate root cause: (1) Where are text/headline colors set (egui styles, custom painting)? (2) Do any widgets or sections bypass theme or use non-theme-aware colors? (3) Check ui.heading(), RichText, Slider/ComboBox/DragValue value text, and any custom galley/painter text. Ensure all labels, headings, controls, and menu text have sufficient contrast in both light and dark themes. Audit settings panel, gear menu, and any other panels that use headings or styled text.",
+        "testStrategy": "1. Switch to light theme. 2. Open Settings (gear) and verify all section titles, labels, slider values, combo text, and controls are readable. 3. Check menus and any other UI with headlines. 4. Switch to dark theme and confirm no regressions. 5. Document which code paths needed changes.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-02-17T23:21:03.719Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-02-18T21:20:28.341Z",
+      "taskCount": 20,
+      "completedCount": 17,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

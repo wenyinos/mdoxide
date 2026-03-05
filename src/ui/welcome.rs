@@ -86,17 +86,17 @@ impl WelcomePanel {
                     );
                     ui.add_space(4.0);
                     ui.label(
-                        RichText::new(t!("welcome.subtitle"))
+                        RichText::new(t!("welcome.subtitle").to_string())
                             .size(14.0)
                             .color(weak_color),
                     );
 
                     // ── Theme ─────────────────────────────────────────
-                    Self::section_heading(ui, &t!("welcome.section.appearance"), text_color);
+                    Self::section_heading(ui, &t!("welcome.section.appearance").to_string(), text_color);
 
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new(t!("welcome.label.theme"))
+                            RichText::new(t!("welcome.label.theme").to_string())
                                 .strong()
                                 .color(text_color),
                         );
@@ -104,13 +104,13 @@ impl WelcomePanel {
                         for theme in [Theme::Light, Theme::Dark, Theme::System] {
                             let label = match theme {
                                 Theme::Light => {
-                                    format!("  {}  ", t!("settings.general.theme_light"))
+                                    format!("  {}  ", t!("settings.general.theme_light").to_string())
                                 }
                                 Theme::Dark => {
-                                    format!("  {}  ", t!("settings.general.theme_dark"))
+                                    format!("  {}  ", t!("settings.general.theme_dark").to_string())
                                 }
                                 Theme::System => {
-                                    format!("  {}  ", t!("settings.general.theme_system"))
+                                    format!("  {}  ", t!("settings.general.theme_system").to_string())
                                 }
                             };
                             if ui
@@ -126,7 +126,7 @@ impl WelcomePanel {
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new(t!("welcome.label.language"))
+                            RichText::new(t!("welcome.label.language").to_string())
                                 .strong()
                                 .color(text_color),
                         );
@@ -154,13 +154,13 @@ impl WelcomePanel {
                     });
 
                     // ── Editor ─────────────────────────────────────────
-                    Self::section_heading(ui, &t!("welcome.section.editor"), text_color);
+                    Self::section_heading(ui, &t!("welcome.section.editor").to_string(), text_color);
 
                     if Self::setting_toggle(
                         ui,
                         &mut settings.word_wrap,
-                        &t!("settings.editor.word_wrap"),
-                        &t!("settings.editor.word_wrap_tooltip"),
+                        &t!("settings.editor.word_wrap").to_string(),
+                        &t!("settings.editor.word_wrap_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -169,8 +169,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.show_line_numbers,
-                        &t!("settings.editor.show_line_numbers"),
-                        &t!("settings.editor.line_numbers_tooltip"),
+                        &t!("settings.editor.show_line_numbers").to_string(),
+                        &t!("settings.editor.line_numbers_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -179,8 +179,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.minimap_enabled,
-                        &t!("settings.editor.show_minimap"),
-                        &t!("settings.editor.minimap_tooltip"),
+                        &t!("settings.editor.show_minimap").to_string(),
+                        &t!("settings.editor.minimap_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -189,8 +189,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.highlight_matching_pairs,
-                        &t!("settings.editor.highlight_brackets"),
-                        &t!("settings.editor.brackets_tooltip"),
+                        &t!("settings.editor.highlight_brackets").to_string(),
+                        &t!("settings.editor.brackets_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -199,8 +199,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.auto_close_brackets,
-                        &t!("settings.editor.auto_close_brackets"),
-                        &t!("settings.editor.auto_close_tooltip"),
+                        &t!("settings.editor.auto_close_brackets").to_string(),
+                        &t!("settings.editor.auto_close_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -209,8 +209,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.syntax_highlighting_enabled,
-                        &t!("settings.editor.syntax_highlighting"),
-                        &t!("settings.editor.syntax_tooltip"),
+                        &t!("settings.editor.syntax_highlighting").to_string(),
+                        &t!("settings.editor.syntax_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -219,8 +219,8 @@ impl WelcomePanel {
                     if Self::setting_toggle(
                         ui,
                         &mut settings.use_spaces,
-                        &t!("settings.editor.use_spaces"),
-                        &t!("settings.editor.use_spaces_tooltip"),
+                        &t!("settings.editor.use_spaces").to_string(),
+                        &t!("settings.editor.use_spaces_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;
@@ -230,7 +230,7 @@ impl WelcomePanel {
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new(t!("settings.preview.default_view"))
+                            RichText::new(t!("settings.preview.default_view").to_string())
                                 .strong()
                                 .color(text_color),
                         );
@@ -246,17 +246,17 @@ impl WelcomePanel {
                         }
                     });
                     ui.label(
-                        RichText::new(t!("settings.default_view_hint"))
+                        RichText::new(t!("settings.default_view_hint").to_string())
                             .weak()
                             .small()
                             .color(weak_color),
                     );
 
                     // ── Line Width ─────────────────────────────────────
-                    Self::section_heading(ui, &t!("settings.editor.max_line_width"), text_color);
+                    Self::section_heading(ui, &t!("settings.editor.max_line_width").to_string(), text_color);
 
                     ui.label(
-                        RichText::new(t!("welcome.line_width_hint"))
+                        RichText::new(t!("welcome.line_width_hint").to_string())
                             .weak()
                             .small()
                             .color(weak_color),
@@ -287,9 +287,9 @@ impl WelcomePanel {
                                     }
                                 }
                                 let is_custom = settings.max_line_width.is_custom();
-                                let custom_label = t!("settings.editor.custom_width");
+                                let custom_label = t!("settings.editor.custom_width").to_string();
                                 if ui
-                                    .selectable_label(is_custom, custom_label.to_string())
+                                    .selectable_label(is_custom, custom_label)
                                     .clicked()
                                     && !is_custom
                                 {
@@ -320,12 +320,12 @@ impl WelcomePanel {
                     // ── CJK Font Preference ───────────────────────────
                     Self::section_heading(
                         ui,
-                        &t!("welcome.section.cjk"),
+                        &t!("welcome.section.cjk").to_string(),
                         text_color,
                     );
 
                     ui.label(
-                        RichText::new(t!("settings.editor.cjk_preference_hint"))
+                        RichText::new(t!("settings.editor.cjk_preference_hint").to_string())
                             .weak()
                             .small()
                             .color(weak_color),
@@ -351,13 +351,13 @@ impl WelcomePanel {
                         });
 
                     // ── Files ──────────────────────────────────────────
-                    Self::section_heading(ui, &t!("welcome.section.files"), text_color);
+                    Self::section_heading(ui, &t!("welcome.section.files").to_string(), text_color);
 
                     if Self::setting_toggle(
                         ui,
                         &mut settings.auto_save_enabled_default,
-                        &t!("settings.files.enable_auto_save"),
-                        &t!("settings.files.auto_save_tooltip"),
+                        &t!("settings.files.enable_auto_save").to_string(),
+                        &t!("settings.files.auto_save_tooltip").to_string(),
                         weak_color,
                     ) {
                         changed = true;

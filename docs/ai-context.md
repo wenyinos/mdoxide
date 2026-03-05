@@ -16,7 +16,7 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 | `markdown/csv_viewer.rs` | CSV/TSV table viewer with lazy byte-offset row parsing |
 | `markdown/tree_viewer.rs` | JSON/YAML/TOML hierarchical tree viewer |
 | `terminal/` | Integrated terminal emulator (PTY via `portable-pty`, VTE ANSI parser, screen buffer, themes, split layouts) |
-| `ui/` | UI panels (ribbon, settings, file_tree, outline, search, terminal_panel, productivity_panel, welcome) |
+| `ui/` | UI panels (ribbon, settings, file_tree, outline, search, terminal_panel, productivity_panel, frontmatter_panel, welcome) |
 | `config/` | Settings persistence, session/crash recovery, text expansion snippets |
 | `theme/` | Light/dark theme management (ThemeManager, light.rs, dark.rs) |
 | `export/` | HTML export with themed CSS, clipboard operations |
@@ -140,6 +140,10 @@ cargo test           # Run tests
 
 ## Recently Changed
 
+- **2026-03-04**: Task 33 — Complex Script Font Preferences. Added Settings UI (Appearance → Additional Scripts) for pre-selecting fonts per script (Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, Other Indic, Southeast Asian). `complex_script_font_preferences: BTreeMap<String, String>` in Settings; preferences passed through `load_complex_script_fonts_for_text`, `load_cjk_for_text`, `reload_fonts`. Docs: `docs/technical/config/complex-script-font-preferences.md`.
+- **2026-03-04**: Fixed Open Folder in Flatpak (Task 39). Added `resolve_initial_dir()` with $HOME fallback in `src/files/dialogs.rs` so xdg-desktop-portal always has a navigable starting directory. Added `is_flatpak()` and Flatpak-aware error handling in `handle_open_workspace()`. No manifest changes. Docs: `docs/technical/platform/flatpak-file-dialog-portal.md`.
+- **2026-03-04**: Refactored frontmatter editor from standalone side panel into a tab ("FM") inside the outline panel, matching BacklinksPanel pattern. `FrontmatterPanel::show_content(ui, is_dark)` renders inside outline tab area. Removed `frontmatter_panel_enabled`/`frontmatter_panel_width` settings. `Ctrl+Shift+M` now opens outline panel + switches to FM tab. Added `OutlinePanelTab::Frontmatter`, `OutlinePanelOutput.frontmatter_new_content`.
+- **2026-03-04**: Implemented visual frontmatter editor (Task 32). `src/ui/frontmatter_panel.rs` with form-based YAML editing, type-aware widgets (text, checkbox, tag chips), bidirectional sync with raw editor. 7 unit tests.
 - **2026-03-02**: Fixed critical bug when opening binary files (images, etc.) as text documents. The app would crash with "byte index is not a char boundary" panic in `stats.rs`. Two fixes applied: (1) Added `is_binary_content()` function in `state.rs` to detect binary files using null byte detection and non-printable character ratio heuristics. Binary files are now rejected with a user-friendly error message during file open. (2) Fixed `count_links()` and `count_images()` in `editor/stats.rs` to use safe string slicing with `get()` instead of direct byte indexing, preventing panics on invalid UTF-8 boundaries. Added 7 tests for binary detection.
 - **2026-02-26**: Merged Nix/NixOS flake support ([PR #92](https://github.com/OlaProeis/Ferrite/pull/92) by @liuxiaopai-ai). Added `flake.nix`, `flake.lock`, CI workflow `.github/workflows/nix.yml`, docs in README + `docs/building.md`. Supports `nix run`/`nix build`/`nix develop` for 4 platforms.
 - **2026-02-26**: PortableApps.com Format packaging. Added `FERRITE_DATA_DIR` env var to `config/persistence.rs` (priority 1 before `portable/` folder). Created full PAF directory structure in `portable/FerriteMDPortable/` with `appinfo.ini`, launcher config, help.html, NSIS installer script. Automated in `.github/workflows/release.yml` — installs NSIS via choco, generates icons from source, updates version from git tag, compiles `.paf.exe`, sends through SignPath, attaches to GitHub Release.

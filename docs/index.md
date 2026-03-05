@@ -79,6 +79,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Vim Mode](./technical/editor/vim-mode.md) | Optional modal editing with Normal/Insert/Visual modes, Vim keybindings, status bar indicator |
 | [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants, CJK lazy loading, complex script lazy loading (11 families) |
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
+| [Complex Script Font Preferences](./technical/config/complex-script-font-preferences.md) | Per-script font preferences for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. |
 
 ### UI Components
 
@@ -103,6 +104,8 @@ These diagrams provide a quick visual overview for new contributors.
 | [Theme System](./technical/ui/theme-system.md) | Unified theming with ThemeColors, ThemeManager, light/dark themes, runtime switching |
 | [Adaptive Toolbar](./technical/ui/adaptive-toolbar.md) | File-type aware toolbar, conditional buttons for Markdown vs JSON/YAML/TOML |
 | [Navigation Buttons](./technical/ui/nav-buttons.md) | Document navigation overlay for quick jumping to top, middle, or bottom |
+| [Frontmatter Panel](./technical/ui/frontmatter-panel.md) | Visual YAML frontmatter editor (FM tab in outline panel), form-based key-value editing, tag chips, bidirectional sync |
+| [Header Spacing](./technical/ui/header-spacing.md) | Adjustable vertical spacing between headings (H1-H6) in rendered view (compact/normal/relaxed) |
 | [Check for Updates](./technical/ui/check-for-updates.md) | Manual update checker via GitHub Releases API, security model, URL validation |
 
 ### Markdown & WYSIWYG
@@ -122,6 +125,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Table of Contents](./technical/markdown/table-of-contents.md) | TOC generation from headings, anchor links, update/insert modes, Ctrl+Shift+U |
 | [List Editing Fixes](./technical/markdown/list-editing-fixes.md) | Frontmatter offset fix, edit buffer persistence, deferred commits, rendered-mode undo/redo |
 | [List Editing Debug](./technical/markdown/list-editing-debug.md) | Debugging list editing issues and fixes |
+| [Task List Checkbox](./technical/markdown/task-list-checkbox.md) | Interactive task list checkboxes in rendered view, click-to-toggle with source sync |
 | [Table Editing Focus](./technical/markdown/table-editing-focus.md) | Fix cursor loss during table cell editing, deferred source updates, keyboard navigation |
 | [Smart Paste](./technical/markdown/smart-paste.md) | URL detection, markdown link creation with selection, image markdown insertion |
 | [Image Drag & Drop](./technical/markdown/image-drag-drop.md) | Drag images into editor, auto-save to assets/, insert markdown link at cursor |
@@ -197,10 +201,12 @@ These diagrams provide a quick visual overview for new contributors.
 | **[Idle Mode Optimization](./technical/platform/idle-mode-optimization.md)** | **Tiered idle repaint system to reduce CPU usage on all platforms** |
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
 | **[Single-Instance Protocol](./technical/platform/single-instance.md)** | **Lock file + TCP IPC to open files in existing window instead of spawning new process** |
+| **[macOS .app Bundle CI](./technical/platform/macos-app-bundle-ci.md)** | **CI workflow for proper macOS .app bundle packaging (cargo-bundle, Gatekeeper-friendly)** |
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |
 | **[MSI Installer Features](./technical/platform/msi-installer-features.md)** | **Windows MSI feature tree: file associations, context menu, PATH, desktop shortcut, Default Apps registration** |
+| [Flatpak File Dialog Portal](./technical/platform/flatpak-file-dialog-portal.md) | Open Folder/File/Save dialogs in Flatpak via xdg-desktop-portal, $HOME fallback for fresh launch |
 
 ### Distribution & Packaging
 

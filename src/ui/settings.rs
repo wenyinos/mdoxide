@@ -3,7 +3,7 @@
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
 
-use crate::config::{CjkFontPreference, EditorFont, KeyBinding, KeyboardShortcuts, KeyCode, KeyModifiers, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme, ViewMode};
+use crate::config::{CjkFontPreference, EditorFont, HeaderSpacing, KeyBinding, KeyboardShortcuts, KeyCode, KeyModifiers, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme, ViewMode};
 use crate::terminal::MonitorInfo;
 use crate::update::{self, UpdateCheckResult, UpdateState};
 use crate::fonts;
@@ -98,6 +98,7 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::InsertToc => t!("shortcuts.commands.insert_toc").to_string(),
         ShortcutCommand::ToggleTerminal => t!("shortcuts.commands.toggle_terminal").to_string(),
         ShortcutCommand::ToggleProductivityHub => t!("shortcuts.commands.toggle_productivity_hub").to_string(),
+        ShortcutCommand::ToggleFrontmatter => "Toggle Frontmatter Panel".to_string(),
     }
 }
 
@@ -1029,6 +1030,66 @@ impl SettingsPanel {
         ui.separator();
         ui.add_space(8.0);
 
+        // Language selection
+        ui.label(RichText::new(t!("settings.appearance.language")).strong());
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!("settings.appearance.language_hint"))
+                .weak()
+                .small(),
+        );
+        ui.add_space(4.0);
+
+        let current_lang = settings.language;
+        egui::ComboBox::from_id_source("language_combo")
+            .selected_text(format!("🌐 {}", current_lang.selector_display_name()))
+            .show_ui(ui, |ui| {
+                for lang in Language::all() {
+                    if ui
+                        .selectable_value(&mut settings.language, *lang, lang.selector_display_name())
+                        .changed()
+                    {
+                        // Apply language change immediately
+                        set_locale(settings.language.locale_code());
+                        changed = true;
+                    }
+                }
+            });
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Default View Mode selection
+        ui.label(RichText::new(t!("settings.preview.default_view")).strong());
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!("settings.default_view_hint"))
+                .weak()
+                .small(),
+        );
+        ui.add_space(4.0);
+
+        for view_mode in ViewMode::all() {
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_value(
+                        &mut settings.default_view_mode,
+                        *view_mode,
+                        format!("{} {}", view_mode.icon(), view_mode.label()),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.label(RichText::new(view_mode_description(view_mode)).weak().small());
+            });
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
         // Font family selection
         ui.label(RichText::new(t!("settings.editor.font_family")).strong());
         ui.add_space(4.0);
@@ -1112,34 +1173,6 @@ impl SettingsPanel {
         ui.separator();
         ui.add_space(8.0);
 
-        // CJK Font Preference
-        ui.label(RichText::new(t!("settings.editor.cjk_preference")).strong());
-        ui.add_space(4.0);
-        ui.label(
-            RichText::new(t!("settings.editor.cjk_preference_hint"))
-                .weak()
-                .small(),
-        );
-        ui.add_space(4.0);
-
-        egui::ComboBox::from_id_source("cjk_preference_combo")
-            .selected_text(settings.cjk_font_preference.selector_display_name().to_string())
-            .show_ui(ui, |ui| {
-                for pref in CjkFontPreference::all() {
-                    let label = format!("{} - {}", pref.selector_display_name(), pref.description());
-                    if ui
-                        .selectable_value(&mut settings.cjk_font_preference, *pref, label)
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                }
-            });
-
-        ui.add_space(16.0);
-        ui.separator();
-        ui.add_space(8.0);
-
         // Font size slider
         ui.horizontal(|ui| {
             ui.label(RichText::new(t!("settings.editor.font_size")).strong());
@@ -1178,29 +1211,74 @@ impl SettingsPanel {
         ui.separator();
         ui.add_space(8.0);
 
-        // Default View Mode selection
-        ui.label(RichText::new(t!("settings.preview.default_view")).strong());
+        // Additional Scripts (complex script font preferences)
+        ui.label(RichText::new(t!("settings.editor.complex_scripts")).strong());
         ui.add_space(4.0);
         ui.label(
-            RichText::new(t!("settings.default_view_hint"))
+            RichText::new(t!("settings.editor.complex_scripts_hint"))
                 .weak()
                 .small(),
         );
         ui.add_space(4.0);
 
-        for view_mode in ViewMode::all() {
+        const COMPLEX_SCRIPTS: &[(&str, &str)] = &[
+            ("arabic", "Arabic"),
+            ("bengali", "Bengali"),
+            ("devanagari", "Devanagari"),
+            ("thai", "Thai"),
+            ("hebrew", "Hebrew"),
+            ("tamil", "Tamil"),
+            ("georgian", "Georgian"),
+            ("armenian", "Armenian"),
+            ("ethiopic", "Ethiopic"),
+            ("other_indic", "Other Indic"),
+            ("southeast_asian", "Southeast Asian"),
+        ];
+
+        for (key, display_name) in COMPLEX_SCRIPTS {
+            let current = settings
+                .complex_script_font_preferences
+                .get(*key)
+                .cloned()
+                .unwrap_or_default();
+            let display = if current.is_empty() {
+                t!("settings.editor.complex_script_default").to_string()
+            } else {
+                current.clone()
+            };
+
             ui.horizontal(|ui| {
-                if ui
-                    .selectable_value(
-                        &mut settings.default_view_mode,
-                        *view_mode,
-                        format!("{} {}", view_mode.icon(), view_mode.label()),
-                    )
-                    .changed()
-                {
-                    changed = true;
-                }
-                ui.label(RichText::new(view_mode_description(view_mode)).weak().small());
+                ui.label(RichText::new(*display_name).small());
+                ui.add_space(8.0);
+                egui::ComboBox::from_id_source(format!("complex_script_{}", key))
+                    .selected_text(&display)
+                    .width(180.0)
+                    .show_ui(ui, |ui| {
+                        ui.set_min_width(180.0);
+                        if ui
+                            .selectable_label(current.is_empty(), t!("settings.editor.complex_script_default"))
+                            .clicked()
+                        {
+                            settings.complex_script_font_preferences.remove(*key);
+                            changed = true;
+                        }
+                        ui.separator();
+                        egui::ScrollArea::vertical()
+                            .max_height(200.0)
+                            .show(ui, |ui| {
+                                for font_name in fonts::list_system_fonts() {
+                                    if ui
+                                        .selectable_label(font_name == &current, font_name)
+                                        .clicked()
+                                    {
+                                        settings
+                                            .complex_script_font_preferences
+                                            .insert((*key).to_string(), font_name.clone());
+                                        changed = true;
+                                    }
+                                }
+                            });
+                    });
             });
         }
 
@@ -1208,27 +1286,25 @@ impl SettingsPanel {
         ui.separator();
         ui.add_space(8.0);
 
-        // Language selection
-        ui.label(RichText::new(t!("settings.appearance.language")).strong());
+        // CJK Font Preference
+        ui.label(RichText::new(t!("settings.editor.cjk_preference")).strong());
         ui.add_space(4.0);
         ui.label(
-            RichText::new(t!("settings.appearance.language_hint"))
+            RichText::new(t!("settings.editor.cjk_preference_hint"))
                 .weak()
                 .small(),
         );
         ui.add_space(4.0);
 
-        let current_lang = settings.language;
-        egui::ComboBox::from_id_source("language_combo")
-            .selected_text(format!("🌐 {}", current_lang.selector_display_name()))
+        egui::ComboBox::from_id_source("cjk_preference_combo")
+            .selected_text(settings.cjk_font_preference.selector_display_name().to_string())
             .show_ui(ui, |ui| {
-                for lang in Language::all() {
+                for pref in CjkFontPreference::all() {
+                    let label = format!("{} - {}", pref.selector_display_name(), pref.description());
                     if ui
-                        .selectable_value(&mut settings.language, *lang, lang.selector_display_name())
+                        .selectable_value(&mut settings.cjk_font_preference, *pref, label)
                         .changed()
                     {
-                        // Apply language change immediately
-                        set_locale(settings.language.locale_code());
                         changed = true;
                     }
                 }
@@ -1590,6 +1666,38 @@ impl SettingsPanel {
         // Hint text for paragraph indent
         ui.label(
             RichText::new(t!("settings.editor.paragraph_indent_hint"))
+                .weak()
+                .small(),
+        );
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Header Spacing (Markdown Rendering)
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(t!("settings.editor.header_spacing")).strong());
+            ui.add_space(8.0);
+
+            let current_display = settings.header_spacing.display_name();
+            egui::ComboBox::from_id_source("header_spacing_combo")
+                .selected_text(current_display)
+                .width(100.0)
+                .show_ui(ui, |ui| {
+                    for preset in HeaderSpacing::presets() {
+                        let label = format!("{} - {}", preset.display_name(), preset.description());
+                        if ui
+                            .selectable_value(&mut settings.header_spacing, *preset, label)
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                    }
+                });
+        });
+
+        ui.label(
+            RichText::new(t!("settings.editor.header_spacing_hint"))
                 .weak()
                 .small(),
         );

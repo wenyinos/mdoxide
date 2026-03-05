@@ -18,7 +18,7 @@ rustc --version
 cargo --version
 ```
 
-### Platform-Specific Requirements sda
+### Platform-Specific Requirements
 
 #### Windows
 
@@ -37,17 +37,18 @@ winget install WixToolset.WiX
 - **Build essentials**: `build-essential`, `pkg-config`
 - **GTK3 development libraries** (for file dialogs)
 - **libxcb development libraries** (for clipboard)
+- **fontconfig** (for font-kit system font enumeration on Linux)
 
 ```bash
 # Ubuntu/Debian
 sudo apt update
-sudo apt install build-essential pkg-config libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev
+sudo apt install build-essential pkg-config libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev
 
 # Fedora/RHEL
-sudo dnf install gcc pkg-config gtk3-devel libxcb-devel
+sudo dnf install gcc pkg-config gtk3-devel libxcb-devel fontconfig-devel
 
 # Arch Linux
-sudo pacman -S base-devel pkg-config gtk3 libxcb
+sudo pacman -S base-devel pkg-config gtk3 libxcb fontconfig
 ```
 
 #### macOS
@@ -483,6 +484,21 @@ sudo apt install libgtk-3-dev
 
 # Fedora
 sudo dnf install gtk3-devel
+```
+
+### Linux: fontconfig.pc not found
+
+If you see `Package fontconfig was not found in the pkg-config search path` or similar:
+
+```bash
+# Ubuntu/Debian
+sudo apt install libfontconfig1-dev
+
+# Fedora
+sudo dnf install fontconfig-devel
+
+# Arch Linux
+sudo pacman -S fontconfig
 ```
 
 ### macOS: Code signing failed
