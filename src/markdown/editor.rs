@@ -3191,6 +3191,7 @@ fn render_inline_content(
     indent_level: usize,
 ) {
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
         // Add base left indent + any extra indentation
         ui.add_space(4.0 + indent_level as f32 * 20.0);
 

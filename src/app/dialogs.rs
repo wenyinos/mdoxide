@@ -95,6 +95,8 @@ impl FerriteApp {
                                 self.cleanup_tab_state(id, Some(ui.ctx()));
                             }
                             if is_exit {
+                                // Clear recovery data since user explicitly chose not to save
+                                crate::config::clear_all_recovery_data();
                                 self.should_exit = true;
                             }
                         }
@@ -120,6 +122,42 @@ impl FerriteApp {
                     if ui.button(t!("common.ok").to_string()).clicked() {
                         self.state.dismiss_error();
                     }
+                });
+        }
+
+        // Portal error dialog (Linux xdg-desktop-portal missing)
+        if self.state.ui.show_portal_error_dialog {
+            egui::Window::new("File Dialog Failed")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .min_width(450.0)
+                .show(ctx, |ui| {
+                    ui.label(egui::RichText::new("📦").size(24.0));
+                    ui.add_space(8.0);
+
+                    // Show the main error message
+                    for line in self.state.ui.portal_error_message.lines() {
+                        ui.label(line);
+                    }
+
+                    ui.separator();
+
+                    // Copy command button
+                    ui.horizontal(|ui| {
+                        if ui.button("Copy Install Command").clicked() {
+                            let cmd = self.state.ui.portal_error_command.clone();
+                            // Set clipboard via egui's output
+                            ui.output_mut(|o| o.copied_text = cmd.clone());
+                            log::info!("Copied portal install command to clipboard: {}", cmd);
+                        }
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button(t!("common.ok").to_string()).clicked() {
+                                self.state.dismiss_portal_error();
+                            }
+                        });
+                    });
                 });
         }
 

@@ -99,6 +99,9 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::ToggleTerminal => t!("shortcuts.commands.toggle_terminal").to_string(),
         ShortcutCommand::ToggleProductivityHub => t!("shortcuts.commands.toggle_productivity_hub").to_string(),
         ShortcutCommand::ToggleFrontmatter => "Toggle Frontmatter Panel".to_string(),
+        ShortcutCommand::ZoomIn => "Zoom In".to_string(),
+        ShortcutCommand::ZoomOut => "Zoom Out".to_string(),
+        ShortcutCommand::ResetZoom => "Reset Zoom".to_string(),
     }
 }
 
@@ -1399,6 +1402,69 @@ impl SettingsPanel {
                 }
                 ui.end_row();
             });
+
+        // Default language for syntax highlighting (only show when syntax highlighting is enabled)
+        if settings.syntax_highlighting_enabled {
+            ui.add_space(8.0);
+            ui.label(RichText::new(t!("settings.editor.default_language")).strong());
+            ui.label(
+                RichText::new(t!("settings.editor.default_language_hint"))
+                    .weak()
+                    .small(),
+            );
+            ui.add_space(4.0);
+
+            let languages = crate::markdown::syntax::get_available_languages();
+            let current_display = if settings.default_syntax_language.is_empty() {
+                t!("settings.editor.default_language_auto").to_string()
+            } else {
+                languages
+                    .iter()
+                    .find(|(id, _)| id == &settings.default_syntax_language)
+                    .map(|(_, display)| display.clone())
+                    .unwrap_or_else(|| settings.default_syntax_language.clone())
+            };
+
+            egui::ComboBox::from_id_source("default_language_combo")
+                .selected_text(&current_display)
+                .width(200.0)
+                .show_ui(ui, |ui| {
+                    ui.set_min_width(200.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            // Auto option (empty string = no default)
+                            if ui
+                                .selectable_label(
+                                    settings.default_syntax_language.is_empty(),
+                                    t!("settings.editor.default_language_auto"),
+                                )
+                                .clicked()
+                            {
+                                settings.default_syntax_language = String::new();
+                                changed = true;
+                            }
+
+                            ui.separator();
+
+                            // List all available languages
+                            for (lang_id, display_name) in &languages {
+                                if ui
+                                    .selectable_label(
+                                        &settings.default_syntax_language == lang_id,
+                                        display_name,
+                                    )
+                                    .clicked()
+                                {
+                                    settings.default_syntax_language = lang_id.clone();
+                                    changed = true;
+                                }
+                            }
+                        });
+                });
+
+            ui.add_space(4.0);
+        }
 
         // Minimap mode selector (only show if minimap is enabled) - full width
         if settings.minimap_enabled {

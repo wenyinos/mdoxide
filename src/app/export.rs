@@ -4,6 +4,7 @@
 
 use super::FerriteApp;
 use crate::export::{copy_html_to_clipboard, generate_html_document};
+use crate::files::dialogs::{detect_linux_desktop, portal_install_instructions};
 use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
@@ -56,56 +57,74 @@ impl FerriteApp {
             filter
         };
 
-        if let Some(path) = filter.save_file() {
-            // Get document title
-            let title = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Exported Document");
+        let save_result = filter.save_file();
 
-            // Generate HTML with paragraph indentation setting
-            match generate_html_document(&content, Some(title), &theme_colors, true, self.state.settings.paragraph_indent) {
-                Ok(html) => {
-                    // Write to file
-                    match std::fs::write(&path, html) {
-                        Ok(()) => {
-                            info!("Exported HTML to: {}", path.display());
+        let path = match save_result {
+            Some(p) => p,
+            None => {
+                // Check if this is likely a portal failure on Linux
+                let (desktop_env, requires_portal) = detect_linux_desktop();
+                if requires_portal {
+                    warn!(
+                        "Export save dialog failed on {}. This may indicate missing xdg-desktop-portal.",
+                        desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                    );
+                    self.show_portal_error_dialog(desktop_env, "export");
+                } else {
+                    debug!("Export save dialog cancelled");
+                }
+                return;
+            }
+        };
 
-                            // Update last export directory
-                            if let Some(parent) = path.parent() {
-                                self.state.settings.last_export_directory =
-                                    Some(parent.to_path_buf());
-                                self.state.mark_settings_dirty();
-                            }
+        // Get document title
+        let title = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Exported Document");
 
-                            let time = self.get_app_time();
-                            self.state.show_toast(
-                                t!("notification.exported_to", path = path.display().to_string()).to_string(),
-                                time,
-                                2.5,
-                            );
+        // Generate HTML with paragraph indentation setting
+        match generate_html_document(&content, Some(title), &theme_colors, true, self.state.settings.paragraph_indent) {
+            Ok(html) => {
+                // Write to file
+                match std::fs::write(&path, html) {
+                    Ok(()) => {
+                        info!("Exported HTML to: {}", path.display());
 
-                            // Optionally open the file
-                            if self.state.settings.open_after_export {
-                                if let Err(e) = open::that(&path) {
-                                    warn!("Failed to open exported file: {}", e);
-                                }
-                            }
+                        // Update last export directory
+                        if let Some(parent) = path.parent() {
+                            self.state.settings.last_export_directory =
+                                Some(parent.to_path_buf());
+                            self.state.mark_settings_dirty();
                         }
-                        Err(e) => {
-                            warn!("Failed to write HTML file: {}", e);
-                            let time = self.get_app_time();
-                            self.state
-                                .show_toast(t!("notification.export_failed", error = e.to_string()).to_string(), time, 3.0);
+
+                        let time = self.get_app_time();
+                        self.state.show_toast(
+                            t!("notification.exported_to", path = path.display().to_string()).to_string(),
+                            time,
+                            2.5,
+                        );
+
+                        // Optionally open the file
+                        if self.state.settings.open_after_export {
+                            if let Err(e) = open::that(&path) {
+                                warn!("Failed to open exported file: {}", e);
+                            }
                         }
                     }
+                    Err(e) => {
+                        warn!("Failed to write HTML file: {}", e);
+                        let time = self.get_app_time();
+                        self.state
+                            .show_toast(t!("notification.export_failed", error = e.to_string()).to_string(), time, 3.0);
+                    }
                 }
-                Err(e) => {
-                    warn!("Failed to generate HTML: {}", e);
-                    let time = self.get_app_time();
-                    self.state
-                        .show_toast(format!("Export failed: {}", e), time, 3.0);
-                }
+            }
+            Err(e) => {
+                warn!("Failed to generate HTML: {}", e);
+                let time = self.get_app_time();
+                self.state
+                    .show_toast(format!("Export failed: {}", e), time, 3.0);
             }
         }
     }

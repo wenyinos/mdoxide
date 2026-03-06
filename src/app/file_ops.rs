@@ -6,7 +6,7 @@
 
 use super::FerriteApp;
 use crate::config::ViewMode;
-use crate::files::dialogs::{open_multiple_files_dialog, save_file_dialog};
+use crate::files::dialogs::{open_folder_dialog, open_multiple_files_dialog, save_file_dialog, DialogResult, portal_install_instructions};
 use crate::ui::{FileOperationDialog, FileTreeContextAction, SearchNavigationTarget};
 use eframe::egui;
 use log::{debug, info, trace, warn};
@@ -30,12 +30,22 @@ impl FerriteApp {
             .map(|p| p.to_path_buf());
 
         // Open the native file dialog (supports multiple selection)
-        let paths = open_multiple_files_dialog(initial_dir.as_ref());
+        let result = open_multiple_files_dialog(initial_dir.as_ref());
 
-        if paths.is_empty() {
-            debug!("File dialog cancelled");
-            return;
-        }
+        // Handle dialog result, checking for portal failures
+        let paths = match result {
+            DialogResult::Success(p) => p,
+            DialogResult::Cancelled => {
+                debug!("File dialog cancelled");
+                return;
+            }
+            DialogResult::Failed { is_portal_error, desktop_env } => {
+                if is_portal_error {
+                    self.show_portal_error_dialog(desktop_env, "open");
+                }
+                return;
+            }
+        };
 
         let file_count = paths.len();
         let mut success_count = 0;
@@ -166,7 +176,21 @@ impl FerriteApp {
             .unwrap_or_else(|| "untitled.md".to_string());
 
         // Open the native save dialog
-        if let Some(path) = save_file_dialog(initial_dir.as_ref(), Some(&default_name)) {
+        let save_result = save_file_dialog(initial_dir.as_ref(), Some(&default_name));
+
+        let path = match save_result {
+            DialogResult::Success(p) => p,
+            DialogResult::Cancelled => {
+                debug!("Save dialog cancelled");
+                return;
+            }
+            DialogResult::Failed { is_portal_error, desktop_env } => {
+                if is_portal_error {
+                    self.show_portal_error_dialog(desktop_env, "save");
+                }
+                return;
+            }
+        };
             info!("Saving file as: {}", path.display());
             
             // Get old path and tab ID before save for cleanup
@@ -200,13 +224,10 @@ impl FerriteApp {
                     self.backlinks_need_refresh = true;
                 }
                 Err(e) => {
-                    warn!("Failed to save file: {}", e);
-                    self.state
-                        .show_error(t!("error.save_failed", error = e.to_string()).to_string());
-                }
+                warn!("Failed to save file: {}", e);
+                self.state
+                    .show_error(t!("error.save_failed", error = e.to_string()).to_string());
             }
-        } else {
-            debug!("Save dialog cancelled");
         }
     }
 
@@ -216,7 +237,7 @@ impl FerriteApp {
     /// On Linux/Flatpak, rfd uses xdg-desktop-portal automatically, which
     /// grants the sandbox access to the user-selected directory.
     pub(crate) fn handle_open_workspace(&mut self) {
-        use crate::files::dialogs::{is_flatpak, open_folder_dialog};
+        use crate::files::dialogs::is_flatpak;
 
         // Get initial directory from recent workspaces or recent files.
         // resolve_initial_dir (inside open_folder_dialog) will fall back to
@@ -241,85 +262,97 @@ impl FerriteApp {
         }
 
         // Open the native folder dialog
-        if let Some(folder_path) = open_folder_dialog(initial_dir.as_ref()) {
-            info!("Opening workspace: {}", folder_path.display());
+        let folder_result = open_folder_dialog(initial_dir.as_ref());
 
-            // Verify the folder is accessible (important for Flatpak portal paths)
-            if !folder_path.is_dir() {
-                warn!("Selected path is not accessible as a directory: {}", folder_path.display());
-                if is_flatpak() {
-                    self.state.show_error(
-                        "Could not access the selected folder. The Flatpak sandbox may not have \
-                         permission to read this location. Try selecting a folder inside your home directory."
-                            .to_string(),
-                    );
-                } else {
-                    self.state.show_error(
-                        t!("error.open_workspace_failed", error = "Path is not a directory").to_string(),
-                    );
+        let folder_path = match folder_result {
+            DialogResult::Success(p) => p,
+            DialogResult::Cancelled => {
+                debug!("Open workspace dialog cancelled");
+                return;
+            }
+            DialogResult::Failed { is_portal_error, desktop_env } => {
+                if is_portal_error {
+                    self.show_portal_error_dialog(desktop_env, "open folder");
                 }
                 return;
             }
+        };
 
-            match self.state.open_workspace(folder_path.clone()) {
-                Ok(_) => {
-                    let time = self.get_app_time();
-                    let folder_name = folder_path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("folder");
-                    self.state
-                        .show_toast(t!("notification.opened_workspace", name = folder_name).to_string(), time, 2.5);
-                    
-                    // Auto-load terminal layout if enabled
-                    if self.state.settings.terminal_auto_load_layout {
-                        let layout_path = folder_path.join("terminal_layout.json");
-                        if layout_path.exists() {
-                            if let Ok(json) = std::fs::read_to_string(layout_path) {
-                                if let Ok(workspace) = serde_json::from_str::<crate::terminal::SavedWorkspace>(&json) {
-                                    match self.terminal_panel_state.manager.load_workspace(workspace) {
-                                        Ok(fws) => {
-                                            self.terminal_panel_state.floating_windows.clear();
-                                            for (layout, title, pos, size) in fws {
-                                                let leaf = layout.first_leaf();
-                                                let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
-                                                self.terminal_panel_state.floating_windows.push(crate::ui::FloatingWindow {
-                                                    id,
-                                                    layout,
-                                                    title,
-                                                    pos: pos.map(|(x, y)| egui::pos2(x, y)),
-                                                    size: egui::vec2(size.0, size.1),
-                                                    first_frame: true,
-                                                });
-                                            }
-                                            info!("Auto-loaded terminal layout from workspace root");
+        info!("Opening workspace: {}", folder_path.display());
+
+        // Verify the folder is accessible (important for Flatpak portal paths)
+        if !folder_path.is_dir() {
+            warn!("Selected path is not accessible as a directory: {}", folder_path.display());
+            if is_flatpak() {
+                self.state.show_error(
+                    "Could not access the selected folder. The Flatpak sandbox may not have \
+                     permission to read this location. Try selecting a folder inside your home directory."
+                        .to_string(),
+                );
+            } else {
+                self.state.show_error(
+                    t!("error.open_workspace_failed", error = "Path is not a directory").to_string(),
+                );
+            }
+            return;
+        }
+
+        match self.state.open_workspace(folder_path.clone()) {
+            Ok(_) => {
+                let time = self.get_app_time();
+                let folder_name = folder_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("folder");
+                self.state
+                    .show_toast(t!("notification.opened_workspace", name = folder_name).to_string(), time, 2.5);
+
+                // Auto-load terminal layout if enabled
+                if self.state.settings.terminal_auto_load_layout {
+                    let layout_path = folder_path.join("terminal_layout.json");
+                    if layout_path.exists() {
+                        if let Ok(json) = std::fs::read_to_string(layout_path) {
+                            if let Ok(workspace) = serde_json::from_str::<crate::terminal::SavedWorkspace>(&json) {
+                                match self.terminal_panel_state.manager.load_workspace(workspace) {
+                                    Ok(fws) => {
+                                        self.terminal_panel_state.floating_windows.clear();
+                                        for (layout, title, pos, size) in fws {
+                                            let leaf = layout.first_leaf();
+                                            let id = egui::ViewportId::from_hash_of(egui::Id::new("floating_term").with(leaf));
+                                            self.terminal_panel_state.floating_windows.push(crate::ui::FloatingWindow {
+                                                id,
+                                                layout,
+                                                title,
+                                                pos: pos.map(|(x, y)| egui::pos2(x, y)),
+                                                size: egui::vec2(size.0, size.1),
+                                                first_frame: true,
+                                            });
                                         }
-                                        Err(e) => warn!("Failed to auto-load terminal layout: {}", e),
+                                        info!("Auto-loaded terminal layout from workspace root");
                                     }
+                                    Err(e) => warn!("Failed to auto-load terminal layout: {}", e),
                                 }
                             }
                         }
                     }
-
-                    // Immediately save session to persist the workspace path
-                    self.force_session_save();
                 }
-                Err(e) => {
-                    warn!("Failed to open workspace: {}", e);
-                    if is_flatpak() {
-                        self.state.show_error(format!(
-                            "Failed to open folder: {}. If running as Flatpak, ensure the folder \
-                             was selected through the file dialog (portal access is required).",
-                            e
-                        ));
-                    } else {
-                        self.state
-                            .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
-                    }
+
+                // Immediately save session to persist the workspace path
+                self.force_session_save();
+            }
+            Err(e) => {
+                warn!("Failed to open workspace: {}", e);
+                if is_flatpak() {
+                    self.state.show_error(format!(
+                        "Failed to open folder: {}. If running as Flatpak, ensure the folder \
+                         was selected through the file dialog (portal access is required).",
+                        e
+                    ));
+                } else {
+                    self.state
+                        .show_error(t!("error.open_workspace_failed", error = e.to_string()).to_string());
                 }
             }
-        } else {
-            debug!("Open workspace dialog cancelled");
         }
     }
 
@@ -1301,6 +1334,30 @@ impl FerriteApp {
                 );
             }
         }
+    }
+}
+
+impl FerriteApp {
+    /// Show a portal error dialog with installation instructions for the user's distro.
+    ///
+    /// This is called when a file dialog fails on Linux desktops like Hyprland
+    /// that require xdg-desktop-portal but don't have it properly configured.
+    pub(crate) fn show_portal_error_dialog(&mut self, desktop_env: Option<String>, operation: &str) {
+        let (cmd, packages) = portal_install_instructions();
+        let packages_str = packages.join(" ");
+        let full_cmd = format!("{} {}", cmd, packages_str);
+
+        let desktop_name = desktop_env.as_deref().unwrap_or("your Linux desktop");
+
+        let message = format!(
+            "File {operation} dialog failed.\n\n\
+            {desktop_name} requires xdg-desktop-portal for file dialogs.\n\n\
+            To fix this, install the portal packages:\n\n\
+            {full_cmd}",
+        );
+
+        log::warn!("Showing portal error dialog for {}: {}", desktop_name, message);
+        self.state.show_portal_error(message, full_cmd);
     }
 }
 

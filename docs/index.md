@@ -77,9 +77,13 @@ These diagrams provide a quick visual overview for new contributors.
 | [Auto-close Brackets](./technical/editor/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Bracket Matching](./technical/editor/bracket-matching.md) | Highlight matching brackets and parentheses |
 | [Vim Mode](./technical/editor/vim-mode.md) | Optional modal editing with Normal/Insert/Visual modes, Vim keybindings, status bar indicator |
+| [Word Wrap Scroll Fixes](./technical/editor/word-wrap-scroll-fixes.md) | Correctness fixes for pixel_to_line, line_to_pixel, scroll sync, ensure_line_visible when word wrap active |
+| [Word Wrap Performance](./technical/editor/word-wrap-performance.md) | Incremental height cache, O(1) LRU, O(log N) visual row mapping, cache key fix |
+| [Ctrl+Scroll Zoom](./technical/editor/ctrl-scroll-zoom.md) | Ctrl+Mouse Wheel zoom mapped to egui::gui_zoom, ZoomIn/ZoomOut/ResetZoom shortcut commands |
 | [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants, CJK lazy loading, complex script lazy loading (11 families) |
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 | [Complex Script Font Preferences](./technical/config/complex-script-font-preferences.md) | Per-script font preferences for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. |
+| [CJK Font Preloading Verification](./technical/fonts/cjk-font-preloading-verification.md) | **Task 45: Verification that explicit CJK preferences preload correctly at startup** |
 
 ### UI Components
 
@@ -206,6 +210,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |
 | **[MSI Installer Features](./technical/platform/msi-installer-features.md)** | **Windows MSI feature tree: file associations, context menu, PATH, desktop shortcut, Default Apps registration** |
+| **[Linux Portal Dialogs](./technical/platform/linux-portal-dialogs.md)** | **xdg-desktop-portal requirements for Hyprland, Sway, and minimal window managers** |
 | [Flatpak File Dialog Portal](./technical/platform/flatpak-file-dialog-portal.md) | Open Folder/File/Save dialogs in Flatpak via xdg-desktop-portal, $HOME fallback for fresh launch |
 
 ### Distribution & Packaging

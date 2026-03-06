@@ -67,6 +67,9 @@ impl FerriteApp {
             check_shortcut!(ShortcutCommand::ToggleTerminal, KeyboardAction::ToggleTerminal);
             check_shortcut!(ShortcutCommand::ToggleProductivityHub, KeyboardAction::ToggleProductivityHub);
             check_shortcut!(ShortcutCommand::ToggleFrontmatter, KeyboardAction::ToggleFrontmatter);
+            check_shortcut!(ShortcutCommand::ZoomIn, KeyboardAction::ZoomIn);
+            check_shortcut!(ShortcutCommand::ZoomOut, KeyboardAction::ZoomOut);
+            check_shortcut!(ShortcutCommand::ResetZoom, KeyboardAction::ResetZoom);
 
             // Edit - note: Undo/Redo handled separately, MoveLineUp/Down handled separately
             check_shortcut!(ShortcutCommand::DeleteLine, KeyboardAction::DeleteLine);
@@ -289,6 +292,15 @@ impl FerriteApp {
                 }
                 self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
                 self.state.mark_settings_dirty();
+            }
+            KeyboardAction::ZoomIn => {
+                egui::gui_zoom::zoom_in(ctx);
+            }
+            KeyboardAction::ZoomOut => {
+                egui::gui_zoom::zoom_out(ctx);
+            }
+            KeyboardAction::ResetZoom => {
+                ctx.set_zoom_factor(1.0);
             }
         });
     }

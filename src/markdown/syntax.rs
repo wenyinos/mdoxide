@@ -485,6 +485,69 @@ pub fn get_available_themes() -> Vec<(String, String)> {
     get_highlighter().available_themes_sorted()
 }
 
+/// Get available programming languages for syntax highlighting.
+/// Returns a Vec of (language_id, display_name) tuples sorted alphabetically.
+/// Includes common languages and their common aliases.
+pub fn get_available_languages() -> Vec<(String, String)> {
+    let highlighter = get_highlighter();
+    let mut languages: Vec<(String, String)> = Vec::new();
+
+    // Common languages with their display names
+    let common_langs = [
+        ("markdown", "Markdown"),
+        ("rust", "Rust"),
+        ("python", "Python"),
+        ("javascript", "JavaScript"),
+        ("typescript", "TypeScript"),
+        ("jsx", "JSX"),
+        ("tsx", "TSX"),
+        ("html", "HTML"),
+        ("css", "CSS"),
+        ("scss", "SCSS"),
+        ("json", "JSON"),
+        ("yaml", "YAML"),
+        ("toml", "TOML"),
+        ("xml", "XML"),
+        ("sql", "SQL"),
+        ("cpp", "C++"),
+        ("c", "C"),
+        ("csharp", "C#"),
+        ("go", "Go"),
+        ("java", "Java"),
+        ("kotlin", "Kotlin"),
+        ("swift", "Swift"),
+        ("ruby", "Ruby"),
+        ("php", "PHP"),
+        ("lua", "Lua"),
+        ("perl", "Perl"),
+        ("r", "R"),
+        ("sh", "Shell (Bash)"),
+        ("powershell", "PowerShell"),
+        ("haskell", "Haskell"),
+        ("elixir", "Elixir"),
+        ("erlang", "Erlang"),
+        ("clojure", "Clojure"),
+        ("scala", "Scala"),
+        ("diff", "Diff/Patch"),
+        ("dockerfile", "Dockerfile"),
+        ("makefile", "Makefile"),
+        ("cmake", "CMake"),
+        ("ini", "INI/Config"),
+    ];
+
+    for (id, display) in common_langs {
+        // Only include if syntect supports it
+        if highlighter.find_syntax_for_language(id).is_some() {
+            languages.push((id.to_string(), display.to_string()));
+        }
+    }
+
+    // Sort by display name
+    languages.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+
+    languages
+}
+
 /// Prettify a theme name for display in the UI.
 fn prettify_theme_name(name: &str) -> String {
     // Special case mappings for better display names

@@ -88,7 +88,7 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.7 (in progress):** **Welcome page** for first-launch configuration (theme, language, editor prefs). **Wikilinks** and **backlinks panel**. **GitHub-style callouts**. Image rendering in preview. **Nix/NixOS flake support**. Flowchart modular refactor. Multiple scrollbar and word-wrap crash fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.7 (coming soon):** **Wikilinks** & **backlinks panel**. **Vim mode**. **Welcome page** for first-launch setup. **GitHub-style callouts**. **Ctrl+Scroll zoom**. **Keep text selected after formatting**. **Frontmatter editor**. Image rendering in preview. **Format toolbar** & **side panel toggles**. **Nix/NixOS flake support**. Linux portal dialog error handling. macOS .app bundle. 20+ bug fixes including word-wrap scroll, large selection crash, IME backspace. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 > 📦 **v0.2.6 Highlights:** New Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 

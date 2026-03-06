@@ -22,6 +22,11 @@ pub(crate) fn handle_mouse_wheel(
     delta: egui::Vec2,
     modifiers: &egui::Modifiers,
 ) -> InputResult {
+    // Ctrl+scroll = zoom (handled by the editor widget via egui::gui_zoom)
+    if modifiers.command {
+        return InputResult::NoChange;
+    }
+
     // Shift+scroll = horizontal scroll
     if modifiers.shift {
         // Use delta.y for horizontal scrolling (since most mice have vertical wheel only)

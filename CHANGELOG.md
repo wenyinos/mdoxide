@@ -5,7 +5,7 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.7] - 2026-03-06
 
 ### Added
 
@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Content Blocks
 - **GitHub-style callouts** - `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!CAUTION]`, `> [!IMPORTANT]` with color-coded rendering, custom titles, and collapsible state (`> [!NOTE]-`)
+
+#### Zoom
+- **Ctrl+Scroll Wheel zoom** ([#85](https://github.com/OlaProeis/Ferrite/issues/85)) - Ctrl+Mouse Wheel mapped to `egui::gui_zoom` (same as Ctrl++/Ctrl+-). Added `ZoomIn`/`ZoomOut`/`ResetZoom` as shortcut commands with keyboard bindings.
 
 #### Check for Updates
 - **Manual Check for Updates** - Settings → About section with button to check GitHub Releases API; shows up-to-date, update available with download link, or error; user-initiated only (offline-first)
@@ -59,10 +62,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Welcome View
 - **Welcome view on first run** - Welcome tab on first launch with configuration for theme, language, editor settings (word wrap, line numbers, minimap, bracket matching, syntax highlighting), max line width, CJK font preference, and auto-save. Only shown when no CLI paths and no session-restored tabs. Contributed by [@blizzard007dev](https://github.com/blizzard007dev) ([PR #80](https://github.com/OlaProeis/Ferrite/pull/80)).
 
+#### Frontmatter Editor ([#94](https://github.com/OlaProeis/Ferrite/issues/94))
+- **Visual frontmatter panel** - FM tab in outline panel for editing YAML frontmatter as key-value pairs with form-based interface, bidirectional sync with source
+- **Basic field type support** - String, date, and list (tags with chip UI) field types with appropriate input widgets
+
+#### UI Declutter & Edge Toggles
+- **Format toolbar moved to editor bottom** - Markdown formatting buttons (bold, italic, code, headings, lists, etc.) moved from ribbon to a collapsible toolbar at the bottom of the raw editor area. Visible in Raw and Split modes for markdown files. Collapse/expand via chevron toggle.
+- **Side panel toggle strip** - Replaced separate Outline and Productivity Hub ribbon buttons with a thin toggle strip on the right edge of the editor. Click to open/close the side panel (Outline, Statistics, Backlinks, Productivity Hub tabs).
+
 #### Localization
 - **German and Japanese in Settings** - Deutsch and 日本語 now available in Settings → Appearance → Language (locale files already existed)
 
 ### Changed
+
+#### Editing
+- **Keep text selected after formatting** ([#72](https://github.com/OlaProeis/Ferrite/issues/72)) - Bold, Italic, and other formatting operations now preserve both selection and editor focus. Users can chain formatting operations (e.g. Bold → Italic) without reselecting text.
 
 #### Refactoring
 - **Flowchart modular refactor** - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass.
@@ -82,9 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Linux file dialog error handling** ([#97](https://github.com/OlaProeis/Ferrite/issues/97)) - Detect xdg-desktop-portal failures on Linux (Hyprland, Sway, i3, etc.) and show helpful error modal with distro-specific install instructions (pacman, apt, dnf) and "Copy Install Command" button, instead of silent failure
+- **macOS Release .app Bundle** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release CI now packages proper `.app` bundle via `cargo-bundle` instead of raw binary, fixing Gatekeeper blocking on macOS
+- **Task List Checkbox Rendering** ([#95](https://github.com/OlaProeis/Ferrite/issues/95)) - Task list checkboxes now render as proper UI elements instead of ASCII `[ ]`/`[x]` in rendered view; bullet point markers suppressed for task list items
 - **Light mode text invisible** - All `RichText::strong()` labels (section headers in Settings, Terminal, Files, About, and other panels) were invisible in light mode. Root cause: egui's `strong_text_color()` returns `widgets.active.fg_stroke.color`, which was set to `Color32::WHITE` for the pressed-button state. This bypasses `override_text_color`, rendering white-on-white text. Fixed by setting `active.fg_stroke` to `colors.text.primary` in the light theme.
 - **Images not displaying in rendered mode** - Markdown `![](path)` images now render in Rendered/Split view; path resolution relative to document and workspace root; PNG, JPEG, GIF, WebP support; graceful placeholders for missing/unsupported files
-- **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - Preload user's preferred CJK font at startup when preference is explicit (non-Auto), so restored tabs render correctly without tofu
+- **CJK rendering after restart with explicit preference** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - Preload user's preferred CJK font at startup when preference is explicit (non-Auto), so restored tabs render correctly without tofu. Verified: `preload_explicit_cjk_font()` loads the appropriate font, `bump_font_generation()` increments counter, `editor.rs` invalidates line cache (Task 45)
 - **CJK fonts load on language switch** - Switching to Chinese or Japanese in the Welcome panel (or Settings) now lazily loads the required CJK font immediately, so translated UI labels render correctly instead of showing squares
 - **Latin-only names in Language and CJK selectors** - Language and CJK Regional Preference dropdowns now use Latin-only display names (e.g. "Chinese (Simplified)", "Japanese") so they render correctly before CJK fonts load
 - **Syntax highlighting per-frame re-parsing** - `highlight_line()` was called every frame before cache check, causing lag on long lines; now checks cache first and only parses on cache miss
@@ -96,6 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty list item causes heading mis-render** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Typing `- ` (dash-space, no content yet) after a paragraph caused the paragraph above to render as a large heading. Root cause: comrak interprets a single `-` followed by optional whitespace as a setext heading underline (valid per CommonMark spec), but in a markdown editor this is almost always the start of a list item. Added `fix_false_setext_headings()` post-processing in `parser.rs` that detects single-dash setext headings and converts them back to Paragraph + List(Item).
 - **Windows IME backspace deleting editor text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - When using Chinese (or Japanese/Korean) input methods on Windows, pressing Backspace during IME composition deleted already-committed characters in the editor instead of only modifying the pinyin/romaji in the composition window. Root cause: egui forwards raw `Key::Backspace` events alongside IME preedit updates, and the editor processed both. Fixed by suppressing all `Key` and `Text` events while `ime_enabled` is true (active composition session). Affects Microsoft Pinyin, Xiaolanghao/Rime, and all other IME input methods on all platforms.
 - **Crash when opening binary files as text** - Opening image files (PNG, JPEG, etc.) or other binary data as text documents caused a panic: "byte index is not a char boundary". Root cause: (1) Binary files were not detected before opening, (2) The `count_links()` and `count_images()` functions in `stats.rs` used unsafe byte string slicing that panicked on invalid UTF-8 boundaries. Fixed with: (1) New `is_binary_content()` function in `state.rs` that detects binary data using null byte detection and non-printable character ratio heuristics, (2) Safe string slicing using `get()` instead of direct byte indexing in `editor/stats.rs`. Binary files now show a user-friendly error message instead of crashing.
+- **Extra spaces when copying from rendered mode** - Copying text from syntax-highlighted code blocks or inline-formatted paragraphs in rendered/split view inserted phantom spaces at every token boundary (e.g. `json. loads( f. read())` instead of `json.loads(f.read())`). Root cause: each syntax-highlighted segment and inline node was rendered as a separate `ui.label()`, and egui's default `item_spacing.x` (~8px) added gaps between them. Fixed by setting `item_spacing.x = 0.0` in code block horizontal layouts (`widgets.rs`) and inline content `horizontal_wrapped` layouts (`editor.rs`).
+- **Session recovery dialog after "Don't Save"** - Closing the app with unsaved changes and choosing "Don't Save" caused the session recovery dialog to appear on next launch, also closing any active workspace. Root cause: `create_lock_file()` was called before `load_session_state()` at startup, so `check_and_clear_lock_file()` always found the just-created lock file and set `is_crash = true` on every launch. Combined with the session file recording `has_unsaved_content = true` for discarded tabs, this falsely triggered the recovery prompt. Also meant crash detection was completely broken (lock file never persisted through runtime). Fixed by reordering: load session state first (checks previous run's lock file), then create lock file for the current session.
 
 ---
 
@@ -723,7 +742,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
-- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), complex script font preferences UI, flowchart refactoring, window control redesign, preview list item wrapping fix, IME backspace fix (#91), 13+ bug fixes
+- **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, Ctrl+Scroll zoom, keep text selected after formatting, frontmatter editor, format toolbar & side panel toggles, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), Linux portal dialog error handling, macOS .app bundle CI, task list checkbox rendering, flowchart refactoring, window control redesign, word-wrap scroll fixes, 20+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
 - **0.2.5.3** - Windows code signing (SignPath), View Mode Segmented Control, app logo in title bar, extended syntax highlighting (100+ languages), syntax theme selector (25+ themes), list line break fix, table overflow fix, PowerShell rendering fix

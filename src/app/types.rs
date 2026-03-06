@@ -85,6 +85,12 @@ pub(crate) enum KeyboardAction {
     InsertToc,
     /// Toggle Frontmatter Panel (Ctrl+Shift+M)
     ToggleFrontmatter,
+    /// Zoom in (Ctrl+=)
+    ZoomIn,
+    /// Zoom out (Ctrl+-)
+    ZoomOut,
+    /// Reset zoom (Ctrl+0)
+    ResetZoom,
 }
 
 /// Request to navigate to a heading in the document.

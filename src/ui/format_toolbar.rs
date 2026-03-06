@@ -55,9 +55,9 @@ impl FormatToolbar {
 
         if expanded {
             // Expanded: full toolbar with format buttons
-            let height = TOOLBAR_HEIGHT_EXPANDED;
-            let (rect, _response) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), height), egui::Sense::hover());
+            // Use full available rect to ensure we fill the entire allocated space
+            let rect = ui.available_rect_before_wrap();
+            let _response = ui.allocate_rect(rect, egui::Sense::hover());
 
             // Background
             ui.painter().rect_filled(rect, 0.0, bar_bg);
@@ -103,7 +103,7 @@ impl FormatToolbar {
             }
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, height - 12.0);
+            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
             button_ui.add_space(4.0);
 
             // Heading dropdown
@@ -130,7 +130,7 @@ impl FormatToolbar {
                 });
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, height - 12.0);
+            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
             button_ui.add_space(4.0);
 
             // List buttons
@@ -158,7 +158,7 @@ impl FormatToolbar {
             }
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, height - 12.0);
+            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
             button_ui.add_space(4.0);
 
             // Table of Contents
@@ -191,9 +191,9 @@ impl FormatToolbar {
             }
         } else {
             // Collapsed: thin strip with up-chevron
-            let height = TOOLBAR_HEIGHT_COLLAPSED;
-            let (rect, response) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), height), egui::Sense::click());
+            // Use full available rect to ensure we fill the entire allocated space
+            let rect = ui.available_rect_before_wrap();
+            let response = ui.allocate_rect(rect, egui::Sense::click());
 
             // Subtle background
             let bg = if response.hovered() {

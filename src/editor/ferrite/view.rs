@@ -92,14 +92,19 @@ pub struct ViewState {
     /// cumulative_heights[i] = total height of lines 0..i
     /// NOT used for large files (> LARGE_FILE_THRESHOLD) to avoid O(N) overhead.
     cumulative_heights: Vec<f32>,
+    /// Cached cumulative visual row counts for O(log N) visual-row mapping.
+    /// cumulative_visual_rows[i] = total visual rows for lines 0..i
+    cumulative_visual_rows: Vec<usize>,
     /// Cached total content height.
     total_content_height: f32,
     /// Smoothed content height for scrollbar rendering.
     /// Lerps toward `total_content_height` to prevent scrollbar jumping
     /// as new wrap info is discovered for previously unseen lines.
     scrollbar_content_height: f32,
-    /// Dirty flag: set when wrap_info changes, cleared after rebuild_height_cache.
-    wrap_info_dirty: bool,
+    /// Earliest line whose wrap info changed since the last rebuild.
+    /// Set to `usize::MAX` when clean. Enables incremental `rebuild_height_cache`
+    /// that only recomputes cumulative values from this line forward.
+    dirty_from_line: usize,
     /// When true, uses uniform line heights for all calculations.
     /// Automatically enabled for files > LARGE_FILE_THRESHOLD lines.
     /// This avoids O(N) memory and CPU overhead for very large files.
@@ -132,9 +137,10 @@ impl ViewState {
             wrap_width: None,
             wrap_info: Vec::new(),
             cumulative_heights: Vec::new(),
+            cumulative_visual_rows: Vec::new(),
             total_content_height: 0.0,
             scrollbar_content_height: 0.0,
-            wrap_info_dirty: false,
+            dirty_from_line: usize::MAX,
             use_uniform_heights: false,
         }
     }
@@ -276,6 +282,15 @@ impl ViewState {
     /// // Centers line 50, so first visible should be around 45
     /// ```
     pub fn scroll_to_center_line(&mut self, line: usize, total_lines: usize) {
+        // When wrap is active, use actual pixel positions to center the line
+        if self.is_wrap_enabled() && self.cumulative_heights.len() > 1 {
+            let line_y = self.get_line_y_offset(line);
+            let line_h = self.get_line_height(line);
+            let target_y = (line_y + line_h / 2.0 - self.viewport_height / 2.0).max(0.0);
+            self.scroll_to_absolute(target_y, total_lines);
+            return;
+        }
+
         let visible_lines = if self.line_height > 0.0 {
             (self.viewport_height / self.line_height).floor() as usize
         } else {
@@ -316,7 +331,17 @@ impl ViewState {
             return self.first_visible_line;
         }
 
-        // Account for scroll offset within the first line
+        // When wrap is active with cached heights, convert to absolute position
+        // and use binary search for accurate line lookup
+        if self.is_wrap_enabled() && self.cumulative_heights.len() > 1 {
+            let viewport_top = self.get_line_y_offset(self.first_visible_line)
+                + self.scroll_offset_y;
+            let absolute_y = viewport_top + pixel_y;
+            let total_lines = self.cumulative_heights.len().saturating_sub(1);
+            return self.y_offset_to_line(absolute_y, total_lines);
+        }
+
+        // Uniform height path
         let adjusted_y = pixel_y + self.scroll_offset_y;
         let lines_offset = (adjusted_y / self.line_height).floor() as isize;
 
@@ -350,6 +375,14 @@ impl ViewState {
     /// ```
     #[must_use]
     pub fn line_to_pixel(&self, line: usize) -> f32 {
+        // When wrap is active with cached heights, use actual y-offsets
+        if self.is_wrap_enabled() && self.cumulative_heights.len() > 1 {
+            let line_y = self.get_line_y_offset(line);
+            let viewport_top = self.get_line_y_offset(self.first_visible_line)
+                + self.scroll_offset_y;
+            return line_y - viewport_top;
+        }
+
         let line_diff = line as isize - self.first_visible_line as isize;
         (line_diff as f32 * self.line_height) - self.scroll_offset_y
     }
@@ -530,6 +563,19 @@ impl ViewState {
     /// `true` if the line is within the visible range (excluding overscan).
     #[must_use]
     pub fn is_line_visible(&self, line: usize, total_lines: usize) -> bool {
+        if line < self.first_visible_line {
+            return false;
+        }
+
+        // When wrap is active, compare actual pixel positions
+        if self.is_wrap_enabled() && self.cumulative_heights.len() > 1 {
+            let line_top = self.get_line_y_offset(line);
+            let viewport_top =
+                self.get_line_y_offset(self.first_visible_line) + self.scroll_offset_y;
+            let viewport_bottom = viewport_top + self.viewport_height;
+            return line_top < viewport_bottom;
+        }
+
         let visible_lines = if self.line_height > 0.0 {
             (self.viewport_height / self.line_height).ceil() as usize
         } else {
@@ -537,7 +583,7 @@ impl ViewState {
         };
 
         let end = (self.first_visible_line + visible_lines).min(total_lines);
-        line >= self.first_visible_line && line < end
+        line < end
     }
 
     /// Ensures a given line is visible, scrolling if necessary.
@@ -551,6 +597,21 @@ impl ViewState {
     pub fn ensure_line_visible(&mut self, line: usize, total_lines: usize) -> bool {
         if self.is_line_visible(line, total_lines) {
             return false;
+        }
+
+        // When wrap is active, use pixel-based scrolling for accuracy
+        if self.is_wrap_enabled() && self.cumulative_heights.len() > 1 {
+            if line < self.first_visible_line {
+                self.first_visible_line = line;
+                self.scroll_offset_y = 0.0;
+            } else {
+                // Scroll so the line's bottom aligns with the viewport bottom
+                let line_bottom =
+                    self.get_line_y_offset(line) + self.get_line_height(line);
+                let target_top = (line_bottom - self.viewport_height).max(0.0);
+                self.scroll_to_absolute(target_top, total_lines);
+            }
+            return true;
         }
 
         let visible_lines = if self.line_height > 0.0 {
@@ -685,9 +746,10 @@ impl ViewState {
         self.wrap_width = None;
         self.wrap_info.clear();
         self.cumulative_heights.clear();
+        self.cumulative_visual_rows.clear();
         self.total_content_height = 0.0;
         self.scrollbar_content_height = 0.0;
-        self.wrap_info_dirty = false;
+        self.dirty_from_line = usize::MAX;
         // Don't reset use_uniform_heights here - it's based on file size, not wrap state
     }
 
@@ -750,57 +812,84 @@ impl ViewState {
 
         // Ensure wrap_info vector is large enough
         if line >= self.wrap_info.len() {
+            let old_len = self.wrap_info.len();
             self.wrap_info.resize(line + 1, WrapInfo::default());
-            // New entry always counts as dirty
             self.wrap_info[line] = new_info;
-            self.wrap_info_dirty = true;
+            self.dirty_from_line = self.dirty_from_line.min(old_len);
         } else if self.wrap_info[line] != new_info {
-            // Only mark dirty if the value actually changed
             self.wrap_info[line] = new_info;
-            self.wrap_info_dirty = true;
+            self.dirty_from_line = self.dirty_from_line.min(line);
         }
     }
 
-    /// Rebuilds the cumulative height cache after wrap info changes.
+    /// Rebuilds the cumulative height and visual-row caches after wrap info changes.
     ///
-    /// Call this after updating wrap info for multiple lines, before
-    /// performing scroll calculations.
+    /// Uses **incremental rebuild**: only recomputes from the earliest changed line
+    /// forward, reusing the cached prefix. This reduces the common case from
+    /// O(total_lines) to O(total_lines - dirty_from_line).
     ///
     /// # Arguments
     /// * `total_lines` - Total number of logical lines in the document
-    ///
-    /// # Large File Optimization
-    /// For files > LARGE_FILE_THRESHOLD (100k lines), this method skips
-    /// the O(N) cache building and uses uniform heights instead.
-    /// This prevents lag when scrolling very large files.
     pub fn rebuild_height_cache(&mut self, total_lines: usize) {
-        // Skip rebuild if wrap info hasn't changed since last rebuild
-        if !self.wrap_info_dirty {
+        if self.dirty_from_line == usize::MAX {
             return;
         }
-        self.wrap_info_dirty = false;
 
+        let rebuild_from = self.dirty_from_line;
+        self.dirty_from_line = usize::MAX;
         self.use_uniform_heights = false;
-        self.cumulative_heights.clear();
-        self.cumulative_heights.reserve(total_lines + 1);
 
-        let mut cumulative = 0.0;
-        self.cumulative_heights.push(0.0); // Line 0 starts at y=0
+        // Incremental path: reuse cached prefix up to rebuild_from
+        let can_incremental =
+            rebuild_from > 0 && self.cumulative_heights.len() > rebuild_from;
 
-        for i in 0..total_lines {
-            let height = self.get_line_height(i);
-            cumulative += height;
-            self.cumulative_heights.push(cumulative);
+        if can_incremental {
+            self.cumulative_heights.truncate(rebuild_from + 1);
+            self.cumulative_visual_rows.truncate(rebuild_from + 1);
+
+            let mut cum_h = self.cumulative_heights[rebuild_from];
+            let mut cum_vr = self.cumulative_visual_rows[rebuild_from];
+
+            self.cumulative_heights.reserve(total_lines + 1 - self.cumulative_heights.len());
+            self.cumulative_visual_rows.reserve(total_lines + 1 - self.cumulative_visual_rows.len());
+
+            for i in rebuild_from..total_lines {
+                cum_h += self.get_line_height(i);
+                self.cumulative_heights.push(cum_h);
+
+                cum_vr += self.get_visual_rows(i);
+                self.cumulative_visual_rows.push(cum_vr);
+            }
+
+            self.total_content_height = cum_h;
+        } else {
+            // Full rebuild
+            self.cumulative_heights.clear();
+            self.cumulative_heights.reserve(total_lines + 1);
+            self.cumulative_visual_rows.clear();
+            self.cumulative_visual_rows.reserve(total_lines + 1);
+
+            let mut cum_h = 0.0;
+            let mut cum_vr = 0usize;
+            self.cumulative_heights.push(0.0);
+            self.cumulative_visual_rows.push(0);
+
+            for i in 0..total_lines {
+                cum_h += self.get_line_height(i);
+                self.cumulative_heights.push(cum_h);
+
+                cum_vr += self.get_visual_rows(i);
+                self.cumulative_visual_rows.push(cum_vr);
+            }
+
+            self.total_content_height = cum_h;
         }
 
-        self.total_content_height = cumulative;
-
         // Smooth the scrollbar content height to prevent jumping.
-        // On first build, snap immediately. On subsequent builds, lerp toward target.
+        let cumulative = self.total_content_height;
         if self.scrollbar_content_height <= 0.0 {
             self.scrollbar_content_height = cumulative;
         } else {
-            // Lerp factor: 0.3 provides smooth transition over ~5-10 frames
             let diff = cumulative - self.scrollbar_content_height;
             if diff.abs() < 1.0 {
                 self.scrollbar_content_height = cumulative;
@@ -920,6 +1009,9 @@ impl ViewState {
 
     /// Converts a logical line and column to a visual row number.
     ///
+    /// Uses the precomputed `cumulative_visual_rows` array for O(1) lookup
+    /// when available, falling back to O(N) summation otherwise.
+    ///
     /// # Arguments
     /// * `line` - The logical line number (0-indexed)
     /// * `col` - The column position within the line
@@ -929,18 +1021,22 @@ impl ViewState {
     /// The visual row number (0-indexed from document top).
     #[must_use]
     pub fn logical_to_visual_row(&self, line: usize, col: usize, chars_per_row: usize) -> usize {
-        // Sum visual rows for all lines before this one
-        let rows_before: usize = self.wrap_info
-            .iter()
-            .take(line)
-            .map(|info| info.visual_rows)
-            .sum();
+        let total_rows_before = if line < self.cumulative_visual_rows.len() {
+            self.cumulative_visual_rows[line]
+        } else if !self.cumulative_visual_rows.is_empty() {
+            let last_idx = self.cumulative_visual_rows.len() - 1;
+            self.cumulative_visual_rows[last_idx] + line.saturating_sub(last_idx)
+        } else {
+            // Fallback: O(N) summation (only when cache not built yet)
+            let rows_before: usize = self.wrap_info
+                .iter()
+                .take(line)
+                .map(|info| info.visual_rows)
+                .sum();
+            let uncached_lines = line.saturating_sub(self.wrap_info.len());
+            rows_before + uncached_lines
+        };
 
-        // Add any lines not in wrap_info
-        let uncached_lines = line.saturating_sub(self.wrap_info.len());
-        let total_rows_before = rows_before + uncached_lines;
-
-        // Estimate which visual row within this line based on column
         if chars_per_row > 0 {
             let row_within_line = col / chars_per_row;
             let max_rows = self.get_visual_rows(line);
@@ -952,6 +1048,9 @@ impl ViewState {
 
     /// Converts a visual row number to logical line and approximate column.
     ///
+    /// Uses binary search on `cumulative_visual_rows` for O(log N) lookup
+    /// when available, falling back to O(N) linear scan otherwise.
+    ///
     /// # Arguments
     /// * `visual_row` - The visual row number (0-indexed from document top)
     /// * `total_lines` - Total number of logical lines
@@ -960,23 +1059,35 @@ impl ViewState {
     /// A tuple of (logical_line, row_within_line).
     #[must_use]
     pub fn visual_row_to_logical(&self, visual_row: usize, total_lines: usize) -> (usize, usize) {
-        if self.wrap_info.is_empty() {
-            // No wrap info, 1:1 mapping
+        if self.wrap_info.is_empty() && self.cumulative_visual_rows.is_empty() {
             return (visual_row.min(total_lines.saturating_sub(1)), 0);
         }
 
+        // O(log N) path using precomputed cumulative visual rows
+        if self.cumulative_visual_rows.len() > 1 {
+            let line = match self.cumulative_visual_rows.binary_search(&visual_row) {
+                Ok(exact) => exact.min(total_lines.saturating_sub(1)),
+                Err(insert_pos) => insert_pos.saturating_sub(1).min(total_lines.saturating_sub(1)),
+            };
+            let rows_before = self.cumulative_visual_rows
+                .get(line)
+                .copied()
+                .unwrap_or(0);
+            let row_within = visual_row.saturating_sub(rows_before);
+            return (line, row_within);
+        }
+
+        // Fallback: O(N) linear scan
         let mut accumulated_rows = 0usize;
         for (line, info) in self.wrap_info.iter().enumerate() {
             let next_accumulated = accumulated_rows + info.visual_rows;
             if visual_row < next_accumulated {
-                // Found the line
                 let row_within = visual_row - accumulated_rows;
                 return (line, row_within);
             }
             accumulated_rows = next_accumulated;
         }
 
-        // Beyond cached lines, assume 1 row per line
         let remaining_row = visual_row.saturating_sub(accumulated_rows);
         let line = self.wrap_info.len() + remaining_row;
         (line.min(total_lines.saturating_sub(1)), 0)
@@ -986,9 +1097,10 @@ impl ViewState {
     pub fn clear_wrap_info(&mut self) {
         self.wrap_info.clear();
         self.cumulative_heights.clear();
+        self.cumulative_visual_rows.clear();
         self.total_content_height = 0.0;
         self.scrollbar_content_height = 0.0;
-        self.wrap_info_dirty = false;
+        self.dirty_from_line = usize::MAX;
     }
 
     /// Truncates wrap info to match the current line count.
@@ -1002,12 +1114,11 @@ impl ViewState {
     pub fn truncate_wrap_info(&mut self, total_lines: usize) {
         if self.wrap_info.len() > total_lines {
             self.wrap_info.truncate(total_lines);
-            self.wrap_info_dirty = true;
+            self.dirty_from_line = self.dirty_from_line.min(total_lines);
         }
-        // Also truncate cumulative_heights since it's indexed by line
         if self.cumulative_heights.len() > total_lines + 1 {
             self.cumulative_heights.truncate(total_lines + 1);
-            // Recompute total_content_height from truncated data
+            self.cumulative_visual_rows.truncate(total_lines + 1);
             self.total_content_height = self.cumulative_heights.last().copied().unwrap_or(0.0);
         }
     }

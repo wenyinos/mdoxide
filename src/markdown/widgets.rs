@@ -2680,6 +2680,7 @@ impl<'a> EditableCodeBlock<'a> {
                                 } else {
                                     for line in &highlighted_lines {
                                         ui.horizontal(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 0.0;
                                             if line.segments.is_empty() {
                                                 ui.label(
                                                     RichText::new(" ")

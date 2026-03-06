@@ -55,7 +55,11 @@ impl FerriteApp {
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
         let mut pending_wikilink_target: Option<String> = None;
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Get the theme-appropriate fill color from the current visuals
+        let fill_color = ctx.style().visuals.panel_fill;
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO).fill(fill_color))
+            .show(ctx, |ui| {
             // Tab bar - uses custom wrapping layout for multi-line support
             // Hidden in Zen Mode for distraction-free editing
             let mut tab_to_close: Option<usize> = None;
@@ -429,6 +433,8 @@ impl FerriteApp {
                             } else {
                                 Some(self.state.settings.syntax_theme.clone())
                             };
+                            let default_syntax_language =
+                                self.state.settings.default_syntax_language.clone();
 
                             // Get minimap settings (hidden in Zen Mode)
                             // Disable minimap for large files to avoid per-frame content iteration
@@ -653,6 +659,7 @@ impl FerriteApp {
                                         tab_path_for_syntax.clone(),
                                         is_dark
                                     )
+                                    .default_syntax_language(default_syntax_language.clone())
                                     .syntax_theme(syntax_theme.clone())
                                     .auto_close_brackets(auto_close_brackets)
                                     .vim_mode(vim_mode);
@@ -838,10 +845,29 @@ impl FerriteApp {
                             }
 
                             // Handle format toolbar actions
+                            // IMPORTANT: Use deferred format action with pre-captured selection
+                            // to ensure formatting is applied correctly even if button click steals focus
                             if let Some(action) = format_bar_action {
                                 match action {
                                     RibbonAction::Format(cmd) => {
-                                        self.handle_format_command(ctx, cmd);
+                                        // Capture selection now before any focus changes
+                                        use crate::editor::get_ferrite_editor_mut;
+                                        let tab_id = self.state.active_tab().map(|t| t.id);
+                                        let selection = tab_id.and_then(|id| {
+                                            get_ferrite_editor_mut(ctx, id, |editor| {
+                                                let sel = editor.selection();
+                                                let (start, end) = sel.ordered();
+                                                let line_count = editor.buffer().line_count();
+                                                let start_line = start.line.min(line_count.saturating_sub(1));
+                                                let end_line = end.line.min(line_count.saturating_sub(1));
+                                                let start_line_char = editor.buffer().try_line_to_char(start_line).unwrap_or(0);
+                                                let end_line_char = editor.buffer().try_line_to_char(end_line).unwrap_or(0);
+                                                let start_char = start_line_char + start.column;
+                                                let end_char = end_line_char + end.column;
+                                                (start_char, end_char)
+                                            })
+                                        });
+                                        deferred_format_action = Some(DeferredFormatAction { cmd, selection });
                                     }
                                     RibbonAction::InsertToc => {
                                         self.handle_insert_toc();
@@ -938,6 +964,8 @@ impl FerriteApp {
                                 } else {
                                     Some(self.state.settings.syntax_theme.clone())
                                 };
+                                let default_syntax_language =
+                                    self.state.settings.default_syntax_language.clone();
 
                                 // Get line width setting
                                 let max_line_width = self.state.settings.max_line_width;
@@ -1191,6 +1219,7 @@ impl FerriteApp {
                                             tab_path_for_syntax.clone(),
                                             is_dark
                                         )
+                                        .default_syntax_language(default_syntax_language.clone())
                                         .syntax_theme(syntax_theme.clone())
                                         .auto_close_brackets(auto_close_brackets)
                                         .vim_mode(vim_mode)
@@ -1358,6 +1387,8 @@ impl FerriteApp {
                                 }
 
                                 // Handle format toolbar toggle/actions (split view)
+                                // IMPORTANT: Use deferred format action with pre-captured selection
+                                // to ensure formatting is applied correctly even if button click steals focus
                                 if format_bar_toggled_split {
                                     self.state.settings.format_toolbar_visible = !self.state.settings.format_toolbar_visible;
                                     self.state.mark_settings_dirty();
@@ -1365,7 +1396,24 @@ impl FerriteApp {
                                 if let Some(action) = format_bar_action_split {
                                     match action {
                                         RibbonAction::Format(cmd) => {
-                                            self.handle_format_command(ctx, cmd);
+                                            // Capture selection now before any focus changes
+                                            use crate::editor::get_ferrite_editor_mut;
+                                            let tab_id = self.state.active_tab().map(|t| t.id);
+                                            let selection = tab_id.and_then(|id| {
+                                                get_ferrite_editor_mut(ctx, id, |editor| {
+                                                    let sel = editor.selection();
+                                                    let (start, end) = sel.ordered();
+                                                    let line_count = editor.buffer().line_count();
+                                                    let start_line = start.line.min(line_count.saturating_sub(1));
+                                                    let end_line = end.line.min(line_count.saturating_sub(1));
+                                                    let start_line_char = editor.buffer().try_line_to_char(start_line).unwrap_or(0);
+                                                    let end_line_char = editor.buffer().try_line_to_char(end_line).unwrap_or(0);
+                                                    let start_char = start_line_char + start.column;
+                                                    let end_char = end_line_char + end.column;
+                                                    (start_char, end_char)
+                                                })
+                                            });
+                                            deferred_format_action = Some(DeferredFormatAction { cmd, selection });
                                         }
                                         RibbonAction::InsertToc => {
                                             self.handle_insert_toc();

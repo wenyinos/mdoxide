@@ -23,10 +23,16 @@
 - [x] **Empty list item causes heading mis-render** ([#82](https://github.com/OlaProeis/Ferrite/issues/82)) - Typing `- ` after a paragraph caused the paragraph to render as a heading. Comrak interprets a single `-` + whitespace as a setext heading underline. Added `fix_false_setext_headings()` post-processing in `parser.rs` to convert these back to Paragraph + List(Item).
 - [x] **Windows IME backspace deleting editor text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Pressing Backspace during Chinese/Japanese/Korean IME composition deleted already-committed characters. Raw `Key::Backspace` events are now suppressed while IME composition is active.
 - [x] **Crash when opening binary files as text** - Opening image files (PNG, JPEG, etc.) or other binary data as text documents caused a panic: "byte index is not a char boundary". Fixed with (1) binary file detection using null byte and non-printable character heuristics in `state.rs`, (2) safe string slicing in `editor/stats.rs` using `get()` instead of direct byte indexing. Binary files now show a user-friendly error instead of crashing.
-- [ ] **macOS Release .app Bundle** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release workflow ships raw binary instead of .app bundle, causing Gatekeeper to block launch. Fix CI to package `target/release/bundle/osx/Ferrite.app` instead of raw binary.
-- [ ] **Task List Checkbox Rendering** ([#95](https://github.com/OlaProeis/Ferrite/issues/95)) - Fix task list checkboxes showing as ASCII text (`[ ]` / `[x]`) instead of proper checkbox UI elements in rendered view. Also suppress bullet point markers for task list items.
-- [ ] **Open Folder in Flatpak** ([#96](https://github.com/OlaProeis/Ferrite/issues/96)) - Fix "Open Folder" not working unless a file from that folder is already open. Likely Flatpak sandboxing issue - add better error handling and portal-based file access fallback.
-- [ ] **General Bug Fixes** - Addressing additional issues reported post-v0.2.6.1 release.
+- [x] **macOS Release .app Bundle** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release workflow ships raw binary instead of .app bundle, causing Gatekeeper to block launch. Fix CI to package `target/release/bundle/osx/Ferrite.app` instead of raw binary.
+- [x] **Task List Checkbox Rendering** ([#95](https://github.com/OlaProeis/Ferrite/issues/95)) - Fix task list checkboxes showing as ASCII text (`[ ]` / `[x]`) instead of proper checkbox UI elements in rendered view. Also suppress bullet point markers for task list items.
+- [x] **Open Folder in Flatpak** ([#96](https://github.com/OlaProeis/Ferrite/issues/96)) - Fix "Open Folder" not working unless a file from that folder is already open. All file dialogs now fall back to `$HOME` when no recent directory is available; added Flatpak environment detection and user-friendly error messages.
+- [x] **General Bug Fixes** - Addressed additional issues reported post-v0.2.6.1 release (binary file crash, header spacing, i18n translation loading, complex script font preferences).
+- [x] **Ctrl+Mouse Wheel zoom** ([#85](https://github.com/OlaProeis/Ferrite/issues/85)) - Zoom in/out with Ctrl+Scroll using existing zoom logic from Ctrl++/Ctrl+-. ZoomIn/ZoomOut/ResetZoom shortcut commands.
+- [x] **Keep text selected after formatting** ([#72](https://github.com/OlaProeis/Ferrite/issues/72)) - After applying Bold/Italic/etc. to selected text, selection is preserved and focus restored so users can chain formatting operations.
+- [x] **Linux file dialog error handling** ([#97](https://github.com/OlaProeis/Ferrite/issues/97)) - Detect xdg-desktop-portal failures (e.g. Hyprland without GTK portal) and show helpful error message with distro-specific installation instructions.
+- [x] **CJK explicit preference preloading** ([#76](https://github.com/OlaProeis/Ferrite/issues/76)) - Verified non-Auto CJK font preference is preloaded at startup so restored tabs render correctly. `preload_explicit_cjk_font()` handles all explicit preferences, `bump_font_generation()` increments counter, editor invalidates stale galley cache. No code changes required (Task 45)
+- [x] **Extra spaces when copying from rendered mode** - Syntax-highlighted code blocks and inline-formatted text inserted phantom spaces at every token boundary when copied (e.g. `json. loads( f. read())`). Fixed by zeroing `item_spacing.x` in code block and inline content layouts.
+- [x] **Session recovery dialog after "Don't Save"** - Closing the app with unsaved changes and choosing "Don't Save" caused the recovery dialog to appear on next launch (also closing the workspace). Root cause: `create_lock_file()` called before `load_session_state()` at startup, making `is_crash` always true. Fixed by reordering so the previous run's lock file is checked before the new one is created.
 
 #### Markdown Linking
 - [x] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[target]]` and `[[target|display]]` syntax with relative path resolution, spaces in filenames, click-to-navigate, ambiguity handling.
@@ -58,8 +64,8 @@
 - [x] **Column resizing** - Draggable column separators with resize cursor, visual guide line, min-width enforcement (40px), proportional scaling on window resize, double-click to reset to auto widths. Custom widths stored in egui memory per table via `TableEditState.custom_col_widths`.
 
 #### Frontmatter Editor (Basic) ([#94](https://github.com/OlaProeis/Ferrite/issues/94))
-- [ ] **Visual frontmatter panel** - Side panel for editing YAML frontmatter as key-value pairs with form-like interface.
-- [ ] **Basic field type support** - String, date, and list (tags) field types with appropriate input widgets.
+- [x] **Visual frontmatter panel** - FM tab in outline panel for editing YAML frontmatter as key-value pairs with form-based interface, bidirectional sync with source.
+- [x] **Basic field type support** - String, date, and list (tags with chip UI) field types with appropriate input widgets.
 - [ ] **New file templates** - Optional frontmatter templates when creating new markdown files.
 
 *Note: This is initial/basic frontmatter support. Advanced features (project-wide tag autocomplete, SSG-specific field types like slug/permalink, template system) planned for future releases.*
@@ -108,7 +114,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
 
 ### Platform & Distribution
-- [ ] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Release ships raw binary instead of .app bundle, causing Gatekeeper to block launch on macOS. Workaround: `xattr -d com.apple.quarantine ferrite` in terminal. Fix in progress for v0.2.7.
+- [x] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Fixed: CI now packages proper `.app` bundle via `cargo-bundle`. Workaround no longer needed.
 
 ### Rendered View Limitations
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
@@ -304,8 +310,8 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Recently Completed ✅
 
-### v0.2.7 (Feb 2026) - Performance, Features & Polish
-Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, PortableApps.com Format packaging with automated CI build, Nix/NixOS flake support, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), complex script font preferences UI (Settings → Additional Scripts), flowchart modular refactoring, window control redesign, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), binary file crash fix, 14+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
+### v0.2.7 (Mar 2026) - Performance, Features & Polish
+Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, Ctrl+Scroll Wheel zoom, keep text selected after formatting, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, PortableApps.com Format packaging with automated CI build, Nix/NixOS flake support, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), complex script font preferences UI (Settings → Additional Scripts), visual frontmatter editor, format toolbar moved to editor bottom, side panel toggle strip, Linux file dialog error handling with portal failure detection, flowchart modular refactoring, window control redesign, macOS .app bundle CI, task list checkbox rendering, word-wrap scroll correctness & performance fixes, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), binary file crash fix, rendered mode copy spacing fix, 20+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.
 
 ### v0.2.6.1 (Released Feb 2026) - Terminal, Productivity Hub & Refactoring
 **First code-signed release.** Integrated Terminal Workspace and Productivity Hub contributed by [@wolverin0](https://github.com/wolverin0) ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74)) — the first major community contribution. Major app.rs refactoring into ~15 modules. 8+ bug fixes.

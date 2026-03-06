@@ -2682,6 +2682,12 @@ pub struct UiState {
     pub show_error_modal: bool,
     /// Error message for modal
     pub error_message: String,
+    /// Whether to show the portal error dialog (Linux xdg-desktop-portal missing)
+    pub show_portal_error_dialog: bool,
+    /// Portal error message with installation instructions
+    pub portal_error_message: String,
+    /// Portal error command to copy (install command)
+    pub portal_error_command: String,
     /// Temporary toast message (shown in center of status bar)
     pub toast_message: Option<String>,
     /// When the toast message should expire (as seconds since app start)
@@ -4337,6 +4343,20 @@ impl AppState {
     pub fn dismiss_error(&mut self) {
         self.ui.show_error_modal = false;
         self.ui.error_message.clear();
+    }
+
+    /// Show the portal error dialog with installation instructions.
+    pub fn show_portal_error(&mut self, message: impl Into<String>, command: impl Into<String>) {
+        self.ui.portal_error_message = message.into();
+        self.ui.portal_error_command = command.into();
+        self.ui.show_portal_error_dialog = true;
+    }
+
+    /// Dismiss the portal error dialog.
+    pub fn dismiss_portal_error(&mut self) {
+        self.ui.show_portal_error_dialog = false;
+        self.ui.portal_error_message.clear();
+        self.ui.portal_error_command.clear();
     }
 
     /// Show a temporary toast message (disappears after duration).

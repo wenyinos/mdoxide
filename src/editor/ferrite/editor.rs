@@ -2003,13 +2003,35 @@ impl FerriteEditor {
             .unwrap_or(false);
         
         if pointer_over_editor {
-            let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
-            if scroll_delta.y.abs() > 0.01 {
-                // scroll_delta.y > 0 means scroll up (show earlier content)
-                // scroll_delta.y < 0 means scroll down (show later content)
-                let scroll_lines = 3.0; // Lines per scroll unit
-                let scroll_amount = -scroll_delta.y * scroll_lines;
-                self.view.scroll_by(scroll_amount, total_lines);
+            let ctrl_scroll_zoom: Option<bool> = ui.input(|i| {
+                if !i.modifiers.command {
+                    return None;
+                }
+                for event in &i.events {
+                    if let egui::Event::MouseWheel { delta, .. } = event {
+                        if delta.y.abs() > 0.01 {
+                            return Some(delta.y > 0.0);
+                        }
+                    }
+                }
+                None
+            });
+
+            if let Some(zoom_in) = ctrl_scroll_zoom {
+                if zoom_in {
+                    egui::gui_zoom::zoom_in(ui.ctx());
+                } else {
+                    egui::gui_zoom::zoom_out(ui.ctx());
+                }
+            } else {
+                let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
+                if scroll_delta.y.abs() > 0.01 {
+                    // smooth_scroll_delta is already in points (pixel-equivalent units)
+                    // Just apply sensitivity multiplier (scroll_lines = 3.0 is typical)
+                    let scroll_lines = 3.0;
+                    let scroll_amount = -scroll_delta.y * scroll_lines;
+                    self.view.scroll_by(scroll_amount, total_lines);
+                }
             }
         }
 
@@ -2030,11 +2052,9 @@ impl FerriteEditor {
 
             for event in &events {
                 // Skip MouseWheel events when pointer is not over the editor
-                // This prevents scroll events from other panels (file tree, preview) from
-                // being processed when the editor has focus but the mouse is elsewhere.
-                // Scroll is already handled above via explicit pointer_over_editor check.
-                if matches!(event, egui::Event::MouseWheel { .. }) {
-                    if !pointer_over_editor {
+                // or when Ctrl is held (Ctrl+scroll = zoom, handled above).
+                if let egui::Event::MouseWheel { modifiers, .. } = event {
+                    if !pointer_over_editor || modifiers.command {
                         continue;
                     }
                 }

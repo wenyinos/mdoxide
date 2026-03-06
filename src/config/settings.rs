@@ -419,6 +419,9 @@ pub enum ShortcutCommand {
     TogglePipeline,
     ToggleTerminal,
     ToggleProductivityHub,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
     // Edit
     Undo,
     Redo,
@@ -472,6 +475,7 @@ impl ShortcutCommand {
             NextTab, PrevTab, GoToLine, QuickOpen,
             // View
             ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal, ToggleProductivityHub,
+            ZoomIn, ZoomOut, ResetZoom,
             // Edit
             Undo, Redo, DeleteLine, DuplicateLine, MoveLineUp, MoveLineDown, SelectNextOccurrence,
             // Search
@@ -512,6 +516,9 @@ impl ShortcutCommand {
             ShortcutCommand::TogglePipeline => "Toggle Pipeline",
             ShortcutCommand::ToggleTerminal => "Toggle Terminal",
             ShortcutCommand::ToggleProductivityHub => "Toggle Productivity Hub",
+            ShortcutCommand::ZoomIn => "Zoom In",
+            ShortcutCommand::ZoomOut => "Zoom Out",
+            ShortcutCommand::ResetZoom => "Reset Zoom",
             // Edit
             ShortcutCommand::Undo => "Undo",
             ShortcutCommand::Redo => "Redo",
@@ -567,7 +574,8 @@ impl ShortcutCommand {
             ShortcutCommand::ToggleViewMode | ShortcutCommand::CycleTheme | ShortcutCommand::ToggleZenMode
             | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree
             | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal
-            | ShortcutCommand::ToggleProductivityHub => "View",
+            | ShortcutCommand::ToggleProductivityHub
+            | ShortcutCommand::ZoomIn | ShortcutCommand::ZoomOut | ShortcutCommand::ResetZoom => "View",
 
             ShortcutCommand::Undo | ShortcutCommand::Redo | ShortcutCommand::DeleteLine
             | ShortcutCommand::DuplicateLine | ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown
@@ -616,6 +624,9 @@ impl ShortcutCommand {
             ShortcutCommand::TogglePipeline => KeyBinding::new(M::ctrl_shift(), L),
             ShortcutCommand::ToggleTerminal => KeyBinding::new(M::ctrl(), Backtick),
             ShortcutCommand::ToggleProductivityHub => KeyBinding::new(M::ctrl_shift(), H),
+            ShortcutCommand::ZoomIn => KeyBinding::new(M::ctrl(), Equals),
+            ShortcutCommand::ZoomOut => KeyBinding::new(M::ctrl(), Minus),
+            ShortcutCommand::ResetZoom => KeyBinding::new(M::ctrl(), Num0),
             // Edit
             ShortcutCommand::Undo => KeyBinding::new(M::ctrl(), Z),
             ShortcutCommand::Redo => KeyBinding::new(M::ctrl(), Y),
@@ -1856,6 +1867,12 @@ pub struct Settings {
     /// Supports Rust, Python, JavaScript, TypeScript, and many other languages
     pub syntax_highlighting_enabled: bool,
 
+    /// Default language for syntax highlighting when no language is detected from the file path.
+    /// This applies to unsaved/new documents. Empty string means "Auto (none)".
+    /// Examples: "markdown", "rust", "python", "javascript"
+    #[serde(default)]
+    pub default_syntax_language: String,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Maximum Line Width Settings
     // ─────────────────────────────────────────────────────────────────────────
@@ -2108,6 +2125,7 @@ impl Default for Settings {
 
             // Syntax Highlighting Settings
             syntax_highlighting_enabled: true, // Syntax highlighting enabled by default
+            default_syntax_language: String::new(), // Empty = no default language (auto)
 
             // Maximum Line Width Settings
             max_line_width: MaxLineWidth::default(), // Off by default (no limit)

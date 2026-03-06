@@ -7,10 +7,36 @@
 //! backend). In Flatpak sandboxes, portal-based dialogs grant the app access
 //! to user-selected paths without requiring broad filesystem permissions.
 
-use log::debug;
+use log::{debug, warn};
 use rfd::FileDialog;
 use rust_i18n::t;
 use std::path::PathBuf;
+
+/// Result type for file dialog operations that may fail due to portal issues.
+#[derive(Debug, Clone)]
+pub enum DialogResult<T> {
+    /// User selected a path/file(s)
+    Success(T),
+    /// User cancelled the dialog
+    Cancelled,
+    /// Dialog failed (likely portal issue on Linux)
+    Failed { is_portal_error: bool, desktop_env: Option<String> },
+}
+
+impl<T> DialogResult<T> {
+    /// Convert to Option, discarding error information
+    pub fn ok(self) -> Option<T> {
+        match self {
+            DialogResult::Success(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Check if this is a portal-related failure
+    pub fn is_portal_failure(&self) -> bool {
+        matches!(self, DialogResult::Failed { is_portal_error: true, .. })
+    }
+}
 
 /// File extension filters for supported file types.
 const MARKDOWN_EXTENSIONS: &[&str] = &["md", "markdown", "mdown", "mkd", "mkdn"];
@@ -34,6 +60,110 @@ const SUPPORTED_EXTENSIONS: &[&str] = &[
 /// Returns true when running inside a Flatpak sandbox.
 pub fn is_flatpak() -> bool {
     std::env::var("FLATPAK_ID").is_ok()
+}
+
+/// Returns true when running on Linux (any flavor).
+pub fn is_linux() -> bool {
+    cfg!(target_os = "linux")
+}
+
+/// Detects the current Linux desktop environment from environment variables.
+/// Returns a tuple of (desktop_name, requires_portal) where requires_portal
+/// indicates if this DE typically needs xdg-desktop-portal for file dialogs.
+pub fn detect_linux_desktop() -> (Option<String>, bool) {
+    if !is_linux() {
+        return (None, false);
+    }
+
+    // Check XDG_CURRENT_DESKTOP first (most reliable)
+    if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
+        let desktop_lower = desktop.to_lowercase();
+
+        // Desktop environments that require xdg-desktop-portal
+        let requires_portal = matches!(
+            desktop_lower.as_str(),
+            "hyprland" | "sway" | "i3" | "bspwm" | "dwm" | "awesomewm" | "xmonad" |
+            "qtile" | "river" | "niri" | "cosmic" | "wayfire" | "labwc" |
+            " Weston"  // Some compositors might not have full portal support
+        );
+
+        // Desktop environments with native file dialog support
+        let has_native = matches!(
+            desktop_lower.as_str(),
+            "gnome" | "kde" | "plasma" | "xfce" | "mate" | "cinnamon" | "lxde" | "lxqt" | "budgie"
+        );
+
+        return (Some(desktop), requires_portal || !has_native);
+    }
+
+    // Fallback: check DESKTOP_SESSION
+    if let Ok(session) = std::env::var("DESKTOP_SESSION") {
+        let session_lower = session.to_lowercase();
+        let requires_portal = session_lower.contains("hyprland")
+            || session_lower.contains("sway")
+            || session_lower.contains("i3");
+        return (Some(session), requires_portal);
+    }
+
+    // Unknown desktop on Linux - assume it might need portal
+    (None, true)
+}
+
+/// Returns a human-readable name for the current Linux distro based on common files.
+pub fn detect_linux_distro() -> Option<String> {
+    // Try /etc/os-release first (standard)
+    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+        for line in content.lines() {
+            if line.starts_with("NAME=") {
+                return line.trim_start_matches("NAME=").trim_matches('"').to_string().into();
+            }
+            if line.starts_with("ID=") {
+                return line.trim_start_matches("ID=").trim_matches('"').to_string().into();
+            }
+        }
+    }
+
+    // Fallback to other common files
+    for path in &["/etc/arch-release", "/etc/debian_version", "/etc/fedora-release"] {
+        if std::path::Path::new(path).exists() {
+            return match *path {
+                "/etc/arch-release" => Some("arch".to_string()),
+                "/etc/debian_version" => Some("debian".to_string()),
+                "/etc/fedora-release" => Some("fedora".to_string()),
+                _ => None,
+            };
+        }
+    }
+
+    None
+}
+
+/// Returns the install command for xdg-desktop-portal packages based on distro.
+pub fn portal_install_instructions() -> (&'static str, Vec<&'static str>) {
+    let distro = detect_linux_distro().unwrap_or_default();
+
+    match distro.as_str() {
+        "arch" | "manjaro" | "endeavouros" | "garuda" => (
+            "pacman -S",
+            vec!["xdg-desktop-portal", "xdg-desktop-portal-hyprland", "xdg-desktop-portal-wlr"],
+        ),
+        "debian" | "ubuntu" | "pop" | "mint" | "elementary" => (
+            "apt install",
+            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
+        ),
+        "fedora" | "nobara" => (
+            "dnf install",
+            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
+        ),
+        "opensuse" | "suse" => (
+            "zypper install",
+            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
+        ),
+        _ => (
+            "<package-manager> install",
+            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
+        ),
+    }
 }
 
 /// Resolve initial directory for a file dialog, with Flatpak-aware fallback.
@@ -66,8 +196,8 @@ fn resolve_initial_dir(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
 ///
 /// Uses xdg-desktop-portal automatically on Linux (rfd's default backend).
 /// In Flatpak, the portal grants sandbox access to the selected directory.
-/// Returns `Some(PathBuf)` if a folder was selected, `None` if cancelled.
-pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
+/// Returns `DialogResult::Success(PathBuf)` if a folder was selected.
+pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> DialogResult<PathBuf> {
     let effective_dir = resolve_initial_dir(initial_dir);
 
     let mut dialog = FileDialog::new().set_title(&t!("file_dialog.open_workspace").to_string());
@@ -78,23 +208,43 @@ pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> Option<PathBuf> {
 
     let result = dialog.pick_folder();
 
-    if result.is_none() && is_flatpak() {
-        debug!(
-            "Folder dialog returned None in Flatpak (initial_dir: {:?}). \
-             This may be a portal/sandbox issue or the user cancelled.",
-            initial_dir
-        );
-    }
+    match result {
+        Some(path) => DialogResult::Success(path),
+        None => {
+            // Determine if this is likely a portal failure
+            let (desktop_env, requires_portal) = detect_linux_desktop();
 
-    result
+            if is_flatpak() {
+                debug!(
+                    "Folder dialog returned None in Flatpak (initial_dir: {:?}). \
+                     This may be a portal/sandbox issue or the user cancelled.",
+                    initial_dir
+                );
+            }
+
+            // On Linux desktops that require portals, None is likely a portal failure
+            if is_linux() && requires_portal {
+                warn!(
+                    "File dialog failed on {}. This may indicate missing xdg-desktop-portal.",
+                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                );
+                DialogResult::Failed {
+                    is_portal_error: true,
+                    desktop_env,
+                }
+            } else {
+                DialogResult::Cancelled
+            }
+        }
+    }
 }
 
 /// Opens a native file dialog for selecting multiple files.
 ///
 /// Supports Markdown, JSON, YAML, TOML, CSV/TSV, and plain text files.
 /// The default filter shows all supported file types.
-/// Returns a vector of selected file paths. Empty if the dialog was cancelled.
-pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> Vec<PathBuf> {
+/// Returns `DialogResult::Success(Vec<PathBuf>)` if files were selected.
+pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> DialogResult<Vec<PathBuf>> {
     let effective_dir = resolve_initial_dir(initial_dir);
 
     let mut dialog = FileDialog::new()
@@ -112,16 +262,36 @@ pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> Vec<PathBuf>
         dialog = dialog.set_directory(dir);
     }
 
-    dialog.pick_files().unwrap_or_default()
+    let result = dialog.pick_files();
+
+    match result {
+        Some(paths) if !paths.is_empty() => DialogResult::Success(paths),
+        _ => {
+            let (desktop_env, requires_portal) = detect_linux_desktop();
+
+            if is_linux() && requires_portal {
+                warn!(
+                    "File open dialog failed on {}. This may indicate missing xdg-desktop-portal.",
+                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                );
+                DialogResult::Failed {
+                    is_portal_error: true,
+                    desktop_env,
+                }
+            } else {
+                DialogResult::Cancelled
+            }
+        }
+    }
 }
 
 /// Opens a native save dialog for saving a file.
 ///
-/// Returns `Some(PathBuf)` if a location was selected, `None` if cancelled.
+/// Returns `DialogResult::Success(PathBuf)` if a location was selected.
 pub fn save_file_dialog(
     initial_dir: Option<&PathBuf>,
     default_name: Option<&str>,
-) -> Option<PathBuf> {
+) -> DialogResult<PathBuf> {
     let effective_dir = resolve_initial_dir(initial_dir);
 
     let mut dialog = FileDialog::new()
@@ -143,5 +313,25 @@ pub fn save_file_dialog(
         dialog = dialog.set_file_name(name);
     }
 
-    dialog.save_file()
+    let result = dialog.save_file();
+
+    match result {
+        Some(path) => DialogResult::Success(path),
+        None => {
+            let (desktop_env, requires_portal) = detect_linux_desktop();
+
+            if is_linux() && requires_portal {
+                warn!(
+                    "Save dialog failed on {}. This may indicate missing xdg-desktop-portal.",
+                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                );
+                DialogResult::Failed {
+                    is_portal_error: true,
+                    desktop_env,
+                }
+            } else {
+                DialogResult::Cancelled
+            }
+        }
+    }
 }

@@ -236,9 +236,6 @@ impl FerriteApp {
         info!("Initializing Ferrite");
         crate::log_memory("App::new() start");
 
-        // Create lock file to detect crashes on next startup
-        create_lock_file();
-
         // Set up custom fonts with lazy CJK loading for faster startup
         // CJK fonts will be loaded on-demand when CJK text is detected
         fonts::setup_fonts_lazy(&cc.egui_ctx);
@@ -256,8 +253,14 @@ impl FerriteApp {
             options.repaint_on_widget_change = false;
         });
 
-        // Check for crash recovery before creating AppState
+        // Load session state BEFORE creating lock file so that
+        // check_and_clear_lock_file() detects the previous run's lock file,
+        // not the one we're about to create for this session.
         let recovery_result = load_session_state();
+
+        // Now create lock file for this session - if we crash, the next
+        // startup will find it and know recovery is needed.
+        create_lock_file();
         let needs_recovery_dialog =
             recovery_result.is_crash_recovery &&
             recovery_result.session
@@ -722,6 +725,11 @@ impl FerriteApp {
     /// and saves a crash recovery snapshot if needed.
     fn update_session_recovery(&mut self) {
         use crate::config::save_crash_recovery_state;
+
+        // Don't save crash recovery if we're exiting
+        if self.should_exit {
+            return;
+        }
 
         // Mark session dirty if there are unsaved changes
         if self.state.has_unsaved_changes() {
@@ -2420,6 +2428,11 @@ impl eframe::App for FerriteApp {
                 deferred.selection
             );
             self.handle_format_command_with_selection(ctx, deferred.cmd, deferred.selection);
+            // Restore focus to the editor after applying formatting
+            // This ensures the editor keeps focus even though the button click stole it
+            if let Some(tab) = self.state.active_tab_mut() {
+                tab.needs_focus = true;
+            }
         }
 
         // Try to expand snippets if enabled
@@ -2535,11 +2548,11 @@ impl eframe::App for FerriteApp {
 
         if save_session_state(&session_state) {
             info!("Session state saved for next startup");
-            // Clear recovery data since we had a clean shutdown
-            clear_all_recovery_data();
         } else {
             warn!("Failed to save session state");
         }
+        // Always clear recovery data on clean shutdown
+        clear_all_recovery_data();
 
         // Remove lock file to indicate clean shutdown
         remove_lock_file();

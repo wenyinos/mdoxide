@@ -216,6 +216,9 @@ pub struct EditorWidget<'a> {
     syntax_highlighting: bool,
     /// File path for syntax detection (needed for determining language).
     file_path: Option<PathBuf>,
+    /// Default language for syntax highlighting when no language is detected from file path.
+    /// This is used for unsaved/new documents. Empty string means no default.
+    default_syntax_language: String,
     /// Whether we're in dark mode (for syntax theme selection).
     is_dark_mode: bool,
     /// Maximum line width setting (applies when not in Zen Mode).
@@ -252,6 +255,7 @@ impl<'a> EditorWidget<'a> {
             highlight_matching_pairs: true,
             syntax_highlighting: false,
             file_path: None,
+            default_syntax_language: String::new(),
             is_dark_mode: true,
             max_line_width: MaxLineWidth::Off,
             syntax_theme: None,
@@ -375,6 +379,19 @@ impl<'a> EditorWidget<'a> {
         self.syntax_highlighting = enabled;
         self.file_path = file_path;
         self.is_dark_mode = is_dark;
+        self
+    }
+
+    /// Set the default syntax language for unsaved/new documents.
+    ///
+    /// This language is used when no language can be detected from the file path,
+    /// such as for unsaved documents. Set to empty string to disable default language.
+    ///
+    /// # Arguments
+    /// * `language` - Language identifier (e.g., "markdown", "rust", "python")
+    #[must_use]
+    pub fn default_syntax_language(mut self, language: String) -> Self {
+        self.default_syntax_language = language;
         self
     }
 
@@ -563,11 +580,10 @@ impl<'a> EditorWidget<'a> {
                     // Only restore if significantly off (more than 5 lines)
                     if current_first_line.abs_diff(expected_first_line) > 5 {
                         let total_lines = editor.buffer().line_count();
-                        let clamped_line = expected_first_line.min(total_lines.saturating_sub(1));
-                        editor.view_mut().scroll_to_line(clamped_line);
+                        editor.view_mut().scroll_to_absolute(self.tab.scroll_offset, total_lines);
                         debug!(
-                            "Restored viewport to line {} (scroll_offset={:.1}, line_height={:.1})",
-                            clamped_line, self.tab.scroll_offset, line_height
+                            "Restored viewport to absolute offset {:.1}px (line_height={:.1})",
+                            self.tab.scroll_offset, line_height
                         );
                     }
                 }
@@ -618,10 +634,19 @@ impl<'a> EditorWidget<'a> {
         let syntax_enabled = self.syntax_highlighting && content_len < SYNTAX_SIZE_LIMIT;
 
         // Determine language from file path if syntax highlighting is enabled
+        // Fall back to default language for unsaved/new documents
         let syntax_language = if syntax_enabled {
             self.file_path
                 .as_ref()
                 .and_then(|p| crate::markdown::syntax::language_from_path(p))
+                .or_else(|| {
+                    // Use default language if set and not empty
+                    if self.default_syntax_language.is_empty() {
+                        None
+                    } else {
+                        Some(self.default_syntax_language.clone())
+                    }
+                })
         } else {
             None
         };
@@ -670,26 +695,21 @@ impl<'a> EditorWidget<'a> {
         editor.set_show_fold_indicators(self.show_fold_indicators);
         editor.set_show_line_numbers(self.show_line_numbers);
 
-        // Handle pending scroll offset from Tab
+        // Handle pending scroll offset from Tab (absolute pixel position)
         if let Some(offset) = self.tab.pending_scroll_offset.take() {
-            let line = (offset / editor.view().line_height()) as usize;
-            editor.view_mut().scroll_to_line(line);
+            let total_lines = editor.buffer().line_count();
+            editor.view_mut().scroll_to_absolute(offset, total_lines);
         }
 
         // Handle pending sync scroll offset (for bidirectional scroll sync in split view)
         // This sets an absolute scroll position without moving the cursor
         if let Some(offset) = self.pending_sync_scroll_offset {
-            let line_height = editor.view().line_height();
-            if line_height > 0.0 {
-                let total_lines = editor.buffer().line_count();
-                let target_line = (offset / line_height) as usize;
-                let clamped_line = target_line.min(total_lines.saturating_sub(1));
-                editor.view_mut().scroll_to_line(clamped_line);
-                debug!(
-                    "EditorWidget: sync scroll to offset {:.1}px (line {})",
-                    offset, clamped_line
-                );
-            }
+            let total_lines = editor.buffer().line_count();
+            editor.view_mut().scroll_to_absolute(offset, total_lines);
+            debug!(
+                "EditorWidget: sync scroll to absolute offset {:.1}px",
+                offset
+            );
         }
 
         // Handle scroll_to_line from outline panel / minimap navigation
@@ -732,7 +752,7 @@ impl<'a> EditorWidget<'a> {
         // Update Tab's scroll metrics from FerriteEditor
         // These are used by the minimap and outline panel for position sync
         // Capture all scroll metrics at once to avoid borrow conflicts later
-        let (line_height, first_visible, total_lines, scroll_offset_y_val, viewport_height_val, content_height_val) = {
+        let (line_height, first_visible, total_lines, scroll_offset_y_val, viewport_height_val, content_height_val, absolute_scroll_y) = {
             let view = editor.view();
             let line_height = view.line_height();
             let first_visible = view.first_visible_line();
@@ -740,9 +760,10 @@ impl<'a> EditorWidget<'a> {
             let scroll_offset_y = view.scroll_offset_y();
             let viewport_height = view.viewport_height();
             let content_height = view.total_content_height(total_lines);
-            (line_height, first_visible, total_lines, scroll_offset_y, viewport_height, content_height)
+            let absolute_scroll_y = view.current_scroll_y();
+            (line_height, first_visible, total_lines, scroll_offset_y, viewport_height, content_height, absolute_scroll_y)
         };
-        self.tab.scroll_offset = first_visible as f32 * line_height;
+        self.tab.scroll_offset = absolute_scroll_y;
         self.tab.raw_line_height = line_height;
         self.tab.content_height = content_height_val;
 
@@ -800,8 +821,8 @@ impl<'a> EditorWidget<'a> {
         };
         let new_content_len = self.tab.content.len();
 
-        // Calculate scroll offset for output (using already-captured metrics)
-        let scroll_total_offset = first_visible as f32 * line_height + scroll_offset_y_val;
+        // Use absolute scroll position for output (accounts for wrapped line heights)
+        let scroll_total_offset = absolute_scroll_y;
 
         // Capture Vim mode label before storing editor back
         let vim_mode_label = editor.vim_mode().map(|m| m.label());

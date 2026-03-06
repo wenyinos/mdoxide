@@ -36,7 +36,7 @@
 //! ```
 
 use egui::{text::LayoutJob, text::TextFormat, Color32, FontId, Galley, Painter};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
@@ -131,9 +131,31 @@ impl CacheKey {
         Self(hasher.finish())
     }
     
-    /// Creates a cache key from content hash only (for LayoutJob caching).
-    fn from_content_hash(content_hash: u64) -> Self {
-        Self(content_hash)
+    /// Creates a cache key from a `LayoutJob`, hashing text, section styling,
+    /// and wrap width. This avoids the bug where different `LayoutJob`s with
+    /// the same text content but different fonts/colors shared a key.
+    fn from_layout_job(job: &LayoutJob) -> Self {
+        let mut hasher = DefaultHasher::new();
+        job.text.hash(&mut hasher);
+        job.wrap.max_width.to_bits().hash(&mut hasher);
+
+        for section in &job.sections {
+            section.byte_range.start.hash(&mut hasher);
+            section.byte_range.end.hash(&mut hasher);
+            section.leading_space.to_bits().hash(&mut hasher);
+            section.format.font_id.size.to_bits().hash(&mut hasher);
+            match &section.format.font_id.family {
+                egui::FontFamily::Monospace => 1u8.hash(&mut hasher),
+                egui::FontFamily::Proportional => 2u8.hash(&mut hasher),
+                egui::FontFamily::Name(name) => {
+                    3u8.hash(&mut hasher);
+                    name.hash(&mut hasher);
+                }
+            }
+            section.format.color.to_array().hash(&mut hasher);
+        }
+
+        Self(hasher.finish())
     }
 
     /// Creates a cache key for syntax-highlighted content.
@@ -184,20 +206,29 @@ impl CacheKey {
 }
 
 /// Hashes a string to a u64 using `DefaultHasher`.
-///
-/// This is a fast hash suitable for cache keys. The same content
-/// will always produce the same hash.
+#[cfg(test)]
 fn hash_content(content: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     content.hash(&mut hasher);
     hasher.finish()
 }
 
+/// A cached galley entry with its last-access timestamp for LRU eviction.
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    galley: Arc<Galley>,
+    last_access: u64,
+}
+
 /// Caches egui `Galley` objects to avoid recreating text layouts every frame.
 ///
 /// `LineCache` stores galleys keyed by content hash, font, and color.
 /// When the cache exceeds `MAX_CACHE_ENTRIES` (200), the least recently
-/// used entries are evicted.
+/// used entry is evicted based on a monotonic access counter.
+///
+/// Cache hits are **O(1)** (HashMap lookup + counter increment).
+/// Eviction on cache miss is O(N) over the cache size, but cache misses
+/// are rare after initial warm-up.
 ///
 /// # Thread Safety
 /// This struct is not thread-safe. Each `LineCache` should be used from
@@ -208,10 +239,10 @@ fn hash_content(content: &str) -> u64 {
 /// and typical line lengths, memory usage is approximately 2-5 MB.
 #[derive(Debug, Clone)]
 pub struct LineCache {
-    /// Maps cache keys to cached galleys.
-    cache: HashMap<CacheKey, Arc<Galley>>,
-    /// Tracks access order for LRU eviction. Front = oldest, back = newest.
-    lru_order: VecDeque<CacheKey>,
+    /// Maps cache keys to cached galley entries with access timestamps.
+    cache: HashMap<CacheKey, CacheEntry>,
+    /// Monotonically increasing counter stamped on each cache access.
+    access_counter: u64,
 }
 
 impl Default for LineCache {
@@ -232,7 +263,7 @@ impl LineCache {
     pub fn new() -> Self {
         Self {
             cache: HashMap::with_capacity(MAX_CACHE_ENTRIES),
-            lru_order: VecDeque::with_capacity(MAX_CACHE_ENTRIES),
+            access_counter: 0,
         }
     }
 
@@ -274,19 +305,14 @@ impl LineCache {
     ) -> Arc<Galley> {
         let key = CacheKey::new(line_content, &font_id, color);
 
-        // Check cache first - clone the galley before updating LRU
-        if let Some(galley) = self.cache.get(&key).cloned() {
-            // Update LRU order - move to back (most recently used)
-            self.update_lru_order(key);
-            return galley;
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.access_counter += 1;
+            entry.last_access = self.access_counter;
+            return Arc::clone(&entry.galley);
         }
 
-        // Create new galley using egui's layout_no_wrap (no word wrapping)
         let galley = painter.layout_no_wrap(line_content.to_string(), font_id, color);
-
-        // Cache the galley
         self.insert(key, Arc::clone(&galley));
-
         galley
     }
 
@@ -309,26 +335,20 @@ impl LineCache {
     /// including styling info in the content or using separate caches.
     pub fn get_galley_with_job(
         &mut self,
-        line_content: &str,
+        _line_content: &str,
         layout_job: LayoutJob,
         painter: &Painter,
     ) -> Arc<Galley> {
-        // For LayoutJob, we use a simplified key based on content hash only
-        // In the future, we might want to hash the entire LayoutJob
-        let key = CacheKey::from_content_hash(hash_content(line_content));
+        let key = CacheKey::from_layout_job(&layout_job);
 
-        // Check cache first - clone the galley before updating LRU
-        if let Some(galley) = self.cache.get(&key).cloned() {
-            self.update_lru_order(key);
-            return galley;
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.access_counter += 1;
+            entry.last_access = self.access_counter;
+            return Arc::clone(&entry.galley);
         }
 
-        // Create galley from LayoutJob
         let galley = painter.layout_job(layout_job);
-
-        // Cache the galley
         self.insert(key, Arc::clone(&galley));
-
         galley
     }
 
@@ -367,10 +387,10 @@ impl LineCache {
             wrap_width,
         );
 
-        // Check cache first
-        if let Some(galley) = self.cache.get(&key).cloned() {
-            self.update_lru_order(key);
-            return galley;
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.access_counter += 1;
+            entry.last_access = self.access_counter;
+            return Arc::clone(&entry.galley);
         }
 
         // Build LayoutJob from highlighted segments
@@ -395,12 +415,8 @@ impl LineCache {
             job.append("", 0.0, format);
         }
 
-        // Create galley from LayoutJob
         let galley = painter.layout_job(job);
-
-        // Cache the galley
         self.insert(key, Arc::clone(&galley));
-
         galley
     }
 
@@ -436,9 +452,10 @@ impl LineCache {
             wrap_width,
         );
 
-        if let Some(galley) = self.cache.get(&key).cloned() {
-            self.update_lru_order(key);
-            Some(galley)
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.access_counter += 1;
+            entry.last_access = self.access_counter;
+            Some(Arc::clone(&entry.galley))
         } else {
             None
         }
@@ -481,13 +498,12 @@ impl LineCache {
     ) -> Arc<Galley> {
         let key = CacheKey::new_wrapped(line_content, &font_id, color, wrap_width);
 
-        // Check cache first
-        if let Some(galley) = self.cache.get(&key).cloned() {
-            self.update_lru_order(key);
-            return galley;
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.access_counter += 1;
+            entry.last_access = self.access_counter;
+            return Arc::clone(&entry.galley);
         }
 
-        // Create wrapped galley using egui's layout function
         let galley = painter.layout(
             line_content.to_string(),
             font_id,
@@ -495,9 +511,7 @@ impl LineCache {
             wrap_width,
         );
 
-        // Cache the galley
         self.insert(key, Arc::clone(&galley));
-
         galley
     }
 
@@ -538,33 +552,28 @@ impl LineCache {
         (galley.rows.len(), galley.size().y, galley.size().x)
     }
 
-    /// Inserts a galley into the cache with LRU eviction if needed.
+    /// Inserts a galley into the cache, evicting the least-recently-used entry
+    /// if the cache is at capacity.
+    ///
+    /// Eviction scans all entries (O(N) over cache size) to find the one with
+    /// the lowest `last_access` counter. This only runs on cache misses, which
+    /// are rare after warm-up.
     fn insert(&mut self, key: CacheKey, galley: Arc<Galley>) {
-        // Evict oldest entries if at capacity
-        while self.cache.len() >= MAX_CACHE_ENTRIES {
-            if let Some(oldest_key) = self.lru_order.pop_front() {
-                self.cache.remove(&oldest_key);
-            } else {
-                // LRU queue is empty but cache is full - shouldn't happen
-                // but handle gracefully by clearing everything
-                self.cache.clear();
-                break;
+        if self.cache.len() >= MAX_CACHE_ENTRIES {
+            if let Some(&evict_key) = self.cache
+                .iter()
+                .min_by_key(|(_, e)| e.last_access)
+                .map(|(k, _)| k)
+            {
+                self.cache.remove(&evict_key);
             }
         }
 
-        // Insert the new entry
-        self.cache.insert(key, galley);
-        self.lru_order.push_back(key);
-    }
-
-    /// Updates the LRU order when a key is accessed (moves to back).
-    fn update_lru_order(&mut self, key: CacheKey) {
-        // Find and remove the key from its current position
-        if let Some(pos) = self.lru_order.iter().position(|k| *k == key) {
-            self.lru_order.remove(pos);
-        }
-        // Add to back (most recently used)
-        self.lru_order.push_back(key);
+        self.access_counter += 1;
+        self.cache.insert(key, CacheEntry {
+            galley,
+            last_access: self.access_counter,
+        });
     }
 
     /// Clears all cached galleys.
@@ -579,7 +588,7 @@ impl LineCache {
     /// ```
     pub fn invalidate(&mut self) {
         self.cache.clear();
-        self.lru_order.clear();
+        self.access_counter = 0;
     }
 
     /// Invalidates cached galleys for specific line content with given styling.
@@ -596,12 +605,7 @@ impl LineCache {
     /// This removes the galley with the exact content/font/color combination.
     pub fn invalidate_line(&mut self, content: &str, font_id: &FontId, color: Color32) {
         let key = CacheKey::new(content, font_id, color);
-
-        // Remove from cache
         self.cache.remove(&key);
-
-        // Remove from LRU order
-        self.lru_order.retain(|k| *k != key);
     }
 
     /// Returns the number of cached galleys.
@@ -732,103 +736,101 @@ mod tests {
     #[test]
     fn test_invalidate() {
         let mut cache = LineCache::new();
-        // Manually insert some test data to simulate cached entries
         let key = test_key("test line");
-        cache.lru_order.push_back(key);
+        cache.cache.insert(key, dummy_entry(1));
 
-        // Now verify invalidate clears the LRU order
         cache.invalidate();
         assert!(cache.is_empty());
-        assert!(cache.lru_order.is_empty());
+        assert_eq!(cache.access_counter, 0);
     }
 
     #[test]
     fn test_invalidate_empty_cache() {
         let mut cache = LineCache::new();
-        // Should not panic on empty cache
         cache.invalidate();
         assert!(cache.is_empty());
     }
 
+    fn dummy_entry(access: u64) -> CacheEntry {
+        CacheEntry {
+            galley: Arc::new(egui::Galley {
+                job: Arc::new(LayoutJob::default()),
+                rows: vec![],
+                rect: egui::Rect::NOTHING,
+                mesh_bounds: egui::Rect::NOTHING,
+                num_vertices: 0,
+                num_indices: 0,
+                pixels_per_point: 1.0,
+                elided: false,
+            }),
+            last_access: access,
+        }
+    }
+
     #[test]
-    fn test_lru_eviction_ordering() {
+    fn test_counter_based_eviction() {
         let mut cache = LineCache::new();
 
-        // Manually add entries to test LRU logic
-        // Note: This tests the internal LRU tracking, not the full get_galley flow
-        // (which requires a real Painter)
-
-        // Add MAX_CACHE_ENTRIES entries
+        // Fill to capacity
         for i in 0..MAX_CACHE_ENTRIES {
             let content = format!("line {i}");
             let key = test_key(&content);
-            cache.lru_order.push_back(key);
+            cache.access_counter += 1;
+            cache.cache.insert(key, dummy_entry(cache.access_counter));
+        }
+        assert_eq!(cache.cache.len(), MAX_CACHE_ENTRIES);
+
+        // "Access" the first entry to give it a high counter
+        let first_key = test_key("line 0");
+        cache.access_counter += 1;
+        if let Some(entry) = cache.cache.get_mut(&first_key) {
+            entry.last_access = cache.access_counter;
         }
 
-        assert_eq!(cache.lru_order.len(), MAX_CACHE_ENTRIES);
+        // Insert a new entry, which should evict "line 1" (lowest counter)
+        let new_key = test_key("line new");
+        let new_galley = dummy_entry(0).galley;
+        cache.insert(new_key, new_galley);
 
-        // Verify the oldest entry is at front
-        let first_key = test_key("line 0");
-        assert_eq!(cache.lru_order.front(), Some(&first_key));
-
-        // Verify the newest entry is at back
-        let last_key = test_key(&format!("line {}", MAX_CACHE_ENTRIES - 1));
-        assert_eq!(cache.lru_order.back(), Some(&last_key));
+        assert_eq!(cache.cache.len(), MAX_CACHE_ENTRIES);
+        // "line 0" should still exist (was recently accessed)
+        assert!(cache.cache.contains_key(&first_key));
+        // "line 1" should be evicted (had the lowest access counter)
+        let evicted_key = test_key("line 1");
+        assert!(!cache.cache.contains_key(&evicted_key));
     }
 
     #[test]
-    fn test_update_lru_order() {
+    fn test_cache_hit_updates_counter() {
         let mut cache = LineCache::new();
+        let key = test_key("test");
+        cache.cache.insert(key, dummy_entry(1));
+        cache.access_counter = 1;
 
-        // Add some entries
-        let key1 = test_key("line 1");
-        let key2 = test_key("line 2");
-        let key3 = test_key("line 3");
+        // Simulate a cache hit
+        if let Some(entry) = cache.cache.get_mut(&key) {
+            cache.access_counter += 1;
+            entry.last_access = cache.access_counter;
+        }
 
-        cache.lru_order.push_back(key1);
-        cache.lru_order.push_back(key2);
-        cache.lru_order.push_back(key3);
-
-        // Access key1, it should move to back
-        cache.update_lru_order(key1);
-
-        assert_eq!(cache.lru_order.front(), Some(&key2));
-        assert_eq!(cache.lru_order.back(), Some(&key1));
-    }
-
-    #[test]
-    fn test_update_lru_order_nonexistent() {
-        let mut cache = LineCache::new();
-
-        let key1 = test_key("line 1");
-        cache.lru_order.push_back(key1);
-
-        // Update a key that doesn't exist - should add it
-        let key2 = test_key("line 2");
-        cache.update_lru_order(key2);
-
-        assert_eq!(cache.lru_order.len(), 2);
-        assert_eq!(cache.lru_order.back(), Some(&key2));
+        assert_eq!(cache.access_counter, 2);
+        assert_eq!(cache.cache.get(&key).unwrap().last_access, 2);
     }
 
     #[test]
     fn test_invalidate_line() {
         let mut cache = LineCache::new();
 
-        // Add entries with different content (LRU order only, no actual galleys)
-        // This tests the LRU tracking logic without requiring a real Painter
         let key1 = test_key("line 1");
         let key2 = test_key("line 2");
+        cache.cache.insert(key1, dummy_entry(1));
+        cache.cache.insert(key2, dummy_entry(2));
 
-        cache.lru_order.push_back(key1);
-        cache.lru_order.push_back(key2);
-
-        // Invalidate "line 1" - should remove key1 from LRU order
         cache.invalidate_line("line 1", &FontId::default(), Color32::WHITE);
 
-        // Only key2 should remain in LRU order
-        assert_eq!(cache.lru_order.len(), 1);
-        assert_eq!(cache.lru_order.front(), Some(&key2));
+        assert_eq!(cache.cache.len(), 1);
+        assert!(!cache.cache.contains_key(&key1));
+        assert!(cache.cache.contains_key(&key2));
     }
 
     #[test]
@@ -884,44 +886,23 @@ mod tests {
         assert_ne!(hash2, hash3);
     }
 
-    /// Test that the LRU eviction works correctly when adding 201 entries
     #[test]
-    fn test_lru_eviction_201_entries() {
+    fn test_eviction_at_capacity_201() {
         let mut cache = LineCache::new();
 
-        // Add 200 entries
-        for i in 0..200 {
+        // Fill to capacity using insert helper
+        for i in 0..MAX_CACHE_ENTRIES {
             let content = format!("line {i}");
             let key = test_key(&content);
-            cache.lru_order.push_back(key);
+            cache.insert(key, dummy_entry(0).galley);
         }
+        assert_eq!(cache.cache.len(), MAX_CACHE_ENTRIES);
 
-        assert_eq!(cache.lru_order.len(), 200);
+        // Insert 201st entry - should evict the entry with lowest access counter
+        let new_key = test_key("line 200");
+        cache.insert(new_key, dummy_entry(0).galley);
 
-        // Verify first entry is "line 0"
-        let first_key = test_key("line 0");
-        assert_eq!(cache.lru_order.front(), Some(&first_key));
-
-        // Add 201st entry - should trigger eviction of "line 0"
-        let key_201 = test_key("line 200");
-        cache.lru_order.push_back(key_201);
-
-        // Manually evict from front (simulating insert behavior)
-        if cache.lru_order.len() > MAX_CACHE_ENTRIES {
-            cache.lru_order.pop_front();
-        }
-
-        assert_eq!(cache.lru_order.len(), 200);
-
-        // "line 0" should be gone
-        let old_first_key = test_key("line 0");
-        assert!(!cache.lru_order.contains(&old_first_key));
-
-        // "line 1" should now be at front
-        let new_first_key = test_key("line 1");
-        assert_eq!(cache.lru_order.front(), Some(&new_first_key));
-
-        // "line 200" should be at back
-        assert_eq!(cache.lru_order.back(), Some(&key_201));
+        assert_eq!(cache.cache.len(), MAX_CACHE_ENTRIES);
+        assert!(cache.cache.contains_key(&new_key));
     }
 }
