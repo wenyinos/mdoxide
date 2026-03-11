@@ -116,10 +116,10 @@ After v0.2.2 addressed critical bugs and CLI improvements, users expect standard
 #### 2.1 Configurable Line Width (Issue #15)
 - **Feature:** Limit text width for improved readability
 - **Setting:** `max_line_width` in Settings > Editor
-- **Options:** 
-  - Off (default, current behavior)
+- **Options:**
+  - Off (no width limit)
   - 80 characters
-  - 100 characters
+  - 100 characters (default)
   - 120 characters
   - Custom pixel width
 - **Behavior:**

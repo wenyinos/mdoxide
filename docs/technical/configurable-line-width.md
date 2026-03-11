@@ -14,9 +14,9 @@ Added `MaxLineWidth` enum with the following variants:
 
 ```rust
 pub enum MaxLineWidth {
-    Off,           // No width limit (default)
+    Off,           // No width limit
     Col80,         // 80 characters
-    Col100,        // 100 characters  
+    Col100,        // 100 characters (default)
     Col120,        // 120 characters
     Custom(u32),   // Custom pixel width (400-2000px)
 }
@@ -28,7 +28,7 @@ Key methods:
 - `description() -> &'static str` - Returns descriptive text
 - `is_custom() -> bool` - Checks if this is a custom width
 
-Added `max_line_width` field to `Settings` struct with default value `MaxLineWidth::Off`.
+Added `max_line_width` field to `Settings` struct with default value `MaxLineWidth::Col100`.
 
 ### Settings UI (`src/ui/settings.rs`)
 
