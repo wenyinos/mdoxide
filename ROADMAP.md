@@ -2,7 +2,7 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.2.7 (Planned) - Performance, Features & Polish
+### v0.2.7 (Released March 2026) - Performance, Features & Polish
 **Focus:** Features moved from v0.2.6 to allow focus on the text editor, plus checking for updates.
 
 #### Bug Fixes & UX
@@ -110,7 +110,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
 - [x] **IME backspace deleting text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Fixed in v0.2.7. Backspace during IME composition no longer deletes editor text.
 
-### Deferred to v0.2.7
+### Deferred (from v0.2.7)
 - [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
 
 ### Platform & Distribution
@@ -124,6 +124,14 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ## Planned Features 
 
 ### v0.2.8 - UI, Accessibility & Text Shaping
+
+#### Executable Code Blocks
+- [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
+- [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
+- [ ] **Python support** - Detect `python` / `python3` and run with system interpreter.
+- [ ] **Timeout handling** - Kill long-running scripts after configurable timeout (default: 30s).
+- [ ] **Security warning** - First-run dialog explaining execution risks.
+  *Security note: Code execution is opt-in and disabled by default.*
 
 #### Unicode & Complex Script Support (Phase 2: Text Shaping Engine)
 *Depends on: Phase 1 font loading from v0.2.7*

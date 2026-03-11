@@ -5,7 +5,7 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.7] - 2026-03-06
+## [0.2.7] - 2026-03-11
 
 ### Added
 
@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Editing
 - **Keep text selected after formatting** ([#72](https://github.com/OlaProeis/Ferrite/issues/72)) - Bold, Italic, and other formatting operations now preserve both selection and editor focus. Users can chain formatting operations (e.g. Bold → Italic) without reselecting text.
+
+#### Settings
+- **Default maximum line width changed to 100 characters** - The default `max_line_width` setting is now 100 characters (was "Off"). This provides a comfortable reading width out of the box, especially for zen mode, while still allowing users to change it to Off, 80, 120, or a custom width.
 
 #### Refactoring
 - **Flowchart modular refactor** - Split monolithic `flowchart.rs` (3600 lines) into 12 focused modules under `flowchart/` directory: `types.rs`, `parser.rs`, `layout/` (config, graph, subgraph, sugiyama), `render/` (colors, nodes, edges, subgraphs), `utils.rs`. Zero behavior changes, all 83 tests pass.
@@ -755,8 +758,8 @@ Complete ground-up reimplementation of the text editor:
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
-[0.2.7]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6-hotfix.1...v0.2.7
-[0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6-hotfix.1
+[0.2.7]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6.1...v0.2.7
+[0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6.1
 [0.2.6]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.3...v0.2.6
 [0.2.5.3]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.2...v0.2.5-hotfix.3
 [0.2.5.2]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.1...v0.2.5-hotfix.2

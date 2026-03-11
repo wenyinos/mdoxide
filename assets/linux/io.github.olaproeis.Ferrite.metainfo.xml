@@ -52,15 +52,15 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6.1/assets/screenshots/split-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.7/assets/screenshots/split-dark.png</image>
       <caption>Ferrite in dark mode with split view showing markdown editing and live preview</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6.1/assets/screenshots/raw-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.7/assets/screenshots/raw-dark.png</image>
       <caption>Raw editing mode with syntax highlighting</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.6.1/assets/screenshots/zen-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.7/assets/screenshots/zen-dark.png</image>
       <caption>Zen mode for distraction-free writing</caption>
     </screenshot>
   </screenshots>
@@ -68,6 +68,26 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.7" date="2026-03-11">
+      <description>
+        <p>Major feature release: wikilinks, callouts, Vim mode, new packaging formats, and performance improvements</p>
+        <ul>
+          <li>Wikilinks and backlinks panel for knowledge-base workflows</li>
+          <li>GitHub-style callouts (NOTE, TIP, WARNING, CAUTION, IMPORTANT)</li>
+          <li>Vim mode with Normal/Insert/Visual modes and essential commands</li>
+          <li>Ctrl+Scroll wheel zoom and keyboard zoom (Ctrl++/Ctrl+-/Ctrl+0)</li>
+          <li>Single-instance protocol: files open as tabs in existing window</li>
+          <li>Visual frontmatter editor panel for YAML metadata</li>
+          <li>Welcome page on first run with configuration wizard</li>
+          <li>Lazy font loading for 11 complex script families (Arabic, Hebrew, Devanagari, Thai, and more)</li>
+          <li>Lazy CSV/TSV row parsing for large files (memory reduced from ~200MB to ~8MB for 1M rows)</li>
+          <li>Check for Updates button in Settings</li>
+          <li>New packaging: Linux .deb and .rpm, macOS .app bundles (ARM64 + Intel), Nix flake, PortableApps.com</li>
+          <li>MSI installer with file associations, Explorer context menu, and PATH integration</li>
+          <li>Fixed word wrap scroll correctness, binary file crash, IME backspace, Linux portal dialogs</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.6.1" date="2026-02-06">
       <description>
         <p>First code-signed release with integrated terminal, productivity hub, and bug fixes</p>

@@ -41,7 +41,7 @@ If Windows Defender quarantines Ferrite:
 2. **Verify the signature**: Right-click `ferrite.exe` → Properties → Digital Signatures → should show "SignPath Foundation"
 3. **Check VirusTotal**: Upload the file to [VirusTotal](https://www.virustotal.com) — signed builds should show clean results
 
-Ferrite does **NOT** access passwords, browser data, or make network connections. The application is fully offline and only accesses files you explicitly open.
+Ferrite does **NOT** access passwords, browser data, or make unsolicited network connections. The only network access is the manual "Check for Updates" button (Settings → About), which contacts the GitHub Releases API when you click it. The application only accesses files you explicitly open.
 
 </details>
 
@@ -88,9 +88,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.7 (coming soon):** **Wikilinks** & **backlinks panel**. **Vim mode**. **Welcome page** for first-launch setup. **GitHub-style callouts**. **Ctrl+Scroll zoom**. **Keep text selected after formatting**. **Frontmatter editor**. Image rendering in preview. **Format toolbar** & **side panel toggles**. **Nix/NixOS flake support**. Linux portal dialog error handling. macOS .app bundle. 20+ bug fixes including word-wrap scroll, large selection crash, IME backspace. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.7 (Latest):** **Wikilinks** & **backlinks panel**. **Vim mode**. **Welcome page** for first-launch setup. **GitHub-style callouts**. **Ctrl+Scroll zoom**. **Keep text selected after formatting**. **Frontmatter editor**. Image rendering in preview. **Format toolbar** & **side panel toggles**. **Nix/NixOS flake support**. New packaging: **.deb**, **.rpm**, macOS **.app** bundles. **Single-instance** file opening. 20+ bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 📦 **v0.2.6 Highlights:** New Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
+> 📦 **v0.2.6 Highlights:** Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
 ## Features
 
