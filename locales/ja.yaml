@@ -148,7 +148,8 @@ settings:
     use_spaces: "インデントにスペースを使用"
     use_spaces_tooltip: "インデントにタブの代わりにスペースを使用する"
     vim_mode: "Vim モード"
-    vim_mode_tooltip: "Vimスタイルのモーダル編集を、通常モード、挿入モード、ビジュアルモードで有効にします。ナビゲーションには hjkl、挿入には i、通常モードには Escを使用します。"
+    vim_mode_tooltip: "Vimスタイルのモーダル編集を、通常モード、挿入モード、ビジュアルモードで有効にします。ナビゲーションには hjkl、挿入には
+      i、通常モードには Escを使用します。"
     max_line_width: "最大行幅"
     custom_width: "カスタム - ピクセル幅を指定"
     code_folding: "コードの折りたたみ"
@@ -177,6 +178,15 @@ settings:
     paragraph_indent_hint: "CJK タイポグラフィ規約に基づく行頭インデント"
     paragraph_indent_custom: "カスタム"
     paragraph_indent_custom_desc: "カスタム em 値"
+    complex_scripts: 追加スクリプト
+    complex_scripts_hint: 
+      アラビア語、ベンガル語、デーバナーガリー語、タイ語、ヘブライ語、タミル語、グルジア語、アルメニア語、エチオピア語などの文字体系のフォントを事前に選択できます。これらの文字体系を含むファイルを開くと、フォントがオンデマンドで読み込まれます。
+    complex_script_default: 既定 (システム)
+    default_language: 既定の言語
+    default_language_hint: ファイルパスから言語が検出されない場合に、保存されていない/新しいドキュメントで構文を強調表示する言語
+    default_language_auto: 自動 (なし)
+    header_spacing: ヘッダの間隔
+    header_spacing_hint: レンダリング表示でのヘッダ (H1-H6) 間の縦方向の間隔
   preview:
     sync_scroll: "スクロールの同期"
     default_view: "既定の表示モード"
@@ -569,7 +579,7 @@ notification:
   renamed_to: "名前の変更 : %{name}"
   deleted: "削除済み : %{name}"
   opened_background: "バックグラウンドで開く : %{name}"
-  settings_reset: "設定をデフォルトにリセット"
+  settings_reset: "設定を既定値にリセット"
   encoding_changed: "エンコーディングが %{encoding} に変更されました"
   reloaded_single: "再読み込み済み : %{name}"
   reloaded_multiple: "%{count} 個のファイルがディスクから再読み込みされました"
@@ -692,7 +702,9 @@ pipeline:
   run_tooltip: "コマンドを実行 (Enter)"
   stdout: "stdout"
   stderr: "stderr"
-  hint: "上の欄にコマンドを入力して、ドキュメントをパイプ処理します。\n例 :\n• jq '.'           - JSON を整形\n• jq '.items[]'    - 配列項目を抽出\n• yq '.data'       - YAML フィールドを抽出\n• grep 'pattern'   - パターンを検索"
+  hint: "上の欄にコマンドを入力して、ドキュメントをパイプ処理します。\n例 :\n• jq '.'           - JSON を整形\n• jq
+    '.items[]'    - 配列項目を抽出\n• yq '.data'       - YAML フィールドを抽出\n• grep 'pattern'\
+    \   - パターンを検索"
   no_output_success: "(コマンドは出力を生成しませんでした)"
 
 # Encoding
