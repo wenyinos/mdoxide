@@ -158,6 +158,9 @@ pub struct FerriteEditor {
     pub(crate) ime_committed_text: Option<String>,
     /// Last font generation seen - used to invalidate cache when fonts change.
     pub(crate) last_font_generation: u64,
+    /// Last zoom factor seen - used to invalidate cache when Ctrl+scroll zoom changes.
+    /// Cached galleys are tied to pixels_per_point; stale galleys render as garbled text.
+    pub(crate) last_zoom_factor: f32,
     // ─────────────────────────────────────────────────────────────────────────
     // Cursor Blink
     // ─────────────────────────────────────────────────────────────────────────
@@ -253,6 +256,7 @@ impl FerriteEditor {
             ime_committed_text: None,
             // Font tracking
             last_font_generation: fonts::font_generation(),
+            last_zoom_factor: 1.0,
             // Cursor blink defaults
             cursor_blink_instant: std::time::Instant::now(),
             cursor_visible: true,
@@ -322,6 +326,7 @@ impl FerriteEditor {
             ime_committed_text: None,
             // Font tracking
             last_font_generation: fonts::font_generation(),
+            last_zoom_factor: 1.0,
             // Cursor blink defaults
             cursor_blink_instant: std::time::Instant::now(),
             cursor_visible: true,
@@ -1327,6 +1332,12 @@ impl FerriteEditor {
                 self.last_font_generation, current_font_gen);
             self.line_cache.invalidate();
             self.last_font_generation = current_font_gen;
+        }
+
+        let current_zoom = ui.ctx().zoom_factor();
+        if (current_zoom - self.last_zoom_factor).abs() > f32::EPSILON {
+            self.line_cache.invalidate();
+            self.last_zoom_factor = current_zoom;
         }
         
         // Clear cache if content changed

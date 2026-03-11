@@ -749,6 +749,35 @@ impl<'a> MarkdownEditor<'a> {
             });
         }
 
+        // Ctrl+Scroll Zoom: detect before ScrollArea consumes the scroll events
+        let ctrl_scroll_zoom: Option<bool> = ui.input(|i| {
+            if !i.modifiers.command {
+                return None;
+            }
+            for event in &i.events {
+                if let egui::Event::MouseWheel { delta, .. } = event {
+                    if delta.y.abs() > 0.01 {
+                        return Some(delta.y > 0.0);
+                    }
+                }
+            }
+            None
+        });
+
+        if let Some(is_zoom_in) = ctrl_scroll_zoom {
+            if is_zoom_in {
+                egui::gui_zoom::zoom_in(ui.ctx());
+            } else {
+                egui::gui_zoom::zoom_out(ui.ctx());
+            }
+            ui.input_mut(|i| {
+                i.smooth_scroll_delta = egui::Vec2::ZERO;
+                i.events.retain(|e| {
+                    !matches!(e, egui::Event::MouseWheel { modifiers, .. } if modifiers.command)
+                });
+            });
+        }
+
         // Render the document in a scroll area
         let mut scroll_area = ScrollArea::vertical()
             .id_source(id.with("rendered_scroll"))

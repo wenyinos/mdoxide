@@ -1069,13 +1069,13 @@ impl HeaderSpacing {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MaxLineWidth {
-    /// No width limit (current behavior)
-    #[default]
+    /// No width limit
     Off,
     /// 80 characters (traditional terminal width)
     #[serde(rename = "80")]
     Col80,
-    /// 100 characters (comfortable reading width)
+    /// 100 characters (comfortable reading width) - default
+    #[default]
     #[serde(rename = "100")]
     Col100,
     /// 120 characters (wide monitors)
@@ -3130,7 +3130,7 @@ mod tests {
 
     #[test]
     fn test_max_line_width_default() {
-        assert_eq!(MaxLineWidth::default(), MaxLineWidth::Off);
+        assert_eq!(MaxLineWidth::default(), MaxLineWidth::Col100);
     }
 
     #[test]
@@ -3198,15 +3198,15 @@ mod tests {
     #[test]
     fn test_settings_max_line_width_default() {
         let settings = Settings::default();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Off);
+        assert_eq!(settings.max_line_width, MaxLineWidth::Col100);
     }
 
     #[test]
     fn test_settings_backward_compatibility_max_line_width() {
-        // Old JSON without max_line_width field should default to Off
+        // Old JSON without max_line_width field should use current default (Col100)
         let json = r#"{"theme": "dark"}"#;
         let settings: Settings = serde_json::from_str(json).unwrap();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Off);
+        assert_eq!(settings.max_line_width, MaxLineWidth::Col100);
     }
 
     #[test]
