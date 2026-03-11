@@ -110,6 +110,7 @@ jobs:
           Set-Content -Path portable/FerriteMDPortable/App/AppInfo/appinfo.ini -Value $appinfo -NoNewline
 
           # Copy the release binary into the PAF structure
+          New-Item -ItemType Directory -Force -Path portable\FerriteMDPortable\App\Ferrite | Out-Null
           Copy-Item target\release\ferrite.exe portable\FerriteMDPortable\App\Ferrite\ferrite.exe
 
           # Compile the .paf.exe installer with NSIS
