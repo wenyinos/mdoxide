@@ -5,6 +5,12 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - Added `UTImportedTypeDeclarations` block to `info_plist_ext.xml` to properly declare the `net.daringfireball.markdown` UTI. This enables opening markdown files from Finder via "Open With Ferrite" or double-clicking when Ferrite is the default application.
+
 ## [0.2.7] - 2026-03-11
 
 ### Added

@@ -123,7 +123,10 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Planned Features 
 
-### v0.2.8 - UI, Accessibility & Text Shaping
+### v0.2.8 - UI, Accessibility, Text Shaping & Bug Fixes
+
+#### Bug Fixes
+- [ ] **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - Add `UTImportedTypeDeclarations` to `info_plist_ext.xml` to properly declare the `net.daringfireball.markdown` UTI, enabling Finder "Open With" and double-click file opening
 
 #### Executable Code Blocks
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
