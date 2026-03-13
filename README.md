@@ -176,8 +176,10 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | **Linux (Debian/Ubuntu)** | `ferrite-editor_amd64.deb` | For Debian, Ubuntu, Mint, Pop!_OS |
 | **Linux (Fedora/RHEL)** | `ferrite-editor.x86_64.rpm` | For Fedora, RHEL, CentOS, Rocky |
 | Linux | `ferrite-linux-x64.tar.gz` | Universal - works on any distro |
-| **macOS (Apple Silicon)** | `ferrite-macos-arm64.tar.gz` | For M1/M2/M3 Macs |
-| **macOS (Intel)** | `ferrite-macos-x64.tar.gz` | For Intel Macs |
+| **macOS (Apple Silicon)** | `ferrite-macos-arm64.dmg` | Recommended - drag to Applications (M1/M2/M3) |
+| macOS (Apple Silicon) | `ferrite-macos-arm64.tar.gz` | Alternative - contains Ferrite.app bundle |
+| **macOS (Intel)** | `ferrite-macos-x64.dmg` | Recommended - drag to Applications |
+| macOS (Intel) | `ferrite-macos-x64.tar.gz` | Alternative - contains Ferrite.app bundle |
 
 <details>
 <summary><strong>Windows Installation</strong></summary>
@@ -274,6 +276,33 @@ nix develop
 tar -xzf ferrite-linux-x64.tar.gz
 ./ferrite
 ```
+
+</details>
+
+<details>
+<summary><strong>macOS Installation</strong></summary>
+
+#### DMG Installer (Recommended)
+
+Download the `.dmg` for your Mac:
+- **Apple Silicon** (M1/M2/M3/M4): `ferrite-macos-arm64.dmg`
+- **Intel**: `ferrite-macos-x64.dmg`
+
+Open the DMG and drag `Ferrite.app` to the **Applications** folder. Launch from Launchpad or Spotlight.
+
+#### From tar.gz (Alternative)
+
+```bash
+# Apple Silicon
+tar -xzf ferrite-macos-arm64.tar.gz
+cp -R Ferrite.app /Applications/
+
+# Intel
+tar -xzf ferrite-macos-x64.tar.gz
+cp -R Ferrite.app /Applications/
+```
+
+> **Gatekeeper Note:** If macOS shows "app can't be opened because it is from an unidentified developer", right-click `Ferrite.app` and select **Open**, then click **Open** in the dialog. This is only needed once — macOS remembers your choice.
 
 </details>
 
