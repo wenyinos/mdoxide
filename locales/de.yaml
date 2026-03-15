@@ -39,12 +39,24 @@ status:
   vim_mode: "Vim-Benutzeroberfläche (Esc = Standardmodus, i = Einfügen)"
   cursor_position: "Zeile %{line}, Spalte %{col}"
   delimiter_tooltip: "Begrenzungszeichen: %{delimiter}\n%{info} ändern durch draufklicken"
-  header_tooltip: "erste Zeile als Überschriften: %{status}\n%{info} ändern durch Draufklicken"
+  header_tooltip: "erste Zeile als Überschriften: %{status}\n%{info} ändern durch
+    Draufklicken"
   rainbow_tooltip: "Zebra-Darstellung der Spalten: %{status}\numschalten durch Draufklicken"
   encoding_tooltip: "Dateikodierung: %{encoding}\n%{info} klicken zum Ändern"
   encoding_heading: "Dateikodierung"
 
 # File dialogs
+  recent_files_heading: Letzte Dateien
+  recent_folders_heading: Letzte Arbeitsordner
+  file_tooltip: |-
+    %{path}
+
+    Klick: öffnen
+    Hochstelltaste+Klick: im Hintergrund öffnen
+  folder_tooltip: |-
+    %{path}
+
+    Klick: als Arbeitsordner öffnen
 dialog:
   unsaved_changes:
     title: "Ungespeicherte Änderungen"
@@ -85,7 +97,8 @@ settings:
   reset_all: "Alles zurücksetzen"
   reset_tooltip: "Alles auf Standardeinstellungen zurücksetzen"
   auto_save_hint: "Die Einstellungen werden automatisch gespeichert"
-  default_view_hint: "Ansicht für neue Registerkarten (die bestehenden Tabs behalten ihre Ansicht)"
+  default_view_hint: "Ansicht für neue Registerkarten (die bestehenden Tabs behalten
+    ihre Ansicht)"
   font_size:
     small: "klein"
     medium: "mittel"
@@ -135,11 +148,14 @@ settings:
     minimap_mode_pixel: "proportional (pixelweise)"
     minimap_mode_pixel_desc: "Übersicht über Programmcode mit Zeichen"
     highlight_brackets: "zusammengehörige Klammern hervorheben"
-    brackets_tooltip: "Zusammengehörige Klammern hervorheben: (), [], {}, <> - und paarige Betonungen: ** sowie __ - wenn der Cursor in der Nähe ist"
+    brackets_tooltip: "Zusammengehörige Klammern hervorheben: (), [], {}, <> - und
+      paarige Betonungen: ** sowie __ - wenn der Cursor in der Nähe ist"
     auto_close_brackets: "Klammern und Anführungszeichen automatisch schließen"
-    auto_close_tooltip: "Automatisch \"rechte\" Klammern und Anführungszeichen einfügen. Ausgewählten Text einbinden bei Eingabe eines \"linken\" Zeichens."
+    auto_close_tooltip: "Automatisch \"rechte\" Klammern und Anführungszeichen einfügen.
+      Ausgewählten Text einbinden bei Eingabe eines \"linken\" Zeichens."
     syntax_highlighting: "Syntax hervorheben"
-    syntax_tooltip: "Optische Hervorhebung der Syntax für Programmtext (Rust, Python, JavaScript etc.)"
+    syntax_tooltip: "Optische Hervorhebung der Syntax für Programmtext (Rust, Python,
+      JavaScript etc.)"
     sync_scroll_tooltip: "Scrollposition zwischen Rohtext und Vorschau synchronisieren"
     use_spaces: "Leerzeichen für Einrückungen verwenden"
     use_spaces_tooltip: "Leerzeichen anstelle von Tabulatoren für Einrückungen verwenden"
@@ -147,9 +163,11 @@ settings:
     custom_width: "Individuelle - Pixelbreite angeben"
     code_folding: "Einklappbarer Programcode"
     enable_folding: "Programmcode einklappbar machen"
-    folding_tooltip: "Abschnitte des Dokuments einklappbar machen (Ctrl+Hochstelltaste+[ um alles einzuklappen, Ctrl+Hochstelltaste+] zum Ausklappen)"
+    folding_tooltip: "Abschnitte des Dokuments einklappbar machen (Ctrl+Hochstelltaste+[
+      um alles einzuklappen, Ctrl+Hochstelltaste+] zum Ausklappen)"
     show_fold_indicators: "Einklapp-Markierungen anzeigen"
-    fold_indicators_tooltip: "Einklapp-Markierungen in der Randleiste anzeigen (das Einklappen selbst ist noch nicht implementiert)"
+    fold_indicators_tooltip: "Einklapp-Markierungen in der Randleiste anzeigen (das
+      Einklappen selbst ist noch nicht implementiert)"
     fold_headings: "Überschriften"
     fold_headings_tooltip: "Markdown-Überschriften mit ihrem Inhalt einklappen"
     fold_code_blocks: "Programmcode-Böcke"
@@ -160,7 +178,8 @@ settings:
     fold_indentation_tooltip: "Eingerückte Abschnitte in JSON/YAML-Dateien einklappen"
     snippets: "Schnipsel"
     enable_snippets: "Schnipsel-Erweiterung ermöglichen"
-    snippets_tooltip: "Trigger-Worte in vordefinierten Text erweitern. Eingebaute Schnipsel: ;date, ;time, ;datetime, ;now"
+    snippets_tooltip: "Trigger-Worte in vordefinierten Text erweitern. Eingebaute
+      Schnipsel: ;date, ;time, ;datetime, ;now"
     builtin_snippets: "Eingebaute Schnipsel:"
     snippet_date: ";date → YYYY-MM-DD"
     snippet_time: ";time → HH:MM"
@@ -171,14 +190,34 @@ settings:
     paragraph_indent_hint: "Einrückung der ersten Zeile für typographische CJK-Konventionen"
     paragraph_indent_custom: "Meine Einstellungen"
     paragraph_indent_custom_desc: "mein em-Wert"
+    complex_scripts: Zusätzliche Skripte
+    complex_scripts_hint: Vordefinierte Fonts für Arabic, Bengali, Devanagari, 
+      Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, und andere Schriften. 
+      Die Fonts werden bei Bedarf geladen wenn Dateien mit diesen Schriften 
+      geöffnet werden.
+    complex_script_default: Standard (System)
+    default_language: Standardsprache
+    default_language_hint: Sprache für Syntaxhervorhebung in ungespeicherten / 
+      neuen Dokumenten wenn keine Sprache anhand des Dateipfads erkannt wird
+    default_language_auto: automatisch (keine)
+    vim_mode: Vim-Modus
+    vim_mode_tooltip: Vim-Tasteturbelegung mit Normal-, Einfüge- und 
+      Kommandomodus. Cursorsteuerung mit "hjkl", "i" um einzufügen und mit "Esc"
+      zum Normalmodus.
+    header_spacing: Abstand bei Überschriften (Markdown-Darstellung)
+    header_spacing_hint: Vertikaler Abstand zwischen Überschriften (H1-H6) bei 
+      Markdown-Darstellung
   preview:
     sync_scroll: "synchronisiertes Scrollen"
     default_view: "Standard-Ansicht"
   files:
     title: "Dateien"
-    restore_session_tooltip: "Aktiviert: alte Karteikarten beim Start wiederherstellen. Deaktiviert: mit einer leeren Karteikarte starten. Sitzungsdaten werden immer gespeichert."
+    restore_session_tooltip: "Aktiviert: alte Karteikarten beim Start wiederherstellen.
+      Deaktiviert: mit einer leeren Karteikarte starten. Sitzungsdaten werden immer
+      gespeichert."
     enable_auto_save: "Standardmäßig automatische Speicherung aktivieren"
-    auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert. Verwendung von temporären Dateien, um Datenverlust zu vermeiden."
+    auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert.
+      Verwendung von temporären Dateien, um Datenverlust zu vermeiden."
     auto_save_delay: "Zeitintervall für automatische Specherung:"
     recent_files: "Letzte Dateien"
     clear_recent: "Liste der letzten Dateien löschen"
@@ -228,11 +267,45 @@ settings:
     font_size: "Schriftgröße"
     scrollback: "Zurückscrollen: Zeilen"
     copy_selection: "Auswahl automatisch kopieren"
-    copy_selection_tooltip: "Automatisch Text in Zwischenablage kopieren wenn er mit der Maus selektiert wird"
+    copy_selection_tooltip: "Automatisch Text in Zwischenablage kopieren wenn er mit
+      der Maus selektiert wird"
     font_size_format: "%{size}px"
     opacity_format: "%{value}%"
 
 # Find and Replace panel
+    title: Terminal
+    theme: Terminal-Farbschema
+    opacity: Lichtundurchlässigkeit des Hintergrunds
+    startup_command: Startbefehl
+    startup_command_desc: Befehl der beim Öffnen eines neuen Terminals 
+      ausgeführt wird (zum Beispiel "echo Hallo")
+    startup_command_hint: Optional
+    monitors: Erkannte Bildschirme
+    sound_notification: akustische Benachrichtigung
+    sound_notification_desc: Akustische Benachrichtigung wenn das Terminal auf 
+      eine Eingabe wartet
+    enable_sound: Ton zur Eingabeaufforderung abspielen
+    enable_sound_tooltip: Akustische Benachrichtigung bei Eingabeaufforderung im
+      Terminal (Warten auf Eingabe)
+    custom_sound: Eigene Sounddatei (optional)
+    custom_sound_hint: Systemton wenn nichts angegeben ist
+    auto_focus: Autofokussierung bei Eingabe
+    auto_focus_desc: Automatisch zum Terminal wechseln wenn es beginnt auf eine 
+      Eingabe zu warten
+    focus_on_prompt: Bei Eingabeaufforderung zum Terminal wechseln
+    focus_on_prompt_tooltip: Automatisch zum Terminal wechseln wenn es nach dem 
+      Rechnen auf eine Eingabe wartet
+    monitors_desc: erkanntes Bildschirmlayout für die Verteilung der Fenster
+    monitor_label: 'Bildschirm %{index}:'
+    monitor_geometry: (%{width}x%{height} bei %{x},%{y})
+    breathing_color: atmende Anzeigefarbe
+    prompt_patterns: Benutzerdefinierte Eingabeaufforderungsmuster
+    prompt_patterns_desc: Regex-Muster um Eingabeaufforderung zu erkennen (eines
+      je Zeile)
+    prompt_patterns_hint: 'z.B. ^\w+@\w+:'
+    auto_load_layout: Layout automatisch laden
+    auto_load_layout_tooltip: Automatisch 'terminal_layout.json' von der 
+      Arbeitsordner-Wurzel laden
 find:
   placeholder: "Suchen..."
   replace_placeholder: "Ersetzen durch..."
@@ -268,9 +341,23 @@ outline:
   tab_links: "Links"
   json_arrays: "Arrays"
   json_strings: "Strings"
-  json_numbers: "Numbers"
+  json_numbers: "Zahlen"
 
 # Document statistics
+  summary: '%{headings} Überschriften · ~%{minutes} min gelesen'
+  detach_tooltip: Abkoppeln in ein schwebendes Fenster
+  backlinks_unavailable: Backlinks nicht verfügbar
+  productivity_unavailable: Produktivitätsanzeige ist nicht verfügbar
+  tab_hub: Hub
+  json_structure: 📁 Struktur
+  json_values: 📊 Werte
+  json_objects: Objekte
+  json_total_keys: Alle Schlüssel
+  json_max_depth: Maximale Tiefe
+  json_total_values: Alle Werte
+  json_booleans: Boolsche Werte
+  json_nulls: Null-Werte
+  json_array_items: Listeneinträge
 stats:
   no_data: "Statistik nicht verfügbar"
   text_stats: "Text"
@@ -307,7 +394,8 @@ search:
   label: "Suchen:"
   placeholder: "Suchbegriffe eingeben..."
   more_matches: "    ... weitere Suchergebnisse werden nicht angezeigt"
-  keyboard_hints: "Enter drücken zum Suchen • Ergebnis anklicken zum Öffnen • Esc zum Schließen"
+  keyboard_hints: "Enter drücken zum Suchen • Ergebnis anklicken zum Öffnen • Esc
+    zum Schließen"
 
 # About dialog
 about:
@@ -349,7 +437,7 @@ shortcuts:
     edit: "Bearbeiten"
     view: "Anschauen"
     formatting: "Formatieren"
-    workspace: "Workspace"
+    workspace: "Arbeitsordner"
     navigation: "Navigation"
   # Command names (used in keyboard settings panel)
   commands:
@@ -573,7 +661,8 @@ recovery:
     time_label: "Letzte Änderung: %{time}"
   session:
     title: "Sitzung wiederherstellen"
-    crash_detected: "Ferrite hat erkannt, dass die vorherige Sitzung nicht richtig beendet wurde."
+    crash_detected: "Ferrite hat erkannt, dass die vorherige Sitzung nicht richtig
+      beendet wurde."
     restore_question: "Letzte Sitzung wiederherstellen?"
     restore: "Sitzung wiederherstellen"
     start_fresh: "Neu anfangen"
@@ -607,6 +696,7 @@ widgets:
     delete_row: "Zeile löschen"
     add_row_tooltip: "Neue Zeile hinzufügen"
     add_column_tooltip: "Neue Spalte hinzufügen"
+    alignment_tooltip: '%{alignment} (klicken um zu Rotieren)'
   link:
     edit: "Link bearbeiten"
     open: "🔗 Öffnen"
@@ -616,6 +706,11 @@ widgets:
     copy_tooltip: "URL in Zwischenablage kopieren"
 
 # CSV Viewer
+  list:
+    add_item: + Listenpunkt hinzufügen
+    decrease_level: Ausrücken
+    increase_level: Einrücken
+    remove_item: Listeneintrag entfernen
 csv:
   delimiter_auto: "automatisch erkennen"
   error: "CSV-Datei nicht lesbar"
@@ -640,7 +735,10 @@ pipeline:
   run_tooltip: "Befehl ausführen (Eingabetaste)"
   stdout: "stdout"
   stderr: "stderr"
-  hint: "Oben Befehl eingeben, durch den das Dokument durchgeleitet wird.\nBeispiele:\n• jq '.'                       - JSON formatieren\n• jq '.items[]'        - JSON-Array-Inhalt extrahieren\n• yq '.data'            - YAML-Field extrahieren\n• grep 'pattern'  - Muster suchen"
+  hint: "Oben Befehl eingeben, durch den das Dokument durchgeleitet wird.\nBeispiele:\n\
+    • jq '.'                       - JSON formatieren\n• jq '.items[]'        - JSON-Array-Inhalt
+    extrahieren\n• yq '.data'            - YAML-Field extrahieren\n• grep 'pattern'\
+    \  - Muster suchen"
   no_output_success: "(Befehl hat keine Ausgabe erzeugt)"
 
 # Encoding
@@ -690,7 +788,8 @@ tooltip:
   fullscreen_exit: "Vollbildmodus verlassen (F10 oder Esc)"
   fullscreen_enter: "Vollbildmodus (F10)"
   settings: "Einstellungen (Ctrl+,)"
-  recent_items: "Klicken für kürzliche Daten und Ordner\nShift-Klick zum Öffnen im Hintergrund"
+  recent_items: "Klicken für kürzliche Daten und Ordner\nShift-Klick zum Öffnen im
+    Hintergrund"
   about_help: "Info / Hilfe (F1)"
   git_branch: "Aktueller GIT-Zweig"
   new_tab: "Neuer Tab"
@@ -724,11 +823,179 @@ ribbon:
 welcome:
   section:
     files: "Dateien"
+    appearance: Aussehen
+    editor: Editor
+    cjk: CJK Font-Präferenz
   label:
     language: "Sprache"
 
 # Terminal panel
+    theme: Farbschema
+  subtitle: Zum Start den Editor konfigurieren.
+  line_width_hint: Beschränkt die Breite der Textzeilen. Wert eintragen für 
+    zentrierten Text im Zen-Modus (F11).
 terminal:
   rename: "Umbenennen"
 
 # File dialog titles and filters
+  not_found: Terminal nicht gefunden
+  fallback_title: Terminal
+  new_terminal_here: Neues Terminal ist da
+  maximize_active_pane: Aktive Fläche maximieren
+  pop_out: Terminal herauslösen
+  split_horizontal: horizontal teilen
+  split_vertical: vertikal teilen
+  close: Schließen
+  close_pane: Fläche schließen
+  close_others: Andere schließen
+  scatter_to_windows: auf die Fenster verteilen
+  watching: 'beobachtet: %{path}'
+  stop_watching: Nicht mehr beobachten
+  watch_workspace_root: Beobachte Wurzel des Arbeitsordners
+  export_html: Ausgabe als HTML exportieren...
+  no_workspace_root: (keine Wurzel des Arbeitsordners angegeben)
+  no_macros: Keine Makros gespeichert.
+  close_panel_tooltip: Terminal-Fläche schließen
+  running_process_warning: Dieses Terminal hat einen laufenden Prozess.
+  terminate_warning: Wenn man es schließt wird der Prozess beendet.
+  close_terminal: Terminal schließen
+  close_terminal_title: Terminal schließen?
+  cancel: Abbrechen
+  no_terminal: Kein Terminal. Auf + klicken um eines zu erstellen.
+  restore: Wiederherstellen ⤢
+  process_exited: Terminal '%{title}'-Prozess beendet
+  tab_name: Tab %{index}
+  floating_title: '#%{index} %{title}'
+  shell:
+    powershell: PowerShell
+    cmd: CMD
+    wsl: WSL
+  layout:
+    columns_2: 2 Spalten
+    rows_2: 2 Zeilen
+    grid_2x2: 2x2-Gitter
+    save_layout: Aktuelles Layout speichern...
+    load_layout: Layout laden...
+    save_workspace_layout: als Arbeitsordner-Layout speichern
+    custom_layout: Eigenes Layout
+  workspace:
+    scatter_all: Alle Tabs verteilen
+    save: Arbeitsordner speichern...
+    load: Arbeitsordner laden...
+    default_name: Arbeitsordner
+  menu:
+    layouts: Layouts
+    workspaces: Arbeitsordner
+    watch_mode: Ansichts-Modus
+    macros: Makros
+  filter:
+    terminal_layout: Terminal-Layout
+    ferrite_workspace: Ferrite-Arbeitsordner
+  error:
+    shell_not_found: Überprüfe, dass die Shell installiert und der Pfad korrekt 
+      ist
+    pty_failed: PTY-Zuweisung ist fehlgeschlagen. Versuche, die anderen 
+      Terminals zu schließen oder die App neu zu starten
+    permission_denied: Zugriff verweigert. Überprüfe Zugangsberechtigung zum 
+      Ausführen der Shell
+    io_failed: Terminal I/O fehlgeschlagen. Versuche, Terminal zu schließen und 
+      wieder zu öffnen
+    layout_failed: Terminal-Layout konnte nicht geändert werden
+    unexpected: Ein unerwarteter Fehler ist aufgetreten. Versuche, das Terminal 
+      neu zu starten
+    format: 'Terminal: %{operation} — %{hint}'
+productivity:
+  title: Produktivitätsanzeige
+  workspace_hint: Öffne einen Arbeitsordner um Aufgaben und Notizen speichern zu
+    können
+  tasks:
+    title: Aufgaben
+    progress: '%{completed}/%{total} erledigt'
+    input_hint: Tippe task oder - [ ] task ein...
+    add: Hinzufügen
+    tip: 'Tipp: Verwende - [ ] für Checkbox, ! oder !! für Priorität'
+    move_up: nach oben rücken
+    move_down: nach unten rücken
+    empty: Noch keine Aufgaben
+  pomodoro:
+    title: Promodoro-Stoppuhr
+    work: 'Arbeit: %{time}'
+    break_label: 'Pause: %{time}'
+    ready: Bereit
+    cycles: 'Zyklen: %{count}'
+    stop: Stopp
+    start_work: mit Arbeit beginnen (25m)
+    start_break: Pause nehmen (5m)
+  notes:
+    title: kurze Notizen
+    name_label: 'Name:'
+    note_label: 'Notiz:'
+    confirm_rename: Umbennenung bestätigen
+    cancel_rename: Umbenennung abbrechen
+    new_note: Neue Notiz
+    rename_note: Notiz umbenennen
+    confirm_delete: Klicken um Löschung zu bestätigen
+    delete_note: Notiz löschen
+    input_hint: Tippe hier Deine Notizen...
+    dock: Dock
+    dock_tooltip: An Übersichtsfläche anheften
+    ok: Ok
+    confirm: Bestätigen?
+    empty_name: Notiz-Name darf nicht leer sein
+    duplicate_name: Es existiert schon eine Notiz mit diesem Namen
+echo:
+  title: Echo-Demo (Platzhalter für AI-Fläche)
+  prompt: 'Dies veranschaulicht asynchrone Worker. Tippe eine Message:'
+  responses: 'Antworten (100ms Verzögerung):'
+  replacement_note: Diese Fläche wird in Phase 8 durch AI-Chat ersetzt.
+  demo_note: 'Veranschaulicht: verzögerte Erzeugung von Workern, MPSC-Kommunikation,
+    nicht blockierende Benutzeroberfläche.'
+title_bar:
+  restore: Wiederherstellen
+  maximize: Maximieren
+error:
+  save_failed: |-
+    Konnte Datei nicht speichern:
+    %{error}
+  open_workspace_failed: |-
+    Konnte Arbeitsordner nicht öffnen:
+    %{error}
+  open_file_failed: |-
+    Konnte Datei nicht öffnen:
+    %{error}
+  create_file_failed: |-
+    Konnte Datei nicht erstellen:
+    %{error}
+  create_folder_failed: |-
+    Konnte Ordner nicht erstellen:
+    %{error}
+  rename_failed: |-
+    Konnte nicht Umbenennen:
+    %{error}
+  delete_failed: |-
+    Konnte nicht löschen:
+    %{error}
+  image_failed: |-
+    Konnte Bild nicht hinzufügen:
+    %{error}
+  explorer_failed: |-
+    Konnte Explorer nicht öffnen:
+    %{error}
+  write_failed: |-
+    Konnte Datei nicht schreiben:
+    %{error}
+  encoding_failed: 'Konnte Kodierung nicht ändern: %{error}'
+file_dialog:
+  open_workspace: Arbeitsordner öffnen
+  open_files: Dateien öffnen
+  save_file: Datei speichern
+  filter:
+    supported: Unterstützte Dateien
+    markdown: Markdown-Dateien
+    text: Textdateien
+    json: JSON-Dateien
+    yaml: YAML-Dateien
+    toml: TOML-Dateien
+    csv_tsv: CSV/TSV-Dateien
+    all: Alle Dateien
+    html: HTML-Dateien
