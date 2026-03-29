@@ -308,6 +308,29 @@ tar -xzf ferrite-linux-x64.tar.gz
 ./ferrite
 ```
 
+#### Known Issues
+
+**Keyboard not working on Ubuntu 24.04 LTS (GNOME/Wayland)**
+
+Keyboard input does not work when Ferrite is launched under GNOME on Wayland (Ubuntu 24.04 LTS and similar).
+As a workaround, launch Ferrite with `WAYLAND_DISPLAY` unset to force X11 mode:
+
+```bash
+WAYLAND_DISPLAY= ferrite
+```
+
+To make this permanent for your desktop launcher, create a user-level desktop entry override:
+
+```bash
+cp /usr/share/applications/ferrite-editor.desktop ~/.local/share/applications/ferrite-editor.desktop
+```
+
+Then edit `~/.local/share/applications/ferrite-editor.desktop` and change the `Exec` line to:
+
+```
+Exec=env -u WAYLAND_DISPLAY ferrite %F
+```
+
 </details>
 
 <details>
