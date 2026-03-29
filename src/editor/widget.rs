@@ -89,7 +89,6 @@ pub fn cleanup_ferrite_editor(ctx: &egui::Context, tab_id: usize) {
         if let Some(mut editor) = storage.editors.remove(&tab_id) {
             let buffer_chars = editor.buffer.len();
             let cache_entries = editor.line_cache.len();
-            let undo_count = editor.history.can_undo() as usize;
             
             // Explicitly clear large data structures before drop
             // This helps the allocator reclaim memory more efficiently
@@ -98,8 +97,8 @@ pub fn cleanup_ferrite_editor(ctx: &egui::Context, tab_id: usize) {
             editor.search_matches.shrink_to_fit();
             
             log::info!(
-                "Cleaned up FerriteEditor for tab {}: buffer={} chars, cache={} entries, has_undo={}",
-                tab_id, buffer_chars, cache_entries, undo_count
+                "Cleaned up FerriteEditor for tab {}: buffer={} chars, cache={} entries",
+                tab_id, buffer_chars, cache_entries
             );
             // editor is dropped here, freeing TextBuffer (Rope) and remaining fields
         }
@@ -232,6 +231,8 @@ pub struct EditorWidget<'a> {
     auto_close_brackets: bool,
     /// Whether Vim modal editing is enabled.
     vim_mode: bool,
+    /// LSP diagnostics for this file (set each frame from AppState).
+    diagnostics: Vec<crate::lsp::state::DiagnosticEntry>,
 }
 
 impl<'a> EditorWidget<'a> {
@@ -261,6 +262,7 @@ impl<'a> EditorWidget<'a> {
             syntax_theme: None,
             pending_sync_scroll_offset: None,
             auto_close_brackets: false,
+            diagnostics: Vec::new(),
             vim_mode: false,
         }
     }
@@ -448,13 +450,20 @@ impl<'a> EditorWidget<'a> {
         self
     }
 
+    /// Set LSP diagnostics for this file.
+    #[must_use]
+    pub fn diagnostics(mut self, diags: Vec<crate::lsp::state::DiagnosticEntry>) -> Self {
+        self.diagnostics = diags;
+        self
+    }
+
     /// Show the editor widget and return the output.
     ///
     /// This uses the custom FerriteEditor which provides:
     /// - Virtual scrolling (only renders visible lines)
     /// - Rope-based text storage (O(log n) operations)
     /// - Galley caching for efficient re-rendering
-    pub fn show(self, ui: &mut Ui) -> EditorOutput {
+    pub fn show(mut self, ui: &mut Ui) -> EditorOutput {
         let tab_id = self.tab.id;
         let _base_id = self.id.unwrap_or_else(|| ui.id().with("ferrite_editor"));
 
@@ -671,6 +680,9 @@ impl<'a> EditorWidget<'a> {
         // Configure bracket matching
         // Now uses windowed search (cursor ±100 lines), safe for any file size
         editor.set_bracket_matching_enabled(self.highlight_matching_pairs);
+
+        // Pass LSP diagnostics for this file
+        editor.diagnostics = std::mem::take(&mut self.diagnostics);
 
         // Set bracket colors from theme if available
         if let Some(ref colors) = self.theme_colors {

@@ -50,28 +50,11 @@ impl FerriteEditor {
         let end_char = self.buffer.try_byte_to_char(end_byte).unwrap_or(start_char);
         let match_len = end_char.saturating_sub(start_char);
 
-        // Get the original text for undo
-        let original_text: String = self.buffer.slice(start_char, end_char);
-
-        // Record the delete operation
-        self.history
-            .record_operation(super::history::EditOperation::Delete {
-                pos: start_char,
-                text: original_text,
-            });
-
         // Remove the matched text
         self.buffer.remove(start_char, match_len);
 
         // Insert the replacement text
         self.buffer.insert(start_char, replacement);
-
-        // Record the insert operation (in same time window, will be grouped for undo)
-        self.history
-            .record_operation(super::history::EditOperation::Insert {
-                pos: start_char,
-                text: replacement.to_string(),
-            });
 
         // Mark content as dirty
         self.content_dirty = true;
@@ -156,9 +139,6 @@ impl FerriteEditor {
 
         let match_count = self.search_matches.len();
 
-        // Break the edit group to start fresh (so all replacements are grouped together)
-        self.history.break_group();
-
         // Process matches from end to start to avoid position invalidation
         // This way, replacing match N doesn't affect the positions of matches 0..N-1
         for i in (0..match_count).rev() {
@@ -171,32 +151,12 @@ impl FerriteEditor {
             let end_char = self.buffer.try_byte_to_char(end_byte).unwrap_or(start_char);
             let match_len = end_char.saturating_sub(start_char);
 
-            // Get the original text for undo
-            let original_text: String = self.buffer.slice(start_char, end_char);
-
-            // Record the delete operation
-            self.history
-                .record_operation(super::history::EditOperation::Delete {
-                    pos: start_char,
-                    text: original_text,
-                });
-
             // Remove the matched text
             self.buffer.remove(start_char, match_len);
 
             // Insert the replacement text
             self.buffer.insert(start_char, replacement);
-
-            // Record the insert operation
-            self.history
-                .record_operation(super::history::EditOperation::Insert {
-                    pos: start_char,
-                    text: replacement.to_string(),
-                });
         }
-
-        // Break the group after all replacements (next edit will be separate)
-        self.history.break_group();
 
         // Mark content as dirty
         self.content_dirty = true;

@@ -221,6 +221,7 @@ impl SettingsPanel {
         ctx: &egui::Context,
         settings: &mut Settings,
         is_dark: bool,
+        workspace_root: Option<&std::path::Path>,
     ) -> SettingsPanelOutput {
         let mut output = SettingsPanelOutput::default();
 
@@ -321,7 +322,7 @@ impl SettingsPanel {
                                         }
                                     }
                                     SettingsSection::Editor => {
-                                        if self.show_editor_section(ui, settings) {
+                                        if self.show_editor_section(ui, settings, workspace_root) {
                                             output.changed = true;
                                         }
                                     }
@@ -386,6 +387,7 @@ impl SettingsPanel {
         ui: &mut Ui,
         settings: &mut Settings,
         is_dark: bool,
+        workspace_root: Option<&std::path::Path>,
     ) -> SettingsPanelOutput {
         let mut output = SettingsPanelOutput::default();
 
@@ -471,7 +473,7 @@ impl SettingsPanel {
                                 }
                             }
                             SettingsSection::Editor => {
-                                if self.show_editor_section(ui, settings) {
+                                if self.show_editor_section(ui, settings, workspace_root) {
                                     output.changed = true;
                                 }
                             }
@@ -1319,7 +1321,12 @@ impl SettingsPanel {
     /// Show the Editor settings section with two-column layout for toggles.
     ///
     /// Returns true if any setting was changed.
-    fn show_editor_section(&mut self, ui: &mut Ui, settings: &mut Settings) -> bool {
+    fn show_editor_section(
+        &mut self,
+        ui: &mut Ui,
+        settings: &mut Settings,
+        workspace_root: Option<&std::path::Path>,
+    ) -> bool {
         let mut changed = false;
 
         ui.heading(t!("settings.editor.title"));
@@ -1392,7 +1399,7 @@ impl SettingsPanel {
                 }
                 ui.end_row();
 
-                // Row 5: Vim Mode
+                // Row 5: Vim Mode | Strict Line Breaks
                 if ui
                     .checkbox(&mut settings.vim_mode, t!("settings.editor.vim_mode"))
                     .on_hover_text(t!("settings.editor.vim_mode_tooltip"))
@@ -1400,8 +1407,86 @@ impl SettingsPanel {
                 {
                     changed = true;
                 }
+                if ui
+                    .checkbox(&mut settings.strict_line_breaks, "Strict Line Breaks")
+                    .on_hover_text("Treat single newlines as hard line breaks in rendered view")
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.end_row();
+
+                // Row 6: LSP (Language Server Protocol)
+                if ui
+                    .checkbox(&mut settings.lsp_enabled, "LSP (Language Servers)")
+                    .on_hover_text("Auto-detect and start language servers for code intelligence (requires servers on PATH)")
+                    .changed()
+                {
+                    changed = true;
+                }
                 ui.end_row();
             });
+
+        // Language server binary overrides (Editor section)
+        ui.add_space(12.0);
+        ui.label(RichText::new("Language servers").strong());
+        ui.label(
+            RichText::new("Optional path to the server binary per detected server. Leave empty to use PATH.")
+                .weak()
+                .small(),
+        );
+        ui.add_space(6.0);
+
+        let mut server_keys: Vec<String> = workspace_root
+            .map(|root| {
+                crate::lsp::detect_servers_for_workspace(root)
+                    .into_iter()
+                    .map(|(k, _)| k)
+                    .collect()
+            })
+            .unwrap_or_default();
+        for k in settings.lsp_server_overrides.keys() {
+            if !server_keys.contains(k) {
+                server_keys.push(k.clone());
+            }
+        }
+        server_keys.sort();
+        server_keys.dedup();
+
+        if workspace_root.is_none() {
+            ui.label(
+                RichText::new("Open a folder workspace to detect language servers for this project.")
+                    .italics()
+                    .weak(),
+            );
+        } else if server_keys.is_empty() {
+            ui.label(
+                RichText::new(
+                    "No language servers detected for this workspace (add code files or set overrides below).",
+                )
+                .italics()
+                .weak(),
+            );
+        }
+
+        for key in &server_keys {
+            let key = key.clone();
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", key));
+                let mut path = settings.lsp_server_overrides.get(&key).cloned().unwrap_or_default();
+                let desired = f32::max(120.0, f32::min(ui.available_width() - 72.0, 420.0));
+                let te =
+                    egui::TextEdit::singleline(&mut path).desired_width(desired).hint_text("default from PATH");
+                if ui.add(te).changed() {
+                    if path.trim().is_empty() {
+                        settings.lsp_server_overrides.remove(&key);
+                    } else {
+                        settings.lsp_server_overrides.insert(key, path);
+                    }
+                    changed = true;
+                }
+            });
+        }
 
         // Default language for syntax highlighting (only show when syntax highlighting is enabled)
         if settings.syntax_highlighting_enabled {

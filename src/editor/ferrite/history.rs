@@ -1,36 +1,24 @@
-//! EditHistory module for undo/redo operations.
+//! Unified operation-based undo/redo system.
 //!
-//! This module provides operation-based undo/redo functionality for the text editor.
-//! Operations are recorded as discrete edits (insert/delete) rather than full state
-//! snapshots, making it memory-efficient for large files.
+//! This module is the **single undo system** for the entire application.
+//! `EditHistory` is owned by each `Tab` in `state.rs` and handles undo for
+//! both raw (FerriteEditor) and rendered (MarkdownEditor) modes.
+//!
+//! Edits are recorded as discrete operations (insert/delete) rather than full
+//! state snapshots, making memory usage proportional to edit size, not file size.
+//!
+//! # Recording flow
+//!
+//! Both modes use diff-based recording:
+//! 1. Before editor `show()`: `Tab::prepare_undo_snapshot()` lazily clones content.
+//! 2. After editor `show()`: if changed, `Tab::record_edit_from_snapshot()` computes
+//!    a minimal diff via [`compute_edit_ops`] and pushes the resulting operations.
 //!
 //! # Features
 //! - Operation-based undo/redo (not state snapshots)
-//! - Memory-efficient: stores only operations, not full content
-//! - Time-based grouping: rapid typing within 500ms = single undo unit
-//!
-//! # Example
-//! ```rust,ignore
-//! use crate::editor::{EditHistory, EditOperation, TextBuffer};
-//!
-//! let mut buffer = TextBuffer::from_string("Hello");
-//! let mut history = EditHistory::new();
-//!
-//! // Record an insert operation
-//! buffer.insert(5, " World");
-//! history.record_operation(EditOperation::Insert {
-//!     pos: 5,
-//!     text: " World".to_string(),
-//! });
-//!
-//! // Undo the operation
-//! history.undo(&mut buffer);
-//! assert_eq!(buffer.to_string(), "Hello");
-//!
-//! // Redo the operation
-//! history.redo(&mut buffer);
-//! assert_eq!(buffer.to_string(), "Hello World");
-//! ```
+//! - Memory-efficient: stores only changed text, not full content
+//! - Time-based grouping: rapid edits within 500ms = single undo unit
+//! - Works on both `TextBuffer` (rope) and plain `String`
 
 use std::time::{Duration, Instant};
 
@@ -86,7 +74,8 @@ impl EditOperation {
         }
     }
 
-    /// Applies this operation to the given buffer.
+    /// Applies this operation to the given TextBuffer (used in tests).
+    #[cfg(test)]
     pub fn apply(&self, buffer: &mut TextBuffer) {
         match self {
             Self::Insert { pos, text } => {
@@ -97,6 +86,78 @@ impl EditOperation {
             }
         }
     }
+
+    /// Applies this operation to a plain `String` using char-indexed positions.
+    pub fn apply_to_string(&self, s: &mut String) {
+        match self {
+            Self::Insert { pos, text } => {
+                let byte_pos = char_pos_to_byte_pos(s, *pos);
+                s.insert_str(byte_pos, text);
+            }
+            Self::Delete { pos, text } => {
+                let byte_start = char_pos_to_byte_pos(s, *pos);
+                let byte_end = char_pos_to_byte_pos(s, *pos + text.chars().count());
+                s.drain(byte_start..byte_end);
+            }
+        }
+    }
+}
+
+/// Converts a char index to a byte offset within a string.
+fn char_pos_to_byte_pos(s: &str, char_pos: usize) -> usize {
+    s.char_indices()
+        .nth(char_pos)
+        .map(|(byte_idx, _)| byte_idx)
+        .unwrap_or(s.len())
+}
+
+/// Computes the minimal edit operations to transform `old` into `new`.
+///
+/// Uses prefix/suffix matching to find the changed region, then emits
+/// a Delete (if text was removed) and/or an Insert (if text was added).
+/// Positions are char-indexed, not byte-indexed.
+pub fn compute_edit_ops(old: &str, new: &str) -> Vec<EditOperation> {
+    if old == new {
+        return Vec::new();
+    }
+
+    let old_chars: Vec<char> = old.chars().collect();
+    let new_chars: Vec<char> = new.chars().collect();
+
+    let prefix = old_chars
+        .iter()
+        .zip(&new_chars)
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    let max_suffix = old_chars.len().min(new_chars.len()).saturating_sub(prefix);
+    let suffix = old_chars
+        .iter()
+        .rev()
+        .zip(new_chars.iter().rev())
+        .take(max_suffix)
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    let del_end = old_chars.len() - suffix;
+    let ins_end = new_chars.len() - suffix;
+
+    let mut ops = Vec::new();
+    if del_end > prefix {
+        let deleted: String = old_chars[prefix..del_end].iter().collect();
+        ops.push(EditOperation::Delete {
+            pos: prefix,
+            text: deleted,
+        });
+    }
+    if ins_end > prefix {
+        let inserted: String = new_chars[prefix..ins_end].iter().collect();
+        ops.push(EditOperation::Insert {
+            pos: prefix,
+            text: inserted,
+        });
+    }
+    ops
 }
 
 /// A group of operations that should be undone/redone together.
@@ -122,6 +183,7 @@ impl OperationGroup {
     }
 
     /// Applies the inverse of all operations in reverse order (for undo).
+    #[cfg(test)]
     fn undo(&self, buffer: &mut TextBuffer) {
         for op in self.operations.iter().rev() {
             op.inverse().apply(buffer);
@@ -129,9 +191,24 @@ impl OperationGroup {
     }
 
     /// Applies all operations in order (for redo).
+    #[cfg(test)]
     fn redo(&self, buffer: &mut TextBuffer) {
         for op in &self.operations {
             op.apply(buffer);
+        }
+    }
+
+    /// Applies the inverse of all operations in reverse order to a `String`.
+    fn undo_string(&self, s: &mut String) {
+        for op in self.operations.iter().rev() {
+            op.inverse().apply_to_string(s);
+        }
+    }
+
+    /// Applies all operations in order to a `String`.
+    fn redo_string(&self, s: &mut String) {
+        for op in &self.operations {
+            op.apply_to_string(s);
         }
     }
 }
@@ -159,7 +236,12 @@ pub struct EditHistory {
     redo_stack: Vec<OperationGroup>,
     /// Timestamp of the last recorded operation (for grouping).
     last_edit_time: Option<Instant>,
+    /// Maximum number of undo groups to keep. Operations are tiny so this can be large.
+    max_groups: usize,
 }
+
+/// Default maximum undo groups (operation-based entries are small).
+const DEFAULT_MAX_GROUPS: usize = 500;
 
 impl Default for EditHistory {
     fn default() -> Self {
@@ -182,6 +264,18 @@ impl EditHistory {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             last_edit_time: None,
+            max_groups: DEFAULT_MAX_GROUPS,
+        }
+    }
+
+    /// Creates a new `EditHistory` with a custom max undo group limit.
+    #[must_use]
+    pub fn with_max_groups(max_groups: usize) -> Self {
+        Self {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            last_edit_time: None,
+            max_groups,
         }
     }
 
@@ -218,7 +312,6 @@ impl EditHistory {
             if let Some(group) = self.undo_stack.last_mut() {
                 group.push(op);
             } else {
-                // No existing group (shouldn't happen, but handle gracefully)
                 self.undo_stack.push(OperationGroup::new(op));
             }
         } else {
@@ -226,10 +319,30 @@ impl EditHistory {
             self.undo_stack.push(OperationGroup::new(op));
         }
 
+        // Enforce max groups cap
+        while self.undo_stack.len() > self.max_groups {
+            self.undo_stack.remove(0);
+        }
+
         // Clear redo stack when new operation is recorded
         self.redo_stack.clear();
 
         self.last_edit_time = Some(now);
+    }
+
+    /// Records a batch of edit operations as a single group or merged into
+    /// the current group if within the time threshold.
+    ///
+    /// This is used by the diff-based recording path: a single edit frame
+    /// produces 0-2 operations (a delete and/or insert) that should be
+    /// treated as one atomic change.
+    pub fn record_operations(&mut self, ops: Vec<EditOperation>) {
+        if ops.is_empty() {
+            return;
+        }
+        for op in ops {
+            self.record_operation(op);
+        }
     }
 
     /// Undoes the last operation group.
@@ -261,10 +374,9 @@ impl EditHistory {
     /// assert_eq!(buffer.to_string(), "Hello World");
     /// assert!(cursor_pos.is_some());
     /// ```
+    #[cfg(test)]
     pub fn undo(&mut self, buffer: &mut TextBuffer) -> Option<usize> {
         if let Some(group) = self.undo_stack.pop() {
-            // Get cursor position from the first operation in the group
-            // After undo, cursor should be at the position where the change was
             let cursor_pos = group.operations.first().map(|op| match op {
                 EditOperation::Insert { pos, .. } => *pos,
                 EditOperation::Delete { pos, text } => *pos + text.chars().count(),
@@ -272,7 +384,6 @@ impl EditHistory {
             
             group.undo(buffer);
             self.redo_stack.push(group);
-            // Reset grouping timer after undo
             self.last_edit_time = None;
             cursor_pos
         } else {
@@ -313,10 +424,9 @@ impl EditHistory {
     /// assert_eq!(buffer.to_string(), "Hello World");
     /// assert!(cursor_pos.is_some());
     /// ```
+    #[cfg(test)]
     pub fn redo(&mut self, buffer: &mut TextBuffer) -> Option<usize> {
         if let Some(group) = self.redo_stack.pop() {
-            // Get cursor position from the last operation in the group
-            // After redo, cursor should be at the end of the change
             let cursor_pos = group.operations.last().map(|op| match op {
                 EditOperation::Insert { pos, text } => *pos + text.chars().count(),
                 EditOperation::Delete { pos, .. } => *pos,
@@ -324,7 +434,46 @@ impl EditHistory {
             
             group.redo(buffer);
             self.undo_stack.push(group);
-            // Reset grouping timer after redo
+            self.last_edit_time = None;
+            cursor_pos
+        } else {
+            None
+        }
+    }
+
+    /// Undoes the last operation group, applying changes to a plain `String`.
+    ///
+    /// Returns `Some(char_pos)` with the cursor position to restore,
+    /// or `None` if the undo stack was empty.
+    pub fn undo_string(&mut self, s: &mut String) -> Option<usize> {
+        if let Some(group) = self.undo_stack.pop() {
+            let cursor_pos = group.operations.first().map(|op| match op {
+                EditOperation::Insert { pos, .. } => *pos,
+                EditOperation::Delete { pos, text } => *pos + text.chars().count(),
+            });
+
+            group.undo_string(s);
+            self.redo_stack.push(group);
+            self.last_edit_time = None;
+            cursor_pos
+        } else {
+            None
+        }
+    }
+
+    /// Redoes the last undone operation group, applying changes to a plain `String`.
+    ///
+    /// Returns `Some(char_pos)` with the cursor position to restore,
+    /// or `None` if the redo stack was empty.
+    pub fn redo_string(&mut self, s: &mut String) -> Option<usize> {
+        if let Some(group) = self.redo_stack.pop() {
+            let cursor_pos = group.operations.last().map(|op| match op {
+                EditOperation::Insert { pos, text } => *pos + text.chars().count(),
+                EditOperation::Delete { pos, .. } => *pos,
+            });
+
+            group.redo_string(s);
+            self.undo_stack.push(group);
             self.last_edit_time = None;
             cursor_pos
         } else {
@@ -357,21 +506,7 @@ impl EditHistory {
     }
 
     /// Clears all undo and redo history.
-    ///
-    /// This is typically called when loading a new file or after saving.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let mut history = EditHistory::new();
-    /// history.record_operation(EditOperation::Insert {
-    ///     pos: 0,
-    ///     text: "test".to_string(),
-    /// });
-    /// assert!(history.can_undo());
-    ///
-    /// history.clear();
-    /// assert!(!history.can_undo());
-    /// ```
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
@@ -838,6 +973,174 @@ mod tests {
         }
 
         assert_eq!(buffer.to_string(), original);
+    }
+
+    #[test]
+    fn test_compute_edit_ops_insert() {
+        let ops = compute_edit_ops("Hello", "Hello World");
+        assert_eq!(ops.len(), 1);
+        assert_eq!(
+            ops[0],
+            EditOperation::Insert {
+                pos: 5,
+                text: " World".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_compute_edit_ops_delete() {
+        let ops = compute_edit_ops("Hello World", "Hello");
+        assert_eq!(ops.len(), 1);
+        assert_eq!(
+            ops[0],
+            EditOperation::Delete {
+                pos: 5,
+                text: " World".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_compute_edit_ops_replace() {
+        let ops = compute_edit_ops("Hello World", "Hello Rust!");
+        assert_eq!(ops.len(), 2);
+        assert_eq!(
+            ops[0],
+            EditOperation::Delete {
+                pos: 6,
+                text: "World".to_string(),
+            }
+        );
+        assert_eq!(
+            ops[1],
+            EditOperation::Insert {
+                pos: 6,
+                text: "Rust!".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_compute_edit_ops_no_change() {
+        let ops = compute_edit_ops("same", "same");
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn test_compute_edit_ops_unicode() {
+        let ops = compute_edit_ops("Hello", "Hello こんにちは");
+        assert_eq!(ops.len(), 1);
+        assert_eq!(
+            ops[0],
+            EditOperation::Insert {
+                pos: 5,
+                text: " こんにちは".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_undo_string() {
+        let mut s = "Hello World".to_string();
+        let mut history = EditHistory::new();
+
+        history.record_operation(EditOperation::Insert {
+            pos: 5,
+            text: " World".to_string(),
+        });
+
+        let cursor = history.undo_string(&mut s);
+        assert_eq!(s, "Hello");
+        assert_eq!(cursor, Some(5));
+    }
+
+    #[test]
+    fn test_redo_string() {
+        let mut s = "Hello World".to_string();
+        let mut history = EditHistory::new();
+
+        history.record_operation(EditOperation::Insert {
+            pos: 5,
+            text: " World".to_string(),
+        });
+
+        history.undo_string(&mut s);
+        assert_eq!(s, "Hello");
+
+        let cursor = history.redo_string(&mut s);
+        assert_eq!(s, "Hello World");
+        assert_eq!(cursor, Some(11));
+    }
+
+    #[test]
+    fn test_apply_to_string_insert() {
+        let mut s = "Hello".to_string();
+        EditOperation::Insert {
+            pos: 5,
+            text: " World".to_string(),
+        }
+        .apply_to_string(&mut s);
+        assert_eq!(s, "Hello World");
+    }
+
+    #[test]
+    fn test_apply_to_string_delete() {
+        let mut s = "Hello World".to_string();
+        EditOperation::Delete {
+            pos: 5,
+            text: " World".to_string(),
+        }
+        .apply_to_string(&mut s);
+        assert_eq!(s, "Hello");
+    }
+
+    #[test]
+    fn test_apply_to_string_unicode() {
+        let mut s = "こんにちは".to_string();
+        EditOperation::Insert {
+            pos: 5,
+            text: "世界".to_string(),
+        }
+        .apply_to_string(&mut s);
+        assert_eq!(s, "こんにちは世界");
+
+        EditOperation::Delete {
+            pos: 5,
+            text: "世界".to_string(),
+        }
+        .apply_to_string(&mut s);
+        assert_eq!(s, "こんにちは");
+    }
+
+    #[test]
+    fn test_roundtrip_diff_undo() {
+        let old = "# Hello\n\nWorld";
+        let new = "# Hello\n\nRust World";
+        let ops = compute_edit_ops(old, new);
+
+        let mut s = new.to_string();
+        let mut history = EditHistory::new();
+        history.record_operations(ops);
+
+        history.undo_string(&mut s);
+        assert_eq!(s, old);
+
+        history.redo_string(&mut s);
+        assert_eq!(s, new);
+    }
+
+    #[test]
+    fn test_max_groups_cap() {
+        let mut history = EditHistory::with_max_groups(3);
+        for i in 0..5 {
+            history.break_group();
+            history.record_operation(EditOperation::Insert {
+                pos: i,
+                text: format!("{i}"),
+            });
+        }
+        assert_eq!(history.undo_count(), 3);
     }
 
     /// Performance test with 1MB buffer

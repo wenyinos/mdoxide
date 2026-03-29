@@ -36,6 +36,7 @@ mod error;
 mod export;
 mod files;
 mod fonts;
+mod lsp;
 mod markdown;
 mod path_utils;
 mod platform;

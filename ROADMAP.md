@@ -107,7 +107,7 @@
 ### FerriteEditor Limitations
 With the v0.2.6 custom editor, most previous egui TextEdit limitations are resolved. Remaining issues:
 
-- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese IME candidate window may appear offset from cursor position.
+- [ ] **IME candidate box positioning** ([#15](https://github.com/OlaProeis/Ferrite/issues/15), [#103](https://github.com/OlaProeis/Ferrite/issues/103)) - Chinese/Japanese/Korean IME candidate window invisible or offset from cursor position on Windows. Tracked for v0.2.8 fix.
 - [x] **IME backspace deleting text** ([#91](https://github.com/OlaProeis/Ferrite/issues/91)) - Fixed in v0.2.7. Backspace during IME composition no longer deletes editor text.
 
 ### Deferred (from v0.2.7)
@@ -115,18 +115,35 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ### Platform & Distribution
 - [x] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Fixed: CI now packages proper `.app` bundle via `cargo-bundle`. Workaround no longer needed.
+- [ ] **Wayland keyboard input on Ubuntu 24.04** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) - No keyboard input on GNOME/Mutter Wayland. Root cause: winit 0.29.15 (via eframe 0.28) Wayland backend bug. Workaround: `WAYLAND_DISPLAY= ferrite`. Fix: upgrade to eframe/egui 0.31+ (winit 0.31+ rewritten Wayland backend). Tracked as Task 38.
 
 ### Rendered View Limitations
+- [ ] **Slow rendering on large documents** ([#105](https://github.com/OlaProeis/Ferrite/issues/105)) - Rendered view re-parses full markdown AST and builds all egui widgets every frame with no caching or viewport culling. Unusable on 6k+ line files. Tracked for v0.2.8 fix (AST caching + viewport culling).
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
 
 ---
 
 ## Planned Features 
 
-### v0.2.8 - UI, Accessibility, Text Shaping & Bug Fixes
+### v0.2.8 - Performance, Accessibility, Text Shaping & Bug Fixes
+
+#### Rendered View Performance ([#105](https://github.com/OlaProeis/Ferrite/issues/105))
+*Addresses slow/unusable rendered view on large documents (6k+ lines, 50k+ words). Two users reported this as a blocker in v0.2.7.*
+
+- [ ] **Markdown AST caching** - Cache the parsed `MarkdownDocument` using a blake3 content hash (same pattern as Mermaid diagram caching in `mermaid/cache.rs`). Only call `parse_markdown()` when content actually changes instead of re-parsing the full document 60 times per second. Eliminates the dominant per-frame cost for scrolling and idle states.
+- [ ] **Rendered view viewport culling** - Switch `ScrollArea::vertical().show()` to `.show_viewport()` and skip `render_node()` for blocks outside the visible area + overscan buffer. Maintain a block heights array (following the `cumulative_heights` pattern in `editor/ferrite/view.rs` and `CachedVisibleRows` in `csv_viewer.rs`). Use `ui.allocate_space()` for off-screen content. Reduces per-frame widget construction from O(N blocks) to O(visible blocks).
+- [ ] **Block-level height cache** - Cache measured heights per rendered block keyed on content hash (following the `LineCache` LRU pattern in `editor/ferrite/line_cache.rs`). Avoids re-measuring off-screen blocks and enables accurate scrollbar positioning with viewport culling.
+
+*Note: This is not a full virtual document architecture (planned v0.4.0). It brings rendered view performance closer to parity with Obsidian for large files by eliminating the most wasteful per-frame work. The raw editor (FerriteEditor) already handles large files well via virtual scrolling.*
 
 #### Bug Fixes
-- [ ] **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - Add `UTImportedTypeDeclarations` to `info_plist_ext.xml` to properly declare the `net.daringfireball.markdown` UTI, enabling Finder "Open With" and double-click file opening
+- [x] **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - `UTImportedTypeDeclarations` in `info_plist_ext.xml` declares `net.daringfireball.markdown` (conforms to `public.plain-text`); `Cargo.toml` `osx_info_plist_exts` merges it into bundled `Info.plist`; release workflow uses `cargo bundle --release`
+- [ ] **Windows IME candidate box mispositioning** ([#103](https://github.com/OlaProeis/Ferrite/issues/103), [#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese/Korean IME candidate selection box appears at the wrong position (e.g. bottom of screen) or is invisible on Windows 11. Root cause: custom editor sets `IMEOutput` with local widget coordinates instead of applying `layer_transform_to_global()` like egui's built-in `TextEdit` does, causing the OS to receive incorrect screen coordinates for the candidate popup. Reporter confirmed candidate box appears but at wrong position after switching to light mode. Fix: apply `to_global` transform to `rect` and `cursor_rect` in `editor.rs` IME output.
+- [ ] **Double-dash (`--`) causes false setext headings and line collapsing** - Two related rendering bugs when `--` appears in markdown content: (1) Text followed by `--` on the next line is interpreted as a setext H2 heading by Comrak (e.g., `Hvordan\n--` renders "Hvordan" as an H2 header). The v0.2.7 `fix_false_setext_headings()` in `parser.rs` only catches the single-dash case (`trimmed == "-"`), not `"--"`. Fix: extend the function to also treat `--` as a false setext underline. (2) Multiple lines starting with `-- ` that lack a preceding blank line collapse into a single paragraph because CommonMark treats soft line breaks as spaces (e.g., `-- skal\n-- jeg\n-- asd` becomes `-- skal -- jeg -- asd`). Fix options: preprocess `\n-- ` to `\n\n-- ` to force paragraph breaks, or post-process the AST to split paragraphs at `-- ` boundaries.
+
+#### Markdown Rendering Settings
+- [ ] **Strict line breaks setting** - Add "Strict line breaks" toggle to Settings → Editor (default: off). When enabled, single newlines in markdown source render as hard line breaks (`<br>`) instead of spaces — so each new line in the editor appears as a new line in the rendered preview. Wires up Comrak's `render.hardbreaks` option to a new `strict_line_breaks: bool` field in `Settings`. Follows the Obsidian model where spec-compliant soft breaks are the default but users can opt into newline-as-linebreak behavior.
+- [ ] **Strict line breaks on Welcome page** - Add the strict line breaks toggle to the Welcome page editor settings section (alongside word wrap, line numbers, minimap, etc.) so new users can configure this preference on first launch.
 
 #### Executable Code Blocks
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
@@ -157,9 +174,8 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
 - [ ] **Settings** — Per-language server path override; all processing local (no network calls).
 
-#### Traditional Menu Bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
-- [ ] **Alt-key menu access** - Traditional File/Edit/View menus toggled via Alt key (VS Code style).
-- [ ] **Accessibility** - Full keyboard navigation for all menu items.
+#### Image Viewer Tab ([#108](https://github.com/OlaProeis/Ferrite/issues/108))
+- [ ] **Open images as viewer tabs** - Open PNG, JPEG, GIF, WebP files in a dedicated viewer tab instead of showing "binary file" error. Reuses existing `image` crate and texture infrastructure from markdown image rendering. Zoom (Ctrl+scroll), fit-to-window, basic metadata display (dimensions, format, file size). Tracked as Task 39.
 
 #### Additional Format Support
 
@@ -180,8 +196,14 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ---
 
-### v0.3.0 - Mermaid Crate, Markdown Enhancements & Full RTL/BiDi
-**Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, and completing right-to-left and bidirectional text support.
+### v0.3.0 - Mermaid Crate, Markdown Enhancements, Alt Menus & Full RTL/BiDi
+**Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, traditional Alt-key menus (moved from v0.2.8), and completing right-to-left and bidirectional text support.
+
+#### Traditional menu bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
+*Deferred from v0.2.8 — ships in v0.3.0.*
+
+- [ ] **Alt-key menu access** - Traditional File/Edit/View menus toggled via Alt key (VS Code style).
+- [ ] **Accessibility** - Full keyboard navigation for all menu items.
 
 #### 0. Unicode & Complex Script Support (Phase 3 & 4: RTL, BiDi, WYSIWYG)
 *Depends on: Phase 2 text shaping from v0.2.8*
@@ -298,6 +320,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Column/box selection** - Rectangular selection.
 
 ### Additional Document Formats (Candidates)
+- [ ] **PDF viewing (read-only)** ([#108](https://github.com/OlaProeis/Ferrite/issues/108)) - Page-by-page PDF rendering via native library bindings (PDFium or MuPDF). Requires shipping platform-specific native libraries (~20MB per platform). Complex cross-compilation. Low priority — OS viewers handle this well.
 - [ ] **Jupyter Notebooks (.ipynb)** - Read-only viewing of cells and outputs.
 - [ ] **EPUB** - Page-less e-book reading with TOC and position memory.
 - [ ] **LaTeX source (.tex)** - Syntax highlighting, math preview, outline.

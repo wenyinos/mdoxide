@@ -548,11 +548,18 @@ impl FerriteApp {
                                 .active_tab()
                                 .and_then(|t| t.path.clone());
 
-                            // Capture content and cursor before editing for undo support
-                            let (content_before, cursor_before) = self.state
-                                .active_tab()
-                                .map(|t| (t.content.clone(), t.cursors.primary().head))
-                                .unwrap_or_default();
+                            // Collect diagnostics for the active tab's file (cloned to avoid borrow conflict)
+                            let tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
+                                tab_path_for_syntax
+                                    .as_ref()
+                                    .and_then(|p| self.state.diagnostics.get(p))
+                                    .map(|d| d.to_vec())
+                                    .unwrap_or_default();
+
+                            // Prepare lazy undo snapshot (only clones if no pending snapshot)
+                            if let Some(tab) = self.state.active_tab_mut() {
+                                tab.prepare_undo_snapshot();
+                            }
 
                             // Format toolbar state (markdown files only, hidden in Zen Mode)
                             let show_format_toolbar = is_markdown_file && !zen_mode;
@@ -662,7 +669,8 @@ impl FerriteApp {
                                     .default_syntax_language(default_syntax_language.clone())
                                     .syntax_theme(syntax_theme.clone())
                                     .auto_close_brackets(auto_close_brackets)
-                                    .vim_mode(vim_mode);
+                                    .vim_mode(vim_mode)
+                                    .diagnostics(tab_diagnostics.clone());
 
                                 // Add search highlights if available
                                 if let Some(highlights) = search_highlights.clone() {
@@ -707,9 +715,7 @@ impl FerriteApp {
 
                                 if editor_output.changed {
                                     debug!("Content modified in raw editor");
-                                    // Record edit for undo/redo support
-                                    tab.record_edit(content_before.clone(), cursor_before);
-                                    // Mark folds as dirty when content changes
+                                    tab.record_edit_from_snapshot();
                                     if folding_enabled {
                                         tab.mark_folds_dirty();
                                     }
@@ -981,6 +987,14 @@ impl FerriteApp {
                                     .active_tab()
                                     .and_then(|t| t.path.clone());
 
+                                // Collect diagnostics for the active tab's file
+                                let tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
+                                    tab_path_for_syntax
+                                        .as_ref()
+                                        .and_then(|p| self.state.diagnostics.get(p))
+                                        .map(|d| d.to_vec())
+                                        .unwrap_or_default();
+
                                 // Check if file is markdown (for auto mode minimap selection)
                                 let is_markdown_file_split = self.state
                                     .active_tab()
@@ -1100,11 +1114,10 @@ impl FerriteApp {
                                 let mut preview_line_mappings: Vec<crate::markdown::LineMapping> =
                                     Vec::new();
 
-                                // Capture content and cursor before editing for undo support
-                                let (content_before_split, cursor_before_split) = self.state
-                                    .active_tab()
-                                    .map(|t| (t.content.clone(), t.cursors.primary().head))
-                                    .unwrap_or_default();
+                                // Prepare lazy undo snapshot
+                                if let Some(tab) = self.state.active_tab_mut() {
+                                    tab.prepare_undo_snapshot();
+                                }
 
                                 // Format toolbar state for split view (markdown only)
                                 let show_format_toolbar_split = is_markdown_file_split && !zen_mode;
@@ -1223,6 +1236,7 @@ impl FerriteApp {
                                         .syntax_theme(syntax_theme.clone())
                                         .auto_close_brackets(auto_close_brackets)
                                         .vim_mode(vim_mode)
+                                        .diagnostics(tab_diagnostics.clone())
                                         .pending_sync_scroll_offset(pending_editor_scroll);
 
                                     // Add search highlights if available
@@ -1264,11 +1278,7 @@ impl FerriteApp {
                                     }
 
                                     if editor_output.changed {
-                                        // Record edit for undo/redo support
-                                        tab.record_edit(
-                                            content_before_split.clone(),
-                                            cursor_before_split
-                                        );
+                                        tab.record_edit_from_snapshot();
                                         if folding_enabled {
                                             tab.mark_folds_dirty();
                                         }
@@ -1530,8 +1540,7 @@ impl FerriteApp {
                                     let ws_root = self.state.workspace_root().cloned();
                                     if let Some(tab) = self.state.active_tab_mut() {
                                         // Capture content and cursor before editing for undo support
-                                        let content_before = tab.content.clone();
-                                        let cursor_before = tab.cursors.primary().head;
+                                        tab.prepare_undo_snapshot();
 
                                         // Build wikilink context from current file and workspace
                                         let wl_ctx = WikilinkContext {
@@ -1570,9 +1579,7 @@ impl FerriteApp {
                                             md_editor_output.line_mappings.clone();
 
                                         if md_editor_output.changed {
-                                            // Record edit for undo/redo support
-                                            tab.record_edit(content_before, cursor_before);
-                                            // Mark content as edited for auto-save scheduling
+                                            tab.record_edit_from_snapshot();
                                             tab.mark_content_edited();
                                             debug!(
                                                 "Content modified in split rendered pane, recorded for undo"
@@ -1730,9 +1737,7 @@ impl FerriteApp {
                                 let tree_state = self.tree_viewer_states.entry(tab_id).or_default();
 
                                 if let Some(tab) = self.state.active_tab_mut() {
-                                    // Capture content and cursor before editing for undo support
-                                    let content_before = tab.content.clone();
-                                    let cursor_before = tab.cursors.primary().head;
+                                    tab.prepare_undo_snapshot();
 
                                     let output = TreeViewer::new(
                                         &mut tab.content,
@@ -1743,9 +1748,7 @@ impl FerriteApp {
                                         .show(ui);
 
                                     if output.changed {
-                                        // Record edit for undo/redo support
-                                        tab.record_edit(content_before, cursor_before);
-                                        // Mark content as edited for auto-save scheduling
+                                        tab.record_edit_from_snapshot();
                                         tab.mark_content_edited();
                                         debug!(
                                             "Content modified in tree viewer, recorded for undo"
@@ -1766,9 +1769,7 @@ impl FerriteApp {
                                 // Collect workspace root before mutable borrow
                                 let ws_root = self.state.workspace_root().cloned();
                                 if let Some(tab) = self.state.active_tab_mut() {
-                                    // Capture content and cursor before editing for undo support
-                                    let content_before = tab.content.clone();
-                                    let cursor_before = tab.cursors.primary().head;
+                                    tab.prepare_undo_snapshot();
 
                                     // Handle scroll sync: check for pending scroll ratio or offset
                                     let pending_offset = tab.pending_scroll_offset.take();
@@ -1799,9 +1800,7 @@ impl FerriteApp {
                                         .show(ui);
 
                                     if editor_output.changed {
-                                        // Record edit for undo/redo support
-                                        tab.record_edit(content_before, cursor_before);
-                                        // Mark content as edited for auto-save scheduling
+                                        tab.record_edit_from_snapshot();
                                         tab.mark_content_edited();
                                         debug!(
                                             "Content modified in rendered editor, recorded for undo"
@@ -2054,7 +2053,14 @@ impl FerriteApp {
                 let prev_cjk_preference = self.state.settings.cjk_font_preference;
                 let prev_language = self.state.settings.language;
 
-                let output = self.settings_panel.show_inline(ui, &mut self.state.settings, is_dark);
+                let workspace_for_settings =
+                    self.state.workspace_root().map(|p| p.to_path_buf());
+                let output = self.settings_panel.show_inline(
+                    ui,
+                    &mut self.state.settings,
+                    is_dark,
+                    workspace_for_settings.as_deref(),
+                );
 
                 if output.changed {
                     self.theme_manager.set_theme(self.state.settings.theme);

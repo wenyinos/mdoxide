@@ -416,6 +416,196 @@ impl FerriteEditor {
         self.bracket_colors
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Diagnostic Squiggle Rendering
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// Renders wavy underlines for LSP diagnostics on visible lines.
+    ///
+    /// Red for errors, yellow for warnings; only visible-line diagnostics are drawn.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn render_diagnostic_squiggles(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        text_start_x: f32,
+        font_id: &FontId,
+        _wrap_width: f32,
+        start_line: usize,
+        end_line: usize,
+        line_y_positions: &[f32],
+        is_dark: bool,
+    ) {
+        use crate::lsp::state::DiagnosticSeverity;
+
+        for diag in &self.diagnostics {
+            // Quick reject: diagnostic completely outside visible range
+            if diag.end_line < start_line || diag.start_line >= end_line {
+                continue;
+            }
+
+            let color = match diag.severity {
+                DiagnosticSeverity::Error => {
+                    if is_dark {
+                        Color32::from_rgb(255, 80, 80)
+                    } else {
+                        Color32::from_rgb(220, 30, 30)
+                    }
+                }
+                DiagnosticSeverity::Warning => {
+                    if is_dark {
+                        Color32::from_rgb(255, 200, 50)
+                    } else {
+                        Color32::from_rgb(200, 150, 0)
+                    }
+                }
+                DiagnosticSeverity::Information => {
+                    if is_dark {
+                        Color32::from_rgb(80, 160, 255)
+                    } else {
+                        Color32::from_rgb(40, 100, 200)
+                    }
+                }
+                DiagnosticSeverity::Hint => {
+                    if is_dark {
+                        Color32::from_rgb(140, 140, 140)
+                    } else {
+                        Color32::from_rgb(100, 100, 100)
+                    }
+                }
+            };
+
+            // Draw on each visible line the diagnostic spans
+            let first = diag.start_line.max(start_line);
+            let last = diag.end_line.min(end_line.saturating_sub(1));
+
+            for line_idx in first..=last {
+                let Some(line_content) = self.buffer.get_line(line_idx) else {
+                    continue;
+                };
+                let line = line_content.trim_end_matches(['\r', '\n']);
+                let line_chars: Vec<char> = line.chars().collect();
+                let line_len = line_chars.len();
+
+                if line_len == 0 {
+                    continue;
+                }
+
+                // Column range on this line
+                let col_start = if line_idx == diag.start_line {
+                    diag.start_col.min(line_len)
+                } else {
+                    0
+                };
+                let col_end = if line_idx == diag.end_line {
+                    diag.end_col.min(line_len)
+                } else {
+                    line_len
+                };
+
+                if col_start >= col_end {
+                    // If range is empty on this line, underline at least one char
+                    let col_end_fixed = (col_start + 1).min(line_len);
+                    if col_start >= col_end_fixed {
+                        continue;
+                    }
+                    self.draw_squiggle(
+                        painter, rect, text_start_x, font_id,
+                        &line_chars, line_idx, start_line,
+                        line_y_positions, col_start, col_end_fixed, color,
+                    );
+                } else {
+                    self.draw_squiggle(
+                        painter, rect, text_start_x, font_id,
+                        &line_chars, line_idx, start_line,
+                        line_y_positions, col_start, col_end, color,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Draw a wavy underline under columns `col_start..col_end` on `line_idx`.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_squiggle(
+        &self,
+        painter: &egui::Painter,
+        _rect: Rect,
+        text_start_x: f32,
+        font_id: &FontId,
+        line_chars: &[char],
+        line_idx: usize,
+        start_line: usize,
+        line_y_positions: &[f32],
+        col_start: usize,
+        col_end: usize,
+        color: Color32,
+    ) {
+        let pos_idx = line_idx.saturating_sub(start_line);
+        if pos_idx >= line_y_positions.len() {
+            return;
+        }
+        let line_y = line_y_positions[pos_idx];
+        let line_height = self.view.get_line_height(line_idx);
+        let baseline_y = line_y + line_height - 2.0;
+
+        // X offsets via galley measurement
+        let x_start = if col_start == 0 {
+            text_start_x - self.view.horizontal_scroll()
+        } else {
+            let prefix: String = line_chars.iter().take(col_start).collect();
+            let g = painter.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE);
+            text_start_x + g.size().x - self.view.horizontal_scroll()
+        };
+
+        let x_end = {
+            let prefix: String = line_chars.iter().take(col_end).collect();
+            let g = painter.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE);
+            text_start_x + g.size().x - self.view.horizontal_scroll()
+        };
+
+        if x_end <= x_start {
+            return;
+        }
+
+        // Draw a wavy line: period ~4px, amplitude ~1.5px
+        let wave_period = 4.0_f32;
+        let amplitude = 1.5_f32;
+        let stroke = egui::Stroke::new(1.2, color);
+        let mut points = Vec::new();
+        let mut x = x_start;
+        while x <= x_end {
+            let phase = (x - x_start) / wave_period * std::f32::consts::TAU;
+            let dy = amplitude * phase.sin();
+            points.push(Pos2::new(x, baseline_y + dy));
+            x += 1.0;
+        }
+        if points.len() >= 2 {
+            painter.add(egui::Shape::line(points, stroke));
+        }
+    }
+
+    /// Check if a cursor position falls within a diagnostic's range.
+    pub(crate) fn cursor_in_diagnostic_range(
+        &self,
+        cursor: &Cursor,
+        diag: &crate::lsp::state::DiagnosticEntry,
+    ) -> bool {
+        let line = cursor.line;
+        let col = cursor.column;
+
+        if line < diag.start_line || line > diag.end_line {
+            return false;
+        }
+        if line == diag.start_line && col < diag.start_col {
+            return false;
+        }
+        if line == diag.end_line && col >= diag.end_col {
+            return false;
+        }
+        true
+    }
+
     /// Configures search highlights and bracket matching at once.
     ///
     /// This is a convenience method for setting up all Phase 2 highlight options.

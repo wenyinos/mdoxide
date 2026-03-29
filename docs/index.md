@@ -54,6 +54,7 @@ These diagrams provide a quick visual overview for new contributors.
 | **[EditHistory](./technical/editor/edit-history.md)** | **Operation-based undo/redo for memory-efficient large file editing** |
 | **[ViewState](./technical/editor/view-state.md)** | **Viewport tracking and visible line range calculation for virtual scrolling** |
 | **[LineCache](./technical/editor/line-cache.md)** | **LRU-cached galley storage for efficient text rendering without recreation each frame** |
+| **[LineCache Smart Invalidation](./technical/editor/line-cache-smart-invalidation.md)** | **Task 30: Targeted range invalidation and dynamic cache sizing for large-file editing performance** |
 | **[Large File Performance](./technical/editor/large-file-performance.md)** | **Per-frame optimizations for 5MB+ files; open-time warning toast for 10MB+** |
 | **[Memory Optimization](./technical/editor/memory-optimization.md)** | **Tab closure cleanup, FerriteEditorStorage management, debug vs release performance** |
 | **[Word Wrap](./technical/editor/word-wrap.md)** | **Phase 2 word wrap support: visual row tracking, wrapped galley caching, cursor navigation** |
@@ -77,10 +78,14 @@ These diagrams provide a quick visual overview for new contributors.
 | [Auto-close Brackets](./technical/editor/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Bracket Matching](./technical/editor/bracket-matching.md) | Highlight matching brackets and parentheses |
 | [Vim Mode](./technical/editor/vim-mode.md) | Optional modal editing with Normal/Insert/Visual modes, Vim keybindings, status bar indicator |
+| [Windows IME layer transform](./technical/editor/windows-ime-layer-transform.md) | `IMEOutput` in screen space via layer `TSTransform` (candidate box alignment; matches egui TextEdit) |
 | [Word Wrap Scroll Fixes](./technical/editor/word-wrap-scroll-fixes.md) | Correctness fixes for pixel_to_line, line_to_pixel, scroll sync, ensure_line_visible when word wrap active |
 | [Word Wrap Performance](./technical/editor/word-wrap-performance.md) | Incremental height cache, O(1) LRU, O(log N) visual row mapping, cache key fix |
 | [Ctrl+Scroll Zoom](./technical/editor/ctrl-scroll-zoom.md) | Ctrl+Mouse Wheel zoom mapped to egui::gui_zoom, ZoomIn/ZoomOut/ResetZoom shortcut commands |
 | [Font System](./technical/editor/font-system.md) | Custom font loading, EditorFont enum, bold/italic variants, CJK lazy loading, complex script lazy loading (11 families) |
+| [HarfRust text shaping](./technical/editor/harfrust-text-shaping.md) | harfrust 0.5.2 OTL shaping: cluster grouping, shaped-line cache, per-cluster rendering; position-mapping helpers for cursor/click/selection on complex scripts |
+| [Grapheme-Cluster Cursor](./technical/editor/grapheme-cluster-cursor.md) | Grapheme-cluster-aware arrow keys, backspace, delete for emoji ZWJ, Bengali, Korean, combining marks |
+| [Uniform Height Large Files](./technical/editor/uniform-height-large-files.md) | Uniform line heights for 100K+ line files: O(1) memory, force-disabled word wrap, overlap fix |
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 | [Complex Script Font Preferences](./technical/config/complex-script-font-preferences.md) | Per-script font preferences for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. |
 | [CJK Font Preloading Verification](./technical/fonts/cjk-font-preloading-verification.md) | **Task 45: Verification that explicit CJK preferences preload correctly at startup** |
@@ -138,6 +143,11 @@ These diagrams provide a quick visual overview for new contributors.
 | [GitHub-Style Callouts](./technical/markdown/github-callouts.md) | GitHub-style callouts (`> [!NOTE]`, `> [!TIP]`, etc.) with color-coded rendering, collapse toggle |
 | [Wikilinks](./technical/markdown/wikilinks.md) | `[[target]]` and `[[target\|display]]` syntax, file resolution, click-to-navigate, broken link indicators |
 | [Image Rendering](./technical/markdown/image-rendering.md) | Local image display in rendered/split view, path resolution, texture caching, format support (PNG/JPEG/GIF/WebP) |
+| [Setext Heading Detection](./technical/markdown/setext-heading-detection.md) | Single-dash false setext fix, backwards-scan underline detection, CommonMark compliance for `--`/`---` |
+| [Markdown AST Caching](./technical/markdown/markdown-ast-caching.md) | Blake3 content-hash AST cache to skip re-parsing unchanged markdown in rendered view |
+| [Rendered View Viewport Culling](./technical/markdown/rendered-view-viewport-culling.md) | `show_viewport()` two-phase culling: render only visible blocks + 500 px overscan for large-document performance |
+| [Block-Level Height Cache](./technical/markdown/block-level-height-cache.md) | Per-block blake3-keyed LRU height cache; measurement pass skips rendering unchanged off-screen blocks after first frame |
+| [Strict Line Breaks](./technical/markdown/strict-line-breaks.md) | Optional setting treating single newlines as hard `<br>` breaks in rendered view |
 
 ### Data Viewers
 
@@ -148,6 +158,7 @@ These diagrams provide a quick visual overview for new contributors.
 | [CSV Delimiter Detection](./technical/viewers/csv-delimiter-detection.md) | Auto-detect delimiter (comma/tab/semicolon/pipe), manual override, session persistence |
 | [CSV Header Detection](./technical/viewers/csv-header-detection.md) | Auto-detect header rows with heuristics, toggle UI, column alignment |
 | [CSV Rainbow Columns](./technical/viewers/csv-rainbow-columns.md) | Subtle alternating column colors using Oklch, status bar toggle |
+| [CSV Raw View Caching](./technical/viewers/csv-raw-view-caching.md) | Blake3 hash-guarded raw text cache to eliminate per-frame string allocation |
 | [Tree Viewer](./technical/viewers/tree-viewer.md) | JSON/YAML/TOML tree viewer with inline editing, expand/collapse, path copying |
 | [Live Pipeline](./technical/viewers/live-pipeline.md) | JSON/YAML command piping through shell commands (jq, yq), recent history, output display |
 | [Document Export](./technical/viewers/document-export.md) | HTML export with themed CSS, Copy-as-HTML clipboard functionality |
@@ -206,6 +217,7 @@ These diagrams provide a quick visual overview for new contributors.
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
 | **[Single-Instance Protocol](./technical/platform/single-instance.md)** | **Lock file + TCP IPC to open files in existing window instead of spawning new process** |
 | **[macOS .app Bundle CI](./technical/platform/macos-app-bundle-ci.md)** | **CI workflow for proper macOS .app bundle packaging (cargo-bundle, Gatekeeper-friendly)** |
+| [macOS Markdown file association](./technical/platform/macos-markdown-file-association.md) | UTI `net.daringfireball.markdown`, `UTImportedTypeDeclarations`, Finder Open With / default app for `.md` |
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |
@@ -265,6 +277,10 @@ These diagrams provide a quick visual overview for new contributors.
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
 | **[LSP Integration Plan](./lsp-integration-plan.md)** | **v0.2.8 planning: Language Server Protocol client (diagnostics, hover, go-to-def, autocomplete)** |
+| [LSP module infrastructure](./technical/lsp/lsp-module-infrastructure.md) | Task 23: `src/lsp/` — `LspManager`, stdio transport, extension→server detection, `AppState::lsp` |
+| [LSP server lifecycle](./technical/lsp/lsp-server-lifecycle.md) | Task 24: Auto-detect/spawn servers on workspace open, crash restart with backoff, clean shutdown, missing-binary toasts, `lsp_enabled` toggle |
+| [LSP status & overrides](./technical/lsp/lsp-status-and-overrides.md) | Task 25: Status bar per-server state, `lsp_server_overrides`, Editor settings UI, restart on path change |
+| [LSP inline diagnostics](./technical/lsp/lsp-inline-diagnostics.md) | Task 26: Inline squiggles (error/warning), hover tooltips, incremental didOpen/didChange sync, status bar counts |
 
 ### Core (Remaining)
 
@@ -317,6 +333,7 @@ ferrite/
 │   ├── fonts.rs             # Custom font loading, lazy CJK, family selection
 │   ├── path_utils.rs        # Windows path normalization (\\?\ prefix stripping)
 │   ├── string_utils.rs      # String utility functions
+│   ├── lsp/                 # LSP client infrastructure (manager, transport, detection)
 │   ├── update.rs            # Update checker (GitHub Releases API, version comparison)
 │   ├── config/              # Settings and persistence
 │   │   ├── mod.rs           # Module exports
@@ -331,6 +348,7 @@ ferrite/
 │   │   │   ├── editor.rs    # Main FerriteEditor widget
 │   │   │   ├── buffer.rs    # TextBuffer - rope-based text storage
 │   │   │   ├── cursor.rs    # Cursor position tracking
+│   │   │   ├── grapheme.rs  # Grapheme cluster boundary helpers
 │   │   │   ├── selection.rs # Selection handling
 │   │   │   ├── history.rs   # EditHistory - operation-based undo/redo
 │   │   │   ├── view.rs      # ViewState - viewport tracking
@@ -359,6 +377,7 @@ ferrite/
 │   │   └── dialogs.rs       # Native file dialogs (rfd)
 │   ├── markdown/            # Parser and WYSIWYG editor
 │   │   ├── mod.rs           # Module exports
+│   │   ├── cache.rs         # AST caching (blake3 hash → MarkdownDocument)
 │   │   ├── parser.rs        # Comrak integration, AST parsing
 │   │   ├── editor.rs        # WYSIWYG markdown editor
 │   │   ├── widgets.rs       # Editable heading/list/table widgets

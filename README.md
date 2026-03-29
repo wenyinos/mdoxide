@@ -45,6 +45,37 @@ Ferrite does **NOT** access passwords, browser data, or make unsolicited network
 
 </details>
 
+<details>
+<summary><strong>🍎 macOS Installation & Gatekeeper</strong></summary>
+
+Ferrite is **not notarized** by Apple (requires a $99/year Developer Program license). macOS Gatekeeper may show a warning on first launch. The app is safe — it's just not "blessed" by Apple's paid signing system.
+
+### Option 1: Homebrew (Recommended — No Warnings)
+
+```bash
+brew tap olaproeis/ferrite
+brew install --cask ferrite
+```
+
+Homebrew automatically strips the quarantine attribute, so Ferrite launches with zero Gatekeeper friction.
+
+### Option 2: DMG Download + Manual Bypass
+
+1. Download the DMG from [Releases](https://github.com/OlaProeis/Ferrite/releases):
+   - **Apple Silicon (M1/M2/M3/M4):** `ferrite-macos-arm64.dmg`
+   - **Intel:** `ferrite-macos-x64.dmg`
+2. Open the DMG and drag `Ferrite.app` to Applications
+3. **First launch — choose one:**
+   - **Right-click → Open** (may need to do this twice on macOS Sequoia)
+   - **System Settings → Privacy & Security → scroll down → "Open Anyway"** (appears after a blocked launch attempt)
+   - **Terminal:** `xattr -cr /Applications/Ferrite.app`
+
+### Why This Happens
+
+Apple requires developers to pay $99/year for a Developer ID certificate and submit apps for notarization. Without this, macOS treats the app as "unidentified." Ferrite is fully open source — you can [audit the code](https://github.com/OlaProeis/Ferrite) and [build from source](docs/building.md) yourself.
+
+</details>
+
 ## 🤖 AI-Assisted Development
 
 This project is 100% AI-generated code. All Rust code, documentation, and configuration was written by Claude (Anthropic) via [Cursor](https://cursor.com) with MCP tools.

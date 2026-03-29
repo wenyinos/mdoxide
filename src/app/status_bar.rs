@@ -320,7 +320,50 @@ impl FerriteApp {
 
                 // Add separator between left and right sections
                 ui.separator();
-                
+
+                // LSP status (compact; hover for per-server detail)
+                let (lsp_summary, lsp_detail) = self.lsp_status_bar_text();
+                ui.label(
+                    egui::RichText::new(lsp_summary)
+                        .small()
+                        .color(if is_dark {
+                            egui::Color32::from_rgb(160, 200, 255)
+                        } else {
+                            egui::Color32::from_rgb(50, 90, 140)
+                        }),
+                )
+                .on_hover_text(lsp_detail);
+
+                // Diagnostic counts (errors/warnings across all files)
+                let (err_count, warn_count) = self.state.diagnostics.counts();
+                if err_count > 0 || warn_count > 0 {
+                    let err_color = if is_dark {
+                        egui::Color32::from_rgb(255, 100, 100)
+                    } else {
+                        egui::Color32::from_rgb(200, 40, 40)
+                    };
+                    let warn_color = if is_dark {
+                        egui::Color32::from_rgb(255, 200, 80)
+                    } else {
+                        egui::Color32::from_rgb(180, 130, 0)
+                    };
+                    let mut parts = Vec::new();
+                    if err_count > 0 {
+                        parts.push(format!("{} err", err_count));
+                    }
+                    if warn_count > 0 {
+                        parts.push(format!("{} warn", warn_count));
+                    }
+                    let primary_color = if err_count > 0 { err_color } else { warn_color };
+                    ui.label(
+                        egui::RichText::new(parts.join(" "))
+                            .small()
+                            .color(primary_color),
+                    );
+                }
+
+                ui.separator();
+
                 // Center: Toast message (temporary notifications) - shown inline, not expanding
                 if let Some(toast) = &self.state.ui.toast_message {
                     ui.label(egui::RichText::new(format!("✔ {}", toast)).italics().color(

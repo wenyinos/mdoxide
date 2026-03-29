@@ -17,7 +17,7 @@ mod stats;
 mod widget;
 
 // Re-export Ferrite editor types
-pub use ferrite::{Cursor, EditHistory, EditOperation, FerriteEditor, LineCache, Selection, TextBuffer, ViewState};
+pub use ferrite::{compute_edit_ops, Cursor, EditHistory, EditOperation, FerriteEditor, LineCache, Selection, TextBuffer, ViewState};
 
 // Re-export other editor types
 pub use find_replace::{FindReplacePanel, FindState};

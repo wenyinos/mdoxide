@@ -297,13 +297,10 @@ impl FerriteApp {
                 let current_scroll = tab.scroll_offset;
                 // Perform undo - returns the cursor position from the undo entry
                 if let Some(restored_cursor) = tab.undo() {
-                    // Restore scroll position via pending_scroll_offset
                     tab.pending_scroll_offset = Some(current_scroll);
-                    // Request focus to be restored after content_version change
                     tab.needs_focus = true;
-                    // Restore cursor to the position from the undo entry (clamped to content length)
-                    let new_len = tab.content.len();
-                    tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
+                    let char_count = tab.content.chars().count();
+                    tab.pending_cursor_restore = Some(restored_cursor.min(char_count));
                     let time = self.get_app_time();
                     self.state.show_toast(
                         t!("notification.undo", remaining = undo_count.saturating_sub(1)).to_string(),
@@ -332,13 +329,10 @@ impl FerriteApp {
                 let current_scroll = tab.scroll_offset;
                 // Perform redo - returns the cursor position from the redo entry
                 if let Some(restored_cursor) = tab.redo() {
-                    // Restore scroll position via pending_scroll_offset
                     tab.pending_scroll_offset = Some(current_scroll);
-                    // Request focus to be restored after content_version change
                     tab.needs_focus = true;
-                    // Restore cursor to the position from the redo entry (clamped to content length)
-                    let new_len = tab.content.len();
-                    tab.pending_cursor_restore = Some(restored_cursor.min(new_len));
+                    let char_count = tab.content.chars().count();
+                    tab.pending_cursor_restore = Some(restored_cursor.min(char_count));
                     let time = self.get_app_time();
                     self.state.show_toast(
                         t!("notification.redo", remaining = redo_count.saturating_sub(1)).to_string(),

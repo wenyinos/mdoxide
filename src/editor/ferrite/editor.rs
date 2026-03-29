@@ -2,7 +2,6 @@
 //!
 //! This module provides `FerriteEditor`, a custom egui widget that integrates:
 //! - `TextBuffer` for rope-based text storage
-//! - `EditHistory` for operation-based undo/redo
 //! - `ViewState` for viewport tracking and virtual scrolling
 //! - `LineCache` for efficient galley caching
 //!
@@ -24,11 +23,13 @@
 //! });
 //! ```
 
+use std::sync::Arc;
+
 use egui::{Color32, Context, EventFilter, FontId, ImeEvent, Response, Sense, Stroke, Ui, Vec2};
 
 use super::buffer::TextBuffer;
 use super::cursor::{Cursor, Selection};
-use super::history::{EditHistory, EditOperation};
+use super::grapheme;
 use super::input::{InputHandler, InputResult};
 use super::line_cache::{HighlightedSegment, LineCache};
 use super::rendering::{cursor as cursor_render, gutter, text as text_render};
@@ -79,8 +80,6 @@ pub struct SearchMatch {
 pub struct FerriteEditor {
     /// The text content.
     pub(crate) buffer: TextBuffer,
-    /// Undo/redo history.
-    pub(crate) history: EditHistory,
     /// Viewport state for virtual scrolling.
     pub(crate) view: ViewState,
     /// Galley cache for efficient rendering.
@@ -98,8 +97,12 @@ pub struct FerriteEditor {
     pub(crate) font_size: f32,
     /// Font family for rendering (from Settings).
     pub(crate) font_family: EditorFont,
-    /// Whether content has changed since last cache clear.
+    /// Whether content has changed since last render.
     pub(crate) content_dirty: bool,
+    /// Accumulated dirty line range since last render.
+    /// `Some((start, end))` where both are 0-indexed line numbers (inclusive).
+    /// Grows via [`extend_dirty_range`] and is consumed on the next frame.
+    dirty_range: Option<(usize, usize)>,
     /// Whether word wrap is enabled.
     pub(crate) wrap_enabled: bool,
     /// Maximum wrap width in pixels (when set, text wraps at this width or available width, whichever is smaller).
@@ -144,6 +147,11 @@ pub struct FerriteEditor {
     pub(crate) bracket_matching_enabled: bool,
     /// Colors for bracket matching (bg_color, border_color). None = use theme defaults.
     pub(crate) bracket_colors: Option<(Color32, Color32)>,
+    // ─────────────────────────────────────────────────────────────────────────
+    // LSP Diagnostics
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Diagnostics for the current file (set by the app layer each frame).
+    pub(crate) diagnostics: Vec<crate::lsp::state::DiagnosticEntry>,
     // ─────────────────────────────────────────────────────────────────────────
     // IME/CJK Support (Phase 3)
     // ─────────────────────────────────────────────────────────────────────────
@@ -220,7 +228,6 @@ impl FerriteEditor {
     pub fn new() -> Self {
         Self {
             buffer: TextBuffer::new(),
-            history: EditHistory::new(),
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -229,6 +236,7 @@ impl FerriteEditor {
             font_size: DEFAULT_FONT_SIZE,
             font_family: EditorFont::default(),
             content_dirty: false,
+            dirty_range: None,
             wrap_enabled: false,
             max_wrap_width: None,
             preferred_column: None,
@@ -249,6 +257,7 @@ impl FerriteEditor {
             // Bracket matching defaults
             bracket_matching_enabled: false,
             bracket_colors: None,
+            diagnostics: Vec::new(),
             // IME defaults
             ime_enabled: false,
             ime_preedit: None,
@@ -290,7 +299,6 @@ impl FerriteEditor {
     pub fn from_string(content: &str) -> Self {
         Self {
             buffer: TextBuffer::from_string(content),
-            history: EditHistory::new(),
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -299,6 +307,7 @@ impl FerriteEditor {
             font_size: DEFAULT_FONT_SIZE,
             font_family: EditorFont::default(),
             content_dirty: true, // Mark dirty to ensure initial cache population
+            dirty_range: None,
             wrap_enabled: false,
             max_wrap_width: None,
             preferred_column: None,
@@ -319,6 +328,7 @@ impl FerriteEditor {
             // Bracket matching defaults
             bracket_matching_enabled: false,
             bracket_colors: None,
+            diagnostics: Vec::new(),
             // IME defaults
             ime_enabled: false,
             ime_preedit: None,
@@ -360,7 +370,6 @@ impl FerriteEditor {
     /// The cursor is clamped to valid bounds after content replacement.
     pub fn set_content(&mut self, content: &str) {
         self.buffer = TextBuffer::from_string(content);
-        self.history = EditHistory::new();
         self.line_cache.invalidate();
         self.content_dirty = true;
         self.fold_state = FoldState::new();
@@ -442,17 +451,6 @@ impl FerriteEditor {
     pub fn buffer_mut(&mut self) -> &mut TextBuffer {
         self.content_dirty = true;
         &mut self.buffer
-    }
-
-    /// Returns a reference to the edit history.
-    #[must_use]
-    pub fn history(&self) -> &EditHistory {
-        &self.history
-    }
-
-    /// Returns a mutable reference to the edit history.
-    pub fn history_mut(&mut self) -> &mut EditHistory {
-        &mut self.history
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -723,15 +721,6 @@ impl FerriteEditor {
             let len = end_pos.saturating_sub(start_pos);
 
             if len > 0 {
-                // Get the text being deleted for undo
-                let deleted_text: String = self.buffer.rope().slice(start_pos..end_pos).to_string();
-                
-                // Record the delete operation
-                self.history.record_operation(EditOperation::Delete {
-                    pos: start_pos,
-                    text: deleted_text,
-                });
-                
                 self.buffer.remove(start_pos, len);
             }
         }
@@ -842,26 +831,7 @@ impl FerriteEditor {
             return false;
         }
 
-        // Force a new undo group so formatting is always a discrete undo entry,
-        // separate from any prior typing within the 500ms grouping window.
-        self.history.break_group();
-
-        // Record the entire text replacement as a single undo operation
-        // This captures the full before/after state for proper undo
-        self.history.record_operation(EditOperation::Delete {
-            pos: 0,
-            text: content.clone(),
-        });
-        self.history.record_operation(EditOperation::Insert {
-            pos: 0,
-            text: result.text.clone(),
-        });
-
-        // Close the formatting undo group so subsequent typing starts a new group
-        self.history.break_group();
-
         // Replace buffer content
-        // Clear existing content and insert new
         let old_len = self.buffer.len();
         if old_len > 0 {
             self.buffer.remove(0, old_len);
@@ -944,23 +914,6 @@ impl FerriteEditor {
             return false;
         }
 
-        // Force a new undo group so formatting is always a discrete undo entry,
-        // separate from any prior typing within the 500ms grouping window.
-        self.history.break_group();
-
-        // Record the entire text replacement as a single undo operation
-        self.history.record_operation(EditOperation::Delete {
-            pos: 0,
-            text: content.clone(),
-        });
-        self.history.record_operation(EditOperation::Insert {
-            pos: 0,
-            text: result.text.clone(),
-        });
-
-        // Close the formatting undo group so subsequent typing starts a new group
-        self.history.break_group();
-
         // Replace buffer content
         let old_len = self.buffer.len();
         if old_len > 0 {
@@ -1024,12 +977,6 @@ impl FerriteEditor {
         let mut new_cursors: Vec<(usize, Cursor)> = Vec::with_capacity(self.selections.len());
 
         for (sel_idx, char_pos) in cursor_positions {
-            // Record the insert operation for undo
-            self.history.record_operation(EditOperation::Insert {
-                pos: char_pos,
-                text: text.to_string(),
-            });
-            
             // Insert text at this position
             self.buffer.insert(char_pos, text);
             
@@ -1052,150 +999,155 @@ impl FerriteEditor {
     }
 
     /// Performs backspace at all cursor positions with proper offset adjustment.
+    ///
+    /// Deletes the full grapheme cluster before each cursor, correctly handling
+    /// multi-char clusters (emoji ZWJ, Bengali conjuncts, combining marks, etc.).
     fn backspace_at_all_cursors(&mut self) {
-        // If any selection has a range, just delete selections
         if self.selections.iter().any(|s| s.is_range()) {
             self.delete_selection();
             return;
         }
 
-        // IMPORTANT: Capture all original char positions BEFORE any modifications
-        // Each entry is (selection_index, original_char_position)
+        // Capture original char positions BEFORE any modifications.
         let original_positions: Vec<(usize, usize)> = self
             .selections
             .iter()
             .enumerate()
             .map(|(idx, s)| (idx, InputHandler::cursor_to_char_pos(&self.buffer, &s.head)))
             .collect();
-        
-        // Get unique deletion targets (the char BEFORE each cursor, i.e., char_pos - 1)
-        // Sort descending to delete from end first
-        let mut delete_targets: Vec<usize> = original_positions
-            .iter()
-            .filter_map(|(_, pos)| if *pos > 0 { Some(*pos - 1) } else { None })
-            .collect();
-        delete_targets.sort_by(|a, b| b.cmp(a));
-        delete_targets.dedup();
-        
-        // Perform deletions from end to start, recording operations
-        for delete_at in &delete_targets {
-            if *delete_at < self.buffer.len() {
-                // Get the character being deleted for undo
-                let deleted_char: String = self.buffer.rope().slice(*delete_at..*delete_at + 1).to_string();
-                
-                // Record the delete operation
-                self.history.record_operation(EditOperation::Delete {
-                    pos: *delete_at,
-                    text: deleted_char,
-                });
-                
-                self.buffer.remove(*delete_at, 1);
+
+        // For each cursor compute the grapheme-aware deletion range:
+        //   (delete_start_char_pos, delete_length)
+        let mut delete_ranges: Vec<(usize, usize)> = Vec::new();
+        for (_, char_pos) in &original_positions {
+            if *char_pos == 0 {
+                continue;
+            }
+            let cursor = self.char_pos_to_cursor(*char_pos);
+            let grapheme_chars = if cursor.column > 0 {
+                if let Some(line) = self.buffer.get_line(cursor.line) {
+                    let stripped = grapheme::line_text_stripped(&line);
+                    let prev = grapheme::prev_grapheme_boundary(stripped, cursor.column);
+                    cursor.column - prev
+                } else {
+                    1
+                }
+            } else {
+                1 // newline join — single char
+            };
+            let start = char_pos.saturating_sub(grapheme_chars);
+            delete_ranges.push((start, grapheme_chars));
+        }
+
+        // Deduplicate overlapping ranges, sort descending to delete end-first.
+        delete_ranges.sort_by(|a, b| b.0.cmp(&a.0));
+        delete_ranges.dedup();
+
+        for &(start, len) in &delete_ranges {
+            let end = (start + len).min(self.buffer.len());
+            if start < end {
+                self.buffer.remove(start, end - start);
             }
         }
-        
-        // Sort delete targets ascending for offset calculation
-        delete_targets.sort();
-        
-        // Calculate new positions for each cursor
-        // For each original position, count how many deletions occurred BEFORE it
+
+        // Sort ascending for offset calculation.
+        delete_ranges.sort_by_key(|&(start, _)| start);
+
         let new_selections: Vec<Selection> = original_positions
             .iter()
             .map(|(_idx, original_pos)| {
-                // Count deletions that occurred at positions < original_pos
-                let deletions_before = delete_targets.iter()
-                    .filter(|&&del_pos| del_pos < *original_pos)
-                    .count();
-                
-                // New position = original - deletions_before, clamped to buffer length
-                let new_char_pos = original_pos.saturating_sub(deletions_before)
+                let total_deleted_before: usize = delete_ranges
+                    .iter()
+                    .filter(|(del_start, _)| *del_start < *original_pos)
+                    .map(|(_, del_len)| del_len)
+                    .sum();
+                let new_char_pos = original_pos
+                    .saturating_sub(total_deleted_before)
                     .min(self.buffer.len());
-                
-                let new_cursor = self.char_pos_to_cursor(new_char_pos);
-                Selection::collapsed(new_cursor)
+                Selection::collapsed(self.char_pos_to_cursor(new_char_pos))
             })
             .collect();
-        
+
         self.selections = new_selections;
         self.merge_overlapping_selections();
         self.content_dirty = true;
-        
+
         if !self.selections.is_empty() {
             let line = self.primary_selection().head.line.min(self.buffer.line_count().saturating_sub(1));
             self.view.ensure_line_visible(line, self.buffer.line_count());
         }
     }
 
-    /// Performs delete at all cursor positions with proper offset adjustment.
+    /// Performs forward-delete at all cursor positions with proper offset adjustment.
+    ///
+    /// Deletes the full grapheme cluster at each cursor position.
     fn delete_at_all_cursors(&mut self) {
-        // If any selection has a range, just delete selections
         if self.selections.iter().any(|s| s.is_range()) {
             self.delete_selection();
             return;
         }
 
-        // IMPORTANT: Capture all original char positions BEFORE any modifications
         let original_positions: Vec<(usize, usize)> = self
             .selections
             .iter()
             .enumerate()
             .map(|(idx, s)| (idx, InputHandler::cursor_to_char_pos(&self.buffer, &s.head)))
             .collect();
-        
-        // Get unique deletion targets (the char AT each cursor)
-        // Sort descending to delete from end first
-        let mut delete_targets: Vec<usize> = original_positions
-            .iter()
-            .map(|(_, pos)| *pos)
-            .collect();
-        delete_targets.sort_by(|a, b| b.cmp(a));
-        delete_targets.dedup();
 
-        // Perform deletions from end to start, recording operations
-        for delete_at in &delete_targets {
-            if *delete_at < self.buffer.len() {
-                // Get the character being deleted for undo
-                let deleted_char: String = self.buffer.rope().slice(*delete_at..*delete_at + 1).to_string();
-                
-                // Record the delete operation
-                self.history.record_operation(EditOperation::Delete {
-                    pos: *delete_at,
-                    text: deleted_char,
-                });
-                
-                self.buffer.remove(*delete_at, 1);
+        // For each cursor compute the grapheme-aware deletion range at the cursor.
+        let mut delete_ranges: Vec<(usize, usize)> = Vec::new();
+        for (_, char_pos) in &original_positions {
+            if *char_pos >= self.buffer.len() {
+                continue;
+            }
+            let cursor = self.char_pos_to_cursor(*char_pos);
+            let line_len = InputHandler::line_length(&self.buffer, cursor.line);
+            let del_len = if cursor.column < line_len {
+                if let Some(line) = self.buffer.get_line(cursor.line) {
+                    let stripped = grapheme::line_text_stripped(&line);
+                    grapheme::next_grapheme_boundary(stripped, cursor.column) - cursor.column
+                } else {
+                    1
+                }
+            } else {
+                1 // newline join
+            };
+            delete_ranges.push((*char_pos, del_len));
+        }
+
+        delete_ranges.sort_by(|a, b| b.0.cmp(&a.0));
+        delete_ranges.dedup();
+
+        for &(start, len) in &delete_ranges {
+            let end = (start + len).min(self.buffer.len());
+            if start < end {
+                self.buffer.remove(start, end - start);
             }
         }
-        
-        // Sort delete targets ascending for offset calculation
-        delete_targets.sort();
 
-        // Calculate new positions for each cursor
-        // For delete (forward), cursor stays at same logical position but buffer shrinks
-        // Only count deletions that occurred at positions BEFORE the cursor (< original_pos)
-        // because forward delete removes the char AT cursor, not before it
+        delete_ranges.sort_by_key(|&(start, _)| start);
+
+        // Forward delete: cursor stays at same logical position, adjusted only
+        // by deletions that occurred before it in the buffer.
         let new_selections: Vec<Selection> = original_positions
             .iter()
             .map(|(_idx, original_pos)| {
-                // Count deletions at positions < original_pos (not <=)
-                // Forward delete removes char AT cursor, so cursor position shouldn't change
-                // unless characters before it were deleted
-                let deletions_before = delete_targets.iter()
-                    .filter(|&&del_pos| del_pos < *original_pos)
-                    .count();
-                
-                // New position = original - deletions_before, clamped
-                let new_char_pos = original_pos.saturating_sub(deletions_before)
+                let total_deleted_before: usize = delete_ranges
+                    .iter()
+                    .filter(|(del_start, _)| *del_start < *original_pos)
+                    .map(|(_, del_len)| del_len)
+                    .sum();
+                let new_char_pos = original_pos
+                    .saturating_sub(total_deleted_before)
                     .min(self.buffer.len());
-                
-                let new_cursor = self.char_pos_to_cursor(new_char_pos);
-                Selection::collapsed(new_cursor)
+                Selection::collapsed(self.char_pos_to_cursor(new_char_pos))
             })
             .collect();
-        
+
         self.selections = new_selections;
         self.merge_overlapping_selections();
         self.content_dirty = true;
-        
+
         if !self.selections.is_empty() {
             let line = self.primary_selection().head.line.min(self.buffer.line_count().saturating_sub(1));
             self.view.ensure_line_visible(line, self.buffer.line_count());
@@ -1212,9 +1164,14 @@ impl FerriteEditor {
             let new_cursor = match key {
                 egui::Key::ArrowLeft => {
                     if cursor.column > 0 {
-                        Cursor::new(cursor.line, cursor.column - 1)
+                        let new_col = self.buffer.get_line(cursor.line)
+                            .map(|l| {
+                                let stripped = grapheme::line_text_stripped(&l);
+                                grapheme::prev_grapheme_boundary(stripped, cursor.column)
+                            })
+                            .unwrap_or(cursor.column.saturating_sub(1));
+                        Cursor::new(cursor.line, new_col)
                     } else if cursor.line > 0 {
-                        // Move to end of previous line
                         let prev_line_len = self.buffer.get_line(cursor.line - 1)
                             .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
                             .unwrap_or(0);
@@ -1228,9 +1185,14 @@ impl FerriteEditor {
                         .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
                         .unwrap_or(0);
                     if cursor.column < line_len {
-                        Cursor::new(cursor.line, cursor.column + 1)
+                        let new_col = self.buffer.get_line(cursor.line)
+                            .map(|l| {
+                                let stripped = grapheme::line_text_stripped(&l);
+                                grapheme::next_grapheme_boundary(stripped, cursor.column)
+                            })
+                            .unwrap_or(cursor.column + 1);
+                        Cursor::new(cursor.line, new_col)
                     } else if cursor.line + 1 < total_lines {
-                        // Move to start of next line
                         Cursor::new(cursor.line + 1, 0)
                     } else {
                         cursor
@@ -1340,15 +1302,18 @@ impl FerriteEditor {
             self.last_zoom_factor = current_zoom;
         }
         
-        // Clear cache if content changed
-        // NOTE: We only invalidate the line cache, NOT the full wrap_info.
-        // Clearing wrap_info causes flickering because y-position calculations
-        // alternate between two different methods on consecutive frames.
-        // Instead, we TRUNCATE wrap_info to match the current line count, which
-        // removes stale entries for deleted lines while preserving valid ones.
+        // Handle content changes with targeted cache invalidation.
+        // We use invalidate_range (not full invalidate) to preserve cached
+        // galleys for unchanged lines — only the edited line range is evicted.
+        // CacheKey is content-hash-based, so unchanged text at any position
+        // will still produce cache hits even after line-index shifts.
         if self.content_dirty {
-            self.line_cache.invalidate();
-            // Truncate stale wrap_info entries (don't full-clear to avoid flickering)
+            if let Some((dirty_start, dirty_end)) = self.dirty_range.take() {
+                self.line_cache.invalidate_range(dirty_start, dirty_end);
+            } else {
+                // No specific range known (e.g. mark_dirty() was called) — full clear
+                self.line_cache.invalidate();
+            }
             let current_lines = self.buffer.line_count();
             self.view.truncate_wrap_info(current_lines);
             self.content_dirty = false;
@@ -1371,6 +1336,12 @@ impl FerriteEditor {
         // Configure for large file optimization - this sets uniform height mode
         // for files > 100k lines to avoid O(N) performance overhead
         self.view.configure_for_file_size(total_lines);
+
+        // When uniform heights are active (very large files), word wrap is
+        // force-disabled for this frame. Wrapped galleys can be much taller
+        // than the uniform line_height, which causes the line overlap
+        // regression that previously forced this feature to be disabled.
+        let effective_wrap_enabled = self.wrap_enabled && !self.view.uses_uniform_heights();
 
         // Calculate gutter width based on what's enabled (line numbers and/or fold indicators)
         let gutter_width = gutter::calculate_gutter_width(
@@ -1395,18 +1366,23 @@ impl FerriteEditor {
             text_area_width
         };
         
-        // Configure word wrap if enabled, otherwise ensure wrap state is cleared
+        // Configure word wrap if enabled, otherwise ensure wrap state is cleared.
         // This prevents stale wrap_info from causing y-position mismatches between
-        // rendering (which uses get_line_height()) and click detection (which uses pixel_to_line())
-        if self.wrap_enabled {
+        // rendering (which uses get_line_height()) and click detection (which uses pixel_to_line()).
+        // Note: effective_wrap_enabled is false for large files in uniform-height mode.
+        if effective_wrap_enabled {
             self.view.enable_wrap(effective_wrap_width);
         } else if self.view.is_wrap_enabled() {
-            // Wrap was enabled but now disabled - clear stale wrap_info
             self.view.disable_wrap();
         }
 
         // Get visible line range (total_lines already calculated above)
         let (start_line, end_line) = self.view.get_visible_line_range(total_lines);
+
+        // Scale cache capacity to the visible window so large viewports or
+        // files keep a healthy hit rate without unbounded growth.
+        let visible_lines = end_line.saturating_sub(start_line);
+        self.line_cache.update_capacity(visible_lines);
 
         // Allocate painter for the entire editor area
         let desired_size = Vec2::new(available_size.x, available_size.y);
@@ -1572,10 +1548,13 @@ impl FerriteEditor {
             if let Some(line_content) = self.buffer.get_line(line_idx) {
                 let display_content = line_content.trim_end_matches(['\r', '\n']);
 
+                // Track this line's key so invalidate_range can evict it later.
+                self.line_cache.register_line(line_idx, display_content, &font_id, text_color);
+
                 // Check if syntax highlighting is enabled for this line
                 let use_syntax = self.syntax_enabled && self.syntax_language.is_some();
 
-                if self.wrap_enabled {
+                if effective_wrap_enabled {
                     let galley = if use_syntax {
                         // Syntax-highlighted wrapped galley
                         // Check cache first to avoid expensive highlighting on every frame
@@ -1654,8 +1633,22 @@ impl FerriteEditor {
                         // Track max line width for horizontal scrollbar
                         max_line_width = max_line_width.max(galley.size().x);
                         painter.galley(egui::Pos2::new(x, y), galley, text_color);
+                    } else if let Some(shaped) = self.line_cache.get_shaped_line(
+                        display_content,
+                        &painter,
+                        font_id.clone(),
+                        text_color,
+                    ) {
+                        for cg in &shaped.clusters {
+                            painter.galley(
+                                egui::Pos2::new(x + cg.x_offset, y),
+                                Arc::clone(&cg.galley),
+                                text_color,
+                            );
+                        }
+                        max_line_width = max_line_width.max(shaped.total_width);
                     } else {
-                        // Plain non-wrapped galley
+                        // Plain non-wrapped galley (Latin / fallback)
                         let galley = text_render::render_line(
                             &painter,
                             &mut self.line_cache,
@@ -1665,7 +1658,6 @@ impl FerriteEditor {
                             font_id.clone(),
                             text_color,
                         );
-                        // Track max line width for horizontal scrollbar
                         max_line_width = max_line_width.max(galley.size().x);
                     }
                 }
@@ -1674,7 +1666,7 @@ impl FerriteEditor {
 
         // Rebuild height cache after updating wrap info (only when wrap_info changed)
         // and advance scrollbar smoothing every frame for smooth transitions
-        if self.wrap_enabled {
+        if effective_wrap_enabled {
             self.view.rebuild_height_cache(total_lines);
             self.view.advance_scrollbar_smoothing(total_lines);
         }
@@ -1725,6 +1717,21 @@ impl FerriteEditor {
                 effective_wrap_width,
                 start_line,
                 end_line,
+                ui.visuals().dark_mode,
+            );
+        }
+
+        // Render diagnostic squiggles (errors/warnings from LSP)
+        if !self.diagnostics.is_empty() {
+            self.render_diagnostic_squiggles(
+                &painter,
+                rect,
+                text_start_x,
+                &font_id,
+                effective_wrap_width,
+                start_line,
+                end_line,
+                &line_y_positions,
                 ui.visuals().dark_mode,
             );
         }
@@ -1836,14 +1843,17 @@ impl FerriteEditor {
             }
         }
         
-        // Set IME cursor area for candidate window positioning
+        // Set IME cursor area for candidate window positioning (screen space for the OS).
+        // Same as egui TextEdit: apply the layer's TSTransform so IME works with scaled layers
+        // and custom chrome (local widget coords are not sufficient on Windows).
         if let Some(cursor_rect) = cursor_rect_for_ime {
-            // Set IME output so the OS positions the IME candidate window correctly
-            // We use the rect directly since we're typically in the main layer
+            let layer_transform = ui
+                .memory(|m| m.layer_transforms.get(&ui.layer_id()).copied())
+                .unwrap_or_default();
             ui.ctx().output_mut(|o| {
                 o.ime = Some(egui::output::IMEOutput {
-                    rect,
-                    cursor_rect,
+                    rect: layer_transform * rect,
+                    cursor_rect: layer_transform * cursor_rect,
                 });
             });
         }
@@ -2004,6 +2014,47 @@ impl FerriteEditor {
             }
         }
 
+        // Diagnostic hover tooltips
+        if !self.diagnostics.is_empty() {
+            if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                if rect.contains(hover_pos) {
+                    let hover_cursor = self.pos_to_cursor(
+                        hover_pos, rect, text_start_x, &font_id,
+                        effective_wrap_width, total_lines, ui,
+                    );
+                    let mut tooltip_parts: Vec<String> = Vec::new();
+                    for diag in &self.diagnostics {
+                        if self.cursor_in_diagnostic_range(&hover_cursor, diag) {
+                            let sev = match diag.severity {
+                                crate::lsp::state::DiagnosticSeverity::Error => "error",
+                                crate::lsp::state::DiagnosticSeverity::Warning => "warning",
+                                crate::lsp::state::DiagnosticSeverity::Information => "info",
+                                crate::lsp::state::DiagnosticSeverity::Hint => "hint",
+                            };
+                            let src = diag.source.as_deref().unwrap_or("");
+                            if src.is_empty() {
+                                tooltip_parts.push(format!("[{}] {}", sev, diag.message));
+                            } else {
+                                tooltip_parts.push(format!("[{}/{}] {}", sev, src, diag.message));
+                            }
+                        }
+                    }
+                    if !tooltip_parts.is_empty() {
+                        egui::show_tooltip_at_pointer(
+                            ui.ctx(),
+                            ui.layer_id(),
+                            egui::Id::new("diag_tooltip"),
+                            |ui| {
+                                for part in &tooltip_parts {
+                                    ui.label(part);
+                                }
+                            },
+                        );
+                    }
+                }
+            }
+        }
+
         // Handle mouse wheel scrolling when hovering (doesn't require focus)
         // Note: We use explicit pointer position check instead of response.hovered() because
         // smooth_scroll_delta is a global value that persists when scrolling in other panels
@@ -2109,11 +2160,12 @@ impl FerriteEditor {
                                 
                                 // Insert committed text at primary cursor
                                 let mut cursor = self.primary_selection().head;
+                                let start_line = cursor.line;
                                 super::input::keyboard::insert_text(&mut self.buffer, &mut cursor, prediction);
                                 *self.primary_selection_mut() = Selection::collapsed(cursor);
-                                self.content_dirty = true;
+                                self.mark_lines_dirty(start_line, cursor.line);
                                 self.reset_cursor_blink();
-                                self.view.ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
+                                self.view.ensure_line_visible(cursor.line, self.buffer.line_count());
                             }
                             continue;
                         }
@@ -2145,10 +2197,13 @@ impl FerriteEditor {
                     }
                     egui::Event::Cut => {
                         if self.has_selection() {
+                            let sel = self.primary_selection();
+                            let start_line = sel.anchor.line.min(sel.head.line);
+                            let end_line = sel.anchor.line.max(sel.head.line);
                             let text = self.selected_text();
                             ui.output_mut(|o| o.copied_text = text);
                             self.delete_selection();
-                            self.content_dirty = true;
+                            self.mark_lines_dirty(start_line, end_line);
                             self.reset_cursor_blink();
                         }
                         continue;
@@ -2186,10 +2241,13 @@ impl FerriteEditor {
                             egui::Key::X => {
                                 // Cut - fallback if Event::Cut wasn't received
                                 if self.has_selection() {
+                                    let sel = self.primary_selection();
+                                    let start_line = sel.anchor.line.min(sel.head.line);
+                                    let end_line = sel.anchor.line.max(sel.head.line);
                                     let text = self.selected_text();
                                     ui.output_mut(|o| o.copied_text = text);
                                     self.delete_selection();
-                                    self.content_dirty = true;
+                                    self.mark_lines_dirty(start_line, end_line);
                                     self.reset_cursor_blink();
                                     self.view.ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
                                 }
@@ -2198,48 +2256,6 @@ impl FerriteEditor {
                             egui::Key::V => {
                                 // Paste - handled via egui::Event::Paste below
                                 // But we can also check clipboard directly
-                                continue;
-                            }
-                            egui::Key::Z => {
-                                // Undo (Ctrl+Z / Cmd+Z)
-                                if self.history.can_undo() {
-                                    if let Some(cursor_char_pos) = self.history.undo(&mut self.buffer) {
-                                        // Restore cursor position
-                                        let new_cursor = self.char_pos_to_cursor(
-                                            cursor_char_pos.min(self.buffer.len())
-                                        );
-                                        // Clear extra cursors and set cursor to restored position
-                                        self.set_cursor(new_cursor);
-                                        
-                                        // Invalidate line cache and mark content dirty
-                                        self.line_cache.invalidate();
-                                        self.content_dirty = true;
-                                        
-                                        // Ensure cursor is visible
-                                        self.view.ensure_line_visible(new_cursor.line, self.buffer.line_count());
-                                    }
-                                }
-                                continue;
-                            }
-                            egui::Key::Y => {
-                                // Redo (Ctrl+Y / Cmd+Y)
-                                if self.history.can_redo() {
-                                    if let Some(cursor_char_pos) = self.history.redo(&mut self.buffer) {
-                                        // Restore cursor position
-                                        let new_cursor = self.char_pos_to_cursor(
-                                            cursor_char_pos.min(self.buffer.len())
-                                        );
-                                        // Clear extra cursors and set cursor to restored position
-                                        self.set_cursor(new_cursor);
-                                        
-                                        // Invalidate line cache and mark content dirty
-                                        self.line_cache.invalidate();
-                                        self.content_dirty = true;
-                                        
-                                        // Ensure cursor is visible
-                                        self.view.ensure_line_visible(new_cursor.line, self.buffer.line_count());
-                                    }
-                                }
                                 continue;
                             }
                             _ => {}
@@ -2269,12 +2285,10 @@ impl FerriteEditor {
                             super::vim::VimKeyResult::Handled(result) => {
                                 match result {
                                     InputResult::TextChanged => {
-                                        self.content_dirty = true;
+                                        let line = self.primary_selection().head.line;
+                                        self.mark_lines_dirty(line, line);
                                         self.reset_cursor_blink();
-                                        self.view.ensure_line_visible(
-                                            self.primary_selection().head.line,
-                                            self.buffer.line_count(),
-                                        );
+                                        self.view.ensure_line_visible(line, self.buffer.line_count());
                                     }
                                     InputResult::CursorMoved => {
                                         self.reset_cursor_blink();
@@ -2390,11 +2404,10 @@ impl FerriteEditor {
 
                 match result {
                     InputResult::TextChanged => {
-                        self.content_dirty = true;
-                        // Reset cursor blink so cursor is visible immediately after typing
+                        let line = self.primary_selection().head.line;
+                        self.mark_lines_dirty(line, line);
                         self.reset_cursor_blink();
-                        // Ensure cursor is visible after text change
-                        self.view.ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
+                        self.view.ensure_line_visible(line, self.buffer.line_count());
                     }
                     InputResult::CursorMoved => {
                         // Reset cursor blink so cursor is visible immediately after movement
@@ -2449,7 +2462,7 @@ impl FerriteEditor {
 
         // Horizontal scrollbar (only when word wrap is off and content is wider)
         let text_viewport_width = text_area_width;
-        if !self.wrap_enabled && max_line_width > text_viewport_width && text_viewport_width > 0.0 {
+        if !effective_wrap_enabled && max_line_width > text_viewport_width && text_viewport_width > 0.0 {
             Self::render_scrollbar(
                 ui,
                 &painter,
@@ -2503,8 +2516,28 @@ impl FerriteEditor {
     }
 
     /// Marks the content as dirty, causing cache invalidation on next render.
+    ///
+    /// This performs a **full** invalidation (no line range).
+    /// Prefer [`mark_lines_dirty`] when the affected line range is known.
     pub fn mark_dirty(&mut self) {
         self.content_dirty = true;
+        // Full invalidation — clear line_keys so next frame rebuilds them
+        self.line_cache.clear_line_keys();
+        self.dirty_range = None;
+    }
+
+    /// Marks specific lines as dirty for targeted cache invalidation.
+    ///
+    /// Accumulates into a single `(start, end)` range across multiple
+    /// edits within the same frame; consumed by the next `ui()` call.
+    fn mark_lines_dirty(&mut self, start_line: usize, end_line: usize) {
+        self.content_dirty = true;
+        if let Some((ref mut s, ref mut e)) = self.dirty_range {
+            *s = (*s).min(start_line);
+            *e = (*e).max(end_line);
+        } else {
+            self.dirty_range = Some((start_line, end_line));
+        }
     }
 
     /// Returns whether the content has been modified since the last frame.
@@ -2832,21 +2865,19 @@ impl FerriteEditor {
         text_start_x: f32,
         painter: &egui::Painter,
     ) -> f32 {
+        // Use the view's wrap state which accounts for uniform-height override
+        let wrap_active = self.view.is_wrap_enabled();
+
         if cursor.column == 0 {
-            if self.wrap_enabled {
+            if wrap_active {
                 text_start_x
             } else {
                 text_start_x - self.view.horizontal_scroll()
             }
         } else if let Some(line_content) = self.buffer.get_line(cursor.line) {
             let display_content = line_content.trim_end_matches(['\r', '\n']);
-            let chars_before: String = display_content
-                .chars()
-                .take(cursor.column)
-                .collect();
             
-            if self.wrap_enabled {
-                // For wrapped text, create a wrapped galley and use egui's cursor positioning
+            if wrap_active {
                 let effective_wrap_width = self.max_wrap_width.unwrap_or(f32::INFINITY);
                 let galley = painter.layout(
                     display_content.to_string(),
@@ -2860,17 +2891,28 @@ impl FerriteEditor {
                 let galley_cursor = galley.from_ccursor(ccursor);
                 let cursor_rect = galley.pos_from_cursor(&galley_cursor);
                 text_start_x + cursor_rect.min.x
+            } else if crate::fonts::needs_complex_script_fonts(display_content) {
+                let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(font_id);
+                if let Some(x) = super::shaping::shaped_column_to_x(
+                    display_content, font_bytes, font_id.size, cursor.column,
+                ) {
+                    text_start_x + x - self.view.horizontal_scroll()
+                } else {
+                    let chars_before: String = display_content
+                        .chars().take(cursor.column).collect();
+                    let galley = painter.layout_no_wrap(chars_before, font_id.clone(), Color32::WHITE);
+                    text_start_x + galley.size().x - self.view.horizontal_scroll()
+                }
             } else {
-                // Non-wrapped: measure text width up to cursor, apply horizontal scroll
+                let chars_before: String = display_content
+                    .chars().take(cursor.column).collect();
                 let galley = painter.layout_no_wrap(chars_before, font_id.clone(), Color32::WHITE);
                 text_start_x + galley.size().x - self.view.horizontal_scroll()
             }
+        } else if wrap_active {
+            text_start_x
         } else {
-            if self.wrap_enabled {
-                text_start_x
-            } else {
-                text_start_x - self.view.horizontal_scroll()
-            }
+            text_start_x - self.view.horizontal_scroll()
         }
     }
     
@@ -3205,12 +3247,6 @@ impl FerriteEditor {
         let mut new_cursors: Vec<(usize, Cursor)> = Vec::with_capacity(self.selections.len());
 
         for (sel_idx, char_pos) in cursor_positions {
-            // Record the insert operation for undo
-            self.history.record_operation(EditOperation::Insert {
-                pos: char_pos,
-                text: text.to_string(),
-            });
-            
             // Insert text at this position
             self.buffer.insert(char_pos, text);
             
@@ -3232,16 +3268,23 @@ impl FerriteEditor {
         self.view.ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
     }
 
-    /// Moves all cursors one character to the right (for skip-over).
+    /// Moves all cursors one grapheme cluster to the right (for skip-over).
     fn move_all_cursors_right(&mut self) {
         for sel in &mut self.selections {
             let line_len = self.buffer
                 .get_line(sel.head.line)
                 .map(|l| l.trim_end_matches(['\r', '\n']).chars().count())
                 .unwrap_or(0);
-            
+
             if sel.head.column < line_len {
-                sel.head.column += 1;
+                let new_col = self.buffer
+                    .get_line(sel.head.line)
+                    .map(|l| {
+                        let stripped = grapheme::line_text_stripped(&l);
+                        grapheme::next_grapheme_boundary(stripped, sel.head.column)
+                    })
+                    .unwrap_or(sel.head.column + 1);
+                sel.head.column = new_col;
                 sel.anchor = sel.head;
             }
         }
@@ -3540,18 +3583,6 @@ mod tests {
             let _buffer = editor.buffer_mut();
         }
         // content_dirty is internal, but we can verify by checking the effect
-    }
-
-    #[test]
-    fn test_history_access() {
-        let mut editor = FerriteEditor::new();
-
-        // History should be empty initially
-        assert!(!editor.history().can_undo());
-        assert!(!editor.history().can_redo());
-
-        // Mutable access
-        editor.history_mut().clear();
     }
 
     #[test]

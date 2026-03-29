@@ -2,239 +2,132 @@
 
 ## Overview
 
-The `EditHistory` module provides an operation-based undo/redo system for FerriteEditor. Unlike the snapshot-based system (which stored full content copies), this approach stores discrete edit operations, making it memory-efficient for large files.
-
-**Status:** Fully integrated in FerriteEditor (v0.2.6). Ctrl+Z/Y work for undo/redo.
+`EditHistory` (`src/editor/ferrite/history.rs`) is the **sole undo/redo engine** for the entire application. Each `Tab` in `state.rs` owns one instance. It stores discrete edit operations (insert/delete) rather than full content snapshots, making memory usage proportional to edit size, not file size.
 
 ## Architecture
 
-### Operation-Based vs Snapshot-Based
-
-| Approach | Memory Usage | Complexity | Use Case |
-|----------|--------------|------------|----------|
-| **Snapshot** (current Tab) | O(n × history_size) | Simple | Small files (<100KB) |
-| **Operation** (EditHistory) | O(ops × avg_op_size) | Moderate | Large files (>1MB) |
-
-For a 4MB file with 100 edits averaging 20 characters each, the operation-based approach uses ~2KB vs ~400MB for snapshots.
-
-### Key Components
+### Key Types
 
 ```rust
-// Edit operation - stores position and text
 pub enum EditOperation {
     Insert { pos: usize, text: String },
     Delete { pos: usize, text: String },
 }
 
-// History manager - maintains undo/redo stacks
 pub struct EditHistory {
     undo_stack: Vec<OperationGroup>,
     redo_stack: Vec<OperationGroup>,
     last_edit_time: Option<Instant>,
+    max_groups: usize,  // Default 500, large files 200
 }
+```
+
+### Data Flow
+
+```
+Editor widget modifies tab.content
+    → central_panel detects change
+    → tab.record_edit_from_snapshot()
+    → compute_edit_ops(old, new) → Vec<EditOperation>
+    → edit_history.record_operations(ops)
+
+Ctrl+Z
+    → input_handling consumes key
+    → navigation::handle_undo()
+    → tab.undo()
+    → edit_history.undo_string(&mut tab.content)
+    → content_version bumped
+    → FerriteEditor re-syncs via set_content()
 ```
 
 ## Edit Operations
 
-### Insert Operation
+### Insert
 
-Records text insertion at a character position:
+Records text insertion at a char-indexed position. Undo: delete the text. Redo: re-insert it.
 
-```rust
-let op = EditOperation::Insert {
-    pos: 5,
-    text: " World".to_string(),
-};
-```
+### Delete
 
-**Undo**: Delete `text.len()` characters starting at `pos`  
-**Redo**: Insert `text` at `pos`
+Records text deletion, storing the removed text. Undo: re-insert the text. Redo: delete it again.
 
-### Delete Operation
+### apply_to_string
 
-Records text deletion, storing the removed text for undo:
+Operations can be applied to both `TextBuffer` (rope) and plain `String`:
 
 ```rust
-let op = EditOperation::Delete {
-    pos: 5,
-    text: " World".to_string(),
-};
+op.apply_to_string(&mut s);  // Used by Tab for undo/redo on tab.content
 ```
 
-**Undo**: Insert `text` at `pos`  
-**Redo**: Delete `text.len()` characters starting at `pos`
+Char positions are converted to byte offsets internally via `char_pos_to_byte_pos()`.
 
-### Operation Inverse
+## Diff Algorithm
 
-Each operation type is the inverse of the other:
+`compute_edit_ops(old, new)` finds the minimal changed region using prefix/suffix matching:
 
 ```rust
-let insert = EditOperation::Insert { pos: 5, text: "X".to_string() };
-let delete = insert.inverse();  // EditOperation::Delete { pos: 5, text: "X" }
+pub fn compute_edit_ops(old: &str, new: &str) -> Vec<EditOperation> {
+    // 1. Find common prefix (chars from start)
+    // 2. Find common suffix (chars from end, excluding prefix)
+    // 3. Emit Delete for old[prefix..old_len-suffix]
+    // 4. Emit Insert for new[prefix..new_len-suffix]
+}
 ```
+
+Returns 0 ops (no change), 1 op (pure insert or delete), or 2 ops (replace = delete + insert).
 
 ## Operation Grouping
 
-### Time-Based Grouping
+Consecutive operations within 500 ms (`GROUP_THRESHOLD`) are merged into a single `OperationGroup`. A single undo/redo reverses the entire group.
 
-Consecutive operations within 500ms are grouped into a single undo unit. This means rapid typing is undone as a single action rather than character-by-character.
-
-```rust
-const GROUP_THRESHOLD: Duration = Duration::from_millis(500);
-
-// Rapid typing groups together
-history.record_operation(EditOperation::Insert { pos: 0, text: "H".to_string() });
-history.record_operation(EditOperation::Insert { pos: 1, text: "i".to_string() });
-// Both operations in single undo group
-
-// After 500ms pause, new group starts
-std::thread::sleep(Duration::from_millis(550));
-history.record_operation(EditOperation::Insert { pos: 2, text: "!".to_string() });
-// New undo group
-```
-
-### Manual Group Breaking
-
-Force a new group at specific points (e.g., after save):
-
-```rust
-history.break_group();
-```
-
-## Integration with TextBuffer
-
-The EditHistory works with the `TextBuffer` module (also part of FerriteEditor):
-
-```rust
-use crate::editor::{TextBuffer, EditHistory, EditOperation};
-
-let mut buffer = TextBuffer::from_string("Hello");
-let mut history = EditHistory::new();
-
-// Insert and record
-let text = " World";
-let pos = 5;
-buffer.insert(pos, text);
-history.record_operation(EditOperation::Insert {
-    pos,
-    text: text.to_string(),
-});
-
-// Undo (applies inverse automatically)
-history.undo(&mut buffer);  // buffer is now "Hello"
-
-// Redo (reapplies operation)
-history.redo(&mut buffer);  // buffer is now "Hello World"
-```
+`break_group()` forces the next operation into a new group.
 
 ## API Reference
 
-### EditHistory Methods
+### EditHistory
 
 | Method | Description |
 |--------|-------------|
-| `new()` | Create empty history |
-| `record_operation(op)` | Record operation, groups if <500ms |
-| `undo(buffer)` → `bool` | Apply inverse of last group, returns success |
-| `redo(buffer)` → `bool` | Reapply last undone group, returns success |
-| `can_undo()` → `bool` | Check if undo available |
-| `can_redo()` → `bool` | Check if redo available |
+| `new()` | Create with default 500-group cap |
+| `with_max_groups(n)` | Create with custom group cap |
+| `record_operation(op)` | Record single op (auto-groups by time) |
+| `record_operations(ops)` | Record batch of ops (from diff) |
+| `undo_string(s)` → `Option<usize>` | Undo on `&mut String`, returns cursor pos |
+| `redo_string(s)` → `Option<usize>` | Redo on `&mut String`, returns cursor pos |
+| `can_undo()` / `can_redo()` → `bool` | Check availability |
+| `undo_count()` / `redo_count()` → `usize` | Stack sizes |
+| `break_group()` | Force new group boundary |
 | `clear()` | Clear all history |
-| `break_group()` | Force end of current group |
-| `undo_count()` → `usize` | Number of undo groups |
-| `redo_count()` → `usize` | Number of redo groups |
 
-### EditOperation Methods
+### EditOperation
 
 | Method | Description |
 |--------|-------------|
 | `inverse()` | Returns the reverse operation |
-| `apply(buffer)` | Applies operation to buffer |
+| `apply_to_string(s)` | Apply to a `String` (char-indexed) |
 
-## Behavior
+### Standalone Functions
 
-### Redo Stack Clearing
-
-Recording a new operation clears the redo stack:
-
-```
-Initial: "Hello"
-Insert " World" → undo: [Insert], redo: []
-Undo            → undo: [], redo: [Insert]
-Insert "!"      → undo: [Insert "!"], redo: [] (cleared!)
-```
-
-### Grouped Undo
-
-When operations are grouped, a single undo reverses all operations in the group (in reverse order):
-
-```
-Type "Hi" quickly (grouped):
-  undo: [Group([Insert "H", Insert "i"])]
-
-Single undo:
-  1. Remove "i" (inverse of last)
-  2. Remove "H" (inverse of first)
-  Result: empty string
-```
-
-### Unicode Support
-
-Operations correctly handle Unicode text:
-
-```rust
-buffer.insert(0, "こんにちは");  // Japanese "Hello"
-history.record_operation(EditOperation::Insert {
-    pos: 0,
-    text: "こんにちは".to_string(),
-});
-
-// Character count, not byte count
-assert_eq!(buffer.len(), 5);  // 5 characters (15 bytes)
-```
+| Function | Description |
+|----------|-------------|
+| `compute_edit_ops(old, new)` | Minimal diff between two strings |
 
 ## Memory Efficiency
 
-### Comparison for 4MB File
-
-| Scenario | Snapshot System | Operation System |
-|----------|-----------------|------------------|
-| 100 character inserts | 100 × 4MB = 400MB | 100 × ~20B = ~2KB |
-| 50 line deletions | 50 × 4MB = 200MB | 50 × ~80B = ~4KB |
-| Mixed 100 operations | ~300MB | ~5KB |
-
-### Why Operations Win
-
-1. **Small edit operations**: Most edits are small (few characters)
-2. **No full copies**: Only changed text is stored
-3. **Grouping reduces entries**: Rapid edits share one group
-
-## Integration
-
-EditHistory is integrated into FerriteEditor (v0.2.6):
-
-- **FerriteEditor widget** - Main integration point, history stored per-editor
-- **Keyboard input** - All edits automatically record operations
-- **Keyboard shortcuts** - Ctrl+Z/Y trigger undo/redo
-- **Large file mode** - Reduced undo stack (10 vs 100 entries) for memory efficiency
-
-## Related Documentation
-
-- [TextBuffer](./text-buffer.md) - Rope-based text storage
-- [Undo/Redo System](./undo-redo.md) - Current snapshot-based system
-- [Custom Editor Widget Plan](../planning/custom-editor-widget-plan.md) - v0.3.0 roadmap
+| Scenario (4 MB file) | Snapshot System | Operation System |
+|-----------------------|-----------------|-----------------|
+| 100 char inserts      | 100 × 4 MB = 400 MB | 100 × ~20 B = ~2 KB |
+| 50 line deletions     | 50 × 4 MB = 200 MB  | 50 × ~80 B = ~4 KB  |
+| Mixed 100 operations  | ~300 MB              | ~5 KB                |
 
 ## Testing
 
-The module includes comprehensive tests:
-
 ```bash
-cargo test history
+cargo test history     # EditHistory unit tests
+cargo test undo        # Tab-level undo integration tests
 ```
 
-Tests cover:
-- Basic undo/redo operations
-- Operation grouping (time-based)
-- Unicode and emoji handling
-- Extensive operation sequences (100 ops)
-- Large buffer performance (1MB, ignored by default)
+Tests cover: basic undo/redo, String-based undo/redo, diff algorithm (insert, delete, replace, unicode, no-change), operation grouping, max group cap, roundtrip diff-undo, extensive sequences (100 ops), large buffer performance (1 MB).
+
+## Related
+
+- [Undo/Redo System](./undo-redo.md) — User-facing behavior and integration

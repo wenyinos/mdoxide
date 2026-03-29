@@ -174,6 +174,22 @@ pub struct FerriteApp {
     /// Previous view mode for detecting mode switches (for sync scroll)
     #[allow(dead_code)]
     previous_view_mode: Option<ViewMode>,
+    /// Tracks previous LSP enabled state to detect toggle transitions.
+    lsp_was_enabled: bool,
+    /// Latest LSP status per server key (from `LspManagerEvent::StatusChanged`).
+    lsp_status_by_server: std::collections::HashMap<String, crate::lsp::state::ServerStatus>,
+    /// Workspace root last seen for LSP status (reset map when folder changes).
+    lsp_status_workspace: Option<std::path::PathBuf>,
+    /// Fingerprint of `lsp_server_overrides` to restart servers when paths change.
+    lsp_overrides_fingerprint: u64,
+    /// Paths already opened with `textDocument/didOpen` so we don't re-send.
+    lsp_opened_docs: std::collections::HashSet<std::path::PathBuf>,
+    /// Per-path LSP document version counters for `textDocument/didChange`.
+    lsp_doc_versions: std::collections::HashMap<std::path::PathBuf, i32>,
+    /// Per-path `last_edit_time` snapshot — only sync when it changes.
+    lsp_last_edit_times: std::collections::HashMap<std::path::PathBuf, std::time::Instant>,
+    /// Per-path debounce: when the last `didChange` was sent.
+    lsp_last_change_sent: std::collections::HashMap<std::path::PathBuf, std::time::Instant>,
     /// Window resize state for borderless window edge dragging
     window_resize_state: WindowResizeState,
     /// Session save throttle for crash recovery persistence
@@ -395,6 +411,9 @@ impl FerriteApp {
         let productivity_panel = ProductivityPanel::new();
         crate::log_memory("After ProductivityPanel::new()");
 
+        let lsp_overrides_fingerprint =
+            crate::lsp::overrides_fingerprint(&state.settings.lsp_server_overrides);
+        let lsp_was_enabled_init = state.settings.lsp_enabled;
         let mut app = Self {
             state,
             theme_manager,
@@ -423,6 +442,14 @@ impl FerriteApp {
             last_window_pos: None,
             start_time: std::time::Instant::now(),
             previous_view_mode: None,
+            lsp_was_enabled: lsp_was_enabled_init,
+            lsp_status_by_server: std::collections::HashMap::new(),
+            lsp_status_workspace: None,
+            lsp_overrides_fingerprint,
+            lsp_opened_docs: std::collections::HashSet::new(),
+            lsp_doc_versions: std::collections::HashMap::new(),
+            lsp_last_edit_times: std::collections::HashMap::new(),
+            lsp_last_change_sent: std::collections::HashMap::new(),
             window_resize_state: WindowResizeState::new(),
             session_save_throttle: SessionSaveThrottle::default(),
             git_auto_refresh: GitAutoRefresh::new(),
@@ -821,7 +848,7 @@ impl FerriteApp {
         // Clean up egui temporary data for rendered editor widgets
         if let Some(ctx) = ctx {
             cleanup_rendered_editor_memory(ctx);
-            // Clean up FerriteEditor instance (TextBuffer, LineCache, EditHistory)
+            // Clean up FerriteEditor instance (TextBuffer, LineCache)
             // This is critical for freeing memory after closing tabs with large files
             cleanup_ferrite_editor(ctx, tab_id);
         }
@@ -2331,6 +2358,9 @@ impl eframe::App for FerriteApp {
 
         // Poll file watcher for workspace changes
         self.handle_file_watcher_events();
+
+        // Poll LSP manager for status changes and spawn failures
+        self.handle_lsp_events(ctx);
 
         // Handle automatic Git status refresh (focus, periodic, debounced)
         self.handle_git_auto_refresh(ctx);

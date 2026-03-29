@@ -40,9 +40,19 @@ impl FerriteEditor {
                 let cursor = galley.cursor_from_pos(pos);
                 cursor.ccursor.index
             } else {
-                // For non-wrapped text, use simple x-based calculation
+                // For non-wrapped text, use x-based calculation
                 if x <= 0.0 {
                     return 0;
+                }
+
+                // Use HarfRust shaped advances for complex-script text
+                if crate::fonts::needs_complex_script_fonts(line_content) {
+                    let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(font_id);
+                    if let Some(col) = super::shaping::shaped_x_to_column(
+                        line_content, font_bytes, font_id.size, x,
+                    ) {
+                        return col.min(line_content.chars().count());
+                    }
                 }
 
                 let chars: Vec<char> = line_content.chars().collect();

@@ -39,6 +39,7 @@
 //! ```
 
 mod ast_ops;
+pub mod cache;
 pub mod csv_viewer;
 mod editor;
 pub mod formatting;
