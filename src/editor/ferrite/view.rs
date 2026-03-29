@@ -757,17 +757,37 @@ impl ViewState {
     ///
     /// When enabled, the view uses uniform line heights for all calculations,
     /// avoiding O(N) memory and CPU overhead. This should be called when
-    /// opening files with more than LARGE_FILE_THRESHOLD lines.
+    /// opening files with more than `LARGE_FILE_THRESHOLD` lines.
+    ///
+    /// When uniform mode activates, all O(N) per-line vectors (`wrap_info`,
+    /// `cumulative_heights`, `cumulative_visual_rows`) are freed. Callers
+    /// must also disable word wrap for the frame — the overlap regression
+    /// was caused by wrapped galleys being taller than the uniform height.
     ///
     /// # Arguments
     /// * `total_lines` - Total number of lines in the file
-    pub fn configure_for_file_size(&mut self, _total_lines: usize) {
-        // DISABLED: Large file optimization causes rendering regression
-        // where lines overlap. Deferred to future task for proper fix.
-        // See Task 47 notes.
-        //
-        // For now, always use standard height calculations.
-        self.use_uniform_heights = false;
+    pub fn configure_for_file_size(&mut self, total_lines: usize) {
+        if total_lines >= LARGE_FILE_THRESHOLD {
+            if !self.use_uniform_heights {
+                log::info!(
+                    "Enabling uniform heights for large file ({} lines, threshold {})",
+                    total_lines,
+                    LARGE_FILE_THRESHOLD
+                );
+                self.use_uniform_heights = true;
+                self.wrap_info.clear();
+                self.wrap_info.shrink_to_fit();
+                self.cumulative_heights.clear();
+                self.cumulative_heights.shrink_to_fit();
+                self.cumulative_visual_rows.clear();
+                self.cumulative_visual_rows.shrink_to_fit();
+                self.total_content_height = 0.0;
+                self.scrollbar_content_height = 0.0;
+                self.dirty_from_line = usize::MAX;
+            }
+        } else {
+            self.use_uniform_heights = false;
+        }
     }
 
     /// Returns whether uniform heights mode is active.
@@ -831,13 +851,15 @@ impl ViewState {
     /// # Arguments
     /// * `total_lines` - Total number of logical lines in the document
     pub fn rebuild_height_cache(&mut self, total_lines: usize) {
+        if self.use_uniform_heights {
+            return;
+        }
         if self.dirty_from_line == usize::MAX {
             return;
         }
 
         let rebuild_from = self.dirty_from_line;
         self.dirty_from_line = usize::MAX;
-        self.use_uniform_heights = false;
 
         // Incremental path: reuse cached prefix up to rebuild_from
         let can_incremental =
@@ -1946,5 +1968,141 @@ mod tests {
         let info = WrapInfo::default();
         assert_eq!(info.visual_rows, 1);
         assert_eq!(info.height, DEFAULT_LINE_HEIGHT);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Uniform Heights / Large File Tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_configure_for_file_size_activates_uniform() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        assert!(!view.uses_uniform_heights());
+
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+        assert!(view.uses_uniform_heights());
+    }
+
+    #[test]
+    fn test_configure_for_file_size_below_threshold() {
+        let mut view = ViewState::new();
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD - 1);
+        assert!(!view.uses_uniform_heights());
+    }
+
+    #[test]
+    fn test_configure_for_file_size_clears_vectors() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.set_line_wrap_info(0, 2, 40.0);
+        view.set_line_wrap_info(1, 1, 20.0);
+        view.rebuild_height_cache(2);
+
+        assert!(!view.wrap_info().is_empty());
+
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+        assert!(view.wrap_info().is_empty());
+        assert!(view.uses_uniform_heights());
+    }
+
+    #[test]
+    fn test_uniform_get_line_height() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+
+        assert_eq!(view.get_line_height(0), 20.0);
+        assert_eq!(view.get_line_height(500_000), 20.0);
+    }
+
+    #[test]
+    fn test_uniform_get_line_y_offset() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+
+        assert_eq!(view.get_line_y_offset(0), 0.0);
+        assert_eq!(view.get_line_y_offset(100), 2000.0);
+        assert_eq!(view.get_line_y_offset(500_000), 10_000_000.0);
+    }
+
+    #[test]
+    fn test_uniform_total_content_height() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(200_000);
+
+        assert_eq!(view.total_content_height(200_000), 4_000_000.0);
+    }
+
+    #[test]
+    fn test_uniform_visible_line_range() {
+        let mut view = ViewState::new();
+        view.update_viewport(800.0);
+        view.set_line_height(20.0);
+        view.configure_for_file_size(500_000);
+        view.scroll_to_line(250_000);
+
+        let (start, end) = view.get_visible_line_range(500_000);
+        assert_eq!(start, 250_000 - OVERSCAN_LINES);
+        assert_eq!(end, 250_000 + 40 + OVERSCAN_LINES); // 800/20 = 40 lines
+    }
+
+    #[test]
+    fn test_uniform_y_offset_to_line() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(500_000);
+
+        assert_eq!(view.y_offset_to_line(0.0, 500_000), 0);
+        assert_eq!(view.y_offset_to_line(2000.0, 500_000), 100);
+        assert_eq!(view.y_offset_to_line(19.99, 500_000), 0);
+        assert_eq!(view.y_offset_to_line(20.0, 500_000), 1);
+    }
+
+    #[test]
+    fn test_uniform_set_line_wrap_info_is_noop() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+
+        view.set_line_wrap_info(0, 3, 60.0);
+        assert!(view.wrap_info().is_empty());
+        assert_eq!(view.get_line_height(0), 20.0);
+    }
+
+    #[test]
+    fn test_uniform_rebuild_height_cache_is_noop() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+
+        view.rebuild_height_cache(500_000);
+        assert_eq!(view.total_content_height(500_000), 10_000_000.0);
+    }
+
+    #[test]
+    fn test_uniform_scroll_by() {
+        let mut view = ViewState::new();
+        view.update_viewport(800.0);
+        view.set_line_height(20.0);
+        view.configure_for_file_size(500_000);
+        view.scroll_to_line(0);
+
+        view.scroll_by(100.0, 500_000);
+        assert_eq!(view.first_visible_line(), 5);
+        assert_eq!(view.scroll_offset_y(), 0.0);
+    }
+
+    #[test]
+    fn test_uniform_deactivates_below_threshold() {
+        let mut view = ViewState::new();
+        view.set_line_height(20.0);
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD);
+        assert!(view.uses_uniform_heights());
+
+        view.configure_for_file_size(LARGE_FILE_THRESHOLD - 1);
+        assert!(!view.uses_uniform_heights());
     }
 }

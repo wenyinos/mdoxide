@@ -295,29 +295,44 @@ impl FerriteEditor {
                 painter.rect_filled(newline_rect, 0.0, selection_color);
             }
         } else {
-            // Non-wrapped mode: simple rectangle calculation
-            let start_x = if sel_start == 0 {
-                text_start_x - self.view.horizontal_scroll()
+            // Non-wrapped mode: rectangle calculation
+            // Use HarfRust shaped advances for complex-script text
+            let use_shaped = crate::fonts::needs_complex_script_fonts(line);
+            let shaped_data = if use_shaped {
+                let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(font_id);
+                super::shaping::shape_text(line, font_bytes, font_id.size)
+                    .ok()
+                    .filter(|g| !g.is_empty())
+                    .map(|g| super::shaping::group_clusters(&g, line.len()))
             } else {
-                let prefix: String = chars.iter().take(sel_start).collect();
-                let galley = painter.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE);
-                text_start_x + galley.size().x - self.view.horizontal_scroll()
+                None
             };
 
+            let measure_x = |col: usize| -> f32 {
+                if col == 0 {
+                    return text_start_x - self.view.horizontal_scroll();
+                }
+                if let Some(ref clusters) = shaped_data {
+                    let x = super::shaping::column_to_x_offset(line, clusters, col);
+                    text_start_x + x - self.view.horizontal_scroll()
+                } else {
+                    let prefix: String = chars.iter().take(col).collect();
+                    let galley = painter.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE);
+                    text_start_x + galley.size().x - self.view.horizontal_scroll()
+                }
+            };
+
+            let start_x = measure_x(sel_start);
+
             let end_x = if sel_end >= line_len {
-                // Select to end or past (for newline)
-                let full_text: String = chars.iter().collect();
-                let galley = painter.layout_no_wrap(full_text, font_id.clone(), Color32::WHITE);
-                let text_end = text_start_x + galley.size().x - self.view.horizontal_scroll();
+                let text_end = measure_x(line_len);
                 if sel_end > line_len {
-                    (text_end + 8.0).min(max_x) // Add space for newline indicator
+                    (text_end + 8.0).min(max_x)
                 } else {
                     text_end
                 }
             } else {
-                let prefix: String = chars.iter().take(sel_end).collect();
-                let galley = painter.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE);
-                text_start_x + galley.size().x - self.view.horizontal_scroll()
+                measure_x(sel_end)
             };
 
             let sel_rect = Rect::from_min_max(

@@ -226,6 +226,16 @@ impl WelcomePanel {
                         changed = true;
                     }
 
+                    if Self::setting_toggle(
+                        ui,
+                        &mut settings.strict_line_breaks,
+                        "Strict Line Breaks",
+                        "Treat single newlines as hard line breaks in rendered view",
+                        weak_color,
+                    ) {
+                        changed = true;
+                    }
+
                     // ── Default View Mode ───────────────────────────────
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {

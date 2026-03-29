@@ -551,6 +551,19 @@ fn hash_content_bytes(content: &[u8]) -> u64 {
     hasher.finish()
 }
 
+/// Blake3 content hash truncated to u64.
+///
+/// Consistent with the Markdown AST cache pattern (Task 4).
+/// Full-content hash — no sampling — so even mid-file edits are detected.
+fn blake3_content_hash(content: &[u8]) -> u64 {
+    let hash = blake3::hash(content);
+    let bytes = hash.as_bytes();
+    u64::from_le_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5], bytes[6], bytes[7],
+    ])
+}
+
 /// Build a row offset index from CSV content.
 ///
 /// Scans the entire content recording byte offsets per row, and samples
@@ -735,6 +748,11 @@ pub struct CsvViewerState {
     /// Cached window of parsed visible rows for lazy rendering.
     /// Updated when the viewport scrolls beyond the cached range.
     cached_visible: Option<CachedVisibleRows>,
+    /// Cached raw view text to avoid per-frame `.to_string()` allocation.
+    /// Rebuilt only when content hash changes.
+    raw_view_text: String,
+    /// Blake3 hash (truncated to u64) of content when `raw_view_text` was last built.
+    raw_view_hash: u64,
 }
 
 impl CsvViewerState {
@@ -750,6 +768,8 @@ impl CsvViewerState {
         self.cached_index = None;
         self.cached_visible = None;
         self.content_hash = 0;
+        self.raw_view_text = String::new();
+        self.raw_view_hash = 0;
         // Also clear detected delimiter since content changed
         self.detected_delimiter = None;
     }
@@ -767,6 +787,8 @@ impl CsvViewerState {
         self.cached_index = None;
         self.cached_visible = None;
         self.content_hash = 0;
+        self.raw_view_text = String::new();
+        self.raw_view_hash = 0;
     }
 
     /// Clear manual delimiter override (return to auto-detect).
@@ -776,6 +798,8 @@ impl CsvViewerState {
         self.cached_index = None;
         self.cached_visible = None;
         self.content_hash = 0;
+        self.raw_view_text = String::new();
+        self.raw_view_hash = 0;
     }
 
     /// Check if delimiter is manually overridden.
@@ -1272,7 +1296,7 @@ impl<'a> CsvViewer<'a> {
         self
     }
 
-    pub fn show(self, ui: &mut Ui) -> CsvViewerOutput {
+    pub fn show(mut self, ui: &mut Ui) -> CsvViewerOutput {
         let colors = CsvViewerColors::from_dark_mode(ui.visuals().dark_mode)
             .with_rainbow(self.rainbow_columns);
 
@@ -1446,12 +1470,19 @@ impl<'a> CsvViewer<'a> {
         ui.separator();
     }
 
-    fn show_raw_view(&self, ui: &mut Ui) -> f32 {
+    fn show_raw_view(&mut self, ui: &mut Ui) -> f32 {
+        // Hash-guarded rebuild: only allocate when content actually changes
+        let current_hash = blake3_content_hash(self.content.as_bytes());
+        if self.state.raw_view_hash != current_hash {
+            self.state.raw_view_text = self.content.to_string();
+            self.state.raw_view_hash = current_hash;
+        }
+
         let scroll_output = ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.add(
-                    egui::TextEdit::multiline(&mut self.content.to_string())
+                    egui::TextEdit::multiline(&mut self.state.raw_view_text)
                         .code_editor()
                         .font(egui::TextStyle::Monospace)
                         .desired_width(f32::INFINITY)
@@ -2447,5 +2478,51 @@ mod tests {
         state.set_delimiter(b';');
         assert!(state.cached_index.is_none());
         assert!(state.cached_visible.is_none());
+    }
+
+    #[test]
+    fn test_blake3_content_hash_consistency() {
+        let content = b"some csv content";
+        let hash1 = blake3_content_hash(content);
+        let hash2 = blake3_content_hash(content);
+        assert_eq!(hash1, hash2);
+
+        let different = b"different content";
+        let hash3 = blake3_content_hash(different);
+        assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn test_blake3_content_hash_detects_mid_file_edits() {
+        let content = vec![b'x'; 20_000];
+        let hash1 = blake3_content_hash(&content);
+
+        let mut modified = content.clone();
+        modified[10_000] = b'y';
+        let hash2 = blake3_content_hash(&modified);
+        // blake3 hashes the full content, so mid-file edits are always detected
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_invalidate_cache_clears_raw_view() {
+        let mut state = CsvViewerState::new();
+        state.raw_view_text = "cached text".to_string();
+        state.raw_view_hash = 12345;
+
+        state.invalidate_cache();
+        assert!(state.raw_view_text.is_empty());
+        assert_eq!(state.raw_view_hash, 0);
+    }
+
+    #[test]
+    fn test_set_delimiter_clears_raw_view() {
+        let mut state = CsvViewerState::new();
+        state.raw_view_text = "cached text".to_string();
+        state.raw_view_hash = 12345;
+
+        state.set_delimiter(b';');
+        assert!(state.raw_view_text.is_empty());
+        assert_eq!(state.raw_view_hash, 0);
     }
 }

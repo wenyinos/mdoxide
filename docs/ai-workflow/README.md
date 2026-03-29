@@ -48,6 +48,7 @@ PRDs define features and acceptance criteria for each version.
 | `prd-v0.2.3.md` | v0.2.3 | Editor productivity |
 | `prd-v0.2.5.md` | v0.2.5 | Mermaid, CSV, i18n |
 | `prd-v0.2.6.1.md` | v0.2.6.1 | Patch & stability, PR #74, code signing |
+| `prd-v0.2.7.md` | v0.2.7 | Pre–v0.2.8 cycle (tasks 11–45); archived from `.taskmaster` Mar 2026 |
 | `prd-v0.3.0-mermaid-crate.md` | v0.3.0 | Mermaid crate extraction |
 
 ---
@@ -64,6 +65,8 @@ Task files generated from PRDs showing how requirements were broken down.
 | `tasks-v0.2.2.json` | v0.2.2 | v0.2.2 structure |
 | `tasks-v0.2.3.json` | v0.2.3 | v0.2.3 structure |
 | `tasks-v0.2.6.1.json` | v0.2.6.1 | v0.2.6.1 patch release tasks |
+| `tasks-v0.2.7-archive-2026-03-25.json` | v0.2.7 | Full `tasks.json` snapshot (tasks 11–45) before v0.2.8 reset |
+| `task-complexity-report-v0.2.7-archive-2026-03-25.json` | v0.2.7 | Complexity report snapshot for that cycle |
 | `tasks-v0.3.0-mermaid-crate.json` | v0.3.0 | Mermaid crate tasks |
 
 ---

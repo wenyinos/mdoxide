@@ -878,6 +878,45 @@ const FONT_SOUTHEAST_ASIAN: &str = "SoutheastAsian";
 const FONT_CUSTOM: &str = "Custom";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HarfRust shaping: TTF bytes aligned with egui font families
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Embedded TTF bytes for the primary face used with [`FontFamily::Proportional`] (Inter Regular).
+#[must_use]
+pub fn ttf_bytes_proportional_regular() -> &'static [u8] {
+    INTER_REGULAR
+}
+
+/// Embedded TTF bytes for the primary face used with [`FontFamily::Monospace`] (JetBrains Mono Regular).
+#[must_use]
+pub fn ttf_bytes_monospace_regular() -> &'static [u8] {
+    JETBRAINS_REGULAR
+}
+
+/// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::ferrite::shaping).
+///
+/// Named Inter/JetBrains families resolve to the matching weight/style TTF. Unknown names fall
+/// back to Inter Regular (closest default for multilingual text).
+#[must_use]
+pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
+    match &font_id.family {
+        FontFamily::Proportional => INTER_REGULAR,
+        FontFamily::Monospace => JETBRAINS_REGULAR,
+        FontFamily::Name(name) => match name.as_ref() {
+            FONT_INTER => INTER_REGULAR,
+            FONT_INTER_BOLD => INTER_BOLD,
+            FONT_INTER_ITALIC => INTER_ITALIC,
+            FONT_INTER_BOLD_ITALIC => INTER_BOLD_ITALIC,
+            FONT_JETBRAINS => JETBRAINS_REGULAR,
+            FONT_JETBRAINS_BOLD => JETBRAINS_BOLD,
+            FONT_JETBRAINS_ITALIC => JETBRAINS_ITALIC,
+            FONT_JETBRAINS_BOLD_ITALIC => JETBRAINS_BOLD_ITALIC,
+            _ => INTER_REGULAR,
+        },
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Font Loading
 // ─────────────────────────────────────────────────────────────────────────────
 

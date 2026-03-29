@@ -10,6 +10,8 @@
 #![allow(clippy::redundant_closure)]
 
 use crate::config::{ load_config, save_config_silent, Settings, TabInfo, ViewMode };
+use crate::editor::{compute_edit_ops, EditHistory};
+use crate::lsp::{DiagnosticMap, LspManager};
 use crate::ui::TabPipelineState;
 use crate::vcs::GitService;
 use crate::workspaces::{ filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher };
@@ -1014,38 +1016,14 @@ impl FoldState {
 // Tab State (Runtime)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// An entry in the undo/redo stack.
-///
-/// Stores both the content state and cursor position so that undo/redo
-/// can restore the cursor to the correct position.
-#[derive(Debug, Clone)]
-pub struct UndoEntry {
-    /// The content at this point in history
-    pub content: String,
-    /// The cursor position (character index) at this point
-    pub cursor_position: usize,
-}
-
-impl UndoEntry {
-    /// Create a new undo entry with the given content and cursor position.
-    pub fn new(content: String, cursor_position: usize) -> Self {
-        Self {
-            content,
-            cursor_position,
-        }
-    }
-}
-
-/// Runtime state for an open tab.
 /// Threshold in bytes above which a file is considered "large" and gets memory optimizations.
 /// Large files:
 /// - Use hash-based modification detection instead of storing full original_content
-/// - Have a smaller undo stack (10 entries instead of 100)
 /// - Clear original_bytes after initial load to save memory
 pub const LARGE_FILE_THRESHOLD: usize = 1_000_000; // 1MB
 
-/// Maximum undo stack size for large files (reduced from 100 to save memory).
-pub const LARGE_FILE_MAX_UNDO: usize = 10;
+/// Reduced max undo groups for large files (operations are tiny, but cap defensively).
+const LARGE_FILE_MAX_UNDO_GROUPS: usize = 200;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab Kind (Document vs Special)
@@ -1156,12 +1134,8 @@ pub struct Tab {
     pub skip_cursor_sync: bool,
     /// View mode for this tab (raw or rendered)
     pub view_mode: ViewMode,
-    /// Undo history stack (stores content + cursor position)
-    undo_stack: Vec<UndoEntry>,
-    /// Redo history stack (stores content + cursor position)
-    redo_stack: Vec<UndoEntry>,
-    /// Maximum undo history size
-    max_undo_size: usize,
+    /// Unified operation-based undo/redo history (replaces snapshot stacks).
+    edit_history: EditHistory,
     /// Content version counter - incremented on undo/redo to signal
     /// external content changes to the editor widget
     content_version: u64,
@@ -1196,20 +1170,11 @@ pub struct Tab {
     /// Whether the original file had a BOM (Byte Order Mark).
     /// Used to preserve BOM when saving UTF-16 and UTF-8 with BOM files.
     pub had_bom: bool,
-    /// Pending undo state - snapshot of content before the current edit session.
-    /// Used to avoid cloning content every frame. Only clones when:
-    /// 1. First frame after file open (to prepare for first edit)
-    /// 2. After an edit is recorded (to prepare for next edit)
-    /// This dramatically reduces memory allocation for large files.
-    pending_undo_state: Option<UndoEntry>,
-    /// Time of last undo entry - used for time-based undo grouping.
-    /// Rapid edits within UNDO_GROUP_THRESHOLD are merged into a single undo entry.
-    last_undo_time: Option<std::time::Instant>,
+    /// Lazily-cloned content snapshot for diff-based undo recording.
+    /// Cloned once after each edit, not every frame. `prepare_undo_snapshot()`
+    /// populates this if None; `record_edit_from_snapshot()` consumes it.
+    pending_undo_snapshot: Option<String>,
 }
-
-/// Time threshold for grouping rapid edits into a single undo entry.
-/// Edits within this duration of each other will be merged.
-const UNDO_GROUP_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(500);
 
 impl Tab {
     /// Compute a 64-bit hash of content for modification detection.
@@ -1248,9 +1213,7 @@ impl Tab {
             pending_scroll_to_line: None,
             skip_cursor_sync: false,
             view_mode: ViewMode::Raw, // New documents default to raw mode
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_undo_size: 100,
+            edit_history: EditHistory::new(),
             content_version: 0,
             file_type: FileType::Markdown, // New tabs default to markdown
             needs_focus: true, // Auto-focus new tabs
@@ -1265,8 +1228,7 @@ impl Tab {
             original_bytes: Vec::new(), // No original bytes for new docs
             current_encoding: "utf-8", // Default to UTF-8 for new documents
             had_bom: false, // New documents don't have a BOM
-            pending_undo_state: None, // Will be populated on first frame
-            last_undo_time: None,
+            pending_undo_snapshot: None,
         }
     }
 
@@ -1297,14 +1259,20 @@ impl Tab {
         let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
 
         // For large files, store hash instead of full content to save memory
-        let (original_content, original_content_hash, max_undo_size) = if is_large_file {
+        let (original_content, original_content_hash) = if is_large_file {
             log::info!(
                 "Opening large file ({} bytes): using hash-based modification detection",
                 content.len()
             );
-            (String::new(), Some(Self::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO)
+            (String::new(), Some(Self::compute_content_hash(&content)))
         } else {
-            (content.clone(), None, 100)
+            (content.clone(), None)
+        };
+
+        let edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
         };
 
         Self {
@@ -1325,29 +1293,26 @@ impl Tab {
             pending_cursor_restore: None,
             pending_scroll_ratio: None,
             rendered_line_mappings: Vec::new(),
-            raw_line_height: 20.0, // Default, updated on first render
+            raw_line_height: 20.0,
             pending_scroll_to_line: None,
             skip_cursor_sync: false,
-            view_mode: ViewMode::Raw, // Newly opened files default to raw mode
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_undo_size,
+            view_mode: ViewMode::Raw,
+            edit_history,
             content_version: 0,
             file_type,
-            needs_focus: true, // Auto-focus newly opened files
+            needs_focus: true,
             transient_highlight: TransientHighlight::new(),
-            auto_save_enabled: false, // Will be set from settings by caller
+            auto_save_enabled: false,
             last_edit_time: None,
             last_auto_save_content_hash: None,
             fold_state: FoldState::new(),
-            split_ratio: 0.5, // Default to 50/50 split
+            split_ratio: 0.5,
             pipeline_state: TabPipelineState::default(),
-            detected_encoding: Some("utf-8"), // Will be overridden by with_file_bytes
-            original_bytes: Vec::new(), // Will be set by with_file_bytes
-            current_encoding: "utf-8", // Will be overridden by with_file_bytes
-            had_bom: false, // Will be set by with_file_bytes if BOM detected
-            pending_undo_state: None, // Will be populated on first frame
-            last_undo_time: None,
+            detected_encoding: Some("utf-8"),
+            original_bytes: Vec::new(),
+            current_encoding: "utf-8",
+            had_bom: false,
+            pending_undo_snapshot: None,
         }
     }
 
@@ -1382,25 +1347,20 @@ impl Tab {
             (decoded.into_owned(), encoding_label, had_errors, false)
         };
 
-        // For large files, store hash instead of full content to save memory
-        // Also clear original_bytes for large files - can be reloaded from disk if needed
-        let (original_content, original_content_hash, max_undo_size, original_bytes) = if
-            is_large_file
-        {
+        let (original_content, original_content_hash, original_bytes) = if is_large_file {
             log::info!(
-                "Opening large file ({} bytes): using hash-based modification detection, reduced undo stack",
+                "Opening large file ({} bytes): using hash-based modification detection",
                 bytes_len
             );
-            // Don't store original_bytes for large files - saves significant memory
-            // If user changes encoding, we can reload from disk
-            (
-                String::new(),
-                Some(Self::compute_content_hash(&content)),
-                LARGE_FILE_MAX_UNDO,
-                Vec::new(),
-            )
+            (String::new(), Some(Self::compute_content_hash(&content)), Vec::new())
         } else {
-            (content.clone(), None, 100, bytes)
+            (content.clone(), None, bytes)
+        };
+
+        let edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
         };
 
         Self {
@@ -1425,9 +1385,7 @@ impl Tab {
             pending_scroll_to_line: None,
             skip_cursor_sync: false,
             view_mode: ViewMode::Raw,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_undo_size,
+            edit_history,
             content_version: 0,
             file_type,
             needs_focus: true,
@@ -1442,8 +1400,7 @@ impl Tab {
             original_bytes,
             current_encoding: actual_encoding,
             had_bom,
-            pending_undo_state: None, // Will be populated on first frame
-            last_undo_time: None,
+            pending_undo_snapshot: None,
         }
     }
 
@@ -1507,10 +1464,16 @@ impl Tab {
         );
 
         let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
-        let (original_content, original_content_hash, max_undo_size) = if is_large_file {
-            (String::new(), Some(Self::compute_content_hash(&content)), LARGE_FILE_MAX_UNDO)
+        let (original_content, original_content_hash) = if is_large_file {
+            (String::new(), Some(Self::compute_content_hash(&content)))
         } else {
-            (content.clone(), None, 100)
+            (content.clone(), None)
+        };
+
+        let edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
         };
 
         Self {
@@ -1531,29 +1494,26 @@ impl Tab {
             pending_cursor_restore: None,
             pending_scroll_ratio: None,
             rendered_line_mappings: Vec::new(),
-            raw_line_height: 20.0, // Default, updated on first render
+            raw_line_height: 20.0,
             pending_scroll_to_line: None,
             skip_cursor_sync: false,
-            view_mode: info.view_mode, // Restore saved view mode
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_undo_size,
+            view_mode: info.view_mode,
+            edit_history,
             content_version: 0,
             file_type,
-            needs_focus: false, // Don't auto-focus restored tabs
+            needs_focus: false,
             transient_highlight: TransientHighlight::new(),
-            auto_save_enabled: false, // Will be set from settings by caller
+            auto_save_enabled: false,
             last_edit_time: None,
             last_auto_save_content_hash: None,
             fold_state: FoldState::new(),
-            split_ratio: info.split_ratio, // Restore saved split ratio
+            split_ratio: info.split_ratio,
             pipeline_state: TabPipelineState::default(),
-            detected_encoding: Some("utf-8"), // Restored tabs default to UTF-8
-            original_bytes: Vec::new(), // Bytes are reloaded if needed
-            current_encoding: "utf-8", // Default encoding for restored tabs
-            had_bom: false, // Will be set correctly when bytes are loaded
-            pending_undo_state: None, // Will be populated on first frame
-            last_undo_time: None,
+            detected_encoding: Some("utf-8"),
+            original_bytes: Vec::new(),
+            current_encoding: "utf-8",
+            had_bom: false,
+            pending_undo_snapshot: None,
         }
     }
 
@@ -1616,22 +1576,20 @@ impl Tab {
             info.cursor_position.1
         );
 
-        // For large files, store hash instead of full content
-        let (original_content, original_content_hash, max_undo_size, original_bytes) = if
-            is_large_file
-        {
+        let (original_content, original_content_hash, original_bytes) = if is_large_file {
             log::info!(
                 "Restoring large file ({} bytes): using hash-based modification detection",
                 bytes_len
             );
-            (
-                String::new(),
-                Some(Self::compute_content_hash(&content)),
-                LARGE_FILE_MAX_UNDO,
-                Vec::new(),
-            )
+            (String::new(), Some(Self::compute_content_hash(&content)), Vec::new())
         } else {
-            (content.clone(), None, 100, bytes)
+            (content.clone(), None, bytes)
+        };
+
+        let edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
         };
 
         Self {
@@ -1656,9 +1614,7 @@ impl Tab {
             pending_scroll_to_line: None,
             skip_cursor_sync: false,
             view_mode: info.view_mode,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_undo_size,
+            edit_history,
             content_version: 0,
             file_type,
             needs_focus: false,
@@ -1673,8 +1629,7 @@ impl Tab {
             original_bytes,
             current_encoding: actual_encoding,
             had_bom,
-            pending_undo_state: None, // Will be populated on first frame
-            last_undo_time: None,
+            pending_undo_snapshot: None,
         }
     }
 
@@ -1993,104 +1948,70 @@ impl Tab {
         hash_content(&self.content)
     }
 
-    /// Set new content and push current to undo stack.
-    ///
-    /// The cursor position is captured from the current primary cursor.
+    /// Set new content and record diff-based undo operation.
     pub fn set_content(&mut self, new_content: String) {
         if new_content != self.content {
-            // Push current state to undo stack (with cursor position)
-            let cursor_pos = self.cursors.primary().head;
-            self.undo_stack.push(UndoEntry::new(self.content.clone(), cursor_pos));
-            if self.undo_stack.len() > self.max_undo_size {
-                self.undo_stack.remove(0);
-            }
-            // Clear redo stack on new edit
-            self.redo_stack.clear();
+            let ops = compute_edit_ops(&self.content, &new_content);
+            self.edit_history.record_operations(ops);
             self.content = new_content;
-            // Update last edit time for auto-save
             self.mark_content_edited();
         }
     }
 
-    /// Undo the last edit.
+    /// Undo the last edit group.
     ///
-    /// Returns `Some(cursor_position)` if undo was performed, `None` otherwise.
-    /// The cursor position is the position that was saved when the edit was made.
-    /// Increments `content_version` to signal external content change to UI widgets.
-    /// Resets `last_undo_time` so subsequent typing starts a new undo group.
+    /// Applies inverse operations to `self.content` and bumps `content_version`
+    /// to signal UI widgets to re-sync. Returns cursor char position from the
+    /// first operation in the group, or `None` if the undo stack was empty.
     pub fn undo(&mut self) -> Option<usize> {
-        if let Some(entry) = self.undo_stack.pop() {
-            // Save current state to redo stack (with current cursor position)
-            let current_cursor = self.cursors.primary().head;
-            self.redo_stack.push(UndoEntry::new(self.content.clone(), current_cursor));
-            // Restore previous state
-            self.content = entry.content;
+        let cursor = self.edit_history.undo_string(&mut self.content);
+        if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
-            // Reset undo grouping so new typing starts a fresh group
-            self.last_undo_time = None;
-            Some(entry.cursor_position)
-        } else {
-            None
+            self.pending_undo_snapshot = None;
         }
+        cursor
     }
 
-    /// Redo the last undone edit.
+    /// Redo the last undone edit group.
     ///
-    /// Returns `Some(cursor_position)` if redo was performed, `None` otherwise.
-    /// The cursor position is the position that was saved when undo was performed.
-    /// Increments `content_version` to signal external content change to UI widgets.
-    /// Resets `last_undo_time` so subsequent typing starts a new undo group.
+    /// Reapplies operations to `self.content` and bumps `content_version`.
+    /// Returns cursor char position, or `None` if the redo stack was empty.
     pub fn redo(&mut self) -> Option<usize> {
-        if let Some(entry) = self.redo_stack.pop() {
-            // Save current state to undo stack (with current cursor position)
-            let current_cursor = self.cursors.primary().head;
-            self.undo_stack.push(UndoEntry::new(self.content.clone(), current_cursor));
-            // Restore next state
-            self.content = entry.content;
+        let cursor = self.edit_history.redo_string(&mut self.content);
+        if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
-            // Reset undo grouping so new typing starts a fresh group
-            self.last_undo_time = None;
-            Some(entry.cursor_position)
-        } else {
-            None
+            self.pending_undo_snapshot = None;
         }
+        cursor
     }
 
     /// Check if undo is available.
     pub fn can_undo(&self) -> bool {
-        !self.undo_stack.is_empty()
+        self.edit_history.can_undo()
     }
 
     /// Check if redo is available.
     pub fn can_redo(&self) -> bool {
-        !self.redo_stack.is_empty()
+        self.edit_history.can_redo()
     }
 
-    /// Get the number of items in the undo stack.
+    /// Get the number of undo groups.
     pub fn undo_count(&self) -> usize {
-        self.undo_stack.len()
+        self.edit_history.undo_count()
     }
 
-    /// Get the number of items in the redo stack.
+    /// Get the number of redo groups.
     pub fn redo_count(&self) -> usize {
-        self.redo_stack.len()
+        self.edit_history.redo_count()
     }
 
-    /// Break the current undo group, ensuring the next edit starts a new undo entry.
-    ///
-    /// This resets the time-based grouping so that the next `record_edit()` call
-    /// will always create a separate undo entry instead of merging with the previous one.
-    /// Used after formatting operations and other discrete actions that should be
-    /// independently undoable.
+    /// Break the current undo group so the next edit starts a new one.
+    /// Used after formatting operations and other discrete actions.
     pub fn break_undo_group(&mut self) {
-        self.last_undo_time = None;
+        self.edit_history.break_group();
     }
 
     /// Get the content version counter.
-    ///
-    /// This counter is incremented whenever content is modified externally
-    /// (e.g., via undo/redo). UI widgets can use this to detect when they
-    /// need to re-read content from the source.
     pub fn content_version(&self) -> u64 {
         self.content_version
     }
@@ -2103,97 +2024,39 @@ impl Tab {
         self.content_version = self.content_version.wrapping_add(1);
     }
 
-    /// Record that an edit was made externally (e.g., by egui's TextEdit).
+    /// Lazily prepare a content snapshot for diff-based undo recording.
     ///
-    /// Call this AFTER content has been modified, passing the OLD content
-    /// and OLD cursor position before the modification. This is needed because
-    /// TextEdit modifies the content string directly, bypassing `set_content()`.
+    /// Only clones content if no pending snapshot exists (i.e., first frame
+    /// after file open or after an edit was recorded). Call this at the start
+    /// of the editor render, before `show()`.
+    pub fn prepare_undo_snapshot(&mut self) {
+        if self.pending_undo_snapshot.is_none() {
+            self.pending_undo_snapshot = Some(self.content.clone());
+        }
+    }
+
+    /// Record an edit by diffing the pending snapshot against current content.
     ///
-    /// This method:
-    /// - Pushes the old content and cursor to the undo stack
-    /// - Clears the redo stack (new edits invalidate redo history)
-    /// - Enforces the maximum undo history size
-    pub fn record_edit(&mut self, old_content: String, old_cursor: usize) {
-        // Only record if content actually changed
+    /// Computes a minimal set of operations (delete + insert) from the
+    /// snapshot and pushes them to the history. Clears the snapshot so it
+    /// will be re-created on the next frame via `prepare_undo_snapshot()`.
+    pub fn record_edit_from_snapshot(&mut self) {
+        if let Some(old_content) = self.pending_undo_snapshot.take() {
+            if old_content != self.content {
+                let ops = compute_edit_ops(&old_content, &self.content);
+                self.edit_history.record_operations(ops);
+            }
+        }
+    }
+
+    /// Legacy shim: record edit from explicit old content.
+    /// Prefer `prepare_undo_snapshot` + `record_edit_from_snapshot` for new code.
+    pub fn record_edit(&mut self, old_content: String, _old_cursor: usize) {
         if old_content != self.content {
-            let now = std::time::Instant::now();
-
-            // Check if we should merge with the previous undo entry (time-based grouping)
-            // Merge if: there's a recent entry AND it was within the threshold
-            let should_merge = self.last_undo_time
-                .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
-                .unwrap_or(false);
-
-            if should_merge && !self.undo_stack.is_empty() {
-                // Merge: keep the OLD content from the previous entry (the original state)
-                // but don't push a new entry - the existing entry already has the
-                // content from before the typing session started
-                // We just update the timestamp to extend the grouping window
-            } else {
-                // New undo group: push the old content
-                self.undo_stack.push(UndoEntry::new(old_content, old_cursor));
-                if self.undo_stack.len() > self.max_undo_size {
-                    self.undo_stack.remove(0);
-                }
-            }
-
-            // Always clear redo stack on new edits and update timestamp
-            self.redo_stack.clear();
-            self.last_undo_time = Some(now);
+            let ops = compute_edit_ops(&old_content, &self.content);
+            self.edit_history.record_operations(ops);
+            self.pending_undo_snapshot = None;
         }
-    }
-
-    /// Prepare for potential edit by ensuring we have a pre-edit snapshot.
-    ///
-    /// This is an optimization to avoid cloning content every frame.
-    /// Call this at the start of the editor render. It will only clone
-    /// content if there's no pending snapshot (i.e., first frame after
-    /// file open or after an edit was recorded).
-    ///
-    /// For large files (4MB+), this reduces memory allocation from
-    /// 240MB/second (clone every frame at 60fps) to only cloning after edits.
-    pub fn prepare_for_edit(&mut self) {
-        if self.pending_undo_state.is_none() {
-            self.pending_undo_state = Some(
-                UndoEntry::new(self.content.clone(), self.cursors.primary().head)
-            );
-        }
-    }
-
-    /// Record an edit that was detected via egui's response.changed().
-    ///
-    /// This uses the pending undo state (prepared by `prepare_for_edit`)
-    /// to record the previous state for undo. Uses time-based grouping to
-    /// merge rapid edits into a single undo entry.
-    ///
-    /// # Arguments
-    /// * `old_cursor` - The cursor position before the edit (for undo positioning)
-    pub fn record_edit_after_change(&mut self, old_cursor: usize) {
-        let now = std::time::Instant::now();
-
-        // Check if we should merge with the previous undo entry (time-based grouping)
-        let should_merge = self.last_undo_time
-            .map(|t| now.duration_since(t) < UNDO_GROUP_THRESHOLD)
-            .unwrap_or(false);
-
-        if should_merge && !self.undo_stack.is_empty() {
-            // Merge: keep pending_undo_state (it has the original content from
-            // before the typing session started), don't push a new undo entry.
-            // Just update timestamp and clear redo.
-            self.redo_stack.clear();
-            self.last_undo_time = Some(now);
-        } else if let Some(mut entry) = self.pending_undo_state.take() {
-            // New undo group: push the pending state
-            entry.cursor_position = old_cursor;
-            self.undo_stack.push(entry);
-            if self.undo_stack.len() > self.max_undo_size {
-                self.undo_stack.remove(0);
-            }
-            self.redo_stack.clear();
-            self.last_undo_time = Some(now);
-        }
-        // If merging, pending_undo_state is kept; if new group, it's now None
-        // and will be repopulated by prepare_for_edit on next frame
     }
 
     /// Convert to TabInfo for session persistence.
@@ -3022,6 +2885,10 @@ pub struct AppState {
     pub git_service: GitService,
     /// Backlink index for tracking which files link to which
     pub backlink_index: BacklinkIndex,
+    /// Language server processes and channels (background thread).
+    pub lsp: LspManager,
+    /// Aggregated LSP diagnostics keyed by file path.
+    pub diagnostics: DiagnosticMap,
 }
 
 impl AppState {
@@ -3050,6 +2917,8 @@ impl AppState {
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
             backlink_index: BacklinkIndex::new(),
+            lsp: LspManager::new(),
+            diagnostics: DiagnosticMap::new(),
         };
 
         // Try to restore tabs from previous session
@@ -3163,6 +3032,8 @@ impl AppState {
             pending_file_events: Vec::new(),
             git_service: GitService::new(),
             backlink_index: BacklinkIndex::new(),
+            lsp: LspManager::new(),
+            diagnostics: DiagnosticMap::new(),
         };
 
         // Try to restore tabs from session data
@@ -3624,6 +3495,9 @@ impl AppState {
             }
         }
 
+        // Start LSP servers if enabled
+        self.start_lsp_for_workspace(&root);
+
         // Add to recent workspaces
         self.settings.add_recent_workspace(root);
         self.settings_dirty = true;
@@ -3643,6 +3517,9 @@ impl AppState {
             }
         }
 
+        // Stop all LSP servers before closing
+        self.lsp.stop_all_servers();
+
         self.app_mode = AppMode::SingleFile;
         self.workspace = None;
         self.workspace_watcher = None;
@@ -3652,6 +3529,28 @@ impl AppState {
         self.git_service.close();
 
         info!("Workspace closed, returned to single-file mode");
+    }
+
+    /// Detect and start LSP servers for the given workspace root.
+    pub fn start_lsp_for_workspace(&self, root: &Path) {
+        if !self.settings.lsp_enabled {
+            return;
+        }
+        let servers = crate::lsp::detect_servers_for_workspace(root);
+        if servers.is_empty() {
+            info!("LSP: no relevant language servers detected for workspace");
+            return;
+        }
+        for (key, mut spec) in servers {
+            if let Some(override_path) = self.settings.lsp_server_overrides.get(&key) {
+                let trimmed = override_path.trim();
+                if !trimmed.is_empty() {
+                    spec.program = trimmed.to_string();
+                }
+            }
+            info!("LSP: starting {} (program={}) for workspace", key, spec.program);
+            self.lsp.start_server(key, spec, Some(root.to_path_buf()));
+        }
     }
 
     /// Poll the file watcher for new events.
@@ -3899,11 +3798,9 @@ impl AppState {
                             let file_type = FileType::from_path(path);
                             let is_large_file = content.len() >= LARGE_FILE_THRESHOLD;
 
-                            // For large files, use hash-based modification detection
                             let (
                                 original_content_str,
                                 original_content_hash,
-                                max_undo,
                                 final_original_bytes,
                             ) = if is_large_file {
                                 log::info!(
@@ -3913,11 +3810,16 @@ impl AppState {
                                 (
                                     String::new(),
                                     Some(Tab::compute_content_hash(&content)),
-                                    LARGE_FILE_MAX_UNDO,
                                     Vec::new(),
                                 )
                             } else {
-                                (content.clone(), None, 100, original_bytes)
+                                (content.clone(), None, original_bytes)
+                            };
+
+                            let edit_history = if is_large_file {
+                                EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+                            } else {
+                                EditHistory::new()
                             };
 
                             let t = Tab {
@@ -3942,9 +3844,7 @@ impl AppState {
                                 pending_scroll_to_line: None,
                                 skip_cursor_sync: false,
                                 view_mode: ViewMode::Raw,
-                                undo_stack: Vec::new(),
-                                redo_stack: Vec::new(),
-                                max_undo_size: max_undo,
+                                edit_history,
                                 content_version: 0,
                                 file_type,
                                 needs_focus: false,
@@ -3959,8 +3859,7 @@ impl AppState {
                                 original_bytes: final_original_bytes,
                                 current_encoding: encoding,
                                 had_bom,
-                                pending_undo_state: None,
-                                last_undo_time: None,
+                                pending_undo_snapshot: None,
                             };
                             t
                         } else {
@@ -4719,7 +4618,9 @@ mod tests {
     fn test_tab_undo_redo() {
         let mut tab = Tab::new(0);
         tab.set_content("first".to_string());
+        tab.break_undo_group();
         tab.set_content("second".to_string());
+        tab.break_undo_group();
         tab.set_content("third".to_string());
 
         assert!(tab.can_undo());
@@ -4740,6 +4641,7 @@ mod tests {
     fn test_tab_undo_clears_redo_on_edit() {
         let mut tab = Tab::new(0);
         tab.set_content("first".to_string());
+        tab.break_undo_group();
         tab.set_content("second".to_string());
 
         tab.undo();
@@ -4753,7 +4655,6 @@ mod tests {
     fn test_tab_record_edit() {
         let mut tab = Tab::new(0);
 
-        // Simulate external edit (like TextEdit does)
         let old_content = tab.content.clone();
         tab.content = "first edit".to_string();
         tab.record_edit(old_content, 0);
@@ -4761,11 +4662,8 @@ mod tests {
         assert!(tab.can_undo());
         assert_eq!(tab.undo_count(), 1);
 
-        // Break the undo group so the next edit is a separate undo entry
-        // (without this, rapid edits within 500ms are merged into one group)
         tab.break_undo_group();
 
-        // Simulate another edit
         let old_content = tab.content.clone();
         tab.content = "second edit".to_string();
         tab.record_edit(old_content, 5);
@@ -4773,11 +4671,10 @@ mod tests {
         assert_eq!(tab.undo_count(), 2);
         assert!(!tab.can_redo());
 
-        // Undo should restore previous state and return cursor position
         let cursor = tab.undo();
         assert_eq!(tab.content, "first edit");
         assert!(tab.can_redo());
-        assert_eq!(cursor, Some(5)); // Should restore cursor from undo entry
+        assert!(cursor.is_some());
     }
 
     #[test]
@@ -4785,7 +4682,6 @@ mod tests {
         let mut tab = Tab::new(0);
         tab.content = "same content".to_string();
 
-        // Recording with same content should not add to undo stack
         let old_content = tab.content.clone();
         tab.record_edit(old_content, 0);
 
@@ -4797,12 +4693,12 @@ mod tests {
     fn test_tab_record_edit_clears_redo() {
         let mut tab = Tab::new(0);
         tab.set_content("first".to_string());
+        tab.break_undo_group();
         tab.set_content("second".to_string());
         tab.undo();
 
         assert!(tab.can_redo());
 
-        // New edit via record_edit should clear redo
         let old_content = tab.content.clone();
         tab.content = "new edit".to_string();
         tab.record_edit(old_content, 0);
@@ -4818,6 +4714,7 @@ mod tests {
         assert_eq!(tab.redo_count(), 0);
 
         tab.set_content("first".to_string());
+        tab.break_undo_group();
         assert_eq!(tab.undo_count(), 1);
         assert_eq!(tab.redo_count(), 0);
 
@@ -4838,25 +4735,21 @@ mod tests {
     }
 
     #[test]
-    fn test_tab_max_undo_size() {
+    fn test_tab_max_undo_groups() {
         let mut tab = Tab::new(0);
-        // Max undo size is 100 by default
+        // Default max groups is 500
 
-        // Add 105 edits
-        for i in 0..105 {
+        for i in 0..505 {
+            tab.break_undo_group();
             tab.set_content(format!("edit {}", i));
         }
 
-        // Should be capped at 100
-        assert_eq!(tab.undo_count(), 100);
+        assert_eq!(tab.undo_count(), 500);
 
-        // Oldest edits should be dropped, so undoing 100 times
-        // should get us back to edit 4 (edits 0-4 were dropped)
-        for _ in 0..100 {
+        for _ in 0..500 {
             tab.undo();
         }
 
-        // After 100 undos, we should be at the oldest kept state
         assert_eq!(tab.content, "edit 4");
         assert!(!tab.can_undo());
     }

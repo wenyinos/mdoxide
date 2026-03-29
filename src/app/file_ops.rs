@@ -373,6 +373,254 @@ impl FerriteApp {
         }
     }
     
+    /// Poll LSP manager events, detect settings toggle transitions, and surface
+    /// spawn failures as dismissible toast notifications.
+    pub(crate) fn handle_lsp_events(&mut self, _ctx: &egui::Context) {
+        // Reset per-server status when the workspace folder changes.
+        let current_ws = self.state.workspace_root().map(|p| p.to_path_buf());
+        if current_ws != self.lsp_status_workspace {
+            self.lsp_status_workspace = current_ws;
+            self.lsp_status_by_server.clear();
+        }
+
+        // When override paths change, restart LSP if a workspace is open.
+        let fp = crate::lsp::overrides_fingerprint(&self.state.settings.lsp_server_overrides);
+        if fp != self.lsp_overrides_fingerprint {
+            self.lsp_overrides_fingerprint = fp;
+            if self.state.settings.lsp_enabled {
+                if let Some(root) = self.state.workspace_root().cloned() {
+                    self.state.lsp.stop_all_servers();
+                    self.state.start_lsp_for_workspace(&root);
+                    self.lsp_status_by_server.clear();
+                }
+            }
+        }
+
+        let lsp_now = self.state.settings.lsp_enabled;
+        if lsp_now != self.lsp_was_enabled {
+            self.lsp_was_enabled = lsp_now;
+            if lsp_now {
+                if let Some(root) = self.state.workspace_root().cloned() {
+                    self.state.start_lsp_for_workspace(&root);
+                }
+            } else {
+                self.state.lsp.stop_all_servers();
+                self.lsp_status_by_server.clear();
+            }
+        }
+
+        let events = self.state.lsp.poll_events();
+        for ev in events {
+            match ev {
+                crate::lsp::LspManagerEvent::StatusChanged { server_key, status } => {
+                    log::debug!("LSP status: {} → {:?}", server_key, status);
+                    self.lsp_status_by_server.insert(server_key, status);
+                }
+                crate::lsp::LspManagerEvent::SpawnFailed {
+                    server_key: _,
+                    program,
+                    error,
+                } => {
+                    let hint = crate::lsp::install_hint(&program);
+                    let msg = format!("LSP: {} not found ({}). {}", program, error, hint);
+                    let time = self.get_app_time();
+                    self.state.show_toast(msg, time, 6.0);
+                }
+                crate::lsp::LspManagerEvent::Diagnostics {
+                    server_key: _,
+                    path,
+                    diagnostics,
+                } => {
+                    self.state.diagnostics.set(path, diagnostics);
+                }
+            }
+        }
+
+        // If LSP is off, keep the map empty so the status bar does not show stale rows.
+        if !self.state.settings.lsp_enabled {
+            self.lsp_status_by_server.clear();
+            self.state.diagnostics.clear();
+            self.lsp_opened_docs.clear();
+            self.lsp_doc_versions.clear();
+            self.lsp_last_edit_times.clear();
+            self.lsp_last_change_sent.clear();
+        } else {
+            self.sync_active_doc_to_lsp();
+        }
+    }
+
+    /// Minimum interval between `didChange` notifications (debounce).
+    const LSP_DID_CHANGE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+    /// Ensure the active tab's document is opened and up-to-date with the LSP server.
+    ///
+    /// Uses `Tab::last_edit_time` to detect edits without cloning content every frame,
+    /// and debounces `didChange` notifications to avoid flooding the server.
+    fn sync_active_doc_to_lsp(&mut self) {
+        let tab = match self.state.active_tab() {
+            Some(t) => t,
+            None => return,
+        };
+        let path = match &tab.path {
+            Some(p) => p.clone(),
+            None => return,
+        };
+
+        let spec = crate::lsp::detect_lsp_server_for_path(&path);
+        let server_key = match &spec {
+            Some(s) => s.program.clone(),
+            None => {
+                if let Some(key) = self.state.settings.lsp_server_overrides.keys().next() {
+                    key.clone()
+                } else {
+                    return;
+                }
+            }
+        };
+
+        let status = self
+            .lsp_status_by_server
+            .get(&server_key)
+            .cloned()
+            .unwrap_or(crate::lsp::state::ServerStatus::Disconnected);
+        if !matches!(status, crate::lsp::state::ServerStatus::Ready) {
+            log::trace!(
+                "LSP sync skip: {} not ready ({:?})",
+                server_key,
+                status
+            );
+            return;
+        }
+
+        let norm_path = crate::lsp::normalize_lsp_path(&path);
+        let uri = crate::lsp::path_to_uri(&path);
+
+        // First-time open: send didOpen with full content (only clone here)
+        if !self.lsp_opened_docs.contains(&norm_path) {
+            let content = tab.content.clone();
+            let lang_id = crate::lsp::language_id_for_path(&path).to_string();
+            let version = 1_i32;
+            log::debug!(
+                "LSP didOpen: {} → {} ({})",
+                norm_path.display(),
+                uri,
+                lang_id
+            );
+            self.state.lsp.did_open(
+                &server_key,
+                uri,
+                lang_id,
+                version as i64,
+                content,
+            );
+            self.lsp_opened_docs.insert(norm_path.clone());
+            self.lsp_doc_versions.insert(norm_path.clone(), version);
+            if let Some(t) = tab.last_edit_time {
+                self.lsp_last_edit_times.insert(norm_path.clone(), t);
+            }
+            self.lsp_last_change_sent
+                .insert(norm_path, std::time::Instant::now());
+            return;
+        }
+
+        // Check if the tab was edited since our last sync.
+        // If last_edit_time hasn't changed, there's nothing new to send.
+        let current_edit_time = tab.last_edit_time;
+        let prev_edit_time = self.lsp_last_edit_times.get(&norm_path).copied();
+
+        let needs_sync = match (current_edit_time, prev_edit_time) {
+            (Some(cur), Some(prev)) => cur != prev,
+            (Some(_), None) => true,
+            (None, _) => false,
+        };
+
+        if !needs_sync {
+            return;
+        }
+
+        // Debounce: don't send didChange more than once per interval
+        let now = std::time::Instant::now();
+        if let Some(last_sent) = self.lsp_last_change_sent.get(&norm_path) {
+            if now.duration_since(*last_sent) < Self::LSP_DID_CHANGE_DEBOUNCE {
+                return;
+            }
+        }
+
+        // Content actually changed — clone and send (only here, not every frame)
+        let content = tab.content.clone();
+        let version = self.lsp_doc_versions.get(&norm_path).copied().unwrap_or(0) + 1;
+        log::debug!(
+            "LSP didChange: {} v{} ({} bytes)",
+            norm_path.display(),
+            version,
+            content.len()
+        );
+        self.state
+            .lsp
+            .did_change(&server_key, uri, version as i64, content);
+        self.lsp_doc_versions.insert(norm_path.clone(), version);
+        if let Some(t) = current_edit_time {
+            self.lsp_last_edit_times.insert(norm_path.clone(), t);
+        }
+        self.lsp_last_change_sent.insert(norm_path, now);
+    }
+
+    /// Build status-bar text for LSP (compact) and optional hover detail.
+    pub(crate) fn lsp_status_bar_text(&self) -> (String, String) {
+        use crate::lsp::detect_servers_for_workspace;
+        use crate::lsp::state::ServerStatus;
+
+        if !self.state.settings.lsp_enabled {
+            return ("LSP: Disabled".to_string(), "Language servers are disabled in Settings.".to_string());
+        }
+        let Some(root) = self.state.workspace_root() else {
+            return (
+                "LSP: No workspace".to_string(),
+                "Open a folder workspace to use language servers.".to_string(),
+            );
+        };
+
+        let detected: Vec<String> = detect_servers_for_workspace(root)
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+
+        let mut keys: Vec<String> = detected;
+        for k in self.state.settings.lsp_server_overrides.keys() {
+            if !keys.contains(k) {
+                keys.push(k.clone());
+            }
+        }
+        keys.sort();
+        keys.dedup();
+
+        if keys.is_empty() {
+            return (
+                "LSP: No servers detected".to_string(),
+                "No supported code files found in this workspace (first levels).".to_string(),
+            );
+        }
+
+        let mut parts = Vec::new();
+        let mut detail = String::from("Language server status:\n");
+        for key in &keys {
+            let status = self
+                .lsp_status_by_server
+                .get(key)
+                .cloned()
+                .unwrap_or(ServerStatus::Disconnected);
+            let label = status.short_label();
+            parts.push(format!("{}: {}", key, label));
+            if let ServerStatus::Error(e) = &status {
+                detail.push_str(&format!("• {} — {} ({})\n", key, label, e));
+            } else {
+                detail.push_str(&format!("• {} — {}\n", key, label));
+            }
+        }
+        let summary = format!("LSP {}", parts.join(" · "));
+        (summary, detail.trim_end().to_string())
+    }
+
     /// Force an immediate session save (bypasses throttling).
     ///
     /// Use this after important state changes like opening/closing workspaces

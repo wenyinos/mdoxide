@@ -52,8 +52,9 @@ use crate::markdown::ast_ops::{
     exit_list_to_paragraph, heading_enter, indent_list_item, merge_with_previous_list_item,
     outdent_list_item, split_list_item, split_paragraph, EditContext, EditNodeType, StructuralEdit,
 };
+use crate::markdown::cache;
 use crate::markdown::parser::{
-    parse_markdown, CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
+    CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
 use crate::markdown::widgets::{
     CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
@@ -122,6 +123,65 @@ pub struct LineMapping {
     pub rendered_y: f32,
     /// Height of this element in rendered view (pixels)
     pub rendered_height: f32,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Viewport Culling
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Extra pixels above and below the viewport to pre-render, avoiding pop-in
+/// during fast scrolling.
+const VIEWPORT_OVERSCAN_PX: f32 = 500.0;
+
+/// Spacing between rendered blocks (must match the `item_spacing.y` set during layout).
+const BLOCK_ITEM_SPACING_Y: f32 = 1.0;
+
+/// Cached block positions for the rendered view, stored in egui temp memory.
+/// Invalidated when content or available width changes.
+#[derive(Clone)]
+struct ViewportCullingState {
+    content_hash: u64,
+    available_width: f32,
+    /// Y offset where each block starts (includes inter-block spacing).
+    block_start_y: Vec<f32>,
+    /// Rendered height of each block (excludes inter-block spacing).
+    block_heights: Vec<f32>,
+    /// Total content height (blocks + spacing), measured from the layout.
+    total_height: f32,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Block Source Extraction (for per-block height caching)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Byte offset of the start of each line.
+/// `offsets[0]` = byte start of line 1, `offsets[1]` = byte start of line 2, etc.
+fn line_start_byte_offsets(content: &str) -> Vec<usize> {
+    let mut offsets = vec![0];
+    for (i, &b) in content.as_bytes().iter().enumerate() {
+        if b == b'\n' {
+            offsets.push(i + 1);
+        }
+    }
+    offsets
+}
+
+/// Extract the source text for a block spanning `start_line..=end_line` (1-indexed).
+fn block_source_slice<'a>(
+    content: &'a str,
+    offsets: &[usize],
+    start_line: usize,
+    end_line: usize,
+) -> &'a str {
+    if start_line == 0 || end_line == 0 || offsets.is_empty() {
+        return "";
+    }
+    let start = offsets
+        .get(start_line.saturating_sub(1))
+        .copied()
+        .unwrap_or(0);
+    let end = offsets.get(end_line).copied().unwrap_or(content.len());
+    &content[start..end.min(content.len())]
 }
 
 /// Information about the currently focused element in rendered mode.
@@ -444,6 +504,8 @@ pub struct MarkdownEditor<'a> {
     header_spacing: HeaderSpacing,
     /// File context for wikilink resolution (current file dir + workspace root)
     wikilink_context: Option<WikilinkContext>,
+    /// Treat soft breaks as hard line breaks in rendered view
+    strict_line_breaks: bool,
 }
 
 /// Context for resolving wikilinks to actual files during rendering.
@@ -475,6 +537,7 @@ impl<'a> MarkdownEditor<'a> {
             paragraph_indent: ParagraphIndent::Off,
             header_spacing: HeaderSpacing::default(),
             wikilink_context: None,
+            strict_line_breaks: false,
         }
     }
 
@@ -583,6 +646,16 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Set strict line breaks mode.
+    ///
+    /// When enabled, soft breaks (single newlines) in markdown source are
+    /// rendered as hard line breaks instead of being collapsed to spaces.
+    #[must_use]
+    pub fn strict_line_breaks(mut self, enabled: bool) -> Self {
+        self.strict_line_breaks = enabled;
+        self
+    }
+
     /// Apply settings to the editor widget.
     #[must_use]
     pub fn with_settings(mut self, settings: &Settings) -> Self {
@@ -592,6 +665,7 @@ impl<'a> MarkdownEditor<'a> {
         self.theme = settings.theme;
         self.max_line_width = settings.max_line_width;
         self.paragraph_indent = settings.paragraph_indent;
+        self.strict_line_breaks = settings.strict_line_breaks;
         self
     }
 
@@ -705,11 +779,18 @@ impl<'a> MarkdownEditor<'a> {
             });
         }
 
-        // Parse the markdown content
-        let doc = match parse_markdown(self.content) {
+        // Store strict line breaks flag in egui memory for render_inline_node
+        ui.memory_mut(|mem| {
+            mem.data.insert_temp(
+                egui::Id::new("strict_line_breaks"),
+                self.strict_line_breaks,
+            );
+        });
+
+        // Parse the markdown content (cached by blake3 hash — skips re-parse when unchanged)
+        let doc = match cache::get_or_parse(self.content) {
             Ok(doc) => doc,
             Err(e) => {
-                // On parse error, show error and fall back to raw editing
                 ui.colored_label(Color32::RED, format!("Parse error: {}", e));
                 return self.show_raw_editor(ui, id);
             }
@@ -840,70 +921,237 @@ impl<'a> MarkdownEditor<'a> {
             (0.0, None)
         };
         
-        let scroll_output = scroll_area.show(ui, |ui| {
+        // ── Viewport culling state ──────────────────────────────────────────
+        let culling_id = id.with("viewport_culling");
+        let culling_state: Option<ViewportCullingState> =
+            ui.memory(|mem| mem.data.get_temp(culling_id));
+
+        let block_count = doc.root.children.len();
+        let has_valid_heights = culling_state.as_ref().map_or(false, |s| {
+            s.content_hash == content_hash
+                && s.block_heights.len() == block_count
+                && (s.available_width - outer_available_width).abs() < 1.0
+        });
+
+        // Accumulator for newly-measured block data (populated inside the closure)
+        let mut measured_start_y: Vec<f32> = Vec::new();
+        let mut measured_heights: Vec<f32> = Vec::new();
+        let mut measured_total: f32 = 0.0;
+
+        let scroll_output = scroll_area.show_viewport(ui, |ui, viewport| {
+            // Tell the scroll area the total content height so the scrollbar
+            // range is correct even when most blocks are culled.
+            if let Some(ref cs) = culling_state {
+                if has_valid_heights {
+                    ui.set_min_height(cs.total_height);
+                }
+            }
+
             ui.push_id(content_hash, |ui| {
                 ui.horizontal(|ui| {
                     if content_margin > 0.0 {
                         ui.add_space(content_margin);
                     }
-                    
+
                     let content_width = effective_content_width.unwrap_or(ui.available_width());
                     ui.vertical(|ui| {
                         ui.set_max_width(content_width);
-                        
-                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 1.0);
+                        ui.spacing_mut().item_spacing = Vec2::new(4.0, BLOCK_ITEM_SPACING_Y);
 
-                        // Render all children of the document root
-                        // Note: Using original render_node (not the structural_keys version) since
-                        // structural key handling is currently disabled due to compatibility issues
-                        for node in &doc.root.children {
-                            // Capture Y position before rendering this node for scroll sync
-                            let y_before = ui.cursor().top();
-                            
-                            render_node(
-                                ui,
-                                node,
-                                self.content,
-                                &mut edit_state,
-                                colors,
-                                self.font_size,
-                                &self.font_family,
-                                0,
-                                self.paragraph_indent,
-                                self.header_spacing,
-                            );
-                            
-                            // Capture Y position after rendering to get block height
-                            let y_after = ui.cursor().top();
-                            let height = (y_after - y_before).max(1.0); // Ensure minimum height
-                            
-                            // Record the line mapping for this top-level node
-                            line_mappings.push(LineMapping {
-                                start_line: node.start_line,
-                                end_line: node.end_line,
-                                rendered_y: y_before,
-                                rendered_height: height,
-                            });
+                        if has_valid_heights && block_count > 0 {
+                            // ── Fast path: cull off-screen blocks ────────────────
+                            let cs = culling_state.as_ref().unwrap();
+
+                            let vis_top = (viewport.min.y - VIEWPORT_OVERSCAN_PX).max(0.0);
+                            let vis_bottom = viewport.max.y + VIEWPORT_OVERSCAN_PX;
+
+                            // Binary-search for the visible range using block start positions.
+                            let first_vis = cs
+                                .block_start_y
+                                .partition_point(|&y| y <= vis_top)
+                                .saturating_sub(1);
+                            let last_vis = cs
+                                .block_start_y
+                                .partition_point(|&y| y < vis_bottom)
+                                .min(block_count)
+                                .saturating_sub(1);
+
+                            // Allocate space for blocks above the visible range.
+                            // Subtract BLOCK_ITEM_SPACING_Y because egui inserts spacing
+                            // between the spacer item and the first rendered block.
+                            if first_vis > 0 {
+                                let pre = (cs.block_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
+                                    .max(0.0);
+                                ui.allocate_space(Vec2::new(content_width, pre));
+                            }
+
+                            // Render visible blocks
+                            for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
+                                let node = &doc.root.children[i];
+                                let y_before = ui.cursor().top();
+
+                                render_node(
+                                    ui,
+                                    node,
+                                    self.content,
+                                    &mut edit_state,
+                                    colors,
+                                    self.font_size,
+                                    &self.font_family,
+                                    0,
+                                    self.paragraph_indent,
+                                    self.header_spacing,
+                                );
+
+                                let y_after = ui.cursor().top();
+                                let height = (y_after - y_before).max(1.0);
+                                measured_heights.push(height);
+
+                                line_mappings.push(LineMapping {
+                                    start_line: node.start_line,
+                                    end_line: node.end_line,
+                                    rendered_y: cs.block_start_y[i],
+                                    rendered_height: cs.block_heights[i],
+                                });
+                            }
+
+                            // Allocate space for blocks below the visible range.
+                            let after_idx = last_vis + 1;
+                            if after_idx < block_count {
+                                let rendered_end =
+                                    cs.block_start_y[last_vis] + cs.block_heights[last_vis];
+                                let post = (cs.total_height - rendered_end - BLOCK_ITEM_SPACING_Y)
+                                    .max(0.0);
+                                ui.allocate_space(Vec2::new(content_width, post));
+                            }
+
+                            // Populate line_mappings for off-screen blocks (scroll sync)
+                            for i in 0..first_vis {
+                                line_mappings.push(LineMapping {
+                                    start_line: doc.root.children[i].start_line,
+                                    end_line: doc.root.children[i].end_line,
+                                    rendered_y: cs.block_start_y[i],
+                                    rendered_height: cs.block_heights[i],
+                                });
+                            }
+                            for i in (last_vis + 1)..block_count {
+                                line_mappings.push(LineMapping {
+                                    start_line: doc.root.children[i].start_line,
+                                    end_line: doc.root.children[i].end_line,
+                                    rendered_y: cs.block_start_y[i],
+                                    rendered_height: cs.block_heights[i],
+                                });
+                            }
+                        } else {
+                            // ── Measurement pass ─────────────────────────────────
+                            // Uses the per-block height cache so that only blocks
+                            // whose source actually changed need a full egui render.
+                            // Off-screen blocks with a cached height are replaced
+                            // by an `allocate_space` placeholder.
+                            let y_origin = ui.cursor().top();
+                            let line_offsets = line_start_byte_offsets(self.content);
+                            let rp_hash =
+                                cache::render_params_hash(content_width, self.font_size);
+
+                            for node in &doc.root.children {
+                                let y_before = ui.cursor().top();
+                                measured_start_y.push(y_before - y_origin);
+
+                                // Scope the immutable borrow of self.content so it
+                                // doesn't conflict with render_node's &mut borrow.
+                                let cached_h = {
+                                    let s = block_source_slice(
+                                        self.content,
+                                        &line_offsets,
+                                        node.start_line,
+                                        node.end_line,
+                                    );
+                                    cache::get_block_height(s, rp_hash)
+                                };
+
+                                let must_render = match cached_h {
+                                    Some(h) => {
+                                        let est_bottom = y_before + h;
+                                        est_bottom
+                                            >= viewport.min.y - VIEWPORT_OVERSCAN_PX
+                                            && y_before
+                                                <= viewport.max.y + VIEWPORT_OVERSCAN_PX
+                                    }
+                                    None => true,
+                                };
+
+                                let height = if must_render {
+                                    render_node(
+                                        ui,
+                                        node,
+                                        self.content,
+                                        &mut edit_state,
+                                        colors,
+                                        self.font_size,
+                                        &self.font_family,
+                                        0,
+                                        self.paragraph_indent,
+                                        self.header_spacing,
+                                    );
+                                    let y_after = ui.cursor().top();
+                                    let h = (y_after - y_before).max(1.0);
+                                    // Re-extract block source after render to
+                                    // update the cache with current content.
+                                    let s = block_source_slice(
+                                        self.content,
+                                        &line_offsets,
+                                        node.start_line,
+                                        node.end_line,
+                                    );
+                                    cache::insert_block_height(s, rp_hash, h);
+                                    h
+                                } else {
+                                    let h = cached_h.unwrap();
+                                    ui.allocate_space(Vec2::new(content_width, h));
+                                    h
+                                };
+
+                                measured_heights.push(height);
+                                line_mappings.push(LineMapping {
+                                    start_line: node.start_line,
+                                    end_line: node.end_line,
+                                    rendered_y: y_before,
+                                    rendered_height: height,
+                                });
+                            }
+
+                            measured_total = ui.cursor().top() - y_origin;
                         }
 
-                        // Keep structural_state alive to avoid unused variable warning
                         let _ = &structural_state;
                     });
-                    
-                    // Add right margin for centering (fills remaining space)
+
                     if content_margin > 0.0 {
                         ui.add_space(content_margin);
                     }
                 });
 
-                // Return a response from the scroll area content
-                // Note: Using focusable_noninteractive() instead of hover() to prevent
-                // continuous repaints when mouse moves over the content area.
-                // This is important for CPU optimization on Intel Macs (Issue: 100% CPU in Rendered mode)
                 ui.allocate_response(Vec2::ZERO, egui::Sense::focusable_noninteractive())
             })
             .inner
         });
+
+        // ── Persist measured block heights ──────────────────────────────────
+        // Only update cache after a full measurement pass (not a culled render).
+        if measured_start_y.len() == block_count && block_count > 0 {
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(
+                    culling_id,
+                    ViewportCullingState {
+                        content_hash,
+                        available_width: outer_available_width,
+                        block_start_y: measured_start_y,
+                        block_heights: measured_heights,
+                        total_height: measured_total,
+                    },
+                );
+            });
+        }
 
         // Render navigation buttons overlay (top-left corner of scroll area)
         // These buttons allow quick jumping to top, middle, or bottom of the document
@@ -3339,7 +3587,16 @@ fn render_inline_node(
         }
 
         MarkdownNodeType::SoftBreak => {
-            ui.label(" ");
+            let hardbreaks = ui.memory(|mem| {
+                mem.data
+                    .get_temp::<bool>(egui::Id::new("strict_line_breaks"))
+                    .unwrap_or(false)
+            });
+            if hardbreaks {
+                ui.end_row();
+            } else {
+                ui.label(" ");
+            }
         }
 
         MarkdownNodeType::LineBreak => {

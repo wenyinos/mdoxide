@@ -101,6 +101,9 @@ pub fn render_cursor(
 /// In non-wrapped mode, all text stays on a single visual row per logical line.
 /// The X position is calculated by measuring text width up to the cursor column,
 /// then adjusting for horizontal scroll offset.
+///
+/// For complex-script lines (Arabic, Bengali, etc.) the HarfRust shaping
+/// pipeline is used for accurate advance-width measurement.
 fn calculate_unwrapped_cursor_position(
     painter: &egui::Painter,
     buffer: &TextBuffer,
@@ -113,13 +116,24 @@ fn calculate_unwrapped_cursor_position(
     let cursor_x = if cursor.column == 0 {
         text_start_x - view.horizontal_scroll()
     } else if let Some(line_content) = buffer.get_line(cursor.line) {
-        let chars_before: String = line_content
-            .trim_end_matches(['\r', '\n'])
-            .chars()
-            .take(cursor.column)
-            .collect();
-        let galley = painter.layout_no_wrap(chars_before, font_id.clone(), Color32::WHITE);
-        text_start_x + galley.size().x - view.horizontal_scroll()
+        let display = line_content.trim_end_matches(['\r', '\n']);
+
+        if crate::fonts::needs_complex_script_fonts(display) {
+            let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(font_id);
+            if let Some(x) = super::super::shaping::shaped_column_to_x(
+                display, font_bytes, font_id.size, cursor.column,
+            ) {
+                text_start_x + x - view.horizontal_scroll()
+            } else {
+                let chars_before: String = display.chars().take(cursor.column).collect();
+                let galley = painter.layout_no_wrap(chars_before, font_id.clone(), Color32::WHITE);
+                text_start_x + galley.size().x - view.horizontal_scroll()
+            }
+        } else {
+            let chars_before: String = display.chars().take(cursor.column).collect();
+            let galley = painter.layout_no_wrap(chars_before, font_id.clone(), Color32::WHITE);
+            text_start_x + galley.size().x - view.horizontal_scroll()
+        }
     } else {
         text_start_x - view.horizontal_scroll()
     };

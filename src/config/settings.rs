@@ -1933,6 +1933,12 @@ pub struct Settings {
     #[serde(default)]
     pub header_spacing: HeaderSpacing,
 
+    /// Treat single newlines as hard line breaks in rendered view.
+    /// When false (default), adjacent lines in a paragraph flow together.
+    /// When true, each newline produces a visible line break (`<br>`).
+    #[serde(default)]
+    pub strict_line_breaks: bool,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Snippets Settings
     // ─────────────────────────────────────────────────────────────────────────
@@ -2015,6 +2021,20 @@ pub struct Settings {
     /// (transitions from running to prompt). Only triggers once per run cycle.
     #[serde(default)]
     pub terminal_focus_on_detect: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LSP (Language Server Protocol)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Whether the LSP client is enabled (auto-detect and spawn language servers).
+    /// Default off so markdown-only users are unaffected.
+    #[serde(default)]
+    pub lsp_enabled: bool,
+
+    /// Optional executable path per language server key (e.g. `"rust-analyzer"` → `/opt/bin/rust-analyzer`).
+    /// Empty value means use the default program name on `PATH`.
+    #[serde(default)]
+    pub lsp_server_overrides: std::collections::HashMap<String, String>,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Panel Visibility (Future Features)
@@ -2147,6 +2167,7 @@ impl Default for Settings {
 
             // Markdown Rendering Settings
             header_spacing: HeaderSpacing::default(), // Normal by default
+            strict_line_breaks: false, // Standard markdown: soft breaks are spaces
 
             // Snippets Settings
             snippets_enabled: true, // Snippet expansion enabled by default
@@ -2180,6 +2201,10 @@ impl Default for Settings {
             terminal_sound_enabled: false, // Sound notification disabled by default
             terminal_sound_file: None,     // Use system beep by default
             terminal_focus_on_detect: false, // Auto-focus on prompt disabled by default
+
+            // LSP
+            lsp_enabled: false, // Disabled by default (markdown-only users unaffected)
+            lsp_server_overrides: std::collections::HashMap::new(),
 
             // Panel Visibility
             ai_panel_visible: false,

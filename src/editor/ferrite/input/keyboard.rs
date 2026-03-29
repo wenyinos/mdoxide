@@ -7,6 +7,7 @@ use egui::{Key, Modifiers};
 
 use super::super::buffer::TextBuffer;
 use super::super::cursor::{Cursor, Selection};
+use super::super::grapheme;
 use super::super::view::ViewState;
 use super::{InputHandler, InputResult};
 
@@ -331,67 +332,89 @@ pub(crate) fn insert_text(buffer: &mut TextBuffer, cursor: &mut Cursor, text: &s
     cursor.column = new_col;
 }
 
-/// Deletes the character before the cursor (backspace).
-/// Returns true if a character was deleted.
+/// Deletes the grapheme cluster before the cursor (backspace).
+/// Returns true if anything was deleted.
 fn delete_backward(buffer: &mut TextBuffer, cursor: &mut Cursor) -> bool {
     if cursor.column > 0 {
-        // Delete character within the line
+        let prev_col = if let Some(line) = buffer.get_line(cursor.line) {
+            let stripped = grapheme::line_text_stripped(&line);
+            grapheme::prev_grapheme_boundary(stripped, cursor.column)
+        } else {
+            cursor.column.saturating_sub(1)
+        };
+        let chars_to_delete = cursor.column - prev_col;
         let char_pos = InputHandler::cursor_to_char_pos(buffer, cursor);
-        buffer.remove(char_pos - 1, 1);
-        cursor.column -= 1;
+        buffer.remove(char_pos - chars_to_delete, chars_to_delete);
+        cursor.column = prev_col;
         true
     } else if cursor.line > 0 {
-        // At start of line - join with previous line
+        // At start of line — join with previous line (remove newline)
         let prev_line_len = InputHandler::line_length(buffer, cursor.line - 1);
         let char_pos = InputHandler::cursor_to_char_pos(buffer, cursor);
-        // Remove the newline at the end of the previous line
         buffer.remove(char_pos - 1, 1);
         cursor.line -= 1;
         cursor.column = prev_line_len;
         true
     } else {
-        // At document start, nothing to delete
         false
     }
 }
 
-/// Deletes the character after the cursor (delete).
-/// Returns true if a character was deleted.
+/// Deletes the grapheme cluster after the cursor (delete key).
+/// Returns true if anything was deleted.
 fn delete_forward(buffer: &mut TextBuffer, cursor: &mut Cursor) -> bool {
     let char_pos = InputHandler::cursor_to_char_pos(buffer, cursor);
-    let total_chars = buffer.len();
-
-    if char_pos < total_chars {
-        buffer.remove(char_pos, 1);
-        true
-    } else {
-        false
+    if char_pos >= buffer.len() {
+        return false;
     }
+
+    let line_len = InputHandler::line_length(buffer, cursor.line);
+    if cursor.column < line_len {
+        let chars_to_delete = if let Some(line) = buffer.get_line(cursor.line) {
+            let stripped = grapheme::line_text_stripped(&line);
+            grapheme::next_grapheme_boundary(stripped, cursor.column) - cursor.column
+        } else {
+            1
+        };
+        buffer.remove(char_pos, chars_to_delete);
+    } else {
+        // At end of line — remove newline to join lines
+        buffer.remove(char_pos, 1);
+    }
+    true
 }
 
-/// Moves cursor left by one character (or word with Ctrl).
+/// Moves cursor left by one grapheme cluster (or word with Ctrl).
 fn move_cursor_left(buffer: &TextBuffer, cursor: &mut Cursor, word_mode: bool) {
     if word_mode {
         move_cursor_word_left(buffer, cursor);
     } else if cursor.column > 0 {
-        cursor.column -= 1;
+        if let Some(line) = buffer.get_line(cursor.line) {
+            let stripped = grapheme::line_text_stripped(&line);
+            cursor.column = grapheme::prev_grapheme_boundary(stripped, cursor.column);
+        } else {
+            cursor.column = cursor.column.saturating_sub(1);
+        }
     } else if cursor.line > 0 {
-        // Wrap to end of previous line
         cursor.line -= 1;
         cursor.column = InputHandler::line_length(buffer, cursor.line);
     }
 }
 
-/// Moves cursor right by one character (or word with Ctrl).
+/// Moves cursor right by one grapheme cluster (or word with Ctrl).
 fn move_cursor_right(buffer: &TextBuffer, cursor: &mut Cursor, word_mode: bool) {
     if word_mode {
         move_cursor_word_right(buffer, cursor);
     } else {
         let line_len = InputHandler::line_length(buffer, cursor.line);
         if cursor.column < line_len {
-            cursor.column += 1;
+            if let Some(line) = buffer.get_line(cursor.line) {
+                let stripped = grapheme::line_text_stripped(&line);
+                cursor.column = grapheme::next_grapheme_boundary(stripped, cursor.column);
+            } else {
+                cursor.column += 1;
+            }
         } else if cursor.line < buffer.line_count().saturating_sub(1) {
-            // Wrap to start of next line
             cursor.line += 1;
             cursor.column = 0;
         }
@@ -883,5 +906,128 @@ mod tests {
 
         // Should move up by ~10 lines
         assert_eq!(cursor.line, 20);
+    }
+
+    // ── Grapheme-cluster-aware tests ───────────────────────────────────
+
+    #[test]
+    fn test_arrow_right_emoji_zwj_family() {
+        // 👨‍👩‍👧 = 5 chars, 1 grapheme cluster
+        let mut buffer = create_test_buffer("👨\u{200D}👩\u{200D}👧");
+        let mut cursor = Cursor::new(0, 0);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowRight, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 5, "should skip entire ZWJ family emoji");
+    }
+
+    #[test]
+    fn test_arrow_left_emoji_zwj_family() {
+        let mut buffer = create_test_buffer("👨\u{200D}👩\u{200D}👧");
+        let mut cursor = Cursor::new(0, 5);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowLeft, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 0, "should jump back over entire ZWJ family emoji");
+    }
+
+    #[test]
+    fn test_backspace_deletes_entire_emoji_cluster() {
+        let mut buffer = create_test_buffer("a👨\u{200D}👩\u{200D}👧b");
+        let mut cursor = Cursor::new(0, 6); // right after the emoji
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::Backspace, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(buffer.to_string(), "ab");
+        assert_eq!(cursor.column, 1);
+    }
+
+    #[test]
+    fn test_delete_removes_entire_emoji_cluster() {
+        let mut buffer = create_test_buffer("a👨\u{200D}👩\u{200D}👧b");
+        let mut cursor = Cursor::new(0, 1); // on the emoji
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::Delete, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(buffer.to_string(), "ab");
+        assert_eq!(cursor.column, 1);
+    }
+
+    #[test]
+    fn test_bengali_conjunct_single_arrow_press() {
+        // ক্ষ = ক + ্ + ষ  (3 chars, 1 grapheme cluster)
+        let mut buffer = create_test_buffer("ক্ষ");
+        let mut cursor = Cursor::new(0, 0);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowRight, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 3, "single right-arrow should skip entire Bengali conjunct");
+    }
+
+    #[test]
+    fn test_bengali_conjunct_backspace() {
+        let mut buffer = create_test_buffer("ক্ষ");
+        let mut cursor = Cursor::new(0, 3);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::Backspace, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(buffer.to_string(), "");
+        assert_eq!(cursor.column, 0);
+    }
+
+    #[test]
+    fn test_korean_jamo_single_arrow_press() {
+        // Conjoining Hangul jamo: ᄒ + ᅡ + ᆫ = 3 chars, 1 grapheme
+        let mut buffer = create_test_buffer("\u{1112}\u{1161}\u{11AB}");
+        let mut cursor = Cursor::new(0, 0);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowRight, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 3, "should skip entire jamo syllable block");
+    }
+
+    #[test]
+    fn test_combining_diacritic_arrow_right() {
+        // e + combining acute = 2 chars, 1 grapheme
+        let mut buffer = create_test_buffer("e\u{0301}x");
+        let mut cursor = Cursor::new(0, 0);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowRight, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 2, "should skip base + combining mark as one grapheme");
+    }
+
+    #[test]
+    fn test_latin_unchanged_regression() {
+        let mut buffer = create_test_buffer("Hello");
+        let mut cursor = Cursor::new(0, 2);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::ArrowRight, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 3, "Latin should still move by 1");
+
+        handle_key_press(Key::ArrowLeft, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(cursor.column, 2, "Latin left should still move by 1");
+    }
+
+    #[test]
+    fn test_backspace_latin_unchanged_regression() {
+        let mut buffer = create_test_buffer("Hello");
+        let mut cursor = Cursor::new(0, 5);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::Backspace, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(buffer.to_string(), "Hell");
+        assert_eq!(cursor.column, 4);
+    }
+
+    #[test]
+    fn test_delete_at_end_of_line_joins() {
+        let mut buffer = create_test_buffer("Hello\nWorld");
+        let mut cursor = Cursor::new(0, 5);
+        let mut view = ViewState::new();
+
+        handle_key_press(Key::Delete, &Modifiers::NONE, &mut buffer, &mut cursor, &mut view);
+        assert_eq!(buffer.to_string(), "HelloWorld");
     }
 }

@@ -40,6 +40,8 @@ pub struct MarkdownOptions {
     pub safe_urls: bool,
     /// Generate GitHub-style heading IDs
     pub header_ids: Option<String>,
+    /// Treat soft breaks as hard line breaks (renders newlines as `<br>`)
+    pub hardbreaks: bool,
 }
 
 impl Default for MarkdownOptions {
@@ -55,6 +57,7 @@ impl Default for MarkdownOptions {
             front_matter_delimiter: Some("---".to_string()),
             safe_urls: true,
             header_ids: Some(String::new()),
+            hardbreaks: false,
         }
     }
 }
@@ -77,6 +80,7 @@ impl MarkdownOptions {
 
         // Render options
         options.render.unsafe_ = !self.safe_urls;
+        options.render.hardbreaks = self.hardbreaks;
 
         options
     }
@@ -469,6 +473,9 @@ fn merge_consecutive_blockquotes(node: &mut MarkdownNode) {
 /// However, in a markdown editor, the user is almost always starting a list
 /// item when they type `- `. This function detects such cases and converts
 /// the heading back to a Paragraph followed by a List containing an empty Item.
+///
+/// Note: `--` and `---` under text are legitimate setext H2 headings per the
+/// CommonMark spec and are NOT corrected here.
 fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
     // Recursively process children first
     for child in &mut node.children {
@@ -487,36 +494,43 @@ fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
             setext: true,
         } = &child.node_type
         {
-            // Check the underline: the last line of this heading's source range
-            // should be the setext underline. If it's a single `-` (possibly
-            // with trailing whitespace), this is a false setext heading.
-            let underline_idx = child.end_line.saturating_sub(1); // 1-indexed to 0-indexed
-            if let Some(underline) = source_lines.get(underline_idx) {
-                let trimmed = underline.trim();
+            // Find the setext underline by scanning backwards from end_line.
+            // Comrak's end_line can extend past the underline (including blank
+            // lines or even the next paragraph), so we locate the last
+            // all-dashes line in the heading's source range.
+            let start_idx = child.start_line.saturating_sub(1); // 1-indexed to 0-indexed
+            let end_idx = child.end_line; // 0-indexed exclusive
+
+            let mut underline_info: Option<(&str, usize)> = None; // (trimmed, 1-indexed line)
+            for idx in (start_idx..end_idx).rev() {
+                if let Some(line) = source_lines.get(idx) {
+                    let t = line.trim();
+                    if !t.is_empty() && t.chars().all(|c| c == '-') {
+                        underline_info = Some((t, idx + 1));
+                        break;
+                    }
+                }
+            }
+
+            if let Some((trimmed, underline_line)) = underline_info {
+                // Only a single `-` is treated as false setext (list item start).
+                // `--`, `---`, etc. are legitimate setext H2 underlines per CommonMark.
                 if trimmed == "-" {
-                    // This is a false setext heading — it's actually a paragraph
-                    // followed by the start of a list item.
                     let heading_start = child.start_line;
-                    let heading_end = child.end_line;
                     let children = child.children.clone();
 
-                    let mut paragraph = MarkdownNode {
+                    let paragraph = MarkdownNode {
                         node_type: MarkdownNodeType::Paragraph,
                         children,
                         start_line: heading_start,
-                        end_line: heading_end.saturating_sub(1).max(heading_start),
+                        end_line: underline_line.saturating_sub(1).max(heading_start),
                     };
-                    // If the paragraph ends up with the same start/end as heading,
-                    // adjust so it doesn't include the underline line
-                    if paragraph.end_line >= heading_end {
-                        paragraph.end_line = heading_end.saturating_sub(1).max(heading_start);
-                    }
 
                     let list_item = MarkdownNode {
                         node_type: MarkdownNodeType::Item,
                         children: Vec::new(),
-                        start_line: heading_end,
-                        end_line: heading_end,
+                        start_line: underline_line,
+                        end_line: underline_line,
                     };
 
                     let list = MarkdownNode {
@@ -525,8 +539,8 @@ fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
                             tight: true,
                         },
                         children: vec![list_item],
-                        start_line: heading_end,
-                        end_line: heading_end,
+                        start_line: underline_line,
+                        end_line: underline_line,
                     };
 
                     replacements.push((i, vec![paragraph, list]));
@@ -2023,5 +2037,127 @@ mod tests {
             c.children.iter().any(|cc| matches!(&cc.node_type, MarkdownNodeType::Wikilink { .. }))
         });
         assert!(!has_wikilink, "Empty [[]] should NOT produce a Wikilink node");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Setext Heading Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_setext_h2_double_dash_is_valid() {
+        // "Text\n--" is a legitimate setext H2 per CommonMark spec
+        let doc = parse_markdown("Heading\n--").unwrap();
+
+        let first = &doc.root.children[0];
+        assert!(
+            matches!(first.node_type, MarkdownNodeType::Heading { level: HeadingLevel::H2, setext: true }),
+            "\"Text\\n--\" should produce a setext H2, got {:?}",
+            first.node_type
+        );
+        assert_eq!(first.text_content(), "Heading");
+    }
+
+    #[test]
+    fn test_setext_h2_triple_dash_is_valid() {
+        // "Text\n---" directly under text is a setext H2 (not a thematic break)
+        let doc = parse_markdown("Heading\n---").unwrap();
+
+        let first = &doc.root.children[0];
+        assert!(
+            matches!(
+                first.node_type,
+                MarkdownNodeType::Heading { level: HeadingLevel::H2, setext: true }
+            ),
+            "\"Text\\n---\" should produce a setext H2, got {:?}",
+            first.node_type
+        );
+    }
+
+    #[test]
+    fn test_triple_dash_horizontal_rule_with_blank_lines() {
+        // "---" between blank lines is a thematic break, not a heading
+        let doc = parse_markdown("Before\n\n---\n\nAfter").unwrap();
+
+        let hr = doc.root.children.iter().find(|n| {
+            matches!(n.node_type, MarkdownNodeType::ThematicBreak)
+        });
+        assert!(
+            hr.is_some(),
+            "--- between blank lines should produce ThematicBreak"
+        );
+    }
+
+    #[test]
+    fn test_yaml_frontmatter_preserved() {
+        let markdown = "---\ntitle: Test\ndate: 2026-01-01\n---\n\n# Hello";
+        let doc = parse_markdown(markdown).unwrap();
+
+        let has_frontmatter = doc.root.children.iter().any(|c| {
+            matches!(c.node_type, MarkdownNodeType::FrontMatter(_))
+        });
+        assert!(
+            has_frontmatter,
+            "YAML frontmatter delimiters should still parse correctly"
+        );
+
+        let has_heading = doc.root.children.iter().any(|c| {
+            matches!(
+                c.node_type,
+                MarkdownNodeType::Heading { level: HeadingLevel::H1, .. }
+            )
+        });
+        assert!(has_heading, "Heading after frontmatter should still parse");
+    }
+
+    #[test]
+    fn test_single_dash_false_setext_still_works() {
+        // A single `-` under text is ambiguous with list item start;
+        // the editor treats it as Paragraph + List, not as a heading.
+        let doc = parse_markdown("Text\n-").unwrap();
+
+        let has_heading = doc.root.children.iter().any(|c| {
+            matches!(c.node_type, MarkdownNodeType::Heading { .. })
+        });
+        assert!(!has_heading, "Single dash should not produce a heading");
+
+        assert!(
+            matches!(doc.root.children[0].node_type, MarkdownNodeType::Paragraph),
+            "First child should be Paragraph"
+        );
+    }
+
+    #[test]
+    fn test_single_dash_false_setext_in_longer_doc() {
+        // The single-dash fix must work even when comrak's end_line extends
+        // past the underline (e.g. includes trailing blank lines).
+        let doc = parse_markdown("Text\n-\n\nMore text").unwrap();
+
+        let has_heading = doc.root.children.iter().any(|c| {
+            matches!(c.node_type, MarkdownNodeType::Heading { .. })
+        });
+        assert!(
+            !has_heading,
+            "Single dash should not produce a heading even with trailing content"
+        );
+
+        let text = doc.root.text_content();
+        assert!(text.contains("Text"), "Should preserve 'Text'");
+        assert!(text.contains("More text"), "Should preserve 'More text'");
+    }
+
+    #[test]
+    fn test_multiline_setext_h2() {
+        // Multi-line text followed by -- is a valid setext heading
+        let doc = parse_markdown("Line 1\nLine 2\nLine 3\n--").unwrap();
+
+        let first = &doc.root.children[0];
+        assert!(
+            matches!(first.node_type, MarkdownNodeType::Heading { level: HeadingLevel::H2, setext: true }),
+            "Multi-line text with -- underline should be setext H2, got {:?}",
+            first.node_type
+        );
+        let text = first.text_content();
+        assert!(text.contains("Line 1"), "Should contain 'Line 1'");
+        assert!(text.contains("Line 3"), "Should contain 'Line 3'");
     }
 }

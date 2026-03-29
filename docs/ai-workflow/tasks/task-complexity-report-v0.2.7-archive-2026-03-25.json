@@ -1,0 +1,69 @@
+{
+	"meta": {
+		"generatedAt": "2026-03-06T09:43:33.481Z",
+		"tasksAnalyzed": 7,
+		"totalTasks": 35,
+		"analysisCount": 7,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 35,
+			"taskTitle": "Address remaining v0.2.7 bug fixes and polish",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down into subtasks for: 1) Review and prioritize GitHub issues tagged 0.2.7 including IME positioning #15, 2) Fix regressions and performance edge cases, 3) Update documentation for wikilinks/vim mode/callouts, 4) Update CHANGELOG.md and run full test suite across platforms.",
+			"reasoning": "Catch-all task with variable scope depending on open issues; involves multiple small fixes, cross-platform testing, and doc updates. Complexity from uncertainty in issue volume and potential regressions, higher than simple maintenance (avg bug fix benchmark 3.2) but not algorithmic."
+		},
+		{
+			"taskId": 40,
+			"taskTitle": "Optimize word wrap scroll performance (O(N) hot paths)",
+			"complexityScore": 8,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Create one subtask per optimization: 1) Incremental rebuild_height_cache() in view.rs, 2) O(1) LRU cache replacement in line_cache.rs, 3) O(log N) visual row mapping with binary search, 4) Fix get_galley_with_job cache key collision.",
+			"reasoning": "Four distinct algorithmic optimizations requiring deep performance profiling, data structure changes (LRU, binary search), and cache correctness. High risk of regressions in hot scroll paths; matches technical debt/feature dev benchmarks (6-7.1) but elevated by multiple interdependent changes."
+		},
+		{
+			"taskId": 41,
+			"taskTitle": "Verify and profile word wrap scroll fix",
+			"complexityScore": 4,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Subtasks: 1) Run flamegraph profiling on 1000+ line wrapped documents and analyze hot paths, 2) Measure frame times and verify 60fps across scroll patterns, 3) Test regressions on non-wrapped docs and document findings.",
+			"reasoning": "Primarily verification/testing task dependent on prior optimization; involves profiling tools and manual testing but low implementation risk. Lower complexity than dev tasks, aligns with maintenance/verification benchmarks around 4."
+		},
+		{
+			"taskId": 42,
+			"taskTitle": "Implement Ctrl+Mouse Wheel Zoom for Editor with Persistence",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Subtasks: 1) Add Ctrl+scroll detection in mouse.rs calling existing zoom logic, 2) Add zoom_level field to Settings with persistence, 3) Apply zoom scaling to editor rendering with cursor centering, 4) Add bounds checking, smoothing, and multi-tab handling.",
+			"reasoning": "Multiple components: input handling, settings persistence, UI scaling, edge cases (bounds, rapid scroll). Moderate complexity from integration across input/config/editor layers and persistence across restarts/tabs; standard feature dev level (6.0 benchmark)."
+		},
+		{
+			"taskId": 43,
+			"taskTitle": "Improve Linux File Dialog Error Handling for Hyprland and Portal Failures",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Subtasks: 1) Detect portal failures and Hyprland env in dialogs.rs with egui error modal and copyable instructions, 2) Investigate/implement rfd zenity fallback, 3) Update file_ops.rs error propagation and add Linux portal docs.",
+			"reasoning": "Platform-specific error handling with env detection, UI modal, potential fallback integration, and docs. Moderate complexity from Linux-specific knowledge (portals, distro packages) and rfd investigation; lower implementation risk than core features."
+		},
+		{
+			"taskId": 44,
+			"taskTitle": "Keep text selected after applying markdown formatting",
+			"complexityScore": 5,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Subtasks: 1) Update all formatting functions in formatting.rs to recalculate and set new selection range including markers, 2) Handle edge cases (empty sel, boundaries, nesting) and test chaining across all formats.",
+			"reasoning": "Precise selection range math across multiple formatting types with edge cases; requires understanding editor/selection APIs. Moderate complexity from consistency across formats and undo behavior, but straightforward logic once APIs understood."
+		},
+		{
+			"taskId": 45,
+			"taskTitle": "Verify and fix CJK explicit preference font preloading at startup (GitHub #76 follow-up)",
+			"complexityScore": 4,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Subtasks: 1) Review Task 11 code and test explicit CJK prefs on startup/tab restore for tofu issues, 2) If broken: implement preload logic + verify font counter/line cache invalidation across edge cases.",
+			"reasoning": "Verification-first task with conditional small fix; low algorithmic complexity but requires font system knowledge and cross-tab testing. Complexity from potential fix implementation and GitHub follow-up, aligns with bug verification level."
+		}
+	]
+}

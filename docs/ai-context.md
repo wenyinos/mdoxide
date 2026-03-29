@@ -8,40 +8,17 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 |--------|---------|
 | `app/` | Main application (~15 modules: keyboard, file_ops, formatting, navigation, etc.) |
 | `state.rs` | All application state (`AppState`, `Tab`, `TabKind`, `SpecialTabKind`, `FileType`) |
-| `editor/ferrite/` | Custom rope-based editor (`ropey`) for large files (buffer, cursor, history, view, rendering) |
-| `editor/widget.rs` | Editor widget wrapper, integrates FerriteEditor via egui memory |
-| `markdown/editor.rs` | WYSIWYG rendered editing |
-| `markdown/parser.rs` | Comrak markdown parsing, AST operations |
-| `markdown/mermaid/` | Native mermaid rendering (11 diagram types); flowchart is modular (`flowchart/{types,parser,layout/,render/,utils}`) |
-| `markdown/csv_viewer.rs` | CSV/TSV table viewer with lazy byte-offset row parsing |
-| `markdown/tree_viewer.rs` | JSON/YAML/TOML hierarchical tree viewer |
-| `terminal/` | Integrated terminal emulator (PTY via `portable-pty`, VTE ANSI parser, screen buffer, themes, split layouts) |
-| `ui/` | UI panels (ribbon, settings, file_tree, outline, search, terminal_panel, productivity_panel, frontmatter_panel, welcome) |
-| `config/` | Settings persistence, session/crash recovery, text expansion snippets |
-| `theme/` | Light/dark theme management (ThemeManager, light.rs, dark.rs) |
-| `export/` | HTML export with themed CSS, clipboard operations |
-| `preview/` | Sync scrolling between Raw and Rendered views |
-| `vcs/git.rs` | Git integration (status tracking, branch display, auto-refresh via `git2`) |
-| `workspaces/` | Folder mode (file tree, file watcher, workspace settings, persistence) |
-| `workers/` | Async worker infrastructure (feature-gated `async-workers`, tokio runtime) |
-| `platform/` | Platform-specific code (macOS Apple Events) |
-| `single_instance.rs` | Lock file + TCP IPC so double-clicking files opens tabs in existing window |
-| `fonts.rs` | Font loading, lazy CJK, complex script lazy loading (11 families), family selection |
-| `update.rs` | Update checker (GitHub Releases API) |
+| `editor/ferrite/` | Rope-based editor (`ropey`): buffer, cursor, history, view, rendering, line_cache |
+| `editor/widget.rs` | EditorWidget wrapper, integrates FerriteEditor via egui memory |
+| `markdown/` | `editor.rs` (rendered view), `parser.rs` (comrak AST), `mermaid/` (11 diagram types), `csv_viewer.rs`, `tree_viewer.rs` |
+| `terminal/` | Integrated terminal (PTY, VTE, screen, themes, split layouts) |
+| `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome |
+| `config/` | Settings persistence, session/crash recovery, snippets |
+| `fonts.rs` | Font loading, lazy CJK, complex script lazy loading (11 families) |
+| `theme/` | Light/dark themes |
+| `vcs/git.rs`, `workspaces/`, `export/`, `preview/`, `platform/` | Git, folder mode, HTML export, sync scroll, platform-specific |
 
-## FerriteEditor
-
-Custom high-performance editor at `src/editor/ferrite/`. Uses `ropey` rope for O(log n) text operations.
-
-**Key files:** `editor.rs` (main widget), `buffer.rs` (rope), `view.rs` (viewport), `history.rs` (undo/redo), `line_cache.rs` (galley LRU cache)
-
-**Capabilities:** Virtual scrolling (renders only visible lines), multi-cursor (Ctrl+Click), code folding, bracket matching, IME/CJK input, syntax highlighting, find/replace.
-
-**Memory:** ~1x file size in RAM (rope-based vs ~6x with egui TextEdit).
-
-**Integration:** `EditorWidget` in `widget.rs` creates/retrieves `FerriteEditor` from egui memory, syncs with `Tab.content`.
-
-**Deep docs:** `docs/technical/editor/architecture.md`
+**FerriteEditor:** `src/editor/ferrite/` — rope-based, O(log n) ops, virtual scrolling, multi-cursor, code folding, IME/CJK. ~1x file size RAM. `EditorWidget` creates/retrieves from egui memory. Docs: `docs/technical/editor/architecture.md`
 
 ## Critical Patterns
 
@@ -72,43 +49,23 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 - **Errors:** User-facing via `show_toast()`, technical via `log::error!`
 - **Large files (>1MB):** Hash-based `is_modified()`, reduced undo stack (10 vs 100), no `original_bytes`
 
-## Where Things Live
+## Where Things Live (common)
 
 | Want to... | Look in... |
 |------------|------------|
-| Add keyboard shortcut | `app/keyboard.rs` → `handle_keyboard_shortcuts()` |
-| Add a file operation | `app/file_ops.rs` |
-| Add text formatting command | `app/formatting.rs` |
-| Add line operation (duplicate, move) | `app/line_ops.rs` |
-| Add navigation feature | `app/navigation.rs` |
-| Modify the title bar | `app/title_bar.rs` |
-| Modify the status bar | `app/status_bar.rs` |
-| Modify the central editor panel | `app/central_panel.rs` |
-| Add a special tab (settings-like panel) | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` → `render_special_tab_content()` |
 | Add a setting | `config/settings.rs` → `Settings` struct |
-| Add a translation string | `locales/en.yaml` + use `t!("key")` |
+| Add keyboard shortcut | `app/keyboard.rs` → `handle_keyboard_shortcuts()` |
+| Add/modify a UI panel | `ui/` → create or edit panel module |
+| Modify editor core | `editor/ferrite/editor.rs` (behavior), `buffer.rs` (text), `view.rs` (viewport) |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
 | Modify markdown parsing | `markdown/parser.rs` |
-| Add mermaid diagram type | `markdown/mermaid/` → new module |
-| Modify flowchart layout | `markdown/mermaid/flowchart/layout/` |
-| Modify flowchart rendering | `markdown/mermaid/flowchart/render/` |
-| Add flowchart node shape | `flowchart/types.rs` (NodeShape) + `flowchart/render/nodes.rs` |
-| Modify editor core behavior | `editor/ferrite/editor.rs` |
-| Modify editor text buffer | `editor/ferrite/buffer.rs` |
-| Change undo/redo behavior | `editor/ferrite/history.rs` |
-| Modify code folding | `editor/folding.rs` |
-| Modify minimap | `editor/minimap.rs` |
-| Add/modify a UI panel | `ui/` → create or edit panel module |
-| Modify terminal features | `terminal/` (pty, screen, widget, layout) |
-| Modify terminal panel UI | `ui/terminal_panel.rs` |
-| Modify productivity hub | `ui/productivity_panel.rs` |
-| Change themes | `theme/light.rs` or `theme/dark.rs` |
-| Add export format | `export/` → new module |
-| Modify Git integration | `vcs/git.rs` |
-| Modify workspace features | `workspaces/` |
-| Add global app state | `state.rs` → `AppState` struct |
-| Add per-tab state | `state.rs` → `Tab` struct |
-| Modify platform-specific code | `platform/` (currently macOS only) |
+| Modify central panel | `app/central_panel.rs` |
+| Add special tab | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` |
+| Add global/per-tab state | `state.rs` → `AppState` / `Tab` struct |
+| Add i18n string | `locales/en.yaml` + `t!("key")` |
+| Mermaid diagrams | `markdown/mermaid/` (flowchart has `types`, `parser`, `layout/`, `render/`) |
+| Terminal | `terminal/` (pty, screen, widget, layout) |
+| Git/VCS | `vcs/git.rs` |
 
 ## Performance Rules (FerriteEditor)
 
@@ -132,26 +89,19 @@ cargo test           # Run tests
 
 ## Current Focus
 
-- Finishing v0.2.7 release (performance, polish, new features)
-- Task 44 done: Keep text selected after markdown formatting — fixed selection preservation and focus restoration
-- Task 41 done: Word wrap scroll verification — fixed scroll sensitivity, documented findings
-- Key areas: editor performance, wikilinks/backlinks, vim mode, callouts, single-instance, welcome page, Unicode font loading (Phase 1 done)
-- PortableApps.com packaging complete — submit to Beta Testing forum after v0.2.7 release
-- v0.2.8 planned: LSP integration, HarfRust text shaping for complex scripts (Arabic, Bengali, Devanagari)
+- v0.2.7 released (March 2026) — performance, polish, new features
+- v0.2.8 in progress: Rendered view performance (Tasks 4-6 done), strict line breaks (Tasks 7-10 done), large file performance (Tasks 29-32 created), LSP integration (Tasks 23-26 done: module infra, lifecycle, status/overrides, inline diagnostics), HarfRust text shaping (Task 18 done — core module + LineCache pre-shape hook; shaped display/cursor follow-up pending)
+- **Next up:** Cursor/hit-testing aligned to shaped clusters; extend shaped path to wrapped/syntax-highlighted lines; true OTL glyph ID rendering
 - v0.3.0 planned: RTL/BiDi text support, mermaid crate extraction, math rendering
 
 ## Recently Changed
 
-- **2026-03-06**: Task 45 — CJK Font Preloading Verification. Verified that explicit CJK font preferences (Japanese, Korean, Simplified/Traditional Chinese) are correctly preloaded at startup. Implementation was already complete: `preload_explicit_cjk_font()` in `fonts.rs` loads the appropriate font, `bump_font_generation()` increments the counter, and `editor.rs` invalidates the line cache when fonts change. No code changes required. Docs: `docs/technical/fonts/cjk-font-preloading-verification.md`.
-- **2026-03-06**: Task 44 — Keep Text Selected After Markdown Formatting. Fixed format toolbar buttons to preserve both selection and focus. Used deferred format action pattern with pre-captured selection in `central_panel.rs` (raw and split view). Added focus restoration via `tab.needs_focus = true` in `mod.rs` after applying formatting. Users can now chain formatting operations (Bold→Italic) without reselecting, and editor maintains focus after clicking toolbar buttons.
-- **2026-03-06**: Task 41 — Word Wrap Scroll Verification & Fix. Verified Task 40 optimizations. Fixed scroll sensitivity: `smooth_scroll_delta` is already in points (pixels), so removed incorrect `line_height` multiplication that caused 20× overscroll. All 47 scroll tests pass. Docs: `docs/technical/editor/word-wrap-performance.md`.
-- **2026-03-06**: Task 40 — Word Wrap Scroll Performance. Incremental `rebuild_height_cache()` (O(changed) vs O(N)), counter-based O(1) LRU in LineCache replacing O(N) VecDeque scan, `cumulative_visual_rows` array for O(1)/O(log N) visual row mapping, fixed `get_galley_with_job` cache key to include font/color/theme. Docs: `docs/technical/editor/word-wrap-performance.md`.
-- **2026-03-06**: Task 43 — Linux File Dialog Error Handling for Hyprland and Portal Failures. Added `DialogResult<T>` type in `src/files/dialogs.rs` to detect xdg-desktop-portal failures on Linux (Hyprland, Sway, i3, etc.). Portal failure detection via `XXDG_CURRENT_DESKTOP` env var. Error modal with distro-specific install instructions (pacman, apt, dnf). "Copy Install Command" button. Logging with `log::warn!`. Docs: `docs/technical/platform/linux-portal-dialogs.md`.
-- **2026-03-06**: Task 42 — Ctrl+Scroll Wheel Zoom. Mapped Ctrl+scroll to `egui::gui_zoom::zoom_in/zoom_out` (same as Ctrl++/Ctrl+-). Added `ZoomIn/ZoomOut/ResetZoom` as `ShortcutCommand` variants with keyboard bindings. Docs: `docs/technical/editor/ctrl-scroll-zoom.md`.
-- **2026-03-06**: Task 34 — Word Wrap Scroll Correctness Fixes. Fixed 9 functions in `view.rs` and `widget.rs` that assumed uniform line heights when word wrap is enabled. `pixel_to_line()`, `line_to_pixel()`, `scroll_to_center_line()`, `is_line_visible()`, `ensure_line_visible()` now use `cumulative_heights` / `y_offset_to_line()` binary search for wrap-aware coordinate conversion. `tab.scroll_offset`, sync scroll, and viewport restoration in `widget.rs` now use `current_scroll_y()` / `scroll_to_absolute()`. Performance optimization deferred to Tasks 40/41. Docs: `docs/technical/editor/word-wrap-scroll-fixes.md`.
-- **2026-03-04**: Task 33 — Complex Script Font Preferences. Settings UI for per-script font selection (11 scripts). Docs: `docs/technical/config/complex-script-font-preferences.md`.
-- **2026-03-04**: Fixed Open Folder in Flatpak (Task 39). Portal dialog `$HOME` fallback. Docs: `docs/technical/platform/flatpak-file-dialog-portal.md`.
-- **2026-03-04**: Visual frontmatter editor (Task 32). FM tab in outline panel, form-based YAML editing. Docs: `docs/technical/ui/frontmatter-panel.md`.
-- **2026-03-02**: Fixed binary file open crash (`stats.rs` byte index panic). Added `is_binary_content()` detection.
-- **2026-02-26**: Nix/NixOS flake support (PR #92). PortableApps.com packaging with CI automation.
-- **2026-02-23**: Unicode Complex Script Font Loading (Phase 1). 11 script families, lazy loading in `fonts.rs`.
+- **2026-03-28**: Task 26 — LSP inline diagnostics: `DiagnosticEntry`/`DiagnosticMap` in `lsp/state.rs`, full `initialize`/`initialized` handshake + stdout JSON-RPC read loop in `manager.rs`, `publishDiagnostics` routing to `AppState.diagnostics`, wavy squiggles in `highlights.rs`, hover tooltips in `editor.rs`, `didOpen`/`didChange` full-sync in `sync_active_doc_to_lsp()`, status bar error/warning counts. Doc: `docs/technical/lsp/lsp-inline-diagnostics.md`.
+- **2026-03-28**: Task 25 — LSP status bar (`lsp_status_bar_text`, `StatusChanged` → `lsp_status_by_server`), `lsp_server_overrides` in settings + Editor “Language servers” paths, `overrides_fingerprint` restart in `handle_lsp_events`. Doc: `docs/technical/lsp/lsp-status-and-overrides.md`.
+- **2026-03-28**: Task 22 — Shaped text measurements: `column_to_x_offset`/`x_to_column` helpers + `shaped_column_to_x`/`shaped_x_to_column` convenience wrappers in `shaping.rs`. Cursor rendering (`rendering/cursor.rs`), IME positioning (`editor.rs` `calculate_cursor_x`), mouse click-to-cursor (`mouse.rs`), and selection rendering (`selection.rs`) now use HarfRust-shaped advances for complex-script lines (Arabic, Bengali, etc.). Latin text unchanged. 24 shaping tests, 1367 total pass.
+- **2026-03-28**: Task 19 — HarfRust pipeline integration: `group_clusters` in `shaping.rs`, `ShapedLine`/`ClusterGalley` in `line_cache.rs` with LRU shaped cache, per-cluster galley rendering in `editor.rs` for complex-script lines (non-wrapped, non-syntax). Falls back to standard egui path on failure or for Latin-only text.
+- **2026-03-27**: Task 18 — HarfRust: `harfrust` 0.5.2 + `unicode-script`, `src/editor/ferrite/shaping.rs` (`shape_text`, `ShapedGlyph`), `fonts::ttf_bytes_for_font_id_shaping`, `LineCache` pre-shape for complex-script lines before galley build. Doc: `docs/technical/editor/harfrust-text-shaping.md`.
+- **2026-03-25**: v0.2.8 Tasks 7-10 — Strict Line Breaks: `strict_line_breaks` in Settings, `hardbreaks` in parser, conditional `SoftBreak` rendering via egui memory, toggles in Settings UI + Welcome page. Docs: `docs/technical/markdown/strict-line-breaks.md`.
+- **2026-03-25**: v0.2.8 Tasks 1-6 completed — macOS `.md` association (Task 1), Windows IME transform fix (Task 2), setext heading detection (Task 3), AST caching (Task 4), viewport culling with 500px overscan (Task 5), block-level height cache (Task 6). Tasks 29-32 created for large file performance. See `docs/technical/markdown/` and `docs/technical/editor/` for individual docs.
+- **2026-03-25**: Task Master reset for v0.2.8: archived v0.2.7 tasks/PRD under `docs/ai-workflow/`.
+- **2026-03-06**: v0.2.7 wrap-up — Tasks 32-45 (word wrap, zoom, CJK fonts, frontmatter panel, portal dialogs, etc.). See `docs/technical/` for individual docs.
