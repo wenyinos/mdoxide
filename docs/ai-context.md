@@ -2,6 +2,21 @@
 
 Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
 
+## Rules (DO NOT UPDATE)
+- Never auto-update this file or `current-handover-prompt.md` — only update when explicitly requested.
+- Only do the task specified; do not start the next task or go over scope.
+- Run `cargo build` or `cargo check` after changes to verify code compiles.
+- Follow existing code patterns and conventions.
+- Document by feature (e.g., `lsp-inline-diagnostics.md`), not by task.
+- Update `docs/index.md` when adding new documentation.
+- Use Context7 MCP tool to fetch library documentation when needed (resolve library ID first, then fetch docs).
+
+## Tech Stack
+- **Language:** Rust 2021, egui 0.28 + eframe (immediate-mode GUI)
+- **Text:** ropey (rope buffer), comrak (Markdown AST), syntect (syntax highlighting), harfrust (OTL shaping)
+- **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3
+- **Memory:** mimalloc (Windows), jemalloc (Unix)
+
 ## Architecture
 
 | Module | Purpose |
@@ -86,22 +101,3 @@ cargo run            # Run app
 cargo clippy         # Lint
 cargo test           # Run tests
 ```
-
-## Current Focus
-
-- v0.2.7 released (March 2026) — performance, polish, new features
-- v0.2.8 in progress: Rendered view performance (Tasks 4-6 done), strict line breaks (Tasks 7-10 done), large file performance (Tasks 29-32 created), LSP integration (Tasks 23-26 done: module infra, lifecycle, status/overrides, inline diagnostics), HarfRust text shaping (Task 18 done — core module + LineCache pre-shape hook; shaped display/cursor follow-up pending)
-- **Next up:** Cursor/hit-testing aligned to shaped clusters; extend shaped path to wrapped/syntax-highlighted lines; true OTL glyph ID rendering
-- v0.3.0 planned: RTL/BiDi text support, mermaid crate extraction, math rendering
-
-## Recently Changed
-
-- **2026-03-28**: Task 26 — LSP inline diagnostics: `DiagnosticEntry`/`DiagnosticMap` in `lsp/state.rs`, full `initialize`/`initialized` handshake + stdout JSON-RPC read loop in `manager.rs`, `publishDiagnostics` routing to `AppState.diagnostics`, wavy squiggles in `highlights.rs`, hover tooltips in `editor.rs`, `didOpen`/`didChange` full-sync in `sync_active_doc_to_lsp()`, status bar error/warning counts. Doc: `docs/technical/lsp/lsp-inline-diagnostics.md`.
-- **2026-03-28**: Task 25 — LSP status bar (`lsp_status_bar_text`, `StatusChanged` → `lsp_status_by_server`), `lsp_server_overrides` in settings + Editor “Language servers” paths, `overrides_fingerprint` restart in `handle_lsp_events`. Doc: `docs/technical/lsp/lsp-status-and-overrides.md`.
-- **2026-03-28**: Task 22 — Shaped text measurements: `column_to_x_offset`/`x_to_column` helpers + `shaped_column_to_x`/`shaped_x_to_column` convenience wrappers in `shaping.rs`. Cursor rendering (`rendering/cursor.rs`), IME positioning (`editor.rs` `calculate_cursor_x`), mouse click-to-cursor (`mouse.rs`), and selection rendering (`selection.rs`) now use HarfRust-shaped advances for complex-script lines (Arabic, Bengali, etc.). Latin text unchanged. 24 shaping tests, 1367 total pass.
-- **2026-03-28**: Task 19 — HarfRust pipeline integration: `group_clusters` in `shaping.rs`, `ShapedLine`/`ClusterGalley` in `line_cache.rs` with LRU shaped cache, per-cluster galley rendering in `editor.rs` for complex-script lines (non-wrapped, non-syntax). Falls back to standard egui path on failure or for Latin-only text.
-- **2026-03-27**: Task 18 — HarfRust: `harfrust` 0.5.2 + `unicode-script`, `src/editor/ferrite/shaping.rs` (`shape_text`, `ShapedGlyph`), `fonts::ttf_bytes_for_font_id_shaping`, `LineCache` pre-shape for complex-script lines before galley build. Doc: `docs/technical/editor/harfrust-text-shaping.md`.
-- **2026-03-25**: v0.2.8 Tasks 7-10 — Strict Line Breaks: `strict_line_breaks` in Settings, `hardbreaks` in parser, conditional `SoftBreak` rendering via egui memory, toggles in Settings UI + Welcome page. Docs: `docs/technical/markdown/strict-line-breaks.md`.
-- **2026-03-25**: v0.2.8 Tasks 1-6 completed — macOS `.md` association (Task 1), Windows IME transform fix (Task 2), setext heading detection (Task 3), AST caching (Task 4), viewport culling with 500px overscan (Task 5), block-level height cache (Task 6). Tasks 29-32 created for large file performance. See `docs/technical/markdown/` and `docs/technical/editor/` for individual docs.
-- **2026-03-25**: Task Master reset for v0.2.8: archived v0.2.7 tasks/PRD under `docs/ai-workflow/`.
-- **2026-03-06**: v0.2.7 wrap-up — Tasks 32-45 (word wrap, zoom, CJK fonts, frontmatter panel, portal dialogs, etc.). See `docs/technical/` for individual docs.

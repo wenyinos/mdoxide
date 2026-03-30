@@ -272,9 +272,9 @@ Thank you for the clear reproduction steps and environment details — reports l
 
 ## Reply to Issue #108 - Support Image and PDF Preview
 **URL:** https://github.com/OlaProeis/Ferrite/issues/108
-**Status:** ✅ IMAGE ACCEPTED (Task 39) — PDF on long-term roadmap
+**Status:** ✅ IMAGE ACCEPTED (Task 39) | ✅ PDF ACCEPTED (Task 40) — both planned for v0.2.8
 
-### Suggested Reply:
+### Suggested Reply (initial):
 
 ```markdown
 Hi @chocolatedesue! Thanks for the feature request.
@@ -305,6 +305,61 @@ Images display in **Rendered** and **Split** view modes with automatic path reso
 PDF rendering requires native C/C++ library bindings (PDFium or MuPDF) since no pure-Rust PDF renderer exists with acceptable quality. This adds significant binary size (~20MB per platform) and cross-compilation complexity. It's on our long-term roadmap but won't arrive soon — for now, your OS's built-in PDF viewer will do a better job than anything we could ship in the near term.
 
 Thanks for the suggestion!
+```
+
+### Follow-up Reply (re: hayro suggestion):
+
+```markdown
+Great find! We've been looking at [hayro](https://github.com/LaurenzV/hayro) and it actually changes the picture significantly for PDF support.
+
+**Why hayro works for us:**
+- **Pure Rust** — no native C/C++ dependencies (unlike PDFium/MuPDF), so no cross-compilation headaches
+- **MIT/Apache-2.0** — compatible license
+- **Uses the `image` crate** — same version we already depend on (0.25), so minimal dependency overhead
+- **CPU-only rendering** (via vello_cpu) — no GPU requirements, runs everywhere
+- **`#![forbid(unsafe_code)]`** — strong safety guarantees
+
+It renders PDFs to bitmaps, which fits perfectly into our existing texture pipeline (same approach we use for markdown image rendering and the upcoming image viewer tab).
+
+**What we're planning:**
+- PDF viewer tab: open `.pdf` files in a read-only viewer
+- Page navigation (prev/next, keyboard shortcuts)
+- Zoom (Ctrl+scroll, re-render at different DPI)
+- Builds on top of the image viewer infrastructure (Task 39)
+
+hayro is still early (v0.5, performance not yet optimized), so complex/large PDFs may be slow — but for the "quick preview a PDF without leaving the editor" use case, it should work well. We'll ship it as a best-effort viewer rather than a full PDF reader.
+
+This is now tracked for **v0.2.8** alongside image viewer support. Thanks for the pointer — this is exactly the kind of community tip that moves features forward!
+```
+
+---
+
+## Reply to Issue #109 - No Space Between Paragraphs in Live Preview
+**URL:** https://github.com/OlaProeis/Ferrite/issues/109
+**Status:** 🐛 CONFIRMED — Tracked as Task 41
+
+### Suggested Reply:
+
+```markdown
+Hi @Ragos81! Thanks for the clear bug report and screenshot — confirmed, this is a rendering bug in the live preview.
+
+## Root Cause
+
+The rendered view sets its inter-block spacing (`item_spacing.y`) to just **1 pixel** in `markdown/editor.rs`. This was done intentionally to keep the viewport culling system's height calculations tight and predictable, but it means consecutive paragraphs end up with virtually no visible gap between them — exactly what you're seeing.
+
+In standard markdown rendering, an empty line between paragraphs should produce visible vertical separation (typically about half a line height).
+
+## Fix
+
+We'll add explicit paragraph bottom margins in the rendering functions, independent of the tight inter-block spacing used by the layout system. This gives paragraphs proper visual separation (~0.5em) while keeping the viewport culling math accurate.
+
+We'll also audit spacing for other block types (blockquotes, lists, code blocks) to ensure consistent visual separation across the board.
+
+## Timeline
+
+This is a straightforward fix — tracked internally for **v0.2.8**. We'll update this issue when it ships.
+
+Thanks for reporting!
 ```
 
 ---

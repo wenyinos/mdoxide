@@ -291,6 +291,11 @@ fn spawn_server(spec: &LspServerSpec) -> Result<Child, String> {
     cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
     cmd.spawn().map_err(|e| format!("{e}"))
 }
 
