@@ -136,6 +136,16 @@ const VIEWPORT_OVERSCAN_PX: f32 = 500.0;
 /// Spacing between rendered blocks (must match the `item_spacing.y` set during layout).
 const BLOCK_ITEM_SPACING_Y: f32 = 1.0;
 
+/// Max blocks to newly measure (via full egui render) per frame during the
+/// progressive measurement pass.  Keeps first-frame cost bounded for large
+/// documents (10K+ blocks) while the scroll position self-corrects.
+const MAX_NEW_MEASUREMENTS_PER_FRAME: usize = 20;
+
+/// Baseline pixels-per-line used for heuristic height estimates when a block
+/// has never been rendered.  Roughly matches a 14 px body font with default
+/// line spacing.
+const ESTIMATED_LINE_HEIGHT_PX: f32 = 20.0;
+
 /// Cached block positions for the rendered view, stored in egui temp memory.
 /// Invalidated when content or available width changes.
 #[derive(Clone)]
@@ -148,6 +158,9 @@ struct ViewportCullingState {
     block_heights: Vec<f32>,
     /// Total content height (blocks + spacing), measured from the layout.
     total_height: f32,
+    /// Per-block flag: `true` = height was obtained from a real egui render or
+    /// the block-height cache; `false` = heuristic estimate only.
+    block_measured: Vec<bool>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +195,18 @@ fn block_source_slice<'a>(
         .unwrap_or(0);
     let end = offsets.get(end_line).copied().unwrap_or(content.len());
     &content[start..end.min(content.len())]
+}
+
+/// Heuristic height for a block that has never been rendered.
+/// Uses `(end_line - start_line + 1) * ESTIMATED_LINE_HEIGHT_PX` as baseline,
+/// with a small per-block minimum to avoid zero-height placeholders.
+fn estimate_block_height(start_line: usize, end_line: usize) -> f32 {
+    let lines = if end_line >= start_line {
+        (end_line - start_line + 1) as f32
+    } else {
+        1.0
+    };
+    (lines * ESTIMATED_LINE_HEIGHT_PX).max(ESTIMATED_LINE_HEIGHT_PX)
 }
 
 /// Information about the currently focused element in rendered mode.
@@ -933,10 +958,8 @@ impl<'a> MarkdownEditor<'a> {
                 && (s.available_width - outer_available_width).abs() < 1.0
         });
 
-        // Accumulator for newly-measured block data (populated inside the closure)
-        let mut measured_start_y: Vec<f32> = Vec::new();
-        let mut measured_heights: Vec<f32> = Vec::new();
-        let mut measured_total: f32 = 0.0;
+        // Accumulator for the updated culling state (populated inside the closure).
+        let mut new_culling: Option<ViewportCullingState> = None;
 
         let scroll_output = scroll_area.show_viewport(ui, |ui, viewport| {
             // Tell the scroll area the total content height so the scrollbar
@@ -965,7 +988,6 @@ impl<'a> MarkdownEditor<'a> {
                             let vis_top = (viewport.min.y - VIEWPORT_OVERSCAN_PX).max(0.0);
                             let vis_bottom = viewport.max.y + VIEWPORT_OVERSCAN_PX;
 
-                            // Binary-search for the visible range using block start positions.
                             let first_vis = cs
                                 .block_start_y
                                 .partition_point(|&y| y <= vis_top)
@@ -976,16 +998,21 @@ impl<'a> MarkdownEditor<'a> {
                                 .min(block_count)
                                 .saturating_sub(1);
 
-                            // Allocate space for blocks above the visible range.
-                            // Subtract BLOCK_ITEM_SPACING_Y because egui inserts spacing
-                            // between the spacer item and the first rendered block.
                             if first_vis > 0 {
                                 let pre = (cs.block_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
                                     .max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, pre));
                             }
 
-                            // Render visible blocks
+                            // Track which visible blocks got newly measured so we
+                            // can refine the culling state afterwards.
+                            let mut updated_heights = cs.block_heights.clone();
+                            let mut updated_measured = cs.block_measured.clone();
+                            let mut new_measures_this_frame: usize = 0;
+                            let line_offsets = line_start_byte_offsets(self.content);
+                            let rp_hash =
+                                cache::render_params_hash(content_width, self.font_size);
+
                             for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
@@ -1005,33 +1032,45 @@ impl<'a> MarkdownEditor<'a> {
 
                                 let y_after = ui.cursor().top();
                                 let height = (y_after - y_before).max(1.0);
-                                measured_heights.push(height);
+
+                                if !updated_measured[i] {
+                                    let s = block_source_slice(
+                                        self.content,
+                                        &line_offsets,
+                                        node.start_line,
+                                        node.end_line,
+                                    );
+                                    cache::insert_block_height(s, rp_hash, height);
+                                    updated_heights[i] = height;
+                                    updated_measured[i] = true;
+                                    new_measures_this_frame += 1;
+                                } else if (height - updated_heights[i]).abs() > 0.5 {
+                                    updated_heights[i] = height;
+                                }
 
                                 line_mappings.push(LineMapping {
                                     start_line: node.start_line,
                                     end_line: node.end_line,
                                     rendered_y: cs.block_start_y[i],
-                                    rendered_height: cs.block_heights[i],
+                                    rendered_height: updated_heights[i],
                                 });
                             }
 
-                            // Allocate space for blocks below the visible range.
                             let after_idx = last_vis + 1;
                             if after_idx < block_count {
                                 let rendered_end =
-                                    cs.block_start_y[last_vis] + cs.block_heights[last_vis];
+                                    cs.block_start_y[last_vis] + updated_heights[last_vis];
                                 let post = (cs.total_height - rendered_end - BLOCK_ITEM_SPACING_Y)
                                     .max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, post));
                             }
 
-                            // Populate line_mappings for off-screen blocks (scroll sync)
                             for i in 0..first_vis {
                                 line_mappings.push(LineMapping {
                                     start_line: doc.root.children[i].start_line,
                                     end_line: doc.root.children[i].end_line,
                                     rendered_y: cs.block_start_y[i],
-                                    rendered_height: cs.block_heights[i],
+                                    rendered_height: updated_heights[i],
                                 });
                             }
                             for i in (last_vis + 1)..block_count {
@@ -1039,26 +1078,56 @@ impl<'a> MarkdownEditor<'a> {
                                     start_line: doc.root.children[i].start_line,
                                     end_line: doc.root.children[i].end_line,
                                     rendered_y: cs.block_start_y[i],
-                                    rendered_height: cs.block_heights[i],
+                                    rendered_height: updated_heights[i],
                                 });
                             }
+
+                            // If any heights changed, rebuild start_y and total_height.
+                            if new_measures_this_frame > 0 {
+                                let mut start_y = Vec::with_capacity(block_count);
+                                let mut y = 0.0f32;
+                                for (i, &h) in updated_heights.iter().enumerate() {
+                                    start_y.push(y);
+                                    y += h;
+                                    if i + 1 < block_count {
+                                        y += BLOCK_ITEM_SPACING_Y;
+                                    }
+                                }
+                                new_culling = Some(ViewportCullingState {
+                                    content_hash,
+                                    available_width: outer_available_width,
+                                    block_start_y: start_y,
+                                    block_heights: updated_heights,
+                                    total_height: y,
+                                    block_measured: updated_measured,
+                                });
+                                // Still have unmeasured blocks — request another frame
+                                // so the progressive pass continues.
+                                if new_culling
+                                    .as_ref()
+                                    .unwrap()
+                                    .block_measured
+                                    .iter()
+                                    .any(|&m| !m)
+                                {
+                                    ui.ctx().request_repaint();
+                                }
+                            }
                         } else {
-                            // ── Measurement pass ─────────────────────────────────
-                            // Uses the per-block height cache so that only blocks
-                            // whose source actually changed need a full egui render.
-                            // Off-screen blocks with a cached height are replaced
-                            // by an `allocate_space` placeholder.
-                            let y_origin = ui.cursor().top();
+                            // ── Bootstrap / lazy measurement pass ─────────────────
+                            // Build a ViewportCullingState immediately using a mix
+                            // of block-height cache hits, heuristic estimates, and a
+                            // limited number of real renders (budget-capped).
                             let line_offsets = line_start_byte_offsets(self.content);
                             let rp_hash =
                                 cache::render_params_hash(content_width, self.font_size);
 
-                            for node in &doc.root.children {
-                                let y_before = ui.cursor().top();
-                                measured_start_y.push(y_before - y_origin);
+                            let mut boot_heights: Vec<f32> = Vec::with_capacity(block_count);
+                            let mut boot_measured: Vec<bool> = Vec::with_capacity(block_count);
 
-                                // Scope the immutable borrow of self.content so it
-                                // doesn't conflict with render_node's &mut borrow.
+                            // Phase 1: Determine height for every block from cache
+                            // or heuristic, without rendering anything.
+                            for node in &doc.root.children {
                                 let cached_h = {
                                     let s = block_source_slice(
                                         self.content,
@@ -1068,19 +1137,72 @@ impl<'a> MarkdownEditor<'a> {
                                     );
                                     cache::get_block_height(s, rp_hash)
                                 };
-
-                                let must_render = match cached_h {
+                                match cached_h {
                                     Some(h) => {
-                                        let est_bottom = y_before + h;
-                                        est_bottom
-                                            >= viewport.min.y - VIEWPORT_OVERSCAN_PX
-                                            && y_before
-                                                <= viewport.max.y + VIEWPORT_OVERSCAN_PX
+                                        boot_heights.push(h);
+                                        boot_measured.push(true);
                                     }
-                                    None => true,
-                                };
+                                    None => {
+                                        let est = estimate_block_height(
+                                            node.start_line,
+                                            node.end_line,
+                                        );
+                                        boot_heights.push(est);
+                                        boot_measured.push(false);
+                                    }
+                                }
+                            }
 
-                                let height = if must_render {
+                            // Phase 2: Build start_y from the heights.
+                            let mut boot_start_y: Vec<f32> = Vec::with_capacity(block_count);
+                            {
+                                let mut y = 0.0f32;
+                                for (i, &h) in boot_heights.iter().enumerate() {
+                                    boot_start_y.push(y);
+                                    y += h;
+                                    if i + 1 < block_count {
+                                        y += BLOCK_ITEM_SPACING_Y;
+                                    }
+                                }
+                            }
+                            let boot_total: f32 = if block_count > 0 {
+                                boot_start_y[block_count - 1] + boot_heights[block_count - 1]
+                            } else {
+                                0.0
+                            };
+
+                            // Set the min height so the scrollbar approximates the
+                            // full document even on the very first frame.
+                            ui.set_min_height(boot_total);
+
+                            // Phase 3: Render only the viewport-visible blocks,
+                            // capped by the render budget.
+                            let vis_top = (viewport.min.y - VIEWPORT_OVERSCAN_PX).max(0.0);
+                            let vis_bottom = viewport.max.y + VIEWPORT_OVERSCAN_PX;
+
+                            let first_vis = boot_start_y
+                                .partition_point(|&y| y <= vis_top)
+                                .saturating_sub(1);
+                            let last_vis = boot_start_y
+                                .partition_point(|&y| y < vis_bottom)
+                                .min(block_count)
+                                .saturating_sub(1);
+
+                            if first_vis > 0 {
+                                let pre = (boot_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
+                                    .max(0.0);
+                                ui.allocate_space(Vec2::new(content_width, pre));
+                            }
+
+                            let mut new_measures: usize = 0;
+                            for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
+                                let node = &doc.root.children[i];
+                                let y_before = ui.cursor().top();
+
+                                let within_budget =
+                                    new_measures < MAX_NEW_MEASUREMENTS_PER_FRAME;
+
+                                if boot_measured[i] || within_budget {
                                     render_node(
                                         ui,
                                         node,
@@ -1095,8 +1217,9 @@ impl<'a> MarkdownEditor<'a> {
                                     );
                                     let y_after = ui.cursor().top();
                                     let h = (y_after - y_before).max(1.0);
-                                    // Re-extract block source after render to
-                                    // update the cache with current content.
+                                    if !boot_measured[i] {
+                                        new_measures += 1;
+                                    }
                                     let s = block_source_slice(
                                         self.content,
                                         &line_offsets,
@@ -1104,23 +1227,87 @@ impl<'a> MarkdownEditor<'a> {
                                         node.end_line,
                                     );
                                     cache::insert_block_height(s, rp_hash, h);
-                                    h
+                                    boot_heights[i] = h;
+                                    boot_measured[i] = true;
                                 } else {
-                                    let h = cached_h.unwrap();
-                                    ui.allocate_space(Vec2::new(content_width, h));
-                                    h
-                                };
+                                    ui.allocate_space(Vec2::new(
+                                        content_width,
+                                        boot_heights[i],
+                                    ));
+                                }
 
-                                measured_heights.push(height);
                                 line_mappings.push(LineMapping {
                                     start_line: node.start_line,
                                     end_line: node.end_line,
-                                    rendered_y: y_before,
-                                    rendered_height: height,
+                                    rendered_y: boot_start_y[i],
+                                    rendered_height: boot_heights[i],
                                 });
                             }
 
-                            measured_total = ui.cursor().top() - y_origin;
+                            let after_idx = last_vis + 1;
+                            if after_idx < block_count {
+                                let rendered_end =
+                                    boot_start_y[last_vis] + boot_heights[last_vis];
+                                let post =
+                                    (boot_total - rendered_end - BLOCK_ITEM_SPACING_Y).max(0.0);
+                                ui.allocate_space(Vec2::new(content_width, post));
+                            }
+
+                            // Off-screen line mappings for scroll sync.
+                            for i in 0..first_vis {
+                                line_mappings.push(LineMapping {
+                                    start_line: doc.root.children[i].start_line,
+                                    end_line: doc.root.children[i].end_line,
+                                    rendered_y: boot_start_y[i],
+                                    rendered_height: boot_heights[i],
+                                });
+                            }
+                            for i in (last_vis + 1)..block_count {
+                                line_mappings.push(LineMapping {
+                                    start_line: doc.root.children[i].start_line,
+                                    end_line: doc.root.children[i].end_line,
+                                    rendered_y: boot_start_y[i],
+                                    rendered_height: boot_heights[i],
+                                });
+                            }
+
+                            // Rebuild start_y in case visible-block heights changed.
+                            let mut final_start_y: Vec<f32> = Vec::with_capacity(block_count);
+                            {
+                                let mut y = 0.0f32;
+                                for (i, &h) in boot_heights.iter().enumerate() {
+                                    final_start_y.push(y);
+                                    y += h;
+                                    if i + 1 < block_count {
+                                        y += BLOCK_ITEM_SPACING_Y;
+                                    }
+                                }
+                            }
+                            let final_total: f32 = if block_count > 0 {
+                                final_start_y[block_count - 1]
+                                    + boot_heights[block_count - 1]
+                            } else {
+                                0.0
+                            };
+
+                            new_culling = Some(ViewportCullingState {
+                                content_hash,
+                                available_width: outer_available_width,
+                                block_start_y: final_start_y,
+                                block_heights: boot_heights,
+                                total_height: final_total,
+                                block_measured: boot_measured,
+                            });
+
+                            if new_culling
+                                .as_ref()
+                                .unwrap()
+                                .block_measured
+                                .iter()
+                                .any(|&m| !m)
+                            {
+                                ui.ctx().request_repaint();
+                            }
                         }
 
                         let _ = &structural_state;
@@ -1136,20 +1323,10 @@ impl<'a> MarkdownEditor<'a> {
             .inner
         });
 
-        // ── Persist measured block heights ──────────────────────────────────
-        // Only update cache after a full measurement pass (not a culled render).
-        if measured_start_y.len() == block_count && block_count > 0 {
+        // ── Persist culling state ────────────────────────────────────────────
+        if let Some(cs) = new_culling {
             ui.memory_mut(|mem| {
-                mem.data.insert_temp(
-                    culling_id,
-                    ViewportCullingState {
-                        content_hash,
-                        available_width: outer_available_width,
-                        block_start_y: measured_start_y,
-                        block_heights: measured_heights,
-                        total_height: measured_total,
-                    },
-                );
+                mem.data.insert_temp(culling_id, cs);
             });
         }
 

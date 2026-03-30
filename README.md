@@ -686,6 +686,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
       Free code signing on Windows provided by <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath.io</a>, certificate by <a href="https://signpath.org/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath Foundation</a>
     </td>
   </tr>
+  <tr>
+    <td>
+      <a href="https://weblate.org/" target="_blank"><img src="https://weblate.org/static/img/logo.svg" alt="Weblate" width="50" height="50" /></a>
+    </td>
+    <td>
+      Hosted translations provided by <a href="https://weblate.org/">Weblate</a> on <a href="https://hosted.weblate.org/">Hosted Weblate</a> (gratis libre project plan)
+    </td>
+  </tr>
 </table>
 
 ---

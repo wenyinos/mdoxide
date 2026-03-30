@@ -3495,8 +3495,8 @@ impl AppState {
             }
         }
 
-        // Start LSP servers if enabled
-        self.start_lsp_for_workspace(&root);
+        // LSP servers are started on demand when a tab with a matching
+        // file extension becomes active (see sync_active_doc_to_lsp).
 
         // Add to recent workspaces
         self.settings.add_recent_workspace(root);
@@ -3531,26 +3531,14 @@ impl AppState {
         info!("Workspace closed, returned to single-file mode");
     }
 
-    /// Detect and start LSP servers for the given workspace root.
+    /// Previously started all detected LSP servers eagerly on workspace open.
+    ///
+    /// Now a no-op: servers are started on demand when a tab with a matching
+    /// file extension becomes active. Kept for API compatibility with override
+    /// restart logic in `handle_lsp_events`.
+    #[allow(unused_variables)]
     pub fn start_lsp_for_workspace(&self, root: &Path) {
-        if !self.settings.lsp_enabled {
-            return;
-        }
-        let servers = crate::lsp::detect_servers_for_workspace(root);
-        if servers.is_empty() {
-            info!("LSP: no relevant language servers detected for workspace");
-            return;
-        }
-        for (key, mut spec) in servers {
-            if let Some(override_path) = self.settings.lsp_server_overrides.get(&key) {
-                let trimmed = override_path.trim();
-                if !trimmed.is_empty() {
-                    spec.program = trimmed.to_string();
-                }
-            }
-            info!("LSP: starting {} (program={}) for workspace", key, spec.program);
-            self.lsp.start_server(key, spec, Some(root.to_path_buf()));
-        }
+        // On-demand: servers are started lazily by sync_active_doc_to_lsp
     }
 
     /// Poll the file watcher for new events.

@@ -139,6 +139,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 #### Bug Fixes
 - [x] **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - `UTImportedTypeDeclarations` in `info_plist_ext.xml` declares `net.daringfireball.markdown` (conforms to `public.plain-text`); `Cargo.toml` `osx_info_plist_exts` merges it into bundled `Info.plist`; release workflow uses `cargo bundle --release`
 - [ ] **Windows IME candidate box mispositioning** ([#103](https://github.com/OlaProeis/Ferrite/issues/103), [#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Chinese/Japanese/Korean IME candidate selection box appears at the wrong position (e.g. bottom of screen) or is invisible on Windows 11. Root cause: custom editor sets `IMEOutput` with local widget coordinates instead of applying `layer_transform_to_global()` like egui's built-in `TextEdit` does, causing the OS to receive incorrect screen coordinates for the candidate popup. Reporter confirmed candidate box appears but at wrong position after switching to light mode. Fix: apply `to_global` transform to `rect` and `cursor_rect` in `editor.rs` IME output.
+- [ ] **No space between paragraphs in rendered view** ([#109](https://github.com/OlaProeis/Ferrite/issues/109)) - Consecutive paragraphs appear with no visible vertical gap in rendered/split view. Root cause: `BLOCK_ITEM_SPACING_Y` is set to 1.0px in `markdown/editor.rs`. Fix: add proper paragraph margin (0.5–1em) after paragraph blocks in `render_node()`, independent of the tight inter-block spacing used by the viewport culling system.
 - [ ] **Double-dash (`--`) causes false setext headings and line collapsing** - Two related rendering bugs when `--` appears in markdown content: (1) Text followed by `--` on the next line is interpreted as a setext H2 heading by Comrak (e.g., `Hvordan\n--` renders "Hvordan" as an H2 header). The v0.2.7 `fix_false_setext_headings()` in `parser.rs` only catches the single-dash case (`trimmed == "-"`), not `"--"`. Fix: extend the function to also treat `--` as a false setext underline. (2) Multiple lines starting with `-- ` that lack a preceding blank line collapse into a single paragraph because CommonMark treats soft line breaks as spaces (e.g., `-- skal\n-- jeg\n-- asd` becomes `-- skal -- jeg -- asd`). Fix options: preprocess `\n-- ` to `\n\n-- ` to force paragraph breaks, or post-process the AST to split paragraphs at `-- ` boundaries.
 
 #### Markdown Rendering Settings
@@ -174,8 +175,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
 - [ ] **Settings** — Per-language server path override; all processing local (no network calls).
 
-#### Image Viewer Tab ([#108](https://github.com/OlaProeis/Ferrite/issues/108))
+#### Image & PDF Viewer Tabs ([#108](https://github.com/OlaProeis/Ferrite/issues/108))
 - [ ] **Open images as viewer tabs** - Open PNG, JPEG, GIF, WebP files in a dedicated viewer tab instead of showing "binary file" error. Reuses existing `image` crate and texture infrastructure from markdown image rendering. Zoom (Ctrl+scroll), fit-to-window, basic metadata display (dimensions, format, file size). Tracked as Task 39.
+- [ ] **PDF viewer tab** - Open PDF files in a read-only viewer tab using [hayro](https://github.com/LaurenzV/hayro) (pure Rust PDF renderer, MIT/Apache-2.0). Render pages to bitmaps, display in viewer tab with page navigation and zoom. No native C/C++ dependencies. Tracked as Task 40.
 
 #### Additional Format Support
 
@@ -320,7 +322,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Column/box selection** - Rectangular selection.
 
 ### Additional Document Formats (Candidates)
-- [ ] **PDF viewing (read-only)** ([#108](https://github.com/OlaProeis/Ferrite/issues/108)) - Page-by-page PDF rendering via native library bindings (PDFium or MuPDF). Requires shipping platform-specific native libraries (~20MB per platform). Complex cross-compilation. Low priority — OS viewers handle this well.
+- [ ] **PDF viewing (read-only)** - Page-by-page PDF rendering via native library bindings (PDFium or MuPDF). Requires shipping platform-specific native libraries (~20MB per platform). Complex cross-compilation. Low priority — OS viewers handle this well.
 - [ ] **Jupyter Notebooks (.ipynb)** - Read-only viewing of cells and outputs.
 - [ ] **EPUB** - Page-less e-book reading with TOC and position memory.
 - [ ] **LaTeX source (.tex)** - Syntax highlighting, math preview, outline.

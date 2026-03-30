@@ -376,37 +376,47 @@ impl FerriteApp {
     /// Poll LSP manager events, detect settings toggle transitions, and surface
     /// spawn failures as dismissible toast notifications.
     pub(crate) fn handle_lsp_events(&mut self, _ctx: &egui::Context) {
-        // Reset per-server status when the workspace folder changes.
+        // Reset all LSP tracking when the workspace folder changes.
         let current_ws = self.state.workspace_root().map(|p| p.to_path_buf());
         if current_ws != self.lsp_status_workspace {
             self.lsp_status_workspace = current_ws;
             self.lsp_status_by_server.clear();
+            self.lsp_opened_docs.clear();
+            self.lsp_doc_versions.clear();
+            self.lsp_last_edit_times.clear();
+            self.lsp_last_change_sent.clear();
+            self.lsp_tab_server.clear();
+            self.lsp_open_doc_count.clear();
+            self.lsp_idle_since.clear();
         }
 
-        // When override paths change, restart LSP if a workspace is open.
+        // When override paths change, stop all servers so on-demand restart
+        // picks up the new program paths.
         let fp = crate::lsp::overrides_fingerprint(&self.state.settings.lsp_server_overrides);
         if fp != self.lsp_overrides_fingerprint {
             self.lsp_overrides_fingerprint = fp;
             if self.state.settings.lsp_enabled {
-                if let Some(root) = self.state.workspace_root().cloned() {
-                    self.state.lsp.stop_all_servers();
-                    self.state.start_lsp_for_workspace(&root);
-                    self.lsp_status_by_server.clear();
-                }
+                self.state.lsp.stop_all_servers();
+                self.lsp_status_by_server.clear();
+                self.lsp_opened_docs.clear();
+                self.lsp_doc_versions.clear();
+                self.lsp_last_edit_times.clear();
+                self.lsp_last_change_sent.clear();
+                self.lsp_tab_server.clear();
+                self.lsp_open_doc_count.clear();
+                self.lsp_idle_since.clear();
             }
         }
 
         let lsp_now = self.state.settings.lsp_enabled;
         if lsp_now != self.lsp_was_enabled {
             self.lsp_was_enabled = lsp_now;
-            if lsp_now {
-                if let Some(root) = self.state.workspace_root().cloned() {
-                    self.state.start_lsp_for_workspace(&root);
-                }
-            } else {
+            if !lsp_now {
                 self.state.lsp.stop_all_servers();
                 self.lsp_status_by_server.clear();
             }
+            // When toggled on, sync_active_doc_to_lsp will start the
+            // server on demand for the currently active tab.
         }
 
         let events = self.state.lsp.poll_events();
@@ -444,16 +454,24 @@ impl FerriteApp {
             self.lsp_doc_versions.clear();
             self.lsp_last_edit_times.clear();
             self.lsp_last_change_sent.clear();
+            self.lsp_tab_server.clear();
+            self.lsp_open_doc_count.clear();
+            self.lsp_idle_since.clear();
         } else {
             self.sync_active_doc_to_lsp();
+            self.check_lsp_idle_shutdown();
         }
     }
 
     /// Minimum interval between `didChange` notifications (debounce).
     const LSP_DID_CHANGE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
+    /// Idle timeout for shutting down servers with no open documents.
+    const LSP_IDLE_SHUTDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+
     /// Ensure the active tab's document is opened and up-to-date with the LSP server.
     ///
+    /// On-demand: if no server is running for the active file's extension, starts one.
     /// Uses `Tab::last_edit_time` to detect edits without cloning content every frame,
     /// and debounces `didChange` notifications to avoid flooding the server.
     fn sync_active_doc_to_lsp(&mut self) {
@@ -461,6 +479,7 @@ impl FerriteApp {
             Some(t) => t,
             None => return,
         };
+        let tab_id = tab.id;
         let path = match &tab.path {
             Some(p) => p.clone(),
             None => return,
@@ -469,13 +488,7 @@ impl FerriteApp {
         let spec = crate::lsp::detect_lsp_server_for_path(&path);
         let server_key = match &spec {
             Some(s) => s.program.clone(),
-            None => {
-                if let Some(key) = self.state.settings.lsp_server_overrides.keys().next() {
-                    key.clone()
-                } else {
-                    return;
-                }
-            }
+            None => return,
         };
 
         let status = self
@@ -483,13 +496,25 @@ impl FerriteApp {
             .get(&server_key)
             .cloned()
             .unwrap_or(crate::lsp::state::ServerStatus::Disconnected);
-        if !matches!(status, crate::lsp::state::ServerStatus::Ready) {
-            log::trace!(
-                "LSP sync skip: {} not ready ({:?})",
-                server_key,
-                status
-            );
-            return;
+
+        match &status {
+            crate::lsp::state::ServerStatus::Ready => {
+                // Server ready — proceed to didOpen / didChange below
+            }
+            crate::lsp::state::ServerStatus::Disconnected => {
+                // On-demand start: spawn the server now
+                self.start_lsp_server_on_demand(&server_key, spec.unwrap(), &path);
+                return;
+            }
+            crate::lsp::state::ServerStatus::Starting
+            | crate::lsp::state::ServerStatus::Initializing => {
+                // Server is coming up — wait
+                return;
+            }
+            crate::lsp::state::ServerStatus::Error(_) => {
+                // Failed previously — don't auto-retry (backoff handles crashes)
+                return;
+            }
         }
 
         let norm_path = crate::lsp::normalize_lsp_path(&path);
@@ -515,6 +540,10 @@ impl FerriteApp {
             );
             self.lsp_opened_docs.insert(norm_path.clone());
             self.lsp_doc_versions.insert(norm_path.clone(), version);
+            self.lsp_tab_server
+                .insert(tab_id, (norm_path.clone(), server_key.clone()));
+            *self.lsp_open_doc_count.entry(server_key.clone()).or_insert(0) += 1;
+            self.lsp_idle_since.remove(&server_key);
             if let Some(t) = tab.last_edit_time {
                 self.lsp_last_edit_times.insert(norm_path.clone(), t);
             }
@@ -523,8 +552,13 @@ impl FerriteApp {
             return;
         }
 
+        // If the tab wasn't recorded yet (e.g. second tab opened same file), record it
+        if !self.lsp_tab_server.contains_key(&tab_id) {
+            self.lsp_tab_server
+                .insert(tab_id, (norm_path.clone(), server_key.clone()));
+        }
+
         // Check if the tab was edited since our last sync.
-        // If last_edit_time hasn't changed, there's nothing new to send.
         let current_edit_time = tab.last_edit_time;
         let prev_edit_time = self.lsp_last_edit_times.get(&norm_path).copied();
 
@@ -546,7 +580,7 @@ impl FerriteApp {
             }
         }
 
-        // Content actually changed — clone and send (only here, not every frame)
+        // Content actually changed — clone and send
         let content = tab.content.clone();
         let version = self.lsp_doc_versions.get(&norm_path).copied().unwrap_or(0) + 1;
         log::debug!(
@@ -565,48 +599,85 @@ impl FerriteApp {
         self.lsp_last_change_sent.insert(norm_path, now);
     }
 
+    /// Start an LSP server on demand for the given file, applying any user overrides.
+    fn start_lsp_server_on_demand(
+        &self,
+        server_key: &str,
+        mut spec: crate::lsp::detection::LspServerSpec,
+        file_path: &std::path::Path,
+    ) {
+        if let Some(override_path) = self.state.settings.lsp_server_overrides.get(server_key) {
+            let trimmed = override_path.trim();
+            if !trimmed.is_empty() {
+                spec.program = trimmed.to_string();
+            }
+        }
+        let workspace_root = self
+            .state
+            .workspace_root()
+            .cloned()
+            .or_else(|| file_path.parent().map(|p| p.to_path_buf()));
+        log::info!(
+            "LSP on-demand start: {} (program={}) for {}",
+            server_key,
+            spec.program,
+            file_path.display()
+        );
+        self.state
+            .lsp
+            .start_server(server_key.to_string(), spec, workspace_root);
+    }
+
+    /// Shut down LSP servers that have had no open documents for `LSP_IDLE_SHUTDOWN`.
+    fn check_lsp_idle_shutdown(&mut self) {
+        let now = std::time::Instant::now();
+        let expired: Vec<String> = self
+            .lsp_idle_since
+            .iter()
+            .filter(|(_, since)| now.duration_since(**since) >= Self::LSP_IDLE_SHUTDOWN)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in expired {
+            self.lsp_idle_since.remove(&key);
+            self.lsp_open_doc_count.remove(&key);
+            log::info!(
+                "LSP idle shutdown: {} (no open documents for {}s)",
+                key,
+                Self::LSP_IDLE_SHUTDOWN.as_secs()
+            );
+            self.state.lsp.stop_server(&key);
+            self.lsp_status_by_server
+                .insert(key, crate::lsp::state::ServerStatus::Disconnected);
+        }
+    }
+
     /// Build status-bar text for LSP (compact) and optional hover detail.
+    ///
+    /// Only shows servers that have been started (on demand) rather than
+    /// scanning the workspace for potential servers each frame.
     pub(crate) fn lsp_status_bar_text(&self) -> (String, String) {
-        use crate::lsp::detect_servers_for_workspace;
         use crate::lsp::state::ServerStatus;
 
         if !self.state.settings.lsp_enabled {
             return ("LSP: Disabled".to_string(), "Language servers are disabled in Settings.".to_string());
         }
-        let Some(root) = self.state.workspace_root() else {
+
+        if self.lsp_status_by_server.is_empty() {
             return (
-                "LSP: No workspace".to_string(),
-                "Open a folder workspace to use language servers.".to_string(),
+                "LSP".to_string(),
+                "No language servers running. Servers start on demand when you open a supported file.".to_string(),
             );
-        };
-
-        let detected: Vec<String> = detect_servers_for_workspace(root)
-            .into_iter()
-            .map(|(k, _)| k)
-            .collect();
-
-        let mut keys: Vec<String> = detected;
-        for k in self.state.settings.lsp_server_overrides.keys() {
-            if !keys.contains(k) {
-                keys.push(k.clone());
-            }
         }
+
+        let mut keys: Vec<&String> = self.lsp_status_by_server.keys().collect();
         keys.sort();
-        keys.dedup();
-
-        if keys.is_empty() {
-            return (
-                "LSP: No servers detected".to_string(),
-                "No supported code files found in this workspace (first levels).".to_string(),
-            );
-        }
 
         let mut parts = Vec::new();
         let mut detail = String::from("Language server status:\n");
         for key in &keys {
             let status = self
                 .lsp_status_by_server
-                .get(key)
+                .get(*key)
                 .cloned()
                 .unwrap_or(ServerStatus::Disconnected);
             let label = status.short_label();

@@ -631,6 +631,14 @@ Rust 1.70+，egui/eframe 图形界面，comrak Markdown 解析，ropey 绳索文
       Windows 免费代码签名由 <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath.io</a> 提供，证书来自 <a href="https://signpath.org/?utm_source=foundation&utm_medium=github&utm_campaign=ferrite">SignPath Foundation</a>
     </td>
   </tr>
+  <tr>
+    <td>
+      <a href="https://weblate.org/" target="_blank"><img src="https://weblate.org/static/img/logo.svg" alt="Weblate" width="50" height="50" /></a>
+    </td>
+    <td>
+      托管翻译由 <a href="https://weblate.org/">Weblate</a> 通过 <a href="https://hosted.weblate.org/">Hosted Weblate</a> 提供（自由软件项目免费方案）
+    </td>
+  </tr>
 </table>
 
 ---

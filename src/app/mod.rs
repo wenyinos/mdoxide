@@ -190,6 +190,12 @@ pub struct FerriteApp {
     lsp_last_edit_times: std::collections::HashMap<std::path::PathBuf, std::time::Instant>,
     /// Per-path debounce: when the last `didChange` was sent.
     lsp_last_change_sent: std::collections::HashMap<std::path::PathBuf, std::time::Instant>,
+    /// Tab ID → (normalized_path, server_key) for tabs with an active didOpen.
+    lsp_tab_server: std::collections::HashMap<usize, (std::path::PathBuf, String)>,
+    /// Number of open documents per server key (for idle shutdown).
+    lsp_open_doc_count: std::collections::HashMap<String, usize>,
+    /// Instant when a server's doc count dropped to 0 (idle timer start).
+    lsp_idle_since: std::collections::HashMap<String, std::time::Instant>,
     /// Window resize state for borderless window edge dragging
     window_resize_state: WindowResizeState,
     /// Session save throttle for crash recovery persistence
@@ -450,6 +456,9 @@ impl FerriteApp {
             lsp_doc_versions: std::collections::HashMap::new(),
             lsp_last_edit_times: std::collections::HashMap::new(),
             lsp_last_change_sent: std::collections::HashMap::new(),
+            lsp_tab_server: std::collections::HashMap::new(),
+            lsp_open_doc_count: std::collections::HashMap::new(),
+            lsp_idle_since: std::collections::HashMap::new(),
             window_resize_state: WindowResizeState::new(),
             session_save_throttle: SessionSaveThrottle::default(),
             git_auto_refresh: GitAutoRefresh::new(),
@@ -845,11 +854,36 @@ impl FerriteApp {
         self.csv_viewer_states.remove(&tab_id);
         self.sync_scroll_states.remove(&tab_id);
 
+        // Send didClose and update doc count if this tab had an active LSP session
+        if let Some((norm_path, server_key)) = self.lsp_tab_server.remove(&tab_id) {
+            let still_open = self.state.tabs().iter().any(|t| {
+                t.path
+                    .as_ref()
+                    .map(|p| crate::lsp::normalize_lsp_path(p) == norm_path)
+                    .unwrap_or(false)
+            });
+            if !still_open {
+                let uri = crate::lsp::path_to_uri(&norm_path);
+                self.state.lsp.did_close(&server_key, uri);
+                self.lsp_opened_docs.remove(&norm_path);
+                self.lsp_doc_versions.remove(&norm_path);
+                self.lsp_last_edit_times.remove(&norm_path);
+                self.lsp_last_change_sent.remove(&norm_path);
+                log::debug!("LSP didClose on tab close: {}", norm_path.display());
+            }
+            if let Some(count) = self.lsp_open_doc_count.get_mut(&server_key) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    self.lsp_idle_since
+                        .insert(server_key.clone(), std::time::Instant::now());
+                    log::debug!("LSP server {} idle (0 open docs)", server_key);
+                }
+            }
+        }
+
         // Clean up egui temporary data for rendered editor widgets
         if let Some(ctx) = ctx {
             cleanup_rendered_editor_memory(ctx);
-            // Clean up FerriteEditor instance (TextBuffer, LineCache)
-            // This is critical for freeing memory after closing tabs with large files
             cleanup_ferrite_editor(ctx, tab_id);
         }
     }
