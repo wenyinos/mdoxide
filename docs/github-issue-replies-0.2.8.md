@@ -363,3 +363,153 @@ Thanks for reporting!
 ```
 
 ---
+
+## Reply to Issue #110 - Terminal Cannot Display Chinese Correctly
+**URL:** https://github.com/OlaProeis/Ferrite/issues/110
+**Status:** 🐛 CONFIRMED — CJK Double-Width Character Handling Missing — Tracked as Task 45
+
+### Suggested Reply:
+
+```markdown
+Hi @brainwang! Thank you for reporting this — the screenshot clearly shows the overlap issue.
+
+## Root Cause
+
+Ferrite's terminal emulator currently assumes **every character occupies exactly one column width**. CJK characters (Chinese, Japanese, Korean) are "fullwidth" — they need **two columns** in a terminal grid. Our implementation has two coupled bugs:
+
+### 1. Screen Buffer (Emulation Layer)
+The `put_char()` function always advances the cursor by **one column** after placing a character. For CJK characters, it should advance by **two columns** and mark the second cell as a "continuation" cell (similar to how xterm, Alacritty, and other terminals handle this). Without this, the column grid becomes misaligned — subsequent characters are placed one column too early.
+
+### 2. Rendering Layer
+Each cell is drawn at a fixed width calculated from the ASCII character `'M'`. CJK glyphs are approximately **twice as wide** as `'M'` in monospace fonts, so they overflow into the adjacent cell — this is the **visual overlap** you're seeing.
+
+## Fix Plan
+
+1. Add the `unicode-width` crate for proper character width detection (wcwidth-style tables)
+2. Modify the terminal screen buffer to:
+   - Detect double-width characters using `UnicodeWidthChar`
+   - Advance the cursor by 2 columns for wide characters
+   - Fill the second cell with a continuation marker
+3. Update the terminal renderer to:
+   - Draw wide characters spanning 2 cell widths
+   - Handle cursor positioning over wide characters
+   - Fix hit-testing and text selection for wide characters
+
+## Timeline
+
+This is tracked internally as **Task 45** with high priority. The fix is well-scoped and will land in the next release.
+
+## Workaround
+
+Unfortunately there's no workaround for this in the integrated terminal — for now, using an external terminal (Windows Terminal, etc.) for commands with CJK output is recommended.
+
+Thank you for the clear screenshot and reproduction steps!
+```
+
+---
+
+## Reply to Issue #111 - No Keyboard Input on macOS Sonoma 14.2
+**URL:** https://github.com/OlaProeis/Ferrite/issues/111
+**Status:** 🔍 ACKNOWLEDGED — Likely Upstream winit/egui Issue — Related to Task 38
+
+### Suggested Reply:
+
+```markdown
+Hi @w269219808! Thank you for reporting this.
+
+## What We Know
+
+This is very likely related to a **known class of input issues in winit 0.29.x** (the windowing library Ferrite uses via egui/eframe 0.28). We've already received a similar report for Linux/Wayland (#106) where keyboard input doesn't work at all, and the root cause was traced to the winit input pipeline.
+
+For macOS Sonoma specifically, Ferrite has **no custom keyboard handling code** — all keyboard events flow through:
+`macOS → winit 0.29 → egui 0.28 → Ferrite editor`
+
+If winit doesn't deliver the events correctly, no typing reaches the editor.
+
+## Fix Plan
+
+We're already tracking an **egui/eframe upgrade to 0.31+** (which brings winit 0.31+ with substantially rewritten input handling across all platforms) as an internal high-priority task. This upgrade is expected to resolve keyboard issues on macOS Sonoma, just as it will fix the Wayland issue reported in #106.
+
+## Could You Help Us Narrow It Down?
+
+To better understand the issue, could you provide some additional details?
+
+1. **Scope of the issue:**
+   - Is it **all** keyboard input (including shortcuts like Cmd+O, Cmd+Q)?
+   - Or only typing in the editor (shortcuts still work)?
+   
+2. **Focus behavior:**
+   - Does clicking inside the editor area before typing help?
+   - Does Alt+Tab away and back fix it?
+   
+3. **Accessibility settings:**
+   - Do you have any accessibility features enabled that might affect input?
+
+4. **Build method:**
+   - Are you using the pre-built `.dmg` or building from source?
+   - If pre-built, did macOS show any Gatekeeper warnings when first opening?
+
+5. **Reproducibility:**
+   - Does this happen every launch, or intermittently?
+
+This information will help us determine whether this is purely the winit/egui upstream issue or something specific to Ferrite's focus management on macOS.
+
+## Related Issues
+
+- **#106** — Same symptom (no keyboard input) on Ubuntu 24.04 Wayland — confirmed as winit 0.29 backend bug
+
+Thank you for the report — we'll update this issue when the egui/eframe upgrade lands!
+```
+
+---
+
+## Reply to Issue #112 - 便携版0.2.7 在win11上界面显示不正常
+**URL:** https://github.com/OlaProeis/Ferrite/issues/112
+**Status:** 🔍 INVESTIGATING — Windows 11 Borderless Window Offset — Tracked as Task 46
+
+### Suggested Reply (Chinese):
+
+```markdown
+你好 @redream123！感谢你报告这个问题。
+
+## 问题分析
+
+根据你的描述（左侧和顶部出现黑色条，顶部黑色区域可以拖动窗口，主界面按钮无法点击），这是一个 **窗口渲染偏移** 的问题 —— Ferrite 的 UI 内容被绘制在了错误的位置，而实际的窗口框架/输入区域与显示内容不对齐。
+
+### 可能的根本原因
+
+Ferrite 使用 `with_decorations(false)`（无边框窗口）实现自定义标题栏。在 Windows 11 上，以下因素可能导致你看到的问题：
+
+1. **DPI 缩放不匹配** — 如果你的显示器缩放不是 100%（例如 125%、150%），GPU 渲染表面的大小与 egui 的逻辑坐标空间之间可能存在偏差，导致内容整体偏移
+2. **DWM 合成器行为** — Windows 11 的 DWM（桌面窗口管理器）对无边框窗口有特殊的处理方式，可能引入额外的偏移
+3. **winit/eframe 0.28 的已知问题** — 我们使用的窗口库版本（winit 0.29/eframe 0.28）在某些 Windows 配置下可能存在无边框窗口的兼容性问题
+
+## 请帮助我们定位问题
+
+为了更好地定位根因，能否提供以下信息？
+
+1. **显示器缩放比例** — 请检查：设置 → 系统 → 显示 → 缩放（是 100%、125%、150% 还是其他？）
+2. **是否使用多显示器** — 如果是，各显示器的分辨率和缩放是否不同？
+3. **GPU 型号** — 设置 → 系统 → 显示 → 高级显示 → 显示适配器属性
+4. **MSI 安装版是否有同样的问题** — 如果方便，能否也测试一下 MSI 安装版？
+5. **将缩放设置为 100% 后问题是否消失？**
+
+## 临时解决方案
+
+在我们修复之前，你可以尝试：
+
+- **将显示缩放设置为 100%**（如果当前不是的话）看是否能解决
+- **尝试 MSI 安装版** 而不是便携版
+- **右键 ferrite.exe → 属性 → 兼容性 → 更改高 DPI 设置 → 勾选"替代高 DPI 缩放行为"**
+
+## 修复计划
+
+这个问题已作为 **高优先级** 内部任务跟踪。我们计划：
+1. 添加诊断日志以确认坐标偏移的具体原因
+2. 测试不同 DPI/缩放场景
+3. 评估升级 egui/eframe（0.31+）是否能解决此问题
+
+感谢你的报告！我们会在修复后更新这个 issue。
+```
+
+---
