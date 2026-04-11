@@ -14,7 +14,7 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 ## Tech Stack
 - **Language:** Rust 2021, egui 0.28 + eframe (immediate-mode GUI)
 - **Text:** ropey (rope buffer), comrak (Markdown AST), syntect (syntax highlighting), harfrust (OTL shaping)
-- **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3
+- **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3 | **PDF:** hayro
 - **Memory:** mimalloc (Windows), jemalloc (Unix)
 
 ## Architecture
@@ -63,6 +63,8 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 - **State:** `Tab` for per-tab, `AppState` for global
 - **Errors:** User-facing via `show_toast()`, technical via `log::error!`
 - **Large files (>1MB):** Hash-based `is_modified()`, reduced undo stack (10 vs 100), no `original_bytes`
+- **Background file loading (≥5MB):** `open_file_smart()` on `FerriteApp` spawns background thread; `Tab.tab_content` (`TabContent::Loading`/`Ready`/`Error`) tracks state; `FileLoadMsg` channel polled in `update()`
+- **Per-frame caching:** `Tab.content_version` (u64) gates cached `is_modified()`, `text_stats()`, `needs_cjk_cached()`, `needs_complex_script_cached()` — never scan full content per frame
 
 ## Where Things Live (common)
 
@@ -76,6 +78,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | Modify markdown parsing | `markdown/parser.rs` |
 | Modify central panel | `app/central_panel.rs` |
 | Add special tab | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` |
+| Add viewer tab | `state.rs` → `TabKind` variant + state struct, `app/central_panel.rs` → render method |
 | Add global/per-tab state | `state.rs` → `AppState` / `Tab` struct |
 | Add i18n string | `locales/en.yaml` + `t!("key")` |
 | Mermaid diagrams | `markdown/mermaid/` (flowchart has `types`, `parser`, `layout/`, `render/`) |

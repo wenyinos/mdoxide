@@ -5,13 +5,22 @@
 //! and git auto-refresh.
 
 use super::FerriteApp;
+use super::types::FileLoadMsg;
 use crate::config::ViewMode;
 use crate::files::dialogs::{open_folder_dialog, open_multiple_files_dialog, save_file_dialog, DialogResult, portal_install_instructions};
+use crate::state::{FileType, is_binary_content};
 use crate::ui::{FileOperationDialog, FileTreeContextAction, SearchNavigationTarget};
 use eframe::egui;
 use log::{debug, info, trace, warn};
 use rust_i18n::t;
 use std::path::{Path, PathBuf};
+
+/// File size threshold (bytes) above which background thread loading is used.
+/// Files below this threshold are loaded synchronously (fast enough for UI).
+const BACKGROUND_LOAD_THRESHOLD: u64 = 5 * 1024 * 1024; // 5 MB
+
+/// Chunk size for background file reading (controls progress update granularity).
+const LOAD_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
 
 impl FerriteApp {
 
@@ -54,12 +63,14 @@ impl FerriteApp {
         for path in paths {
             info!("Opening file: {}", path.display());
             let time = self.get_app_time();
-            match self.state.open_file(path.clone(), Some(time)) {
+            match self.open_file_smart(path.clone(), true, Some(time)) {
                 Ok(tab_index) => {
                     success_count += 1;
                     self.pending_cjk_check = true;
-                    // Check for auto-save recovery
-                    self.check_auto_save_recovery(tab_index);
+                    // Check for auto-save recovery (skip for loading tabs)
+                    if !self.state.tabs().get(tab_index).map(|t| t.is_loading()).unwrap_or(false) {
+                        self.check_auto_save_recovery(tab_index);
+                    }
                 }
                 Err(e) => {
                     warn!("Failed to open file {}: {}", path.display(), e);
@@ -78,6 +89,165 @@ impl FerriteApp {
         // Show error if any file failed to open
         if let Some(error) = last_error {
             self.state.show_error(error);
+        }
+    }
+
+    /// Open a file, using background loading for large files.
+    ///
+    /// Files above `BACKGROUND_LOAD_THRESHOLD` are loaded in a background thread
+    /// with progress updates. Smaller files use synchronous loading as before.
+    /// Open a file, using background loading for large files (>5 MB).
+    ///
+    /// Files above `BACKGROUND_LOAD_THRESHOLD` are loaded in a background thread
+    /// with progress updates. Smaller files use synchronous loading as before.
+    pub(crate) fn open_file_smart(
+        &mut self,
+        path: PathBuf,
+        focus: bool,
+        app_time: Option<f64>,
+    ) -> Result<usize, std::io::Error> {
+        // Delegate to synchronous path for already-open, image, and PDF files
+        if self.state.find_tab_by_path(&path).is_some()
+            || FileType::from_path(&path).is_image()
+            || FileType::from_path(&path).is_pdf()
+        {
+            return self.state.open_file_with_focus(path, focus, app_time);
+        }
+
+        let metadata = std::fs::metadata(&path)?;
+        let file_size = metadata.len();
+
+        if file_size >= BACKGROUND_LOAD_THRESHOLD {
+            let (tab_index, tab_id) = self.state.open_file_loading(path.clone(), file_size, focus);
+            self.spawn_file_loader(tab_id, path);
+
+            if let Some(time) = app_time {
+                let size_mb = file_size / (1024 * 1024);
+                self.state.show_toast(
+                    t!("notification.large_file_loading", size = size_mb.to_string()).to_string(),
+                    time,
+                    3.0,
+                );
+            }
+            Ok(tab_index)
+        } else {
+            self.state.open_file_with_focus(path, focus, app_time)
+        }
+    }
+
+    /// Spawn a background thread that reads a file in chunks, sending progress updates.
+    fn spawn_file_loader(&mut self, tab_id: usize, path: PathBuf) {
+        let tx = self.file_load_tx.clone();
+
+        let handle = std::thread::spawn(move || {
+            use std::io::Read;
+
+            let file = match std::fs::File::open(&path) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = tx.send(FileLoadMsg::Error {
+                        tab_id,
+                        error: format!("Failed to open: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            let total_size = file.metadata().map(|m| m.len()).unwrap_or(0);
+            let mut reader = std::io::BufReader::with_capacity(LOAD_CHUNK_SIZE, file);
+            let mut bytes = Vec::with_capacity(total_size as usize);
+            let mut buf = vec![0u8; LOAD_CHUNK_SIZE];
+
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        bytes.extend_from_slice(&buf[..n]);
+                        let _ = tx.send(FileLoadMsg::Progress {
+                            tab_id,
+                            bytes_loaded: bytes.len() as u64,
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(FileLoadMsg::Error {
+                            tab_id,
+                            error: format!("Read error: {}", e),
+                        });
+                        return;
+                    }
+                }
+            }
+
+            // Check for binary content before sending
+            if is_binary_content(&bytes) {
+                let _ = tx.send(FileLoadMsg::Error {
+                    tab_id,
+                    error: "Binary file detected. Use a specialized tool to edit this file.".to_string(),
+                });
+                return;
+            }
+
+            let _ = tx.send(FileLoadMsg::Complete { tab_id, bytes });
+        });
+
+        self.loading_tasks.insert(tab_id, handle);
+    }
+
+    /// Poll the file load channel and apply progress/completion/error messages.
+    ///
+    /// Called each frame from `update()`. Non-blocking: drains all pending messages.
+    pub(crate) fn poll_file_load_messages(&mut self, ctx: &egui::Context) {
+        while let Ok(msg) = self.file_load_rx.try_recv() {
+            match msg {
+                FileLoadMsg::Progress { tab_id, bytes_loaded } => {
+                    if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
+                        if let crate::state::TabContent::Loading(ref mut progress) = tab.tab_content {
+                            progress.bytes_loaded = bytes_loaded;
+                        }
+                    }
+                    ctx.request_repaint();
+                }
+                FileLoadMsg::Complete { tab_id, bytes } => {
+                    let auto_save = self.state.settings.auto_save_enabled_default;
+                    let view_mode = self.state.settings.default_view_mode;
+
+                    if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
+                        let file_size = bytes.len() as f64 / (1024.0 * 1024.0);
+                        tab.finish_loading(bytes, auto_save, view_mode);
+
+                        if view_mode == crate::config::ViewMode::Split
+                            && !tab.file_type().supports_split()
+                        {
+                            tab.view_mode = crate::config::ViewMode::Raw;
+                        }
+
+                        let time = self.get_app_time();
+                        self.state.show_toast(
+                            t!("notification.file_loaded", size = format!("{:.1}", file_size)).to_string(),
+                            time,
+                            2.0,
+                        );
+                    }
+
+                    self.loading_tasks.remove(&tab_id);
+                    self.pending_cjk_check = true;
+                    ctx.request_repaint();
+                }
+                FileLoadMsg::Error { tab_id, error } => {
+                    if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
+                        tab.fail_loading(error.clone());
+                    }
+                    self.loading_tasks.remove(&tab_id);
+
+                    let time = self.get_app_time();
+                    self.state.show_toast(
+                        t!("notification.file_load_failed", error = error).to_string(),
+                        time,
+                        4.0,
+                    );
+                    ctx.request_repaint();
+                }
+            }
         }
     }
 
@@ -1237,11 +1407,12 @@ impl FerriteApp {
                     }
                 }
             } else if path.is_file() {
-                // Open as tab
-                match self.state.open_file(path.clone(), Some(time)) {
+                match self.open_file_smart(path.clone(), true, Some(time)) {
                     Ok(tab_index) => {
                         self.pending_cjk_check = true;
-                        self.check_auto_save_recovery(tab_index);
+                        if !self.state.tabs().get(tab_index).map(|t| t.is_loading()).unwrap_or(false) {
+                            self.check_auto_save_recovery(tab_index);
+                        }
                         opened += 1;
                         debug!("Opened file from secondary instance: {}", path.display());
                     }
@@ -1383,11 +1554,10 @@ impl FerriteApp {
         // Priority 3: Open document files in tabs
         let time = self.get_app_time();
         for file in documents {
-            match self.state.open_file(file.clone(), Some(time)) {
+            match self.open_file_smart(file.clone(), true, Some(time)) {
                 Ok(_) => {
                     self.pending_cjk_check = true;
                     debug!("Opened dropped file: {}", file.display());
-                    // Add to workspace recent files if in workspace mode
                     if let Some(workspace) = self.state.workspace_mut() {
                         workspace.add_recent_file(file);
                     }

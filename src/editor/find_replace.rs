@@ -415,6 +415,7 @@ impl FindReplacePanel {
             .resizable(false)
             .collapsible(false)
             .anchor(egui::Align2::CENTER_TOP, [0.0, 60.0])
+            .order(egui::Order::Foreground)
             .frame(frame)
             .show(ctx, |ui| {
                 ui.set_min_width(450.0);

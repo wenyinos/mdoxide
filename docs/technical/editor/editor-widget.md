@@ -80,6 +80,38 @@ pub struct EditorOutput {
 }
 ```
 
+### Scroll Persistence & egui Widget IDs
+
+egui persists `ScrollArea` state (scroll offset) per widget `Id`. To prevent scroll positions leaking across tab switches, every central-panel editor/preview widget ID must be scoped with `tab.id`:
+
+```rust
+// ✅ DO: Scope widget ID with tab.id — each tab gets independent scroll state
+let editor_widget_id = egui::Id::new("main_editor_raw").with(tab.id);
+EditorWidget::new(tab)
+    .id(editor_widget_id)
+    .show(ui);
+
+// ✅ DO: MarkdownEditor can inline it (only borrows tab.content, not tab)
+MarkdownEditor::new(&mut tab.content)
+    .id(egui::Id::new("main_editor_rendered").with(tab.id))
+    .show(ui);
+
+// ❌ DON'T: Fixed ID leaks scroll offset between tabs
+EditorWidget::new(tab)
+    .id(egui::Id::new("main_editor_raw"))
+    .show(ui);
+```
+
+Note: For `EditorWidget`, capture the ID before the builder chain since `EditorWidget::new(tab)` takes a mutable borrow of the entire `Tab`, making `tab.id` inaccessible in the chain.
+
+The four scoped IDs in `src/app/central_panel.rs`:
+- `"main_editor_raw"` — Raw mode, single pane
+- `"main_editor_rendered"` — Rendered mode, single pane
+- `"split_editor_raw"` — Split view, left (raw) pane
+- `"split_preview_rendered"` — Split view, right (preview) pane
+
+`FerriteEditor` storage (raw editor) is separately keyed by `tab_id` in a `HashMap` inside `FerriteEditorStorage` (see `src/editor/widget.rs`), so its virtual scrolling is already per-tab independent of the widget ID.
+
 ## Dependencies Used
 
 - `egui` - TextEdit::multiline, ScrollArea, FontId

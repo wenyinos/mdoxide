@@ -26,6 +26,12 @@ use std::collections::HashMap;
 
 use crate::string_utils::safe_slice_to;
 
+/// Blake3 digest of UTF-8 tab content — single hash compare per frame when caches are warm.
+#[inline]
+fn blake3_content_hash(content: &str) -> [u8; 32] {
+    *blake3::hash(content.as_bytes()).as_bytes()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // File Type Detection
 // ─────────────────────────────────────────────────────────────────────────────
@@ -455,6 +461,18 @@ pub struct TreeViewerState {
     pub show_raw: bool,
     /// Large file warning dismissed
     large_file_warning_dismissed: bool,
+    /// Cached raw view buffer — rebuilt only when `raw_view_text_hash` mismatches content.
+    raw_view_text: Option<String>,
+    /// Blake3 hash of tab content when `raw_view_text` was last built.
+    raw_view_text_hash: [u8; 32],
+    /// Parsed tree for the current content + file type.
+    cached_tree: Option<TreeNode>,
+    /// Last parse error when structured parse failed.
+    cached_parse_error: Option<ParseError>,
+    /// Blake3 hash when parse cache was last filled.
+    parsed_content_hash: [u8; 32],
+    /// File type used for `cached_tree` / `cached_parse_error`.
+    parsed_file_type: Option<StructuredFileType>,
 }
 
 impl TreeViewerState {
@@ -638,6 +656,9 @@ impl<'a> TreeViewer<'a> {
             scroll_offset: 0.0,
         };
 
+        let content_hash = blake3_content_hash(self.content);
+        self.ensure_parse_cache(content_hash);
+
         // Large file warning
         let content_size = self.content.len();
         let is_large = content_size > LARGE_FILE_THRESHOLD;
@@ -668,9 +689,10 @@ impl<'a> TreeViewer<'a> {
                     self.state.expand_all();
                 }
                 if ui.button(t!("tree_viewer.collapse_all").to_string()).clicked() {
-                    // Need to parse to collapse
-                    if let Ok(tree) = parse_structured_content(self.content, self.file_type) {
+                    if self.state.cached_tree.is_some() {
+                        let tree = self.state.cached_tree.take().unwrap();
                         self.state.collapse_all(&tree);
+                        self.state.cached_tree = Some(tree);
                     }
                 }
             }
@@ -682,37 +704,46 @@ impl<'a> TreeViewer<'a> {
 
         // Content area
         if self.state.show_raw {
-            // Raw view with syntax highlighting
-            output.scroll_offset = self.show_raw_view(ui, &colors);
-        } else {
-            // Tree view
-            match parse_structured_content(self.content, self.file_type) {
-                Ok(mut tree) => {
-                    let tree_output = self.show_tree_view(ui, &mut tree, &colors);
-                    output.scroll_offset = tree_output.scroll_offset;
-                    if tree_output.changed {
-                        // Serialize back to content
-                        match serialize_tree(&tree, self.file_type) {
-                            Ok(new_content) => {
-                                *self.content = new_content.clone();
-                                output.changed = true;
-                                output.new_content = Some(new_content);
-                            }
-                            Err(e) => {
-                                warn!("Failed to serialize tree: {}", e);
-                            }
-                        }
+            output.scroll_offset = self.show_raw_view(ui, &colors, content_hash);
+        } else if let Some(ref err) = self.state.cached_parse_error {
+            self.show_parse_error(ui, err, &colors);
+            output.scroll_offset = self.show_raw_view(ui, &colors, content_hash);
+        } else if let Some(mut tree) = self.state.cached_tree.take() {
+            let tree_output = self.show_tree_view(ui, &mut tree, &colors);
+            output.scroll_offset = tree_output.scroll_offset;
+            if tree_output.changed {
+                match serialize_tree(&tree, self.file_type) {
+                    Ok(new_content) => {
+                        *self.content = new_content.clone();
+                        output.changed = true;
+                        output.new_content = Some(new_content);
+                    }
+                    Err(e) => {
+                        warn!("Failed to serialize tree: {}", e);
                     }
                 }
-                Err(e) => {
-                    // Parse error - show error and fall back to raw
-                    self.show_parse_error(ui, &e, &colors);
-                    output.scroll_offset = self.show_raw_view(ui, &colors);
-                }
             }
+            self.state.cached_tree = Some(tree);
         }
 
         output
+    }
+
+    /// Refresh structured parse cache when content or file type changes.
+    fn ensure_parse_cache(&mut self, content_hash: [u8; 32]) {
+        if content_hash == self.state.parsed_content_hash
+            && self.state.parsed_file_type == Some(self.file_type)
+        {
+            return;
+        }
+        self.state.cached_tree = None;
+        self.state.cached_parse_error = None;
+        match parse_structured_content(self.content, self.file_type) {
+            Ok(tree) => self.state.cached_tree = Some(tree),
+            Err(e) => self.state.cached_parse_error = Some(e),
+        }
+        self.state.parsed_content_hash = content_hash;
+        self.state.parsed_file_type = Some(self.file_type);
     }
 
     fn show_parse_error(&self, ui: &mut Ui, error: &ParseError, colors: &TreeViewerColors) {
@@ -723,16 +754,27 @@ impl<'a> TreeViewer<'a> {
         ui.separator();
     }
 
-    fn show_raw_view(&self, ui: &mut Ui, _colors: &TreeViewerColors) -> f32 {
-        // Use syntax highlighting if available, otherwise plain text
+    fn show_raw_view(
+        &mut self,
+        ui: &mut Ui,
+        _colors: &TreeViewerColors,
+        content_hash: [u8; 32],
+    ) -> f32 {
+        if content_hash != self.state.raw_view_text_hash {
+            self.state.raw_view_text = Some(self.content.clone());
+            self.state.raw_view_text_hash = content_hash;
+        }
+        let raw = self
+            .state
+            .raw_view_text
+            .get_or_insert_with(|| self.content.clone());
+
         let scroll_output = ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                // For now, simple monospace display
                 // TODO(enhancement): Integrate with syntect for syntax highlighting in tree viewer
-                let text = self.content.as_str();
                 ui.add(
-                    TextEdit::multiline(&mut text.to_string())
+                    TextEdit::multiline(raw)
                         .code_editor()
                         .font(egui::TextStyle::Monospace)
                         .desired_width(f32::INFINITY)
@@ -1190,5 +1232,12 @@ enabled = true
 
         state.toggle_expanded("root");
         assert!(state.is_expanded("root"));
+    }
+
+    #[test]
+    fn test_blake3_content_hash_stable_and_sensitive() {
+        let a = blake3_content_hash("{\"x\":1}");
+        assert_eq!(a, blake3_content_hash("{\"x\":1}"));
+        assert_ne!(a, blake3_content_hash("{\"x\":2}"));
     }
 }

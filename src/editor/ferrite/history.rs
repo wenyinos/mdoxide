@@ -9,10 +9,13 @@
 //!
 //! # Recording flow
 //!
-//! Both modes use diff-based recording:
-//! 1. Before editor `show()`: `Tab::prepare_undo_snapshot()` lazily clones content.
+//! Non-raw modes use diff-based recording:
+//! 1. Before editor `show()`: `Tab::prepare_undo_snapshot_hashed()` clones content
+//!    only when the blake3 hash changes (avoids per-frame allocation).
 //! 2. After editor `show()`: if changed, `Tab::record_edit_from_snapshot()` computes
 //!    a minimal diff via [`compute_edit_ops`] and pushes the resulting operations.
+//!
+//! Raw mode relies on FerriteEditor's own undo — no central-panel snapshot.
 //!
 //! # Features
 //! - Operation-based undo/redo (not state snapshots)

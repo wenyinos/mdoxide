@@ -6,8 +6,6 @@
 //! raw editor.
 
 use eframe::egui::{self, Color32, RichText, ScrollArea, Ui, Vec2};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 const FIELD_SPACING: f32 = 8.0;
 
@@ -219,7 +217,8 @@ pub struct FrontmatterPanelOutput {
 /// Cached state for the frontmatter panel to avoid re-parsing every frame.
 pub struct FrontmatterPanel {
     fields: Vec<FrontmatterField>,
-    content_hash: u64,
+    /// content_version from Tab — avoids O(N) hashing per frame
+    cached_content_version: u64,
     new_key_buf: String,
     new_tag_bufs: Vec<String>,
     has_frontmatter: bool,
@@ -232,7 +231,7 @@ impl FrontmatterPanel {
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
-            content_hash: 0,
+            cached_content_version: u64::MAX,
             new_key_buf: String::new(),
             new_tag_bufs: Vec::new(),
             has_frontmatter: false,
@@ -241,19 +240,13 @@ impl FrontmatterPanel {
         }
     }
 
-    /// Re-parse frontmatter from content if it changed.
-    pub fn update_from_content(&mut self, content: &str) {
-        let hash = {
-            let mut h = DefaultHasher::new();
-            content.hash(&mut h);
-            h.finish()
-        };
-
-        if hash == self.content_hash {
+    /// Re-parse frontmatter from content if it changed (gated by content_version).
+    pub fn update_from_content_versioned(&mut self, content: &str, content_version: u64) {
+        if content_version == self.cached_content_version {
             return;
         }
-        self.content_hash = hash;
-        self.current_content = content.to_string();
+        self.cached_content_version = content_version;
+        self.current_content.clone_from(&content.to_string());
 
         match extract_frontmatter(content) {
             Some((yaml, _end)) => {
@@ -358,7 +351,7 @@ impl FrontmatterPanel {
             ];
             let new_content = replace_frontmatter_in_content(content, &default_fields);
             output.new_content = Some(new_content);
-            self.content_hash = 0; // force re-parse next frame
+            self.cached_content_version = u64::MAX; // force re-parse next frame
         }
     }
 
@@ -503,7 +496,7 @@ impl FrontmatterPanel {
         if changed {
             let new_content = replace_frontmatter_in_content(content, &self.fields);
             output.new_content = Some(new_content);
-            self.content_hash = 0; // force re-parse to keep hash in sync
+            self.cached_content_version = u64::MAX; // force re-parse to keep in sync
         }
     }
 

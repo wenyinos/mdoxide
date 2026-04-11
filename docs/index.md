@@ -50,6 +50,7 @@
 | [Cursor Position Mapping](./technical/editor/cursor-position-mapping.md) | Raw-to-displayed text position mapping for formatted content editing |
 | [Galley Cursor Positioning](./technical/editor/galley-cursor-positioning.md) | Pixel-accurate cursor placement using egui Galley text layout |
 | [Undo/Redo System](./technical/editor/undo-redo.md) | Per-tab undo/redo with keyboard shortcuts (Ctrl+Z, Ctrl+Y) |
+| [Undo Hash Change Detection](./technical/editor/undo-hash-change-detection.md) | Blake3 hash-based undo snapshot to eliminate per-frame content clones |
 | [Find and Replace](./technical/editor/find-replace.md) | Search functionality with regex, match highlighting, replace operations |
 | [Go to Line](./technical/editor/go-to-line.md) | Ctrl+G modal dialog for line navigation, viewport centering |
 | [Duplicate Line](./technical/editor/duplicate-line.md) | Ctrl+Shift+D line/selection duplication, char-to-byte index handling |
@@ -60,6 +61,8 @@
 | [Semantic Minimap](./technical/editor/semantic-minimap.md) | Semantic minimap with clickable heading labels, content type indicators, density bars |
 | [Editor Minimap (Legacy)](./technical/editor/minimap.md) | VS Code-style pixel minimap (replaced by semantic minimap) |
 | [Search Highlight](./technical/editor/search-highlight.md) | Search-in-files result navigation with transient highlight, auto Raw mode switch |
+| [Search Highlight Rendered View](./technical/editor/search-highlight-rendered-view.md) | Rendered view search highlights (incl. tables) and floating panel z-order stacking |
+| [Search Highlight Edit Recompute](./technical/editor/search-highlight-edit-recompute.md) | Fix stale search highlights after document edits by recomputing match positions |
 | [Syntax Highlighting](./technical/editor/syntax-highlighting.md) | Syntect integration for code block highlighting |
 | [Auto-close Brackets](./technical/editor/auto-close-brackets.md) | Auto-pair insertion, selection wrapping, skip-over behavior for brackets/quotes |
 | [Bracket Matching](./technical/editor/bracket-matching.md) | Highlight matching brackets and parentheses |
@@ -135,6 +138,8 @@
 | [Block-Level Height Cache](./technical/markdown/block-level-height-cache.md) | Per-block blake3-keyed LRU height cache for off-screen block measurement skip |
 | [Strict Line Breaks](./technical/markdown/strict-line-breaks.md) | Optional setting treating single newlines as hard `<br>` breaks |
 | [Lazy Block Height Estimation](./technical/markdown/lazy-block-height-estimation.md) | Heuristic heights for unmeasured blocks, render budget cap, progressive refinement |
+| [Paragraph Trailing Spaces](./technical/markdown/paragraph-trailing-spaces.md) | Fix for trailing spaces lost in plain paragraphs via persistent edit buffer |
+| [Rendered Paragraph Block Spacing](./technical/markdown/rendered-paragraph-block-spacing.md) | Trailing space after block paragraphs and code blocks; viewport height alignment |
 
 ### Data Viewers
 
@@ -146,7 +151,10 @@
 | [CSV Header Detection](./technical/viewers/csv-header-detection.md) | Auto-detect header rows with heuristics, toggle UI, column alignment |
 | [CSV Rainbow Columns](./technical/viewers/csv-rainbow-columns.md) | Subtle alternating column colors using Oklch, status bar toggle |
 | [CSV Raw View Caching](./technical/viewers/csv-raw-view-caching.md) | Blake3 hash-guarded raw text cache to eliminate per-frame string allocation |
+| [Image Viewer](./technical/viewers/image-viewer.md) | Dedicated image viewer tabs (PNG/JPEG/GIF/WebP/BMP) with zoom and metadata |
+| [PDF Viewer](./technical/viewers/pdf-viewer.md) | Read-only PDF viewer tabs with hayro rendering, page navigation, zoom |
 | [Tree Viewer](./technical/viewers/tree-viewer.md) | JSON/YAML/TOML tree viewer with inline editing, expand/collapse, path copying |
+| [Tree Viewer Caching](./technical/viewers/tree-viewer-caching.md) | Blake3-guarded parse cache and raw text buffer to avoid per-frame work |
 | [Live Pipeline](./technical/viewers/live-pipeline.md) | JSON/YAML command piping through shell commands (jq, yq), recent history |
 | [Document Export](./technical/viewers/document-export.md) | HTML export with themed CSS, Copy-as-HTML clipboard functionality |
 
@@ -171,6 +179,7 @@
 | [Terminal UI](./technical/terminal/terminal-ui.md) | Terminal panel with tabs, split panes, floating windows, drag-and-drop |
 | [Terminal Themes](./technical/terminal/terminal-themes.md) | Terminal color schemes (Solarized, Dracula, Monokai, Nord, etc.) |
 | [Terminal Layout](./technical/terminal/terminal-layout.md) | Split pane layouts (horizontal/vertical), grid creation, layout save/load |
+| [Terminal CJK Wide Chars](./technical/terminal/terminal-cjk-wide-chars.md) | Double-width CJK character rendering, cursor advancement, selection snapping |
 
 ### Productivity Hub
 
@@ -192,7 +201,8 @@
 | [Custom Title Bar](./technical/platform/custom-title-bar.md) | Windows-style custom title bar implementation |
 | [Window Resize](./technical/platform/window-resize.md) | Custom resize handles for borderless windows, edge detection |
 | [Windows Borderless Window](./technical/platform/windows-borderless-window.md) | Top edge resize fix, fullscreen toggle (F10), title bar button area exclusion |
-| [Windows Path Normalization](./technical/platform/windows-path-normalization.md) | Strip Windows `\\?\` prefix from canonicalized paths |
+| [Windows Borderless Transparent Fix](./technical/platform/windows-borderless-transparent-fix.md) | Fix rendering offset (black bars) on Intel GPUs via `with_transparent(true)` DWM workaround |
+|| [Windows Path Normalization](./technical/platform/windows-path-normalization.md) | Strip Windows `\\?\` prefix from canonicalized paths |
 | [Linux Cursor Flicker Fix](./technical/platform/linux-cursor-flicker-fix.md) | Title bar exclusion zone to prevent cursor conflicts with window controls |
 | **[Idle Mode Optimization](./technical/platform/idle-mode-optimization.md)** | **Tiered idle repaint system to reduce CPU usage on all platforms** |
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
@@ -269,6 +279,13 @@
 | **[app.rs Refactoring Plan](./technical/planning/app-rs-refactoring-plan.md)** | **Split 7,634-line app.rs into ~15 focused modules under src/app/** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
+
+### Performance
+
+| Document | Description |
+|----------|-------------|
+| **[Per-Frame Cache Elimination](./technical/performance/per-frame-cache-elimination.md)** | **content_version-based caching to eliminate 7 O(N) per-frame operations for large files** |
+| [Background File Loading](./technical/performance/background-file-loading.md) | Background thread loading for 5MB+ files with progress bar, cancellation support |
 
 ### Core (Remaining)
 

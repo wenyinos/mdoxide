@@ -61,6 +61,28 @@ use rust_i18n::{ set_locale, t };
 use std::path::PathBuf;
 use ui::get_app_icon;
 
+/// Ask the global allocator to aggressively return freed memory to the OS.
+///
+/// mimalloc retains freed arenas for reuse, which makes RSS appear inflated
+/// after large allocations are freed (e.g. closing a big file tab).
+/// This function calls `mi_collect(true)` which forces mimalloc to decommit
+/// pages back to the OS. jemalloc (Unix) handles this well by default.
+///
+/// This is intentionally expensive and should only be called after freeing
+/// large amounts of memory (e.g. tab close of a multi-MB file).
+pub fn purge_allocator_caches() {
+    #[cfg(all(feature = "high-perf-alloc", target_os = "windows"))]
+    {
+        extern "C" {
+            fn mi_collect(force: bool);
+        }
+        // SAFETY: mi_collect is always safe to call when mimalloc is the global allocator.
+        // force=true makes it aggressively decommit pages (expensive but returns RSS).
+        unsafe { mi_collect(true) };
+        log::debug!("mimalloc: forced memory purge");
+    }
+}
+
 /// Get current process memory usage in MB (for diagnostics).
 /// Returns (working_set_mb, private_bytes_mb) on Windows.
 #[cfg(target_os = "windows")]
@@ -237,12 +259,18 @@ fn main() -> eframe::Result<()> {
         info!("Application icon loaded successfully");
     }
 
-    // Configure the native window options with custom title bar (no native decorations)
+    // Configure the native window options with custom title bar (no native decorations).
+    // `with_transparent(true)` is required to work around a winit bug where the glow
+    // (OpenGL) backend misaligns the rendering surface on certain Windows GPU drivers
+    // (notably Intel HD 4600) when decorations are disabled, causing black bars and
+    // input offset. See: https://github.com/emilk/egui/issues/2770
+    // The window still appears opaque because eframe paints an opaque background each frame.
     let mut viewport = eframe::egui::ViewportBuilder
         ::default()
         .with_title(APP_NAME)
         .with_app_id("ferrite")
         .with_decorations(false)
+        .with_transparent(true)
         .with_inner_size([window_size.width, window_size.height])
         .with_min_inner_size([400.0, 300.0]);
 

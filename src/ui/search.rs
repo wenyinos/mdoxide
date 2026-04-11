@@ -448,6 +448,7 @@ impl SearchPanel {
 
         // Apply size constraints to prevent manual resize beyond bounds
         window = window
+            .order(egui::Order::Foreground)
             .min_width(self.constraints.min_width)
             .min_height(self.constraints.min_height)
             .max_width((viewport.width() - self.constraints.margin * 2.0).max(self.constraints.min_width))

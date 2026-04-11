@@ -204,27 +204,27 @@ impl<'a> TerminalWidget<'a> {
         // Handle selection
         if response.drag_started() {
             if let Some(pointer_pos) = response.interact_pointer_pos() {
-                if let Some(pos) = get_abs_pos(pointer_pos) {
+                if let Some(mut pos) = get_abs_pos(pointer_pos) {
+                    pos.0 = screen.snap_wide_char(pos.0, pos.1);
                     screen.set_selection(pos, pos);
                 }
             }
         } else if response.dragged() {
             if let Some(pointer_pos) = response.interact_pointer_pos() {
-                // Allow dragging outside rect to select to edge, but for now clamp to rect
                 let clamped_pos = terminal_rect.clamp(pointer_pos);
-                // Calculate abs pos even if slightly outside (clamped)
                 let rel_x = (clamped_pos.x - terminal_rect.left()).max(0.0);
                 let rel_y = (clamped_pos.y - terminal_rect.top()).max(0.0);
                 let col = ((rel_x / char_size.x).floor() as usize).min((cols as usize).saturating_sub(1));
                 let row = ((rel_y / char_size.y).floor() as usize).min((rows as usize).saturating_sub(1));
                 
-                let abs_pos = (col, start_line + row);
+                let abs_row = start_line + row;
+                let snapped_col = screen.snap_wide_char(col, abs_row);
+                let abs_pos = (snapped_col, abs_row);
 
                 if let Some(mut sel) = screen.selection() {
                     sel.1 = abs_pos;
                     screen.set_selection(sel.0, sel.1);
                 } else {
-                     // Started dragging from outside? or missed start event?
                      screen.set_selection(abs_pos, abs_pos);
                 }
             }
@@ -770,20 +770,26 @@ impl<'a> TerminalWidget<'a> {
             };
 
             for (col_idx, cell) in row.iter().enumerate() {
+                if cell.wide_continuation {
+                    continue;
+                }
+
                 let x = rect.left() + (col_idx as f32 * char_size.x);
+                let cell_w = if cell.wide { char_size.x * 2.0 } else { char_size.x };
                 let cell_rect = Rect::from_min_size(
                     egui::pos2(x, y),
-                    char_size,
+                    Vec2::new(cell_w, char_size.y),
                 );
 
-                // Check if cell is selected
+                // Check if cell is selected (for wide chars, selected if either column is in range)
                 let is_selected = if let Some((sel_start, sel_end)) = selection {
+                    let col_end = if cell.wide { col_idx + 1 } else { col_idx };
                     if line_index > sel_start.1 && line_index < sel_end.1 {
                         true
                     } else if line_index == sel_start.1 && line_index == sel_end.1 {
-                        col_idx >= sel_start.0 && col_idx <= sel_end.0
+                        col_end >= sel_start.0 && col_idx <= sel_end.0
                     } else if line_index == sel_start.1 {
-                        col_idx >= sel_start.0
+                        col_end >= sel_start.0
                     } else if line_index == sel_end.1 {
                         col_idx <= sel_end.0
                     } else {
@@ -801,7 +807,6 @@ impl<'a> TerminalWidget<'a> {
                 }
 
                 if bg != Color32::TRANSPARENT {
-                    // Apply opacity if background is default
                     if bg == self.theme.background && self.opacity < 1.0 {
                         bg = bg_color;
                     }
@@ -812,7 +817,6 @@ impl<'a> TerminalWidget<'a> {
                 if cell.character != ' ' || is_selected {
                     let mut fg = cell.fg.to_egui(true, &self.theme.ansi_colors, self.theme.foreground, self.theme.background);
 
-                    // Apply attributes
                     if cell.attrs.dim {
                         fg = Color32::from_rgba_unmultiplied(
                             fg.r(),
@@ -822,7 +826,6 @@ impl<'a> TerminalWidget<'a> {
                         );
                     }
                     if cell.attrs.reverse {
-                        // Swap fg and bg
                         let temp_bg = cell.bg.to_egui(false, &self.theme.ansi_colors, self.theme.foreground, self.theme.background);
                         if temp_bg != Color32::TRANSPARENT {
                             fg = temp_bg;
@@ -837,9 +840,8 @@ impl<'a> TerminalWidget<'a> {
                         fg = bg_color;
                     }
                     
-                    // Use bold font variant if bold
                     let font = if cell.attrs.bold {
-                        FontId::monospace(self.font_size) // egui doesn't have easy bold monospace
+                        FontId::monospace(self.font_size)
                     } else {
                         font_id.clone()
                     };
@@ -852,25 +854,25 @@ impl<'a> TerminalWidget<'a> {
                         fg,
                     );
 
-                    // Draw underline
+                    // Draw underline spanning full cell width
                     if cell.attrs.underline {
                         let underline_y = y + char_size.y - 2.0;
                         painter.line_segment(
                             [
                                 egui::pos2(x, underline_y),
-                                egui::pos2(x + char_size.x, underline_y),
+                                egui::pos2(x + cell_w, underline_y),
                             ],
                             egui::Stroke::new(1.0, fg),
                         );
                     }
 
-                    // Draw strikethrough
+                    // Draw strikethrough spanning full cell width
                     if cell.attrs.strikethrough {
                         let strike_y = y + char_size.y / 2.0;
                         painter.line_segment(
                             [
                                 egui::pos2(x, strike_y),
-                                egui::pos2(x + char_size.x, strike_y),
+                                egui::pos2(x + cell_w, strike_y),
                             ],
                             egui::Stroke::new(1.0, fg),
                         );
@@ -889,18 +891,36 @@ impl<'a> TerminalWidget<'a> {
         char_size: Vec2,
     ) {
         let cursor = screen.cursor();
-        let x = rect.left() + (cursor.col as f32 * char_size.x);
+
+        // Snap cursor to the leading cell if it lands on a continuation cell
+        let mut col = cursor.col as usize;
+        let cells = screen.cells();
+        if let Some(row) = cells.get(cursor.row as usize) {
+            if col < row.len() && row[col].wide_continuation && col > 0 {
+                col -= 1;
+            }
+        }
+
+        let x = rect.left() + (col as f32 * char_size.x);
         let y = rect.top() + (cursor.row as f32 * char_size.y);
+
+        // Double-width cursor for wide characters
+        let cursor_w = if let Some(row) = cells.get(cursor.row as usize) {
+            if col < row.len() && row[col].wide {
+                char_size.x * 2.0
+            } else {
+                char_size.x
+            }
+        } else {
+            char_size.x
+        };
 
         let cursor_rect = Rect::from_min_size(
             egui::pos2(x, y),
-            char_size,
+            Vec2::new(cursor_w, char_size.y),
         );
 
-        // Draw block cursor with transparency
-        // Use theme cursor color
         let cursor_color = self.theme.cursor;
-
         ui.painter().rect_filled(cursor_rect, 0.0, cursor_color);
     }
 }

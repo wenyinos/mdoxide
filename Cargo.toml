@@ -52,8 +52,8 @@ walkdir = "2"
 # Git integration (no SSH/HTTPS - we only need local repo status)
 git2 = { version = "0.19", default-features = false }
 
-# Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP)
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+# Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP, BMP)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 font-kit = "0.14.3"
 
 # Internationalization
@@ -97,6 +97,10 @@ poll-promise = { version = "0.3", optional = true }
 harfrust = "0.5.2"
 unicode-script = "0.5"
 unicode-segmentation = "1.11"
+unicode-width = "0.1"
+
+# PDF rendering (pure Rust, CPU-based)
+hayro = "0.5"
 
 # High-performance memory allocators (platform-specific)
 # mimalloc for Windows: faster allocation, reduced fragmentation

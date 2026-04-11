@@ -136,6 +136,11 @@ const VIEWPORT_OVERSCAN_PX: f32 = 500.0;
 /// Spacing between rendered blocks (must match the `item_spacing.y` set during layout).
 const BLOCK_ITEM_SPACING_Y: f32 = 1.0;
 
+/// Extra vertical space after block-level paragraphs (and code blocks) so consecutive
+/// paragraphs are visibly separated; ~0.5em at 32px line height. Included in viewport
+/// block height measurements via `render_node` layout (not added to `BLOCK_ITEM_SPACING_Y`).
+const PARAGRAPH_TRAILING_SPACE_Y: f32 = 16.0;
+
 /// Max blocks to newly measure (via full egui render) per frame during the
 /// progressive measurement pass.  Keeps first-frame cost bounded for large
 /// documents (10K+ blocks) while the scroll position self-corrects.
@@ -154,7 +159,9 @@ struct ViewportCullingState {
     available_width: f32,
     /// Y offset where each block starts (includes inter-block spacing).
     block_start_y: Vec<f32>,
-    /// Rendered height of each block (excludes inter-block spacing).
+    /// Rendered height of each top-level block (excludes `BLOCK_ITEM_SPACING_Y` between
+    /// blocks; includes in-flow spacing such as [`PARAGRAPH_TRAILING_SPACE_Y`] after
+    /// paragraphs and code blocks).
     block_heights: Vec<f32>,
     /// Total content height (blocks + spacing), measured from the layout.
     total_height: f32,
@@ -207,6 +214,124 @@ fn estimate_block_height(start_line: usize, end_line: usize) -> f32 {
         1.0
     };
     (lines * ESTIMATED_LINE_HEIGHT_PX).max(ESTIMATED_LINE_HEIGHT_PX)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rendered View Search Highlight Overlay
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Converts a byte position in the source to a 1-indexed line number.
+fn byte_pos_to_line_1indexed(line_offsets: &[usize], byte_pos: usize) -> usize {
+    match line_offsets.binary_search(&byte_pos) {
+        Ok(idx) => idx + 1,
+        Err(idx) => idx, // idx is the line whose start is > byte_pos, so line = idx
+    }
+}
+
+/// Paints search highlight overlays for matches that fall within a rendered block.
+///
+/// For table blocks, highlights are subdivided into per-row strips.
+/// For other blocks (paragraphs, headings), a full-width strip is painted.
+#[allow(clippy::too_many_arguments)]
+fn paint_rendered_search_highlights(
+    ui: &Ui,
+    search_highlights: &[(usize, usize)],
+    current_match: usize,
+    content: &str,
+    line_offsets: &[usize],
+    node_start_line: usize,
+    node_end_line: usize,
+    block_y_top: f32,
+    block_y_bottom: f32,
+    block_left: f32,
+    block_right: f32,
+    is_table: bool,
+    is_dark: bool,
+) {
+    if search_highlights.is_empty() || node_start_line == 0 {
+        return;
+    }
+
+    let block_start_byte = line_offsets
+        .get(node_start_line.saturating_sub(1))
+        .copied()
+        .unwrap_or(0);
+    let block_end_byte = line_offsets
+        .get(node_end_line)
+        .copied()
+        .unwrap_or(content.len());
+
+    let current_match_color = if is_dark {
+        Color32::from_rgba_unmultiplied(255, 200, 0, 100)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 220, 0, 120)
+    };
+    let other_match_color = if is_dark {
+        Color32::from_rgba_unmultiplied(180, 150, 50, 60)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 100, 80)
+    };
+
+    let block_height = block_y_bottom - block_y_top;
+    let total_source_lines = node_end_line.saturating_sub(node_start_line) + 1;
+    if block_height <= 0.0 || total_source_lines == 0 {
+        return;
+    }
+
+    let painter = ui.painter();
+
+    for (idx, &(match_start, match_end)) in search_highlights.iter().enumerate() {
+        if match_end <= block_start_byte || match_start >= block_end_byte {
+            continue;
+        }
+
+        let color = if idx == current_match {
+            current_match_color
+        } else {
+            other_match_color
+        };
+
+        let match_line = byte_pos_to_line_1indexed(line_offsets, match_start);
+
+        if is_table {
+            // Table: subdivide into rows. Each source line = one visual row,
+            // except the separator line (start_line + 1) is collapsed.
+            let table_lines = total_source_lines;
+            let visual_rows = if table_lines > 2 {
+                table_lines - 1 // header + data rows (separator merged)
+            } else {
+                table_lines.max(1)
+            };
+            let row_height = block_height / visual_rows as f32;
+
+            let offset_from_start = match_line.saturating_sub(node_start_line);
+            let visual_row = if offset_from_start == 0 {
+                0 // header
+            } else if offset_from_start == 1 {
+                continue; // separator line — skip
+            } else {
+                offset_from_start - 1 // data rows shifted by 1 (separator removed)
+            };
+
+            let row_y = block_y_top + visual_row as f32 * row_height;
+            let highlight_rect = egui::Rect::from_min_max(
+                egui::Pos2::new(block_left, row_y),
+                egui::Pos2::new(block_right, row_y + row_height),
+            );
+            painter.rect_filled(highlight_rect, 2.0, color);
+        } else {
+            // Non-table block: paint a proportional strip
+            let line_frac =
+                (match_line.saturating_sub(node_start_line)) as f32 / total_source_lines as f32;
+            let approx_line_height = block_height / total_source_lines as f32;
+            let y = block_y_top + line_frac * block_height;
+            let highlight_rect = egui::Rect::from_min_max(
+                egui::Pos2::new(block_left, y),
+                egui::Pos2::new(block_right, (y + approx_line_height).min(block_y_bottom)),
+            );
+            painter.rect_filled(highlight_rect, 2.0, color);
+        }
+    }
 }
 
 /// Information about the currently focused element in rendered mode.
@@ -531,6 +656,10 @@ pub struct MarkdownEditor<'a> {
     wikilink_context: Option<WikilinkContext>,
     /// Treat soft breaks as hard line breaks in rendered view
     strict_line_breaks: bool,
+    /// Search match byte ranges for overlay highlighting in rendered view
+    search_highlights: Option<Vec<(usize, usize)>>,
+    /// Index of the currently focused search match
+    current_search_match: usize,
 }
 
 /// Context for resolving wikilinks to actual files during rendering.
@@ -563,6 +692,8 @@ impl<'a> MarkdownEditor<'a> {
             header_spacing: HeaderSpacing::default(),
             wikilink_context: None,
             strict_line_breaks: false,
+            search_highlights: None,
+            current_search_match: 0,
         }
     }
 
@@ -681,6 +812,14 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Set search highlights to render as overlays in the rendered view.
+    #[must_use]
+    pub fn search_highlights(mut self, matches: Vec<(usize, usize)>, current: usize) -> Self {
+        self.search_highlights = Some(matches);
+        self.current_search_match = current;
+        self
+    }
+
     /// Apply settings to the editor widget.
     #[must_use]
     pub fn with_settings(mut self, settings: &Settings) -> Self {
@@ -707,12 +846,10 @@ impl<'a> MarkdownEditor<'a> {
 
     /// Show the raw text editor (plain markdown editing).
     fn show_raw_editor(self, ui: &mut Ui, id: egui::Id) -> MarkdownEditorOutput {
-        let original_content = self.content.clone();
         let font_size = self.font_size;
         let word_wrap = self.word_wrap;
         let editor_font = self.font_family.clone();
 
-        // Get font family for regular text
         let font_family = fonts::get_styled_font_family(false, false, &editor_font);
 
         let scroll_output = ScrollArea::vertical()
@@ -749,7 +886,7 @@ impl<'a> MarkdownEditor<'a> {
             });
 
         let text_output = scroll_output.inner;
-        let changed = *self.content != original_content;
+        let changed = text_output.response.changed();
 
         let cursor_position = if let Some(cursor_range) = text_output.cursor_range {
             let cursor = cursor_range.primary;
@@ -783,7 +920,6 @@ impl<'a> MarkdownEditor<'a> {
         id: egui::Id,
         colors: &EditorColors,
     ) -> MarkdownEditorOutput {
-        let original_content = self.content.clone();
         let mut edit_state = EditState::new();
         let mut structural_state = StructuralEditState::new();
 
@@ -1013,9 +1149,12 @@ impl<'a> MarkdownEditor<'a> {
                             let rp_hash =
                                 cache::render_params_hash(content_width, self.font_size);
 
+                            let is_dark_mode = ui.visuals().dark_mode;
+
                             for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
+                                let block_left = ui.cursor().left();
 
                                 render_node(
                                     ui,
@@ -1032,6 +1171,29 @@ impl<'a> MarkdownEditor<'a> {
 
                                 let y_after = ui.cursor().top();
                                 let height = (y_after - y_before).max(1.0);
+
+                                // Paint search highlight overlays on this block
+                                if let Some(ref highlights) = self.search_highlights {
+                                    let is_table = matches!(
+                                        node.node_type,
+                                        MarkdownNodeType::Table { .. }
+                                    );
+                                    paint_rendered_search_highlights(
+                                        ui,
+                                        highlights,
+                                        self.current_search_match,
+                                        self.content,
+                                        &line_offsets,
+                                        node.start_line,
+                                        node.end_line,
+                                        y_before,
+                                        y_after,
+                                        block_left,
+                                        block_left + content_width,
+                                        is_table,
+                                        is_dark_mode,
+                                    );
+                                }
 
                                 if !updated_measured[i] {
                                     let s = block_source_slice(
@@ -1195,9 +1357,11 @@ impl<'a> MarkdownEditor<'a> {
                             }
 
                             let mut new_measures: usize = 0;
+                            let boot_is_dark = ui.visuals().dark_mode;
                             for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
+                                let block_left = ui.cursor().left();
 
                                 let within_budget =
                                     new_measures < MAX_NEW_MEASUREMENTS_PER_FRAME;
@@ -1217,6 +1381,30 @@ impl<'a> MarkdownEditor<'a> {
                                     );
                                     let y_after = ui.cursor().top();
                                     let h = (y_after - y_before).max(1.0);
+
+                                    // Paint search highlight overlays on this block
+                                    if let Some(ref highlights) = self.search_highlights {
+                                        let is_table = matches!(
+                                            node.node_type,
+                                            MarkdownNodeType::Table { .. }
+                                        );
+                                        paint_rendered_search_highlights(
+                                            ui,
+                                            highlights,
+                                            self.current_search_match,
+                                            self.content,
+                                            &line_offsets,
+                                            node.start_line,
+                                            node.end_line,
+                                            y_before,
+                                            y_after,
+                                            block_left,
+                                            block_left + content_width,
+                                            is_table,
+                                            boot_is_dark,
+                                        );
+                                    }
+
                                     if !boot_measured[i] {
                                         new_measures += 1;
                                     }
@@ -1380,14 +1568,14 @@ impl<'a> MarkdownEditor<'a> {
         // Check if any nodes were modified and rebuild markdown if needed
         let content_changed = edit_state.any_modified();
         if content_changed {
-            rebuild_markdown(self.content, &edit_state, &original_content);
+            rebuild_markdown(self.content, &edit_state, "");
             debug!("WYSIWYG editor content changed, rebuilt markdown");
         }
 
         let changed = content_changed || structural_changed;
 
         // Get focused element info for formatting commands
-        let focused_element = edit_state.get_focused_element(&original_content);
+        let focused_element = edit_state.get_focused_element(self.content);
 
         // Check if a wikilink was clicked this frame
         let wikilink_id = egui::Id::new("wikilink_clicked_target");
@@ -1465,6 +1653,7 @@ fn render_node_with_structural_keys(
                 indent_level,
                 paragraph_indent,
             );
+            ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
         }
         MarkdownNodeType::CodeBlock {
             language, literal, ..
@@ -1658,6 +1847,7 @@ fn render_node(
                 indent_level,
                 paragraph_indent,
             );
+            ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
         }
         MarkdownNodeType::CodeBlock {
             language, literal, ..
@@ -2267,9 +2457,17 @@ fn render_paragraph_with_structural_keys(
             }
         });
     } else {
-        // Simple text-only paragraph with structural key support
+        // Simple text-only paragraph — persist edit buffer in egui memory
+        // to prevent trailing spaces being stripped by AST round-trip each frame.
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
+
+        let para_edit_buffer_id = ui.id().with("para_edit_buffer").with(node.start_line);
+        let para_edit_tracking_id = ui.id().with("para_edit_tracking").with(node.start_line);
+
+        let was_editing = ui.memory(|mem| {
+            mem.data.get_temp::<bool>(para_edit_tracking_id).unwrap_or(false)
+        });
 
         let available_width = ui.available_width();
         ui.horizontal(|ui| {
@@ -2277,6 +2475,13 @@ fn render_paragraph_with_structural_keys(
             ui.add_space(4.0 + indent_level as f32 * 20.0);
 
             if let Some(editable) = edit_state.get_node_mut(node_id) {
+                let source_text = extract_paragraph_content(source, node.start_line, node.end_line);
+                let mut edit_buffer = ui.memory_mut(|mem| {
+                    mem.data
+                        .get_temp_mut_or_insert_with(para_edit_buffer_id, || source_text)
+                        .clone()
+                });
+
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
@@ -2295,7 +2500,10 @@ fn render_paragraph_with_structural_keys(
                         );
                         ui.fonts(|f| f.layout_job(job))
                     };
-                let text_edit = TextEdit::multiline(&mut editable.text)
+
+                let widget_id = ui.id().with("para_text").with(node.start_line);
+                let text_edit = TextEdit::multiline(&mut edit_buffer)
+                    .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
                     .frame(false)
@@ -2304,13 +2512,22 @@ fn render_paragraph_with_structural_keys(
                     .desired_rows(1)
                     .layouter(&mut layouter);
 
-                let response = ui.add(text_edit);
+                let output = text_edit.show(ui);
+                let has_focus = output.response.has_focus();
 
                 let _ = structural_state;
 
-                if response.changed() {
+                ui.memory_mut(|mem| {
+                    mem.data.insert_temp(para_edit_buffer_id, edit_buffer.clone());
+                    mem.data.insert_temp(para_edit_tracking_id, has_focus);
+                });
+
+                if was_editing && !has_focus {
                     editable.modified = true;
-                    update_source_range(source, node.start_line, node.end_line, &editable.text);
+                    update_source_range(source, node.start_line, node.end_line, &edit_buffer);
+                    ui.memory_mut(|mem| {
+                        mem.data.remove::<String>(para_edit_buffer_id);
+                    });
                 }
             }
         });
@@ -3829,6 +4046,7 @@ fn render_code_block(
     // Mermaid blocks get special rendering with diagram type detection
     if language.eq_ignore_ascii_case("mermaid") {
         render_mermaid_block(ui, source, edit_state, colors, font_size, literal, node);
+        ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
         return;
     }
 
@@ -3890,6 +4108,8 @@ fn render_code_block(
     ui.memory_mut(|mem| {
         mem.data.insert_temp(code_block_id.with("state"), code_data);
     });
+
+    ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
 
     // Handle changes
     if output.changed {
