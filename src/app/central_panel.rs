@@ -7,7 +7,7 @@
 use super::FerriteApp;
 use super::types::{ DeferredFormatAction, HeadingNavRequest };
 use super::helpers::{ char_index_to_line_col, get_formatting_state_for, modifier_symbol };
-use crate::config::{ Theme, ViewMode };
+use crate::config::{ ShortcutCommand, Theme, ViewMode };
 use crate::editor::{
     cleanup_ferrite_editor,
     DocumentOutline,
@@ -2154,8 +2154,23 @@ impl FerriteApp {
         }
 
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+        // Command Palette Overlay (Alt+Space)
+        // Commands are NOT dispatched here during render — they are stored in
+        // `pending_palette_command` and executed after render in update().
+        if self.command_palette.is_open() {
+            let shortcuts = self.state.settings.keyboard_shortcuts.clone();
+            let palette_output = self.command_palette.show(ctx, &shortcuts, is_dark);
+
+            if let Some(cmd) = palette_output.selected_command {
+                self.command_palette.record_recent(cmd);
+                self.state.settings.command_palette_recent =
+                    self.command_palette.recent_commands().iter().copied().collect();
+                self.state.mark_settings_dirty();
+                self.pending_palette_command = Some(cmd);
+            }
+        }
+
         // File Operation Dialog (New File, Rename, Delete, etc.)
-        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if let Some(mut dialog) = self.file_operation_dialog.take() {
             let result = dialog.show(ctx, is_dark);
 
@@ -2861,5 +2876,126 @@ impl FerriteApp {
                 });
             },
         );
+    }
+
+    /// Dispatch a command selected from the command palette.
+    ///
+    /// Maps ShortcutCommand variants to the same handler methods used by
+    /// the ribbon and keyboard shortcuts.
+    pub(crate) fn dispatch_palette_command(&mut self, ctx: &egui::Context, cmd: ShortcutCommand) {
+        use crate::markdown::MarkdownFormatCommand;
+
+        debug!("Command palette: {}", cmd.display_name());
+
+        match cmd {
+            // File
+            ShortcutCommand::Save => self.handle_save_file(),
+            ShortcutCommand::SaveAs => self.handle_save_as_file(),
+            ShortcutCommand::Open => self.handle_open_file(),
+            ShortcutCommand::New | ShortcutCommand::NewTab => { self.state.new_tab(); }
+            ShortcutCommand::CloseTab => self.handle_close_current_tab(ctx),
+            ShortcutCommand::OpenWorkspace => self.handle_open_workspace(),
+            ShortcutCommand::CloseWorkspace => self.handle_close_workspace(),
+            // Navigation
+            ShortcutCommand::NextTab => self.handle_next_tab(),
+            ShortcutCommand::PrevTab => self.handle_prev_tab(),
+            ShortcutCommand::GoToLine => self.handle_open_go_to_line(),
+            ShortcutCommand::QuickOpen => self.handle_quick_open(),
+            // View
+            ShortcutCommand::ToggleViewMode => self.handle_toggle_view_mode(),
+            ShortcutCommand::CycleTheme => self.handle_cycle_theme(ctx),
+            ShortcutCommand::ToggleZenMode => self.handle_toggle_zen_mode(),
+            ShortcutCommand::ToggleFullscreen => self.handle_toggle_fullscreen(ctx),
+            ShortcutCommand::ToggleOutline => self.handle_toggle_outline(),
+            ShortcutCommand::ToggleFileTree => self.handle_toggle_file_tree(),
+            ShortcutCommand::TogglePipeline => self.handle_toggle_pipeline(),
+            ShortcutCommand::ToggleTerminal => self.handle_toggle_terminal(),
+            ShortcutCommand::ToggleProductivityHub => {
+                if self.state.settings.productivity_panel_docked {
+                    if self.state.settings.outline_enabled
+                        && self.outline_panel.active_tab() == crate::ui::OutlinePanelTab::Productivity
+                    {
+                        self.state.settings.outline_enabled = false;
+                    } else {
+                        self.state.settings.outline_enabled = true;
+                        self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Productivity);
+                    }
+                } else {
+                    self.state.settings.productivity_panel_visible =
+                        !self.state.settings.productivity_panel_visible;
+                }
+                self.state.mark_settings_dirty();
+            }
+            ShortcutCommand::ZoomIn => egui::gui_zoom::zoom_in(ctx),
+            ShortcutCommand::ZoomOut => egui::gui_zoom::zoom_out(ctx),
+            ShortcutCommand::ResetZoom => ctx.set_zoom_factor(1.0),
+            // Edit
+            ShortcutCommand::Undo => self.handle_undo(),
+            ShortcutCommand::Redo => self.handle_redo(),
+            ShortcutCommand::DeleteLine => self.handle_delete_line(),
+            ShortcutCommand::DuplicateLine => self.handle_duplicate_line(),
+            ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown => {
+                // Move-line is handled via pre-render consumption; palette just records it
+            }
+            ShortcutCommand::SelectNextOccurrence => self.handle_select_next_occurrence(),
+            // Search
+            ShortcutCommand::Find => self.handle_open_find(false),
+            ShortcutCommand::FindReplace => self.handle_open_find(true),
+            ShortcutCommand::FindNext => self.handle_find_next(),
+            ShortcutCommand::FindPrev => self.handle_find_prev(),
+            ShortcutCommand::SearchInFiles => self.handle_search_in_files(),
+            // Format
+            ShortcutCommand::FormatBold => self.handle_format_command(ctx, MarkdownFormatCommand::Bold),
+            ShortcutCommand::FormatItalic => self.handle_format_command(ctx, MarkdownFormatCommand::Italic),
+            ShortcutCommand::FormatInlineCode => self.handle_format_command(ctx, MarkdownFormatCommand::InlineCode),
+            ShortcutCommand::FormatCodeBlock => self.handle_format_command(ctx, MarkdownFormatCommand::CodeBlock),
+            ShortcutCommand::FormatLink => self.handle_format_command(ctx, MarkdownFormatCommand::Link),
+            ShortcutCommand::FormatImage => self.handle_format_command(ctx, MarkdownFormatCommand::Image),
+            ShortcutCommand::FormatBlockquote => self.handle_format_command(ctx, MarkdownFormatCommand::Blockquote),
+            ShortcutCommand::FormatBulletList => self.handle_format_command(ctx, MarkdownFormatCommand::BulletList),
+            ShortcutCommand::FormatNumberedList => self.handle_format_command(ctx, MarkdownFormatCommand::NumberedList),
+            ShortcutCommand::FormatHeading1 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(1)),
+            ShortcutCommand::FormatHeading2 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(2)),
+            ShortcutCommand::FormatHeading3 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(3)),
+            ShortcutCommand::FormatHeading4 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(4)),
+            ShortcutCommand::FormatHeading5 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(5)),
+            ShortcutCommand::FormatHeading6 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(6)),
+            // Folding
+            ShortcutCommand::FoldAll => {
+                if self.state.settings.folding_enabled {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.fold_all();
+                    }
+                }
+            }
+            ShortcutCommand::UnfoldAll => {
+                if self.state.settings.folding_enabled {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.unfold_all();
+                    }
+                }
+            }
+            ShortcutCommand::ToggleFoldAtCursor => {
+                if self.state.settings.folding_enabled {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        let cursor_line = tab.cursor_position.0;
+                        tab.toggle_fold_at_line(cursor_line);
+                    }
+                }
+            }
+            // Other
+            ShortcutCommand::CommandPalette => {} // Already open
+            ShortcutCommand::OpenSettings => self.state.toggle_settings(),
+            ShortcutCommand::OpenAbout => self.state.toggle_about(),
+            ShortcutCommand::ExportHtml => self.handle_export_html(ctx),
+            ShortcutCommand::InsertToc => self.handle_insert_toc(),
+            ShortcutCommand::ToggleFrontmatter => {
+                if !self.state.settings.outline_enabled {
+                    self.state.settings.outline_enabled = true;
+                }
+                self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
+                self.state.mark_settings_dirty();
+            }
+        }
     }
 }

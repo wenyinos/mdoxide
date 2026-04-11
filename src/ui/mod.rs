@@ -5,6 +5,7 @@
 mod welcome;
 mod about;
 mod backlinks_panel;
+mod command_palette;
 mod dialogs;
 mod file_tree;
 pub mod format_toolbar;
@@ -22,6 +23,7 @@ mod terminal_panel;
 mod view_segment;
 mod window;
 
+pub use command_palette::CommandPalette;
 pub use welcome::WelcomePanel;
 pub use about::AboutPanel;
 pub use backlinks_panel::{ BacklinksPanel, BacklinksPanelOutput };

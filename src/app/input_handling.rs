@@ -87,6 +87,29 @@ impl FerriteApp {
         }
     }
 
+    /// Consume the command palette shortcut (default Alt+Space) BEFORE render.
+    ///
+    /// On Windows, Alt+Space opens the system window menu. On some Linux WMs it
+    /// opens the window actions menu. By consuming the key pre-render we prevent
+    /// both the OS handler and egui TextEdit from seeing it.
+    pub(crate) fn consume_command_palette_key(&mut self, ctx: &egui::Context) {
+        if self.terminal_panel_state.terminal_has_focus {
+            return;
+        }
+
+        let binding = self.state.settings.keyboard_shortcuts.get(
+            crate::config::ShortcutCommand::CommandPalette,
+        );
+        let egui_mods = binding.modifiers.to_egui();
+        let egui_key = binding.key.to_egui();
+
+        let consumed = ctx.input_mut(|i| i.consume_key(egui_mods, egui_key));
+        if consumed {
+            debug!("Command palette shortcut consumed before render");
+            self.command_palette.toggle();
+        }
+    }
+
     /// Consume Alt+Arrow keys BEFORE render to prevent TextEdit from processing them.
     /// This must be called before the editor widget is rendered.
     /// Returns the direction to move (-1 for up, 1 for down) if a move was requested.

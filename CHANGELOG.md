@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Command Palette** ([#59](https://github.com/OlaProeis/Ferrite/issues/59)) - Alt+Space searchable command launcher with fuzzy search across all available actions. Shows recently used commands first when empty, category-grouped browsing, keyboard shortcut hints per command. Configurable shortcut (default Alt+Space, alternative Ctrl+Shift+P selectable on Welcome page). Replaces the need for traditional menus — all ribbon and keyboard actions are discoverable through the palette.
+  - **Platform-specific Alt+Space suppression** - On Windows, a thread-level keyboard hook (`WH_KEYBOARD`) intercepts Alt+Space before it reaches the OS window manager, preventing the system menu (Restore/Move/Size/Close) from appearing. No-op on macOS/Linux.
+  - **Deferred command dispatch** - Palette commands are dispatched after render (same phase as keyboard shortcuts) to prevent mid-render state mutations that caused crashes with commands like Toggle View Mode.
+  - **Open/Close Workspace** - Added to command palette as palette-only commands (no default keyboard shortcut).
+
 ### Fixed
 
 - **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - Added `UTImportedTypeDeclarations` block to `info_plist_ext.xml` to properly declare the `net.daringfireball.markdown` UTI. This enables opening markdown files from Finder via "Open With Ferrite" or double-clicking when Ferrite is the default application.
