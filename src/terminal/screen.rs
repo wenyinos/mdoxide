@@ -4,6 +4,7 @@
 //! cursor tracking, and scrollback buffer for terminal history.
 
 use std::collections::VecDeque;
+use unicode_width::UnicodeWidthChar;
 
 /// ANSI color representation supporting 16, 256, and true color modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +109,10 @@ pub struct Cell {
     pub bg: Color,
     /// Text attributes
     pub attrs: CellAttributes,
+    /// This cell contains a double-width (CJK) character
+    pub wide: bool,
+    /// This cell is the trailing half of a double-width character
+    pub wide_continuation: bool,
 }
 
 impl Default for Cell {
@@ -117,6 +122,8 @@ impl Default for Cell {
             fg: Color::Default,
             bg: Color::Default,
             attrs: CellAttributes::default(),
+            wide: false,
+            wide_continuation: false,
         }
     }
 }
@@ -137,6 +144,7 @@ impl Cell {
             fg,
             bg,
             attrs,
+            ..Default::default()
         }
     }
 
@@ -287,6 +295,8 @@ impl TerminalScreen {
 
     /// Put a character at the current cursor position.
     pub fn put_char(&mut self, ch: char) {
+        let char_width = ch.width().unwrap_or(1).max(1);
+
         // Handle pending wrap
         if self.pending_wrap && self.auto_wrap {
             self.cursor.col = 0;
@@ -298,20 +308,76 @@ impl TerminalScreen {
             self.pending_wrap = false;
         }
 
+        // Wide char at last column: not enough room, wrap early
+        if char_width == 2 && self.cursor.col + 1 >= self.cols {
+            if self.auto_wrap {
+                let row = self.cursor.row as usize;
+                let col = self.cursor.col as usize;
+                if row < self.rows as usize && col < self.cols as usize {
+                    self.cells[row][col].clear();
+                }
+                self.cursor.col = 0;
+                self.cursor.row += 1;
+                if self.cursor.row > self.scroll_bottom {
+                    self.scroll_up(1);
+                    self.cursor.row = self.scroll_bottom;
+                }
+            } else {
+                return;
+            }
+        }
+
         // Place the character
         if self.cursor.row < self.rows && self.cursor.col < self.cols {
             let row = self.cursor.row as usize;
             let col = self.cursor.col as usize;
+
+            // Overwriting the trailing half of a wide char — clear the leading half
+            if col > 0 && self.cells[row][col].wide_continuation {
+                self.cells[row][col - 1].clear();
+            }
+
+            // Overwriting the leading half of a wide char — clear the trailing half
+            if self.cells[row][col].wide && col + 1 < self.cols as usize {
+                self.cells[row][col + 1].clear();
+            }
+
             self.cells[row][col] = Cell::with_style(
                 ch,
                 self.current_fg,
                 self.current_bg,
                 self.current_attrs,
             );
+
+            if char_width == 2 {
+                self.cells[row][col].wide = true;
+
+                if col + 1 < self.cols as usize {
+                    // Clear any wide pair the continuation cell was part of
+                    if self.cells[row][col + 1].wide && col + 2 < self.cols as usize {
+                        self.cells[row][col + 2].clear();
+                    }
+                    self.cells[row][col + 1] = Cell::default();
+                    self.cells[row][col + 1].wide_continuation = true;
+                    // Inherit background color for visual continuity
+                    self.cells[row][col + 1].fg = self.current_fg;
+                    self.cells[row][col + 1].bg = self.current_bg;
+                }
+            }
         }
 
         // Advance cursor
-        if self.cursor.col < self.cols.saturating_sub(1) {
+        if char_width == 2 {
+            let new_col = self.cursor.col + 2;
+            if new_col < self.cols {
+                self.cursor.col = new_col;
+            } else {
+                self.cursor.col = self.cols.saturating_sub(1);
+                if self.auto_wrap {
+                    self.pending_wrap = true;
+                }
+            }
+        } else if self.cursor.col < self.cols.saturating_sub(1) {
             self.cursor.col += 1;
         } else if self.auto_wrap {
             self.pending_wrap = true;
@@ -666,6 +732,23 @@ impl TerminalScreen {
         self.selection
     }
 
+    /// Snap a column to the leading cell of a wide character if it lands on a continuation cell.
+    /// `abs_row` is an absolute row index (scrollback + screen).
+    pub fn snap_wide_char(&self, col: usize, abs_row: usize) -> usize {
+        let scrollback_len = self.scrollback.len();
+        let row = if abs_row < scrollback_len {
+            self.scrollback.get(abs_row)
+        } else {
+            self.cells.get(abs_row.saturating_sub(scrollback_len))
+        };
+        if let Some(row) = row {
+            if col < row.len() && row[col].wide_continuation {
+                return col.saturating_sub(1);
+            }
+        }
+        col
+    }
+
     /// Get the selected text.
     pub fn get_selected_text(&self) -> Option<String> {
         let (start, end) = self.selection?;
@@ -693,6 +776,9 @@ impl TerminalScreen {
                 
                 if start_col <= end_col && start_col < row.len() {
                     for cell in &row[start_col..=end_col] {
+                        if cell.wide_continuation {
+                            continue;
+                        }
                         text.push(cell.character);
                     }
                 }
@@ -713,7 +799,12 @@ impl TerminalScreen {
     /// Get the text content of a specific row.
     pub fn get_row_text(&self, row: usize) -> String {
         if row < self.cells.len() {
-            self.cells[row].iter().map(|c| c.character).collect::<String>().trim_end().to_string()
+            self.cells[row].iter()
+                .filter(|c| !c.wide_continuation)
+                .map(|c| c.character)
+                .collect::<String>()
+                .trim_end()
+                .to_string()
         } else {
             String::new()
         }
@@ -728,7 +819,10 @@ impl TerminalScreen {
     pub fn screen_contains(&self, needle: &str) -> bool {
         let needle_lower = needle.to_lowercase();
         for row in &self.cells {
-            let line: String = row.iter().map(|c| c.character).collect();
+            let line: String = row.iter()
+                .filter(|c| !c.wide_continuation)
+                .map(|c| c.character)
+                .collect();
             if line.to_lowercase().contains(&needle_lower) {
                 return true;
             }
@@ -740,7 +834,14 @@ impl TerminalScreen {
     pub fn get_visible_text(&self) -> String {
         self.cells
             .iter()
-            .map(|row| row.iter().map(|c| c.character).collect::<String>().trim_end().to_string())
+            .map(|row| {
+                row.iter()
+                    .filter(|c| !c.wide_continuation)
+                    .map(|c| c.character)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -781,6 +882,10 @@ impl TerminalScreen {
             let mut span_open = false;
 
             for cell in row {
+                if cell.wide_continuation {
+                    continue;
+                }
+
                 let style_changed = cell.fg != current_fg || cell.bg != current_bg || cell.attrs != current_attrs;
                 
                 if style_changed {

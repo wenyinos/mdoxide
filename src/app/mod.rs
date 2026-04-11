@@ -228,6 +228,8 @@ pub struct FerriteApp {
     last_window_title: String,
     /// App logo texture for title bar display (with transparent background)
     app_logo_texture: Option<egui::TextureHandle>,
+    /// Whether we've logged the one-shot window diagnostic on startup.
+    window_diagnostic_logged: bool,
     /// Flag indicating CJK font check is needed after a file was opened.
     /// Set when a file is opened during the UI render pass, checked at end of update().
     /// This ensures CJK fonts are loaded immediately rather than waiting for next frame.
@@ -244,6 +246,12 @@ pub struct FerriteApp {
     /// Input buffer for echo demo panel
     #[cfg(feature = "async-workers")]
     echo_demo_input: String,
+    /// Receiver for background file loading messages (progress, completion, error).
+    file_load_rx: std::sync::mpsc::Receiver<FileLoadMsg>,
+    /// Sender cloned into each background loading thread.
+    file_load_tx: std::sync::mpsc::Sender<FileLoadMsg>,
+    /// Active background loading threads keyed by tab ID for cancellation on tab close.
+    loading_tasks: HashMap<usize, std::thread::JoinHandle<()>>,
 }
 
 impl FerriteApp {
@@ -420,6 +428,9 @@ impl FerriteApp {
         let lsp_overrides_fingerprint =
             crate::lsp::overrides_fingerprint(&state.settings.lsp_server_overrides);
         let lsp_was_enabled_init = state.settings.lsp_enabled;
+
+        let (file_load_tx_init, file_load_rx_init) = std::sync::mpsc::channel();
+
         let mut app = Self {
             state,
             theme_manager,
@@ -476,6 +487,7 @@ impl FerriteApp {
             last_interaction_time: std::time::Instant::now(),
             last_window_title: String::new(),
             app_logo_texture,
+            window_diagnostic_logged: false,
             pending_cjk_check: false,
             last_active_tab_for_backlinks: usize::MAX,
             backlinks_need_refresh: true,
@@ -484,6 +496,9 @@ impl FerriteApp {
             echo_worker: None, // Lazy - spawns when AI panel first shown
             #[cfg(feature = "async-workers")]
             echo_demo_input: String::new(),
+            file_load_rx: file_load_rx_init,
+            file_load_tx: file_load_tx_init,
+            loading_tasks: HashMap::new(),
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -574,7 +589,7 @@ impl FerriteApp {
             for file_path in valid_files.iter() {
                 info!("Opening file from CLI: {}", file_path.display());
                 let time = self.get_app_time();
-                match self.state.open_file(file_path.clone(), Some(time)) {
+                match self.open_file_smart(file_path.clone(), true, Some(time)) {
                     Ok(tab_idx) => {
                         if first_opened_tab_idx.is_none() {
                             first_opened_tab_idx = Some(tab_idx);
@@ -854,6 +869,11 @@ impl FerriteApp {
         self.csv_viewer_states.remove(&tab_id);
         self.sync_scroll_states.remove(&tab_id);
 
+        // Cancel any in-progress background file loading for this tab.
+        // Dropping the JoinHandle detaches the thread; it will notice the
+        // channel receiver is gone when it tries to send the next message.
+        self.loading_tasks.remove(&tab_id);
+
         // Send didClose and update doc count if this tab had an active LSP session
         if let Some((norm_path, server_key)) = self.lsp_tab_server.remove(&tab_id) {
             let still_open = self.state.tabs().iter().any(|t| {
@@ -886,6 +906,19 @@ impl FerriteApp {
             cleanup_rendered_editor_memory(ctx);
             cleanup_ferrite_editor(ctx, tab_id);
         }
+
+        // Clear global caches that may hold large data from the closed tab.
+        // The AST cache stores full parsed document trees keyed by content hash;
+        // for large files this can retain tens of MB after the tab is gone.
+        crate::markdown::cache::clear_ast_cache();
+        crate::markdown::cache::clear_block_height_cache();
+
+        // Clear find/replace matches — these can be very large for big files
+        self.state.ui.find_state.clear();
+
+        // After freeing large data, ask the allocator to return pages to the OS.
+        // Without this, mimalloc keeps freed arenas mapped and RSS stays inflated.
+        crate::purge_allocator_caches();
     }
 
     // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -1661,10 +1694,11 @@ impl FerriteApp {
                 .map(|t| t.file_type() == FileType::Markdown)
                 .unwrap_or(false);
             if is_markdown {
-                let content = self.state.active_tab()
-                    .map(|t| t.content.clone())
-                    .unwrap_or_default();
-                self.frontmatter_panel.update_from_content(&content);
+                if let Some(tab) = self.state.active_tab() {
+                    let ver = tab.content_version();
+                    let content_ref: &str = &tab.content;
+                    self.frontmatter_panel.update_from_content_versioned(content_ref, ver);
+                }
             }
 
             // Configure and render the outline panel
@@ -1813,11 +1847,10 @@ impl FerriteApp {
         // Handle file tree interactions
         if let Some(file_path) = file_tree_file_clicked {
             let time = self.get_app_time();
-            match self.state.open_file(file_path.clone(), Some(time)) {
+            match self.open_file_smart(file_path.clone(), true, Some(time)) {
                 Ok(_) => {
                     self.pending_cjk_check = true;
                     debug!("Opened file from tree: {}", file_path.display());
-                    // Add to workspace recent files
                     if let Some(workspace) = self.state.workspace_mut() {
                         workspace.add_recent_file(file_path);
                     }
@@ -2327,12 +2360,29 @@ impl eframe::App for FerriteApp {
         // This detects mouse near edges, changes cursor, and initiates resize
         handle_window_resize(ctx, &mut self.window_resize_state);
 
+        // One-shot window diagnostic for debugging borderless offset issues (GH #112)
+        if !self.window_diagnostic_logged {
+            self.window_diagnostic_logged = true;
+            let screen_rect = ctx.screen_rect();
+            let ppp = ctx.pixels_per_point();
+            let inner_rect = ctx.input(|i| i.viewport().inner_rect);
+            let outer_rect = ctx.input(|i| i.viewport().outer_rect);
+            info!(
+                "Window diagnostic: screen_rect={:?}, pixels_per_point={:.2}, inner={:?}, outer={:?}",
+                screen_rect, ppp, inner_rect, outer_rect
+            );
+        }
+
         // Apply theme if needed (handles System theme changes)
         self.theme_manager.apply_if_needed(ctx);
 
         // Pre-warm font atlas if needed (deferred from font setup because
         // ctx.fonts() is not available until after first Context::run())
         fonts::check_and_prewarm_if_needed(ctx);
+
+        // Warm per-frame caches (is_modified) for all tabs so that
+        // title() and is_modified() calls via &self are O(1) this frame.
+        self.state.warm_tab_caches();
 
         // Track user interaction for idle detection
         // This updates the last interaction time when any user input is detected,
@@ -2341,16 +2391,19 @@ impl eframe::App for FerriteApp {
             self.update_interaction_time();
         }
 
-        // Lazy load CJK fonts when CJK content is detected (for faster startup)
-        // Only loads the specific fonts needed for detected scripts (Korean/Japanese/Chinese)
-        // This is much more memory efficient than loading all CJK fonts at once
-        // NOTE: We check every frame because files can be opened mid-update-loop.
-        // The load_cjk_for_text function already optimizes by not reloading fonts.
-        if let Some(tab) = self.state.active_tab() {
-            if fonts::needs_cjk(&tab.content) {
+        // Lazy load CJK/complex-script fonts (cached via content_version — O(1) per frame)
+        let (needs_cjk, needs_complex) = if let Some(tab) = self.state.active_tab_mut() {
+            (tab.needs_cjk_cached(), tab.needs_complex_script_cached())
+        } else {
+            (false, false)
+        };
+        if needs_cjk {
+            if let Some(tab) = self.state.active_tab() {
                 let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
             }
-            if fonts::needs_complex_script_fonts(&tab.content) {
+        }
+        if needs_complex {
+            if let Some(tab) = self.state.active_tab() {
                 let _ = self.load_complex_script_fonts_for_content(ctx, &tab.content);
             }
         }
@@ -2389,6 +2442,9 @@ impl eframe::App for FerriteApp {
 
         // Poll for file paths from secondary instances (single-instance protocol)
         self.handle_instance_paths(ctx);
+
+        // Poll background file loading messages (progress, completion, error)
+        self.poll_file_load_messages(ctx);
 
         // Poll file watcher for workspace changes
         self.handle_file_watcher_events();
@@ -2564,13 +2620,20 @@ impl eframe::App for FerriteApp {
         // preventing the "tofu/boxes" issue on file open.
         if self.pending_cjk_check {
             self.pending_cjk_check = false;
-            if let Some(tab) = self.state.active_tab() {
-                if fonts::needs_cjk(&tab.content) {
-                    log::debug!("Deferred CJK check: loading fonts for newly opened file");
+            let (deferred_cjk, deferred_complex) = if let Some(tab) = self.state.active_tab_mut() {
+                (tab.needs_cjk_cached(), tab.needs_complex_script_cached())
+            } else {
+                (false, false)
+            };
+            if deferred_cjk {
+                log::debug!("Deferred CJK check: loading fonts for newly opened file");
+                if let Some(tab) = self.state.active_tab() {
                     let _ = self.load_cjk_fonts_for_content(ctx, &tab.content);
                 }
-                if fonts::needs_complex_script_fonts(&tab.content) {
-                    log::debug!("Deferred complex script check: loading fonts for newly opened file");
+            }
+            if deferred_complex {
+                log::debug!("Deferred complex script check: loading fonts for newly opened file");
+                if let Some(tab) = self.state.active_tab() {
                     let _ = self.load_complex_script_fonts_for_content(ctx, &tab.content);
                 }
             }

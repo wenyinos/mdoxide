@@ -7,7 +7,6 @@ use super::FerriteApp;
 use super::helpers::modifier_symbol;
 use crate::config::{Theme, ViewMode};
 use crate::markdown::{delimiter_display_name, delimiter_symbol, get_structured_file_type, get_tabular_file_type, DELIMITERS};
-use crate::editor::TextStats;
 use crate::state::FileType;
 use crate::theme::ThemeColors;
 use eframe::egui;
@@ -269,7 +268,7 @@ impl FerriteApp {
                                 self.state.ui.show_recent_files_popup = false;
                             }
                             let time = self.get_app_time();
-                            match self.state.open_file_with_focus(path.clone(), focus, Some(time)) {
+                            match self.open_file_smart(path.clone(), focus, Some(time)) {
                                 Ok(_) => {
                                     self.pending_cjk_check = true;
                                     if focus {
@@ -372,6 +371,9 @@ impl FerriteApp {
                     ));
                     ui.separator();
                 }
+
+                // Pre-compute cached text stats via &mut borrow before entering immutable tab borrow
+                let cached_stats = self.state.active_tab_mut().map(|tab| tab.text_stats());
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Help button (rightmost in right-to-left layout)
@@ -630,9 +632,10 @@ impl FerriteApp {
 
                         ui.separator();
 
-                        // Text statistics
-                        let stats = TextStats::from_text(&tab.content);
-                        ui.label(stats.format_compact());
+                        // Text statistics (cached via content_version)
+                        if let Some(stats) = cached_stats {
+                            ui.label(stats.format_compact());
+                        }
                     }
                 });
             });

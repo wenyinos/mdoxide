@@ -34,13 +34,146 @@ use crate::markdown::{
 };
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
-use crate::state::{ FileType, PendingAction, Selection, SpecialTabKind, TabKind };
+use crate::state::{ FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabKind };
 use crate::theme::ThemeColors;
 use crate::ui::{ FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction };
 use eframe::egui;
 use log::{ debug, info, trace, warn };
 use rust_i18n::t;
 use std::collections::HashMap;
+use std::path::Path;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image Viewer Texture Cache
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct ImageViewerTexture {
+    texture: Option<egui::TextureHandle>,
+    width: u32,
+    height: u32,
+    error: Option<String>,
+}
+
+fn load_viewer_image(ctx: &egui::Context, path: &Path) -> Result<ImageViewerTexture, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Failed to decode: {}", e))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    let pixels: Vec<egui::Color32> = rgba
+        .pixels()
+        .map(|p| egui::Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+
+    let color_image = egui::ColorImage {
+        size: [width as usize, height as usize],
+        pixels,
+    };
+
+    let texture_name = format!("img_viewer_{}", path.display());
+    let texture = ctx.load_texture(&texture_name, color_image, egui::TextureOptions::LINEAR);
+
+    Ok(ImageViewerTexture {
+        texture: Some(texture),
+        width,
+        height,
+        error: None,
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF Viewer Texture Cache
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct PdfPageTexture {
+    texture: Option<egui::TextureHandle>,
+    width: u32,
+    height: u32,
+    page_index: usize,
+    zoom: f32,
+    error: Option<String>,
+}
+
+fn render_pdf_page(
+    ctx: &egui::Context,
+    path: &Path,
+    page_index: usize,
+    zoom: f32,
+) -> PdfPageTexture {
+    use hayro::hayro_interpret::hayro_syntax::Pdf;
+    use hayro::hayro_interpret::InterpreterSettings;
+    use hayro::RenderSettings;
+
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) => return PdfPageTexture {
+            texture: None, width: 0, height: 0,
+            page_index, zoom,
+            error: Some(format!("Failed to read file: {}", e)),
+        },
+    };
+
+    let pdf_data = std::sync::Arc::new(bytes);
+    let pdf = match Pdf::new(pdf_data) {
+        Ok(p) => p,
+        Err(e) => return PdfPageTexture {
+            texture: None, width: 0, height: 0,
+            page_index, zoom,
+            error: Some(format!("Failed to parse PDF: {:?}", e)),
+        },
+    };
+
+    let pages = pdf.pages();
+    if page_index >= pages.len() {
+        return PdfPageTexture {
+            texture: None, width: 0, height: 0,
+            page_index, zoom,
+            error: Some(format!("Page {} out of range (total: {})", page_index + 1, pages.len())),
+        };
+    }
+
+    let page = &pages[page_index];
+    let interpreter_settings = InterpreterSettings::default();
+    let render_settings = RenderSettings {
+        x_scale: zoom,
+        y_scale: zoom,
+        bg_color: {
+            use hayro::vello_cpu::color::{AlphaColor, Srgb};
+            AlphaColor::<Srgb>::new([1.0, 1.0, 1.0, 1.0])
+        },
+        ..Default::default()
+    };
+
+    let pixmap = hayro::render(page, &interpreter_settings, &render_settings);
+    let width = pixmap.width() as u32;
+    let height = pixmap.height() as u32;
+
+    let rgba_data = pixmap.data_as_u8_slice();
+    let pixels: Vec<egui::Color32> = rgba_data
+        .chunks_exact(4)
+        .map(|c| egui::Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3]))
+        .collect();
+
+    let color_image = egui::ColorImage {
+        size: [width as usize, height as usize],
+        pixels,
+    };
+
+    let texture_name = format!("pdf_page_{}_{}_{:.2}", path.display(), page_index, zoom);
+    let texture = ctx.load_texture(&texture_name, color_image, egui::TextureOptions::LINEAR);
+
+    PdfPageTexture {
+        texture: Some(texture),
+        width,
+        height,
+        page_index,
+        zoom,
+        error: None,
+    }
+}
 
 impl FerriteApp {
     /// Render the central panel containing tabs and editor content.
@@ -348,8 +481,22 @@ impl FerriteApp {
                 .map(|t| t.kind.clone())
                 .unwrap_or(TabKind::Document);
 
+            // Check if the active tab is loading or has a load error
+            let active_tab_content = self.state
+                .active_tab()
+                .map(|t| t.tab_content.clone());
+
             if let TabKind::Special(special_kind) = active_tab_kind {
                 self.render_special_tab_content(ui, special_kind);
+            } else if matches!(active_tab_kind, TabKind::ImageViewer(_)) {
+                self.render_image_viewer_tab(ui, ctx);
+            } else if matches!(active_tab_kind, TabKind::PdfViewer(_)) {
+                self.render_pdf_viewer_tab(ui, ctx);
+            } else if let Some(crate::state::TabContent::Loading(ref progress)) = active_tab_content {
+                self.render_loading_tab(ui, progress);
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            } else if let Some(crate::state::TabContent::Error(ref error)) = active_tab_content {
+                Self::render_load_error_tab(ui, error);
             } else {
                 // Editor widget - extract settings values to avoid borrow conflicts
                 let font_size = self.state.settings.font_size;
@@ -556,10 +703,8 @@ impl FerriteApp {
                                     .map(|d| d.to_vec())
                                     .unwrap_or_default();
 
-                            // Prepare lazy undo snapshot (only clones if no pending snapshot)
-                            if let Some(tab) = self.state.active_tab_mut() {
-                                tab.prepare_undo_snapshot();
-                            }
+                            // Raw mode: FerriteEditor owns undo via EditHistory
+                            // — no central-panel snapshot needed.
 
                             // Format toolbar state (markdown files only, hidden in Zen Mode)
                             let show_format_toolbar = is_markdown_file && !zen_mode;
@@ -578,6 +723,7 @@ impl FerriteApp {
                             let mut format_bar_toggled = false;
                             let mut format_bar_action: Option<RibbonAction> = None;
                             let mut vim_label_for_status: Option<&'static str> = None;
+                            let mut content_changed_in_editor = false;
 
                             if let Some(tab) = self.state.active_tab_mut() {
                                 // Update folds if dirty
@@ -648,6 +794,7 @@ impl FerriteApp {
                                     None
                                 );
 
+                                let editor_widget_id = egui::Id::new("main_editor_raw").with(tab.id);
                                 let mut editor = EditorWidget::new(tab)
                                     .font_size(font_size)
                                     .font_family(font_family.clone())
@@ -655,7 +802,7 @@ impl FerriteApp {
                                     .show_line_numbers(show_line_numbers && !zen_mode) // Hide line numbers in Zen Mode
                                     .show_fold_indicators(show_fold_indicators && !zen_mode) // Hide in Zen Mode
                                     .theme_colors(theme_colors.clone())
-                                    .id(egui::Id::new("main_editor_raw"))
+                                    .id(editor_widget_id)
                                     .scroll_to_line(scroll_to_line)
                                     .zen_mode(zen_mode, zen_max_column_width)
                                     .max_line_width(max_line_width) // Apply when not in Zen Mode
@@ -715,10 +862,12 @@ impl FerriteApp {
 
                                 if editor_output.changed {
                                     debug!("Content modified in raw editor");
-                                    tab.record_edit_from_snapshot();
+                                    // FerriteEditor records its own undo ops — no
+                                    // central-panel record_edit_from_snapshot() here.
                                     if folding_enabled {
                                         tab.mark_folds_dirty();
                                     }
+                                    content_changed_in_editor = true;
                                 }
 
                                 // Capture IME committed text for font loading (processed after tab borrow ends)
@@ -843,6 +992,17 @@ impl FerriteApp {
 
                             // Update Vim mode indicator (after tab borrow ends)
                             self.state.ui.vim_mode_indicator = vim_label_for_status;
+
+                            // Recompute search matches when content changes while find panel is open.
+                            // Byte positions in find_state.matches become stale after buffer edits.
+                            if content_changed_in_editor
+                                && self.state.ui.show_find_replace
+                                && !self.state.ui.find_state.search_term.is_empty()
+                            {
+                                if let Some(content) = self.state.active_tab().map(|t| t.content.clone()) {
+                                    self.state.ui.find_state.find_matches(&content);
+                                }
+                            }
 
                             // Handle format toolbar toggle (after mutable borrow ends)
                             if format_bar_toggled {
@@ -1101,6 +1261,7 @@ impl FerriteApp {
                                 };
 
                                 let mut split_vim_label: Option<&'static str> = None;
+                                let mut split_content_changed = false;
 
                                 // Track scroll outputs from both panes
                                 let mut editor_scroll_offset: Option<f32> = None;
@@ -1114,10 +1275,8 @@ impl FerriteApp {
                                 let mut preview_line_mappings: Vec<crate::markdown::LineMapping> =
                                     Vec::new();
 
-                                // Prepare lazy undo snapshot
-                                if let Some(tab) = self.state.active_tab_mut() {
-                                    tab.prepare_undo_snapshot();
-                                }
+                                // Split left pane is Raw (FerriteEditor) — no
+                                // central-panel undo snapshot needed for it.
 
                                 // Format toolbar state for split view (markdown only)
                                 let show_format_toolbar_split = is_markdown_file_split && !zen_mode;
@@ -1214,6 +1373,7 @@ impl FerriteApp {
                                         );
                                     }
 
+                                    let editor_widget_id = egui::Id::new("split_editor_raw").with(tab.id);
                                     let mut editor = EditorWidget::new(tab)
                                         .font_size(font_size)
                                         .font_family(font_family.clone())
@@ -1221,7 +1381,7 @@ impl FerriteApp {
                                         .show_line_numbers(show_line_numbers && !zen_mode) // Hide in Zen Mode
                                         .show_fold_indicators(show_fold_indicators)
                                         .theme_colors(theme_colors.clone())
-                                        .id(egui::Id::new("split_editor_raw"))
+                                        .id(editor_widget_id)
                                         .scroll_to_line(scroll_to_line)
                                         .max_line_width(max_line_width)
                                         .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
@@ -1278,10 +1438,11 @@ impl FerriteApp {
                                     }
 
                                     if editor_output.changed {
-                                        tab.record_edit_from_snapshot();
+                                        // FerriteEditor records its own undo ops.
                                         if folding_enabled {
                                             tab.mark_folds_dirty();
                                         }
+                                        split_content_changed = true;
                                     }
 
                                     // Capture IME committed text for font loading (processed after tab borrow ends)
@@ -1292,6 +1453,8 @@ impl FerriteApp {
 
                                 // Update Vim mode indicator (after tab borrow ends)
                                 self.state.ui.vim_mode_indicator = split_vim_label;
+
+
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Minimap (between editor and splitter)
                                 // Uses semantic minimap for markdown, pixel minimap for others
@@ -1539,8 +1702,7 @@ impl FerriteApp {
                                     // Collect workspace root before mutable borrow
                                     let ws_root = self.state.workspace_root().cloned();
                                     if let Some(tab) = self.state.active_tab_mut() {
-                                        // Capture content and cursor before editing for undo support
-                                        tab.prepare_undo_snapshot();
+                                        tab.prepare_undo_snapshot_hashed();
 
                                         // Build wikilink context from current file and workspace
                                         let wl_ctx = WikilinkContext {
@@ -1550,20 +1712,26 @@ impl FerriteApp {
                                             workspace_root: ws_root.clone(),
                                         };
 
-                                        let md_editor_output = MarkdownEditor::new(&mut tab.content)
+                                        let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                             .mode(EditorMode::Rendered)
                                             .font_size(font_size)
                                             .font_family(font_family.clone())
                                             .word_wrap(word_wrap)
                                             .theme(theme)
                                             .max_line_width(max_line_width)
-                                            .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
-                                            .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                            .zen_mode(zen_mode, zen_max_column_width)
+                                            .paragraph_indent(paragraph_indent)
                                             .header_spacing(header_spacing)
                                             .wikilink_context(wl_ctx)
-                                            .id(egui::Id::new("split_preview_rendered"))
-                                            .pending_scroll_offset(pending_preview_scroll)
-                                            .show(&mut right_ui);
+                                            .id(egui::Id::new("split_preview_rendered").with(tab.id))
+                                            .pending_scroll_offset(pending_preview_scroll);
+                                        if let Some(ref sh) = search_highlights {
+                                            md_editor = md_editor.search_highlights(
+                                                sh.matches.clone(),
+                                                sh.current_match,
+                                            );
+                                        }
+                                        let md_editor_output = md_editor.show(&mut right_ui);
 
                                         // Capture scroll metrics for sync scrolling
                                         preview_scroll_offset = Some(
@@ -1581,6 +1749,7 @@ impl FerriteApp {
                                         if md_editor_output.changed {
                                             tab.record_edit_from_snapshot();
                                             tab.mark_content_edited();
+                                            split_content_changed = true;
                                             debug!(
                                                 "Content modified in split rendered pane, recorded for undo"
                                             );
@@ -1707,6 +1876,16 @@ impl FerriteApp {
                                     }
                                 }
 
+                                // Recompute search matches when content changes in either split pane
+                                if split_content_changed
+                                    && self.state.ui.show_find_replace
+                                    && !self.state.ui.find_state.search_term.is_empty()
+                                {
+                                    if let Some(content) = self.state.active_tab().map(|t| t.content.clone()) {
+                                        self.state.ui.find_state.find_matches(&content);
+                                    }
+                                }
+
                                 // Load CJK / complex script fonts if IME committed text needs them
                                 if let Some(ref ime_text) = ime_text_for_font_loading_split {
                                     let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
@@ -1737,7 +1916,7 @@ impl FerriteApp {
                                 let tree_state = self.tree_viewer_states.entry(tab_id).or_default();
 
                                 if let Some(tab) = self.state.active_tab_mut() {
-                                    tab.prepare_undo_snapshot();
+                                    tab.prepare_undo_snapshot_hashed();
 
                                     let output = TreeViewer::new(
                                         &mut tab.content,
@@ -1768,8 +1947,9 @@ impl FerriteApp {
 
                                 // Collect workspace root before mutable borrow
                                 let ws_root = self.state.workspace_root().cloned();
+                                let mut rendered_content_changed = false;
                                 if let Some(tab) = self.state.active_tab_mut() {
-                                    tab.prepare_undo_snapshot();
+                                    tab.prepare_undo_snapshot_hashed();
 
                                     // Handle scroll sync: check for pending scroll ratio or offset
                                     let pending_offset = tab.pending_scroll_offset.take();
@@ -1783,25 +1963,32 @@ impl FerriteApp {
                                         workspace_root: ws_root,
                                     };
 
-                                    let editor_output = MarkdownEditor::new(&mut tab.content)
+                                    let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
                                         .font_size(font_size)
                                         .font_family(font_family.clone())
                                         .word_wrap(word_wrap)
                                         .theme(theme)
-                                        .max_line_width(max_line_width) // Apply line width limit
-                                        .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
-                                        .paragraph_indent(paragraph_indent) // CJK paragraph indentation
+                                        .max_line_width(max_line_width)
+                                        .zen_mode(zen_mode, zen_max_column_width)
+                                        .paragraph_indent(paragraph_indent)
                                         .header_spacing(header_spacing)
                                         .wikilink_context(wl_ctx)
-                                        .id(egui::Id::new("main_editor_rendered"))
+                                        .id(egui::Id::new("main_editor_rendered").with(tab.id))
                                         .scroll_to_line(scroll_to_line)
-                                        .pending_scroll_offset(pending_offset)
-                                        .show(ui);
+                                        .pending_scroll_offset(pending_offset);
+                                    if let Some(ref sh) = search_highlights {
+                                        md_editor = md_editor.search_highlights(
+                                            sh.matches.clone(),
+                                            sh.current_match,
+                                        );
+                                    }
+                                    let editor_output = md_editor.show(ui);
 
                                     if editor_output.changed {
                                         tab.record_edit_from_snapshot();
                                         tab.mark_content_edited();
+                                        rendered_content_changed = true;
                                         debug!(
                                             "Content modified in rendered editor, recorded for undo"
                                         );
@@ -1910,6 +2097,16 @@ impl FerriteApp {
                                         pending_wikilink_target = Some(target);
                                     }
                                 }
+
+                                // Recompute search matches when content changes in rendered editor
+                                if rendered_content_changed
+                                    && self.state.ui.show_find_replace
+                                    && !self.state.ui.find_state.search_term.is_empty()
+                                {
+                                    if let Some(content) = self.state.active_tab().map(|t| t.content.clone()) {
+                                        self.state.ui.find_state.find_matches(&content);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1939,11 +2136,10 @@ impl FerriteApp {
                 // Handle file selection
                 if let Some(file_path) = output.selected_file {
                     let time = self.get_app_time();
-                    match self.state.open_file(file_path.clone(), Some(time)) {
+                    match self.open_file_smart(file_path.clone(), true, Some(time)) {
                         Ok(_) => {
                             self.pending_cjk_check = true;
                             debug!("Opened file from quick switcher: {}", file_path.display());
-                            // Add to workspace recent files
                             if let Some(workspace) = self.state.workspace_mut() {
                                 workspace.add_recent_file(file_path);
                             }
@@ -2154,5 +2350,516 @@ impl FerriteApp {
                 }
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Image Viewer Tab
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn render_image_viewer_tab(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let active_idx = self.state.active_tab_index();
+
+        let (path, viewer_state) = {
+            let tab = match self.state.tab(active_idx) {
+                Some(t) => t,
+                None => return,
+            };
+            let path = match tab.path.clone() {
+                Some(p) => p,
+                None => return,
+            };
+            let vs = match &tab.kind {
+                TabKind::ImageViewer(vs) => vs.clone(),
+                _ => return,
+            };
+            (path, vs)
+        };
+
+        let cache_id = egui::Id::new("image_viewer_texture").with(&path);
+        let cached: Option<ImageViewerTexture> = ui.data(|d| d.get_temp(cache_id));
+
+        let load_result = cached.unwrap_or_else(|| {
+            match load_viewer_image(ctx, &path) {
+                Ok(tex) => {
+                    ui.data_mut(|d| d.insert_temp(cache_id, tex.clone()));
+                    tex
+                }
+                Err(msg) => {
+                    let failed = ImageViewerTexture {
+                        texture: None,
+                        width: 0,
+                        height: 0,
+                        error: Some(msg),
+                    };
+                    ui.data_mut(|d| d.insert_temp(cache_id, failed.clone()));
+                    failed
+                }
+            }
+        });
+
+        // Update dimensions in tab state if loaded and not yet set
+        if load_result.texture.is_some() {
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::ImageViewer(ref mut vs) = tab.kind {
+                    if vs.dimensions.is_none() {
+                        vs.dimensions = Some((load_result.width, load_result.height));
+                    }
+                }
+            }
+        }
+
+        if let Some(ref error_msg) = load_result.error {
+            ui.centered_and_justified(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Failed to load image: {}", error_msg))
+                        .color(ui.visuals().error_fg_color)
+                        .size(16.0),
+                );
+            });
+            return;
+        }
+
+        let texture = match load_result.texture {
+            Some(ref t) => t,
+            None => return,
+        };
+
+        let available = ui.available_size();
+        let img_w = load_result.width as f32;
+        let img_h = load_result.height as f32;
+
+        // Read current zoom from tab
+        let mut zoom = viewer_state.zoom;
+        let fitted = viewer_state.fitted;
+
+        // Fit-to-window on first render
+        if !fitted && img_w > 0.0 && img_h > 0.0 {
+            let scale_x = available.x / img_w;
+            let scale_y = (available.y - 30.0) / img_h; // reserve space for metadata bar
+            zoom = scale_x.min(scale_y).min(1.0); // don't upscale beyond 1:1
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::ImageViewer(ref mut vs) = tab.kind {
+                    vs.zoom = zoom;
+                    vs.fitted = true;
+                }
+            }
+        }
+
+        // Handle Ctrl+Scroll zoom via raw MouseWheel events
+        // (smooth_scroll_delta is consumed by egui's global gui_zoom when Ctrl is held)
+        let wheel_delta: Option<f32> = ui.input(|i| {
+            if !i.modifiers.command {
+                return None;
+            }
+            for event in &i.events {
+                if let egui::Event::MouseWheel { delta, .. } = event {
+                    if delta.y.abs() > 0.01 {
+                        return Some(delta.y);
+                    }
+                }
+            }
+            None
+        });
+        if let Some(delta) = wheel_delta {
+            let zoom_factor = if delta > 0.0 { 1.1 } else { 1.0 / 1.1 };
+            zoom = (zoom * zoom_factor).clamp(0.1, 10.0);
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::ImageViewer(ref mut vs) = tab.kind {
+                    vs.zoom = zoom;
+                }
+            }
+            // Consume the events so egui's global zoom doesn't also fire
+            ui.input_mut(|i| {
+                i.events.retain(|e| {
+                    !matches!(e, egui::Event::MouseWheel { modifiers, .. } if modifiers.command)
+                });
+            });
+        }
+
+        let display_w = img_w * zoom;
+        let display_h = img_h * zoom;
+
+        // Scrollable area for the image
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .max_height(available.y - 28.0)
+            .show(ui, |ui| {
+                let content_size = egui::vec2(display_w, display_h);
+
+                // Center the image if smaller than available space
+                let padding_x = ((ui.available_width() - content_size.x) / 2.0).max(0.0);
+                let padding_y = ((ui.available_height() - content_size.y) / 2.0).max(0.0);
+
+                if padding_y > 0.0 {
+                    ui.add_space(padding_y);
+                }
+
+                ui.horizontal(|ui| {
+                    if padding_x > 0.0 {
+                        ui.add_space(padding_x);
+                    }
+                    let sized = egui::load::SizedTexture::new(
+                        texture.id(),
+                        egui::Vec2::new(display_w, display_h),
+                    );
+                    ui.add(egui::Image::from_texture(sized));
+                });
+            });
+
+        // Metadata bar at the bottom
+        let file_size = viewer_state.file_size;
+        let format_label = &viewer_state.format_label;
+        let dims_text = if let Some((w, h)) = viewer_state.dimensions {
+            format!("{} x {}", w, h)
+        } else {
+            "Loading...".to_string()
+        };
+        let size_text = if file_size >= 1_048_576 {
+            format!("{:.1} MB", file_size as f64 / 1_048_576.0)
+        } else {
+            format!("{:.1} KB", file_size as f64 / 1024.0)
+        };
+        let zoom_pct = (zoom * 100.0).round() as u32;
+
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 16.0;
+            ui.label(
+                egui::RichText::new(format!("{}  |  {}  |  {}  |  {}%", dims_text, format_label, size_text, zoom_pct))
+                    .small()
+                    .color(ui.visuals().text_color().gamma_multiply(0.7)),
+            );
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PDF Viewer Tab
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn render_pdf_viewer_tab(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let active_idx = self.state.active_tab_index();
+
+        let (path, viewer_state) = {
+            let tab = match self.state.tab(active_idx) {
+                Some(t) => t,
+                None => return,
+            };
+            let path = match tab.path.clone() {
+                Some(p) => p,
+                None => return,
+            };
+            let vs = match &tab.kind {
+                TabKind::PdfViewer(vs) => vs.clone(),
+                _ => return,
+            };
+            (path, vs)
+        };
+
+        // Show error overlay if PDF failed to load
+        if let Some(ref error_msg) = viewer_state.error {
+            ui.centered_and_justified(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Failed to load PDF: {}", error_msg))
+                        .color(ui.visuals().error_fg_color)
+                        .size(16.0),
+                );
+            });
+            return;
+        }
+
+        if viewer_state.page_count == 0 {
+            ui.centered_and_justified(|ui| {
+                ui.label(
+                    egui::RichText::new("PDF has no pages")
+                        .color(ui.visuals().error_fg_color)
+                        .size(16.0),
+                );
+            });
+            return;
+        }
+
+        let current_page = viewer_state.current_page;
+        let page_count = viewer_state.page_count;
+        let mut zoom = viewer_state.zoom;
+        let fitted = viewer_state.fitted;
+
+        // Cache key includes page index and zoom for invalidation
+        let cache_id = egui::Id::new("pdf_viewer_texture")
+            .with(&path)
+            .with(current_page)
+            .with((zoom * 100.0) as u32);
+        let cached: Option<PdfPageTexture> = ui.data(|d| d.get_temp(cache_id));
+
+        let page_texture = cached.unwrap_or_else(|| {
+            let tex = render_pdf_page(ctx, &path, current_page, zoom);
+            ui.data_mut(|d| d.insert_temp(cache_id, tex.clone()));
+            tex
+        });
+
+        if let Some(ref error_msg) = page_texture.error {
+            ui.centered_and_justified(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Failed to render page: {}", error_msg))
+                        .color(ui.visuals().error_fg_color)
+                        .size(16.0),
+                );
+            });
+            return;
+        }
+
+        let texture = match page_texture.texture {
+            Some(ref t) => t,
+            None => return,
+        };
+
+        let available = ui.available_size();
+        let img_w = page_texture.width as f32;
+        let img_h = page_texture.height as f32;
+
+        // Fit-to-window on first render: render at scale 1.0 then compute visual zoom
+        if !fitted && img_w > 0.0 && img_h > 0.0 {
+            let scale_x = available.x / img_w;
+            let scale_y = (available.y - 60.0) / img_h;
+            zoom = scale_x.min(scale_y).min(1.0);
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                    vs.zoom = zoom;
+                    vs.fitted = true;
+                }
+            }
+            // Re-render at the fitted zoom by clearing cache
+            let new_cache_id = egui::Id::new("pdf_viewer_texture")
+                .with(&path)
+                .with(current_page)
+                .with((zoom * 100.0) as u32);
+            let tex = render_pdf_page(ctx, &path, current_page, zoom);
+            ui.data_mut(|d| d.insert_temp(new_cache_id, tex));
+            ctx.request_repaint();
+            return;
+        }
+
+        // Handle Ctrl+Scroll zoom via raw MouseWheel events
+        // (smooth_scroll_delta is consumed by egui's global gui_zoom when Ctrl is held)
+        let wheel_delta: Option<f32> = ui.input(|i| {
+            if !i.modifiers.command {
+                return None;
+            }
+            for event in &i.events {
+                if let egui::Event::MouseWheel { delta, .. } = event {
+                    if delta.y.abs() > 0.01 {
+                        return Some(delta.y);
+                    }
+                }
+            }
+            None
+        });
+        if let Some(delta) = wheel_delta {
+            let zoom_factor = if delta > 0.0 { 1.1 } else { 1.0 / 1.1 };
+            let new_zoom = (zoom * zoom_factor).clamp(0.5, 4.0);
+            if (new_zoom - zoom).abs() > 0.001 {
+                zoom = new_zoom;
+                if let Some(tab) = self.state.tab_mut(active_idx) {
+                    if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                        vs.zoom = zoom;
+                    }
+                }
+                // Consume the events so egui's global zoom doesn't also fire
+                ui.input_mut(|i| {
+                    i.events.retain(|e| {
+                        !matches!(e, egui::Event::MouseWheel { modifiers, .. } if modifiers.command)
+                    });
+                });
+                ctx.request_repaint();
+                return;
+            }
+        }
+
+        // Handle keyboard navigation
+        let (prev_pressed, next_pressed) = ui.input(|i| {
+            let prev = i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::PageUp);
+            let next = i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::PageDown);
+            (prev, next)
+        });
+
+        if prev_pressed && current_page > 0 {
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                    vs.current_page = current_page - 1;
+                    vs.fitted = false;
+                }
+            }
+            ctx.request_repaint();
+            return;
+        }
+
+        if next_pressed && current_page + 1 < page_count {
+            if let Some(tab) = self.state.tab_mut(active_idx) {
+                if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                    vs.current_page = current_page + 1;
+                    vs.fitted = false;
+                }
+            }
+            ctx.request_repaint();
+            return;
+        }
+
+        let display_w = img_w;
+        let display_h = img_h;
+
+        // Scrollable area for the page
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .max_height(available.y - 36.0)
+            .show(ui, |ui| {
+                let content_size = egui::vec2(display_w, display_h);
+                let padding_x = ((ui.available_width() - content_size.x) / 2.0).max(0.0);
+                let padding_y = ((ui.available_height() - content_size.y) / 2.0).max(0.0);
+
+                if padding_y > 0.0 {
+                    ui.add_space(padding_y);
+                }
+
+                ui.horizontal(|ui| {
+                    if padding_x > 0.0 {
+                        ui.add_space(padding_x);
+                    }
+                    let sized = egui::load::SizedTexture::new(
+                        texture.id(),
+                        egui::Vec2::new(display_w, display_h),
+                    );
+                    ui.add(egui::Image::from_texture(sized));
+                });
+            });
+
+        // Navigation + metadata bar at the bottom
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+
+            let prev_enabled = current_page > 0;
+            if ui.add_enabled(prev_enabled, egui::Button::new("\u{25C0}").small()).clicked() {
+                if let Some(tab) = self.state.tab_mut(active_idx) {
+                    if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                        vs.current_page = current_page.saturating_sub(1);
+                        vs.fitted = false;
+                    }
+                }
+                ctx.request_repaint();
+            }
+
+            ui.label(
+                egui::RichText::new(format!("{} / {}", current_page + 1, page_count))
+                    .small(),
+            );
+
+            let next_enabled = current_page + 1 < page_count;
+            if ui.add_enabled(next_enabled, egui::Button::new("\u{25B6}").small()).clicked() {
+                if let Some(tab) = self.state.tab_mut(active_idx) {
+                    if let TabKind::PdfViewer(ref mut vs) = tab.kind {
+                        vs.current_page = current_page + 1;
+                        vs.fitted = false;
+                    }
+                }
+                ctx.request_repaint();
+            }
+
+            ui.separator();
+
+            let size_text = if viewer_state.file_size >= 1_048_576 {
+                format!("{:.1} MB", viewer_state.file_size as f64 / 1_048_576.0)
+            } else {
+                format!("{:.1} KB", viewer_state.file_size as f64 / 1024.0)
+            };
+            let zoom_pct = (zoom * 100.0).round() as u32;
+
+            ui.label(
+                egui::RichText::new(format!("PDF  |  {}  |  {}%", size_text, zoom_pct))
+                    .small()
+                    .color(ui.visuals().text_color().gamma_multiply(0.7)),
+            );
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Loading / Error Tab Rendering
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Render a progress indicator for a tab whose file is still loading.
+    fn render_loading_tab(
+        &self,
+        ui: &mut egui::Ui,
+        progress: &crate::state::LoadingProgress,
+    ) {
+        let avail = ui.available_size();
+
+        ui.allocate_ui_at_rect(
+            egui::Rect::from_min_size(
+                ui.min_rect().min + egui::vec2(0.0, avail.y * 0.35),
+                egui::vec2(avail.x, avail.y * 0.3),
+            ),
+            |ui| {
+                ui.vertical_centered(|ui| {
+                    let file_name = progress.path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file");
+
+                    ui.add_space(8.0);
+                    ui.spinner();
+                    ui.add_space(12.0);
+
+                    ui.label(
+                        egui::RichText::new(format!("Loading {}", file_name))
+                            .size(18.0)
+                            .strong(),
+                    );
+                    ui.add_space(8.0);
+
+                    let fraction = progress.fraction();
+                    let bar = egui::ProgressBar::new(fraction)
+                        .text(format!(
+                            "{:.1} / {:.1} MB  ({:.0}%)",
+                            progress.mb_loaded(),
+                            progress.mb_total(),
+                            fraction * 100.0
+                        ))
+                        .desired_width(avail.x.min(400.0));
+                    ui.add(bar);
+                });
+            },
+        );
+    }
+
+    /// Render an error message for a tab whose file failed to load.
+    fn render_load_error_tab(ui: &mut egui::Ui, error: &str) {
+        let avail = ui.available_size();
+
+        ui.allocate_ui_at_rect(
+            egui::Rect::from_min_size(
+                ui.min_rect().min + egui::vec2(0.0, avail.y * 0.35),
+                egui::vec2(avail.x, avail.y * 0.3),
+            ),
+            |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("\u{26A0}")
+                            .size(32.0)
+                            .color(egui::Color32::from_rgb(220, 80, 60)),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Failed to load file")
+                            .size(18.0)
+                            .strong(),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(error)
+                            .color(ui.visuals().warn_fg_color),
+                    );
+                });
+            },
+        );
     }
 }

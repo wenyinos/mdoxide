@@ -201,6 +201,7 @@ fn show_create_dialog(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .order(egui::Order::Foreground)
         .frame(
             egui::Frame::window(&ctx.style())
                 .fill(bg_color)
@@ -313,6 +314,7 @@ fn show_rename_dialog(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .order(egui::Order::Foreground)
         .frame(
             egui::Frame::window(&ctx.style())
                 .fill(bg_color)
@@ -420,6 +422,7 @@ fn show_delete_dialog(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .order(egui::Order::Foreground)
         .frame(
             egui::Frame::window(&ctx.style())
                 .fill(bg_color)
@@ -552,6 +555,7 @@ impl GoToLineDialog {
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .order(egui::Order::Foreground)
             .frame(
                 egui::Frame::window(&ctx.style())
                     .fill(bg_color)

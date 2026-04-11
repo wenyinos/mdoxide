@@ -332,12 +332,6 @@ impl MarkdownNode {
 pub struct MarkdownDocument {
     /// Root node of the AST
     pub root: MarkdownNode,
-    #[allow(dead_code)]
-    /// Original source text
-    source: String,
-    #[allow(dead_code)]
-    /// Front matter content if present
-    front_matter: Option<String>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -417,8 +411,6 @@ pub fn parse_markdown_with_options(
 
     Ok(MarkdownDocument {
         root: adjusted_root,
-        source: markdown.to_string(),
-        front_matter,
     })
 }
 

@@ -10,7 +10,7 @@
 #![allow(clippy::redundant_closure)]
 
 use crate::config::{ load_config, save_config_silent, Settings, TabInfo, ViewMode };
-use crate::editor::{compute_edit_ops, EditHistory};
+use crate::editor::{compute_edit_ops, EditHistory, TextStats};
 use crate::lsp::{DiagnosticMap, LspManager};
 use crate::ui::TabPipelineState;
 use crate::vcs::GitService;
@@ -60,6 +60,10 @@ pub enum FileType {
     Csv,
     /// TSV files (.tsv)
     Tsv,
+    /// Image files (.png, .jpg, .jpeg, .gif, .webp, .bmp)
+    Image,
+    /// PDF files (.pdf)
+    Pdf,
     /// Unknown or unsupported file type
     Unknown,
 }
@@ -82,6 +86,8 @@ impl FileType {
             "toml" => Self::Toml,
             "csv" => Self::Csv,
             "tsv" => Self::Tsv,
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" => Self::Image,
+            "pdf" => Self::Pdf,
             _ => Self::Unknown,
         }
     }
@@ -101,6 +107,16 @@ impl FileType {
         matches!(self, Self::Csv | Self::Tsv)
     }
 
+    /// Check if this is an image file type.
+    pub fn is_image(&self) -> bool {
+        matches!(self, Self::Image)
+    }
+
+    /// Check if this is a PDF file type.
+    pub fn is_pdf(&self) -> bool {
+        matches!(self, Self::Pdf)
+    }
+
     /// Check if this file type supports split view (raw + rendered side-by-side).
     pub fn supports_split(&self) -> bool {
         self.is_markdown() || self.is_tabular()
@@ -115,6 +131,8 @@ impl FileType {
             Self::Toml => "TOML",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
+            Self::Image => "Image",
+            Self::Pdf => "PDF",
             Self::Unknown => "Unknown",
         }
     }
@@ -1064,6 +1082,112 @@ impl SpecialTabKind {
     }
 }
 
+/// State for an image viewer tab.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageViewerState {
+    /// Current zoom level (1.0 = original size, fit-to-window by default)
+    pub zoom: f32,
+    /// Image dimensions (width, height) — populated after first load
+    pub dimensions: Option<(u32, u32)>,
+    /// Image file size in bytes
+    pub file_size: u64,
+    /// Image format string (e.g., "PNG", "JPEG")
+    pub format_label: String,
+    /// Whether initial fit-to-window has been applied
+    pub fitted: bool,
+}
+
+impl Default for ImageViewerState {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            dimensions: None,
+            file_size: 0,
+            format_label: String::new(),
+            fitted: false,
+        }
+    }
+}
+
+/// State for a PDF viewer tab.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PdfViewerState {
+    /// Current page index (0-based)
+    pub current_page: usize,
+    /// Total number of pages
+    pub page_count: usize,
+    /// Current zoom level (1.0 = fit-to-window)
+    pub zoom: f32,
+    /// Whether initial fit-to-window has been applied
+    pub fitted: bool,
+    /// File size in bytes
+    pub file_size: u64,
+    /// Error message if PDF failed to load
+    pub error: Option<String>,
+}
+
+impl Default for PdfViewerState {
+    fn default() -> Self {
+        Self {
+            current_page: 0,
+            page_count: 0,
+            zoom: 1.0,
+            fitted: false,
+            file_size: 0,
+            error: None,
+        }
+    }
+}
+
+/// Progress state for background file loading.
+#[derive(Debug, Clone)]
+pub struct LoadingProgress {
+    /// File path being loaded
+    pub path: PathBuf,
+    /// Bytes loaded so far
+    pub bytes_loaded: u64,
+    /// Total file size in bytes
+    pub total_size: u64,
+}
+
+impl LoadingProgress {
+    /// Progress as a fraction (0.0 to 1.0).
+    pub fn fraction(&self) -> f32 {
+        if self.total_size == 0 {
+            0.0
+        } else {
+            (self.bytes_loaded as f64 / self.total_size as f64) as f32
+        }
+    }
+
+    /// Bytes loaded in megabytes.
+    pub fn mb_loaded(&self) -> f64 {
+        self.bytes_loaded as f64 / (1024.0 * 1024.0)
+    }
+
+    /// Total size in megabytes.
+    pub fn mb_total(&self) -> f64 {
+        self.total_size as f64 / (1024.0 * 1024.0)
+    }
+}
+
+/// Content state for a tab — either loading in background or fully loaded.
+#[derive(Debug, Clone)]
+pub enum TabContent {
+    /// File is being loaded in background thread.
+    Loading(LoadingProgress),
+    /// Content is fully loaded and ready for editing.
+    Ready,
+    /// File loading failed with an error message.
+    Error(String),
+}
+
+impl Default for TabContent {
+    fn default() -> Self {
+        TabContent::Ready
+    }
+}
+
 /// The kind of content a tab holds.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TabKind {
@@ -1071,6 +1195,10 @@ pub enum TabKind {
     Document,
     /// Special non-editable tab (settings, about, etc.)
     Special(SpecialTabKind),
+    /// Image viewer tab (read-only image display with zoom)
+    ImageViewer(ImageViewerState),
+    /// PDF viewer tab (read-only PDF display with page navigation)
+    PdfViewer(PdfViewerState),
 }
 
 impl Default for TabKind {
@@ -1089,6 +1217,8 @@ pub struct Tab {
     pub id: usize,
     /// Kind of tab (document or special panel)
     pub kind: TabKind,
+    /// Loading state: whether content is still being loaded from disk.
+    pub tab_content: TabContent,
     /// File path (None for unsaved/new documents)
     pub path: Option<PathBuf>,
     /// Document content
@@ -1171,9 +1301,27 @@ pub struct Tab {
     /// Used to preserve BOM when saving UTF-16 and UTF-8 with BOM files.
     pub had_bom: bool,
     /// Lazily-cloned content snapshot for diff-based undo recording.
-    /// Cloned once after each edit, not every frame. `prepare_undo_snapshot()`
-    /// populates this if None; `record_edit_from_snapshot()` consumes it.
+    /// Populated by `prepare_undo_snapshot_hashed()` only when the blake3
+    /// hash changes; `record_edit_from_snapshot()` updates it in-place.
     pending_undo_snapshot: Option<String>,
+    /// Blake3 hash of content at the time of the last undo snapshot.
+    /// Used to skip cloning when content hasn't changed between frames.
+    undo_content_hash: [u8; 32],
+
+    // ── Per-frame cache fields (invalidated via content_version) ─────────
+    cached_text_stats: TextStats,
+    cached_text_stats_version: u64,
+    cached_is_modified: bool,
+    cached_is_modified_version: u64,
+    /// Tracks save events separately so is_modified cache invalidates on save.
+    save_version: u64,
+    cached_is_modified_save_version: u64,
+    cached_needs_cjk: bool,
+    cached_needs_cjk_version: u64,
+    cached_needs_complex_script: bool,
+    cached_needs_complex_script_version: u64,
+    /// content_version at last auto-save (avoids O(N) hash_content per frame)
+    last_auto_save_content_version: Option<u64>,
 }
 
 impl Tab {
@@ -1194,6 +1342,7 @@ impl Tab {
         Self {
             id,
             kind: TabKind::Document,
+            tab_content: TabContent::Ready,
             path: None,
             content: String::new(),
             original_content: String::new(),
@@ -1229,6 +1378,18 @@ impl Tab {
             current_encoding: "utf-8", // Default to UTF-8 for new documents
             had_bom: false, // New documents don't have a BOM
             pending_undo_snapshot: None,
+            undo_content_hash: [0u8; 32],
+            cached_text_stats: TextStats::default(),
+            cached_text_stats_version: u64::MAX,
+            cached_is_modified: false,
+            cached_is_modified_version: u64::MAX,
+            save_version: 0,
+            cached_is_modified_save_version: u64::MAX,
+            cached_needs_cjk: false,
+            cached_needs_cjk_version: u64::MAX,
+            cached_needs_complex_script: false,
+            cached_needs_complex_script_version: u64::MAX,
+            last_auto_save_content_version: None,
         }
     }
 
@@ -1278,6 +1439,7 @@ impl Tab {
         Self {
             id,
             kind: TabKind::Document,
+            tab_content: TabContent::Ready,
             path: Some(path),
             content,
             original_content,
@@ -1313,6 +1475,18 @@ impl Tab {
             current_encoding: "utf-8",
             had_bom: false,
             pending_undo_snapshot: None,
+            undo_content_hash: [0u8; 32],
+            cached_text_stats: TextStats::default(),
+            cached_text_stats_version: u64::MAX,
+            cached_is_modified: false,
+            cached_is_modified_version: u64::MAX,
+            save_version: 0,
+            cached_is_modified_save_version: u64::MAX,
+            cached_needs_cjk: false,
+            cached_needs_cjk_version: u64::MAX,
+            cached_needs_complex_script: false,
+            cached_needs_complex_script_version: u64::MAX,
+            last_auto_save_content_version: None,
         }
     }
 
@@ -1366,6 +1540,7 @@ impl Tab {
         Self {
             id,
             kind: TabKind::Document,
+            tab_content: TabContent::Ready,
             path: Some(path),
             content,
             original_content,
@@ -1401,6 +1576,18 @@ impl Tab {
             current_encoding: actual_encoding,
             had_bom,
             pending_undo_snapshot: None,
+            undo_content_hash: [0u8; 32],
+            cached_text_stats: TextStats::default(),
+            cached_text_stats_version: u64::MAX,
+            cached_is_modified: false,
+            cached_is_modified_version: u64::MAX,
+            save_version: 0,
+            cached_is_modified_save_version: u64::MAX,
+            cached_needs_cjk: false,
+            cached_needs_cjk_version: u64::MAX,
+            cached_needs_complex_script: false,
+            cached_needs_complex_script_version: u64::MAX,
+            last_auto_save_content_version: None,
         }
     }
 
@@ -1479,6 +1666,7 @@ impl Tab {
         Self {
             id,
             kind: TabKind::Document,
+            tab_content: TabContent::Ready,
             path: info.path.clone(),
             content,
             original_content,
@@ -1514,6 +1702,18 @@ impl Tab {
             current_encoding: "utf-8",
             had_bom: false,
             pending_undo_snapshot: None,
+            undo_content_hash: [0u8; 32],
+            cached_text_stats: TextStats::default(),
+            cached_text_stats_version: u64::MAX,
+            cached_is_modified: false,
+            cached_is_modified_version: u64::MAX,
+            save_version: 0,
+            cached_is_modified_save_version: u64::MAX,
+            cached_needs_cjk: false,
+            cached_needs_cjk_version: u64::MAX,
+            cached_needs_complex_script: false,
+            cached_needs_complex_script_version: u64::MAX,
+            last_auto_save_content_version: None,
         }
     }
 
@@ -1595,6 +1795,7 @@ impl Tab {
         Self {
             id,
             kind: TabKind::Document,
+            tab_content: TabContent::Ready,
             path: info.path.clone(),
             content,
             original_content,
@@ -1630,25 +1831,168 @@ impl Tab {
             current_encoding: actual_encoding,
             had_bom,
             pending_undo_snapshot: None,
+            undo_content_hash: [0u8; 32],
+            cached_text_stats: TextStats::default(),
+            cached_text_stats_version: u64::MAX,
+            cached_is_modified: false,
+            cached_is_modified_version: u64::MAX,
+            save_version: 0,
+            cached_is_modified_save_version: u64::MAX,
+            cached_needs_cjk: false,
+            cached_needs_cjk_version: u64::MAX,
+            cached_needs_complex_script: false,
+            cached_needs_complex_script_version: u64::MAX,
+            last_auto_save_content_version: None,
         }
     }
 
-    /// Check if the tab has unsaved changes.
+    /// Create a placeholder tab for a file that is being loaded in the background.
+    ///
+    /// The tab is immediately added and visible but renders a progress indicator
+    /// instead of editor content until loading completes.
+    pub fn new_loading(id: usize, path: PathBuf, total_size: u64) -> Self {
+        let file_type = FileType::from_path(&path);
+        let mut tab = Self::new(id);
+        tab.tab_content = TabContent::Loading(LoadingProgress {
+            path: path.clone(),
+            bytes_loaded: 0,
+            total_size,
+        });
+        tab.path = Some(path);
+        tab.file_type = file_type;
+        tab.needs_focus = true;
+        tab
+    }
+
+    /// Finalize background loading: populate tab with decoded content and transition to Ready.
+    ///
+    /// This is called from the main thread when the background reader sends the complete bytes.
+    pub fn finish_loading(
+        &mut self,
+        bytes: Vec<u8>,
+        auto_save_default: bool,
+        default_view_mode: crate::config::ViewMode,
+    ) {
+        use chardetng::EncodingDetector;
+
+        let bytes_len = bytes.len();
+        let is_large_file = bytes_len >= LARGE_FILE_THRESHOLD;
+
+        let mut detector = EncodingDetector::new();
+        detector.feed(&bytes, true);
+        let detected = detector.guess(None, true);
+
+        let (content, actual_encoding, had_bom) = if
+            let Some((bom_encoding, bom_len)) = encoding_rs::Encoding::for_bom(&bytes)
+        {
+            let (decoded, _had_errors) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+            (decoded.into_owned(), bom_encoding.name(), true)
+        } else {
+            let (decoded, _, _) = detected.decode(&bytes);
+            (decoded.into_owned(), detected.name(), false)
+        };
+
+        let (original_content, original_content_hash, original_bytes) = if is_large_file {
+            log::info!(
+                "Background load complete ({} bytes): using hash-based modification detection",
+                bytes_len
+            );
+            (String::new(), Some(Self::compute_content_hash(&content)), Vec::new())
+        } else {
+            (content.clone(), None, bytes)
+        };
+
+        self.content = content;
+        self.original_content = original_content;
+        self.original_content_hash = original_content_hash;
+        self.is_large_file = is_large_file;
+        self.original_bytes = original_bytes;
+        self.detected_encoding = Some(actual_encoding);
+        self.current_encoding = actual_encoding;
+        self.had_bom = had_bom;
+        self.auto_save_enabled = auto_save_default;
+        self.view_mode = default_view_mode;
+        self.edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
+        };
+        self.tab_content = TabContent::Ready;
+        self.content_version = self.content_version.wrapping_add(1);
+    }
+
+    /// Mark this tab's loading as failed with an error message.
+    pub fn fail_loading(&mut self, error: String) {
+        self.tab_content = TabContent::Error(error);
+    }
+
+    /// Check if the tab has unsaved changes (cached via content_version + save_version).
     ///
     /// For large files (>1MB), uses hash comparison instead of full string comparison
     /// to avoid storing a full copy of the original content.
+    /// The result is cached and only recomputed when content or save state changes.
     pub fn is_modified(&self) -> bool {
-        // Special tabs are never "modified"
+        if self.cached_is_modified_version == self.content_version
+            && self.cached_is_modified_save_version == self.save_version
+        {
+            return self.cached_is_modified;
+        }
+        self.is_modified_uncached()
+    }
+
+    /// Recompute is_modified and update cache (call from &mut self contexts).
+    pub fn is_modified_cached(&mut self) -> bool {
+        if self.cached_is_modified_version == self.content_version
+            && self.cached_is_modified_save_version == self.save_version
+        {
+            return self.cached_is_modified;
+        }
+        let result = self.is_modified_uncached();
+        self.cached_is_modified = result;
+        self.cached_is_modified_version = self.content_version;
+        self.cached_is_modified_save_version = self.save_version;
+        result
+    }
+
+    fn is_modified_uncached(&self) -> bool {
         if self.is_special() {
             return false;
         }
         if let Some(hash) = self.original_content_hash {
-            // Large file: use hash-based comparison
             Self::compute_content_hash(&self.content) != hash
         } else {
-            // Normal file: use string comparison
             self.content != self.original_content
         }
+    }
+
+    /// Cached text statistics (word/char/line counts), recomputed only when content changes.
+    pub fn text_stats(&mut self) -> TextStats {
+        if self.cached_text_stats_version == self.content_version {
+            return self.cached_text_stats;
+        }
+        self.cached_text_stats = TextStats::from_text(&self.content);
+        self.cached_text_stats_version = self.content_version;
+        self.cached_text_stats
+    }
+
+    /// Whether content contains CJK characters (cached via content_version).
+    pub fn needs_cjk_cached(&mut self) -> bool {
+        if self.cached_needs_cjk_version == self.content_version {
+            return self.cached_needs_cjk;
+        }
+        self.cached_needs_cjk = crate::fonts::needs_cjk(&self.content);
+        self.cached_needs_cjk_version = self.content_version;
+        self.cached_needs_cjk
+    }
+
+    /// Whether content contains complex script characters (cached via content_version).
+    pub fn needs_complex_script_cached(&mut self) -> bool {
+        if self.cached_needs_complex_script_version == self.content_version {
+            return self.cached_needs_complex_script;
+        }
+        self.cached_needs_complex_script = crate::fonts::needs_complex_script_fonts(&self.content);
+        self.cached_needs_complex_script_version = self.content_version;
+        self.cached_needs_complex_script
     }
 
     /// Check if this is a large file that uses memory-optimized storage.
@@ -1686,8 +2030,8 @@ impl Tab {
     /// This allows new tabs that haven't been touched to be closed silently,
     /// while still protecting any typed content from accidental loss.
     pub fn should_prompt_to_save(&self) -> bool {
-        // Special tabs never need to save
-        if self.is_special() {
+        // Special tabs, image viewer tabs, PDF viewer tabs, and loading tabs never need to save
+        if self.is_special() || self.is_image_viewer() || self.is_pdf_viewer() || self.is_loading() || self.is_load_error() {
             return false;
         }
 
@@ -1712,11 +2056,37 @@ impl Tab {
             return format!("{} {}", special.icon(), special.title());
         }
 
+        if matches!(&self.kind, TabKind::ImageViewer(_)) {
+            let name = self.path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("Image");
+            return format!("\u{1F5BC} {}", name); // framed picture emoji
+        }
+
+        if matches!(&self.kind, TabKind::PdfViewer(_)) {
+            let name = self.path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("PDF");
+            return format!("\u{1F4C4} {}", name); // page facing up emoji
+        }
+
         let name = self.path
             .as_ref()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
             .unwrap_or("Untitled");
+
+        if self.is_loading() {
+            return format!("\u{23F3} {}", name); // hourglass
+        }
+
+        if self.is_load_error() {
+            return format!("\u{26A0} {}", name); // warning sign
+        }
 
         if self.is_modified() {
             format!("{}*", name)
@@ -1730,19 +2100,49 @@ impl Tab {
         matches!(self.kind, TabKind::Special(_))
     }
 
+    /// Check if this tab is an image viewer tab.
+    pub fn is_image_viewer(&self) -> bool {
+        matches!(self.kind, TabKind::ImageViewer(_))
+    }
+
+    /// Check if this tab is a PDF viewer tab.
+    pub fn is_pdf_viewer(&self) -> bool {
+        matches!(self.kind, TabKind::PdfViewer(_))
+    }
+
+    /// Check if this tab is currently loading file content from disk.
+    pub fn is_loading(&self) -> bool {
+        matches!(self.tab_content, TabContent::Loading(_))
+    }
+
+    /// Check if this tab had a loading error.
+    pub fn is_load_error(&self) -> bool {
+        matches!(self.tab_content, TabContent::Error(_))
+    }
+
+    /// Get loading progress if this tab is currently loading.
+    pub fn loading_progress(&self) -> Option<&LoadingProgress> {
+        if let TabContent::Loading(ref progress) = self.tab_content {
+            Some(progress)
+        } else {
+            None
+        }
+    }
+
     /// Mark the current content as saved (updates original_content or hash).
     /// Also clears auto-save state since content is now persisted.
     pub fn mark_saved(&mut self) {
         if self.is_large_file {
-            // Large file: update hash instead of storing full content
             self.original_content_hash = Some(Self::compute_content_hash(&self.content));
         } else {
-            // Normal file: store full content for comparison
             self.original_content = self.content.clone();
         }
-        // Clear auto-save tracking since content is now saved
         self.last_auto_save_content_hash = None;
         self.last_edit_time = None;
+        self.save_version = self.save_version.wrapping_add(1);
+        self.cached_is_modified = false;
+        self.cached_is_modified_version = self.content_version;
+        self.cached_is_modified_save_version = self.save_version;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1911,36 +2311,29 @@ impl Tab {
 
     /// Check if auto-save should trigger based on idle time.
     ///
-    /// Returns true if:
-    /// - Auto-save is enabled for this tab
-    /// - Tab has unsaved changes (modified)
-    /// - Content has changed since last auto-save
-    /// - Idle delay has passed since last edit
+    /// Uses cached is_modified() and content_version to avoid O(N) per-frame work.
     pub fn should_auto_save(&self, delay_ms: u32) -> bool {
         if !self.auto_save_enabled || !self.is_modified() {
             return false;
         }
 
-        // Check if content changed since last auto-save
-        let current_hash = hash_content(&self.content);
-        if let Some(last_hash) = self.last_auto_save_content_hash {
-            if current_hash == last_hash {
-                return false; // No changes since last auto-save
+        if let Some(last_ver) = self.last_auto_save_content_version {
+            if self.content_version == last_ver {
+                return false;
             }
         }
 
-        // Check if idle delay has passed
         if let Some(last_edit) = self.last_edit_time {
-            let elapsed = last_edit.elapsed();
-            elapsed >= std::time::Duration::from_millis(delay_ms as u64)
+            last_edit.elapsed() >= std::time::Duration::from_millis(delay_ms as u64)
         } else {
             false
         }
     }
 
-    /// Mark that auto-save was performed (updates content hash).
+    /// Mark that auto-save was performed (stores content_version to avoid O(N) re-hash).
     pub fn mark_auto_saved(&mut self) {
         self.last_auto_save_content_hash = Some(hash_content(&self.content));
+        self.last_auto_save_content_version = Some(self.content_version);
     }
 
     /// Get the content hash for change detection.
@@ -1961,13 +2354,19 @@ impl Tab {
     /// Undo the last edit group.
     ///
     /// Applies inverse operations to `self.content` and bumps `content_version`
-    /// to signal UI widgets to re-sync. Returns cursor char position from the
-    /// first operation in the group, or `None` if the undo stack was empty.
+    /// to signal UI widgets to re-sync. Updates the undo snapshot in-place
+    /// (reusing buffer) and refreshes the blake3 hash to avoid a re-clone
+    /// on the next frame. Returns cursor char position from the first
+    /// operation in the group, or `None` if the undo stack was empty.
     pub fn undo(&mut self) -> Option<usize> {
         let cursor = self.edit_history.undo_string(&mut self.content);
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
-            self.pending_undo_snapshot = None;
+            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+            match self.pending_undo_snapshot.as_mut() {
+                Some(snap) => snap.clone_from(&self.content),
+                None => { self.pending_undo_snapshot = Some(self.content.clone()); }
+            }
         }
         cursor
     }
@@ -1975,12 +2374,17 @@ impl Tab {
     /// Redo the last undone edit group.
     ///
     /// Reapplies operations to `self.content` and bumps `content_version`.
+    /// Updates the undo snapshot in-place and refreshes the blake3 hash.
     /// Returns cursor char position, or `None` if the redo stack was empty.
     pub fn redo(&mut self) -> Option<usize> {
         let cursor = self.edit_history.redo_string(&mut self.content);
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
-            self.pending_undo_snapshot = None;
+            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+            match self.pending_undo_snapshot.as_mut() {
+                Some(snap) => snap.clone_from(&self.content),
+                None => { self.pending_undo_snapshot = Some(self.content.clone()); }
+            }
         }
         cursor
     }
@@ -2024,37 +2428,50 @@ impl Tab {
         self.content_version = self.content_version.wrapping_add(1);
     }
 
-    /// Lazily prepare a content snapshot for diff-based undo recording.
+    /// Prepare an undo snapshot using blake3 hash-based change detection.
     ///
-    /// Only clones content if no pending snapshot exists (i.e., first frame
-    /// after file open or after an edit was recorded). Call this at the start
-    /// of the editor render, before `show()`.
-    pub fn prepare_undo_snapshot(&mut self) {
-        if self.pending_undo_snapshot.is_none() {
+    /// Computes a blake3 hash of content and only clones when the hash
+    /// differs from the stored hash (i.e., content actually changed).
+    /// Uses `clone_from` to reuse existing buffer capacity when possible.
+    /// Call before non-Raw view widgets that can modify `content`.
+    pub fn prepare_undo_snapshot_hashed(&mut self) {
+        let hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+        if hash != self.undo_content_hash {
+            match self.pending_undo_snapshot.as_mut() {
+                Some(snap) => snap.clone_from(&self.content),
+                None => { self.pending_undo_snapshot = Some(self.content.clone()); }
+            }
+            self.undo_content_hash = hash;
+        } else if self.pending_undo_snapshot.is_none() {
             self.pending_undo_snapshot = Some(self.content.clone());
+            self.undo_content_hash = hash;
         }
     }
 
     /// Record an edit by diffing the pending snapshot against current content.
     ///
-    /// Computes a minimal set of operations (delete + insert) from the
-    /// snapshot and pushes them to the history. Clears the snapshot so it
-    /// will be re-created on the next frame via `prepare_undo_snapshot()`.
+    /// After recording, updates the snapshot in-place via `clone_from` to
+    /// reuse the buffer, and refreshes the blake3 hash. This avoids a fresh
+    /// allocation on the next frame.
     pub fn record_edit_from_snapshot(&mut self) {
-        if let Some(old_content) = self.pending_undo_snapshot.take() {
+        if let Some(mut old_content) = self.pending_undo_snapshot.take() {
             if old_content != self.content {
                 let ops = compute_edit_ops(&old_content, &self.content);
                 self.edit_history.record_operations(ops);
+                old_content.clone_from(&self.content);
+                self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             }
+            self.pending_undo_snapshot = Some(old_content);
         }
     }
 
     /// Legacy shim: record edit from explicit old content.
-    /// Prefer `prepare_undo_snapshot` + `record_edit_from_snapshot` for new code.
+    /// Prefer `prepare_undo_snapshot_hashed` + `record_edit_from_snapshot` for new code.
     pub fn record_edit(&mut self, old_content: String, _old_cursor: usize) {
         if old_content != self.content {
             let ops = compute_edit_ops(&old_content, &self.content);
             self.edit_history.record_operations(ops);
+            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             self.pending_undo_snapshot = None;
         }
     }
@@ -2961,7 +3378,25 @@ impl AppState {
 
         for tab_info in &tab_infos {
             if let Some(path) = &tab_info.path {
-                // Try to read the file as bytes for encoding detection
+                let file_type = FileType::from_path(path);
+
+                // Viewer tabs: restore as viewer instead of document
+                if file_type.is_image() {
+                    match self.open_image_tab(path.clone(), false) {
+                        Ok(_) => debug!("Restored image viewer tab: {}", path.display()),
+                        Err(e) => warn!("Could not restore image tab '{}': {}", path.display(), e),
+                    }
+                    continue;
+                }
+                if file_type.is_pdf() {
+                    match self.open_pdf_tab(path.clone(), false) {
+                        Ok(_) => debug!("Restored PDF viewer tab: {}", path.display()),
+                        Err(e) => warn!("Could not restore PDF tab '{}': {}", path.display(), e),
+                    }
+                    continue;
+                }
+
+                // Regular document tabs: read bytes for encoding detection
                 match std::fs::read(path) {
                     Ok(bytes) => {
                         let tab = Tab::from_tab_info_with_bytes(
@@ -2981,7 +3416,6 @@ impl AppState {
                             path.display(),
                             e
                         );
-                        // Skip this tab - file no longer exists
                     }
                 }
             } else {
@@ -3051,6 +3485,14 @@ impl AppState {
     // Tab Management
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// Warm per-frame caches (is_modified) for all tabs.
+    /// Call once per frame before reading tab titles or is_modified via &self.
+    pub fn warm_tab_caches(&mut self) {
+        for tab in &mut self.tabs {
+            tab.is_modified_cached();
+        }
+    }
+
     /// Get the number of open tabs.
     pub fn tab_count(&self) -> usize {
         self.tabs.len()
@@ -3088,6 +3530,11 @@ impl AppState {
     /// Get a mutable tab by index.
     pub fn tab_mut(&mut self, index: usize) -> Option<&mut Tab> {
         self.tabs.get_mut(index)
+    }
+
+    /// Find a tab by its unique ID and return a mutable reference.
+    pub fn tab_by_id_mut(&mut self, tab_id: usize) -> Option<&mut Tab> {
+        self.tabs.iter_mut().find(|t| t.id == tab_id)
     }
 
     /// Create a new empty tab and make it active.
@@ -3137,6 +3584,95 @@ impl AppState {
         self.active_tab_index
     }
 
+    /// Open an image file in an image viewer tab.
+    ///
+    /// If the same image is already open, focuses that tab instead.
+    /// Returns the index of the (new or existing) tab.
+    pub fn open_image_tab(&mut self, path: PathBuf, focus: bool) -> Result<usize, std::io::Error> {
+        if let Some(index) = self.find_tab_by_path(&path) {
+            if focus {
+                self.active_tab_index = index;
+            }
+            return Ok(index);
+        }
+
+        let metadata = std::fs::metadata(&path)?;
+        let file_size = metadata.len();
+        let format_label = path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|s| s.to_uppercase())
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let viewer_state = ImageViewerState {
+            zoom: 1.0,
+            dimensions: None,
+            file_size,
+            format_label,
+            fitted: false,
+        };
+
+        let mut tab = Tab::new(self.next_tab_id);
+        tab.kind = TabKind::ImageViewer(viewer_state);
+        tab.path = Some(path.clone());
+        tab.needs_focus = false;
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        let new_index = self.tabs.len() - 1;
+
+        if focus {
+            self.active_tab_index = new_index;
+            info!("Opened image viewer: {}", path.display());
+        }
+        Ok(new_index)
+    }
+
+    /// Open a PDF file in a PDF viewer tab.
+    ///
+    /// If the same PDF is already open, focuses that tab instead.
+    /// Returns the index of the (new or existing) tab.
+    pub fn open_pdf_tab(&mut self, path: PathBuf, focus: bool) -> Result<usize, std::io::Error> {
+        if let Some(index) = self.find_tab_by_path(&path) {
+            if focus {
+                self.active_tab_index = index;
+            }
+            return Ok(index);
+        }
+
+        let metadata = std::fs::metadata(&path)?;
+        let file_size = metadata.len();
+
+        // Try to load PDF and get page count
+        let bytes = std::fs::read(&path)?;
+        let pdf_data = std::sync::Arc::new(bytes);
+        let (page_count, error) = match hayro::hayro_interpret::hayro_syntax::Pdf::new(pdf_data) {
+            Ok(pdf) => (pdf.pages().len(), None),
+            Err(e) => (0, Some(format!("{:?}", e))),
+        };
+
+        let viewer_state = PdfViewerState {
+            current_page: 0,
+            page_count,
+            zoom: 1.0,
+            fitted: false,
+            file_size,
+            error,
+        };
+
+        let mut tab = Tab::new(self.next_tab_id);
+        tab.kind = TabKind::PdfViewer(viewer_state);
+        tab.path = Some(path.clone());
+        tab.needs_focus = false;
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        let new_index = self.tabs.len() - 1;
+
+        if focus {
+            self.active_tab_index = new_index;
+            info!("Opened PDF viewer: {}", path.display());
+        }
+        Ok(new_index)
+    }
+
     /// Open a file in a new tab.
     ///
     /// Returns the index of the new tab, or an error if the file couldn't be read.
@@ -3173,6 +3709,16 @@ impl AppState {
                 info!("File already open at tab {} (no focus change)", index);
             }
             return Ok(index);
+        }
+
+        // Intercept image files before binary detection — open as image viewer
+        if FileType::from_path(&path).is_image() {
+            return self.open_image_tab(path, focus);
+        }
+
+        // Intercept PDF files before binary detection — open as PDF viewer
+        if FileType::from_path(&path).is_pdf() {
+            return self.open_pdf_tab(path, focus);
         }
 
         // Show non-blocking performance warning for large files before loading
@@ -3255,6 +3801,40 @@ impl AppState {
         self.save_settings_if_dirty();
 
         Ok(new_index)
+    }
+
+    /// Create a loading-placeholder tab for a large file.
+    ///
+    /// The caller is responsible for spawning a background thread to read the
+    /// file and calling `finish_loading()` on the tab when done.
+    /// Returns `(tab_index, tab_id)` so the caller can track the loading task.
+    pub fn open_file_loading(
+        &mut self,
+        path: PathBuf,
+        file_size: u64,
+        focus: bool,
+    ) -> (usize, usize) {
+        let tab_id = self.next_tab_id;
+        let tab = Tab::new_loading(tab_id, path.clone(), file_size);
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        let new_index = self.tabs.len() - 1;
+
+        if focus {
+            self.active_tab_index = new_index;
+        }
+
+        info!(
+            "Created loading tab for large file: {} ({:.1} MB)",
+            path.display(),
+            file_size as f64 / (1024.0 * 1024.0)
+        );
+
+        self.settings.add_recent_file(path);
+        self.settings_dirty = true;
+        self.save_settings_if_dirty();
+
+        (new_index, tab_id)
     }
 
     /// Find a tab by file path.
@@ -3758,6 +4338,25 @@ impl AppState {
         let mut restored_count = 0;
 
         for session_tab in &session.tabs {
+            // Viewer tabs: restore as viewer instead of document
+            if let Some(path) = &session_tab.path {
+                let file_type = FileType::from_path(path);
+                if file_type.is_image() {
+                    match self.open_image_tab(path.clone(), false) {
+                        Ok(_) => { restored_count += 1; }
+                        Err(e) => warn!("Could not restore image tab '{}': {}", path.display(), e),
+                    }
+                    continue;
+                }
+                if file_type.is_pdf() {
+                    match self.open_pdf_tab(path.clone(), false) {
+                        Ok(_) => { restored_count += 1; }
+                        Err(e) => warn!("Could not restore PDF tab '{}': {}", path.display(), e),
+                    }
+                    continue;
+                }
+            }
+
             // Try to load content from various sources
             let resolved = self.resolve_tab_content(session_tab, result);
 
@@ -3813,6 +4412,7 @@ impl AppState {
                             let t = Tab {
                                 id: self.next_tab_id,
                                 kind: TabKind::Document,
+                                tab_content: TabContent::Ready,
                                 path: Some(path.clone()),
                                 content,
                                 original_content: original_content_str,
@@ -3848,6 +4448,18 @@ impl AppState {
                                 current_encoding: encoding,
                                 had_bom,
                                 pending_undo_snapshot: None,
+                                undo_content_hash: [0u8; 32],
+                                cached_text_stats: TextStats::default(),
+                                cached_text_stats_version: u64::MAX,
+                                cached_is_modified: false,
+                                cached_is_modified_version: u64::MAX,
+                                save_version: 0,
+                                cached_is_modified_save_version: u64::MAX,
+                                cached_needs_cjk: false,
+                                cached_needs_cjk_version: u64::MAX,
+                                cached_needs_complex_script: false,
+                                cached_needs_complex_script_version: u64::MAX,
+                                last_auto_save_content_version: None,
                             };
                             t
                         } else {

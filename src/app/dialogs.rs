@@ -26,6 +26,7 @@ impl FerriteApp {
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
                     ui.label(&self.state.ui.confirm_dialog_message);
                     ui.separator();
@@ -37,13 +38,15 @@ impl FerriteApp {
                         );
                         let is_exit = self.state.ui.pending_action == Some(PendingAction::Exit);
 
-                        // Extract tab_id for cleanup if this is a CloseTab action
-                        let tab_id_to_cleanup = if let Some(PendingAction::CloseTab(index)) =
-                            self.state.ui.pending_action
-                        {
-                            self.state.tabs().get(index).map(|t| t.id)
-                        } else {
-                            None
+                        // Collect tab IDs for cleanup before the action mutates state
+                        let tab_ids_to_cleanup: Vec<usize> = match self.state.ui.pending_action {
+                            Some(PendingAction::CloseTab(index)) => {
+                                self.state.tabs().get(index).map(|t| vec![t.id]).unwrap_or_default()
+                            }
+                            Some(PendingAction::CloseAllTabs) => {
+                                self.state.tabs().iter().map(|t| t.id).collect()
+                            }
+                            _ => Vec::new(),
                         };
 
                         // "Save" button - save then proceed with action
@@ -68,9 +71,8 @@ impl FerriteApp {
                                         .unwrap_or(true)
                                     {
                                         self.state.handle_confirmed_action();
-                                        // Clean up viewer state after tab is closed
-                                        if let Some(id) = tab_id_to_cleanup {
-                                            self.cleanup_tab_state(id, Some(ui.ctx()));
+                                        for id in &tab_ids_to_cleanup {
+                                            self.cleanup_tab_state(*id, Some(ui.ctx()));
                                         }
                                     } else {
                                         // Save was cancelled or failed, cancel the close
@@ -90,9 +92,8 @@ impl FerriteApp {
                         // "Discard" button - proceed without saving
                         if ui.button(t!("dialog.unsaved_changes.dont_save").to_string()).clicked() {
                             self.state.handle_confirmed_action();
-                            // Clean up viewer state after tab is closed
-                            if let Some(id) = tab_id_to_cleanup {
-                                self.cleanup_tab_state(id, Some(ui.ctx()));
+                            for id in &tab_ids_to_cleanup {
+                                self.cleanup_tab_state(*id, Some(ui.ctx()));
                             }
                             if is_exit {
                                 // Clear recovery data since user explicitly chose not to save
@@ -115,6 +116,7 @@ impl FerriteApp {
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
                     ui.label(egui::RichText::new("⚠").size(24.0));
                     ui.label(&self.state.ui.error_message);
@@ -131,6 +133,7 @@ impl FerriteApp {
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
                 .min_width(450.0)
                 .show(ctx, |ui| {
                     ui.label(egui::RichText::new("📦").size(24.0));

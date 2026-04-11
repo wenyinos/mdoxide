@@ -119,6 +119,16 @@ pub(crate) struct DeferredFormatAction {
     pub selection: Option<(usize, usize)>,
 }
 
+/// Messages sent from background file-loading threads to the UI thread.
+pub(crate) enum FileLoadMsg {
+    /// Progress update: tab_id, bytes_loaded so far.
+    Progress { tab_id: usize, bytes_loaded: u64 },
+    /// Loading complete: tab_id, full file bytes.
+    Complete { tab_id: usize, bytes: Vec<u8> },
+    /// Loading failed: tab_id, error message.
+    Error { tab_id: usize, error: String },
+}
+
 /// Information about a pending auto-save recovery for user confirmation.
 #[derive(Debug, Clone)]
 pub(crate) struct AutoSaveRecoveryInfo {
