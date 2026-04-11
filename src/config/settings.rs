@@ -389,6 +389,12 @@ impl KeyBinding {
             format!("{}+{}", mods, key)
         }
     }
+
+    /// Returns `true` if this binding represents a real shortcut (has modifiers).
+    /// Bindings with no modifiers and a generic key are treated as palette-only.
+    pub fn has_modifiers(&self) -> bool {
+        self.modifiers.ctrl || self.modifiers.shift || self.modifiers.alt || self.modifiers.raw_ctrl
+    }
 }
 
 /// Command identifier for keyboard shortcuts.
@@ -404,6 +410,8 @@ pub enum ShortcutCommand {
     New,
     NewTab,
     CloseTab,
+    OpenWorkspace,
+    CloseWorkspace,
     // Navigation
     NextTab,
     PrevTab,
@@ -457,6 +465,7 @@ pub enum ShortcutCommand {
     UnfoldAll,
     ToggleFoldAtCursor,
     // Other
+    CommandPalette,
     OpenSettings,
     OpenAbout,
     ExportHtml,
@@ -470,7 +479,7 @@ impl ShortcutCommand {
         use ShortcutCommand::*;
         &[
             // File operations
-            Save, SaveAs, Open, New, NewTab, CloseTab,
+            Save, SaveAs, Open, New, NewTab, CloseTab, OpenWorkspace, CloseWorkspace,
             // Navigation
             NextTab, PrevTab, GoToLine, QuickOpen,
             // View
@@ -487,7 +496,7 @@ impl ShortcutCommand {
             // Folding
             FoldAll, UnfoldAll, ToggleFoldAtCursor,
             // Other
-            OpenSettings, OpenAbout, ExportHtml, InsertToc, ToggleFrontmatter,
+            CommandPalette, OpenSettings, OpenAbout, ExportHtml, InsertToc, ToggleFrontmatter,
         ]
     }
 
@@ -501,6 +510,8 @@ impl ShortcutCommand {
             ShortcutCommand::New => "New File",
             ShortcutCommand::NewTab => "New Tab",
             ShortcutCommand::CloseTab => "Close Tab",
+            ShortcutCommand::OpenWorkspace => "Open Workspace",
+            ShortcutCommand::CloseWorkspace => "Close Workspace",
             // Navigation
             ShortcutCommand::NextTab => "Next Tab",
             ShortcutCommand::PrevTab => "Previous Tab",
@@ -554,6 +565,7 @@ impl ShortcutCommand {
             ShortcutCommand::UnfoldAll => "Unfold All",
             ShortcutCommand::ToggleFoldAtCursor => "Toggle Fold",
             // Other
+            ShortcutCommand::CommandPalette => "Command Palette",
             ShortcutCommand::OpenSettings => "Open Settings",
             ShortcutCommand::OpenAbout => "Open About",
             ShortcutCommand::ExportHtml => "Export HTML",
@@ -566,7 +578,8 @@ impl ShortcutCommand {
     pub fn category(&self) -> &'static str {
         match self {
             ShortcutCommand::Save | ShortcutCommand::SaveAs | ShortcutCommand::Open
-            | ShortcutCommand::New | ShortcutCommand::NewTab | ShortcutCommand::CloseTab => "File",
+            | ShortcutCommand::New | ShortcutCommand::NewTab | ShortcutCommand::CloseTab
+            | ShortcutCommand::OpenWorkspace | ShortcutCommand::CloseWorkspace => "File",
 
             ShortcutCommand::NextTab | ShortcutCommand::PrevTab | ShortcutCommand::GoToLine
             | ShortcutCommand::QuickOpen => "Navigation",
@@ -592,8 +605,8 @@ impl ShortcutCommand {
 
             ShortcutCommand::FoldAll | ShortcutCommand::UnfoldAll | ShortcutCommand::ToggleFoldAtCursor => "Folding",
 
-            ShortcutCommand::OpenSettings | ShortcutCommand::OpenAbout | ShortcutCommand::ExportHtml
-            | ShortcutCommand::InsertToc | ShortcutCommand::ToggleFrontmatter => "Other",
+            ShortcutCommand::CommandPalette | ShortcutCommand::OpenSettings | ShortcutCommand::OpenAbout
+            | ShortcutCommand::ExportHtml | ShortcutCommand::InsertToc | ShortcutCommand::ToggleFrontmatter => "Other",
         }
     }
 
@@ -609,6 +622,8 @@ impl ShortcutCommand {
             ShortcutCommand::New => KeyBinding::new(M::ctrl(), N),
             ShortcutCommand::NewTab => KeyBinding::new(M::ctrl(), T),
             ShortcutCommand::CloseTab => KeyBinding::new(M::ctrl(), W),
+            ShortcutCommand::OpenWorkspace => KeyBinding::new(M::none(), F12),
+            ShortcutCommand::CloseWorkspace => KeyBinding::new(M::none(), F12),
             // Navigation
             ShortcutCommand::NextTab => KeyBinding::new(M::ctrl(), Tab),
             ShortcutCommand::PrevTab => KeyBinding::new(M::ctrl_shift(), Tab),
@@ -662,6 +677,7 @@ impl ShortcutCommand {
             ShortcutCommand::UnfoldAll => KeyBinding::new(M::ctrl_shift(), CloseBracket),
             ShortcutCommand::ToggleFoldAtCursor => KeyBinding::new(M::ctrl_shift(), Period),
             // Other
+            ShortcutCommand::CommandPalette => KeyBinding::new(M::alt(), Space),
             ShortcutCommand::OpenSettings => KeyBinding::new(M::ctrl(), Comma),
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
             ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
@@ -1831,6 +1847,10 @@ pub struct Settings {
     /// Recent pipeline commands (persisted across sessions)
     pub pipeline_recent_commands: Vec<String>,
 
+    /// Recent command palette commands (persisted across sessions)
+    #[serde(default)]
+    pub command_palette_recent: Vec<ShortcutCommand>,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Minimap Settings
     // ─────────────────────────────────────────────────────────────────────────
@@ -2133,6 +2153,7 @@ impl Default for Settings {
             pipeline_max_runtime_ms: 30000,  // 30 seconds max runtime
             pipeline_panel_height: 200.0,    // Default panel height
             pipeline_recent_commands: Vec::new(),
+            command_palette_recent: Vec::new(),
 
             // Minimap Settings
             minimap_enabled: true,           // Minimap enabled by default
@@ -2504,6 +2525,7 @@ impl Settings {
             .clamp(Self::MIN_PIPELINE_PANEL_HEIGHT, Self::MAX_PIPELINE_PANEL_HEIGHT);
         self.pipeline_recent_commands
             .truncate(Self::MAX_PIPELINE_RECENT_COMMANDS);
+        self.command_palette_recent.truncate(20);
 
         // Clamp minimap width
         self.minimap_width = self

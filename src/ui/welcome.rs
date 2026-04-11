@@ -3,7 +3,7 @@
 //! This module implements the Welcome panel displayed on first launch,
 //! allowing users to configure theme, language, fonts, and editor preferences.
 
-use crate::config::{CjkFontPreference, Language, MaxLineWidth, Settings, Theme, ViewMode};
+use crate::config::{CjkFontPreference, KeyBinding, KeyCode, KeyModifiers, Language, MaxLineWidth, Settings, ShortcutCommand, Theme, ViewMode};
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
 
@@ -359,6 +359,61 @@ impl WelcomePanel {
                                 }
                             }
                         });
+
+                    // ── Command Palette ──────────────────────────────
+                    Self::section_heading(ui, "Command Palette", text_color);
+
+                    ui.label(
+                        RichText::new("Quick access to all commands. Press the shortcut to open a searchable command list.")
+                            .weak()
+                            .small()
+                            .color(weak_color),
+                    );
+                    ui.add_space(6.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new("Shortcut")
+                                .strong()
+                                .color(text_color),
+                        );
+                        ui.add_space(8.0);
+
+                        let current_binding = settings.keyboard_shortcuts.get(ShortcutCommand::CommandPalette);
+                        let binding_str = current_binding.display_string();
+
+                        // Show preset options
+                        let presets: &[(&str, KeyBinding)] = &[
+                            ("Alt+Space", KeyBinding::new(KeyModifiers::alt(), KeyCode::Space)),
+                            ("Ctrl+Shift+P", KeyBinding::new(KeyModifiers::ctrl_shift(), KeyCode::P)),
+                        ];
+
+                        for (label, binding) in presets {
+                            let is_current = current_binding == *binding;
+                            if ui.selectable_label(is_current, *label).clicked() && !is_current {
+                                settings.keyboard_shortcuts.set(ShortcutCommand::CommandPalette, *binding);
+                                changed = true;
+                            }
+                        }
+
+                        // Show current if custom (not matching any preset)
+                        let is_custom = !presets.iter().any(|(_, b)| current_binding == *b);
+                        if is_custom {
+                            ui.add_space(8.0);
+                            ui.label(
+                                RichText::new(format!("Custom: {}", binding_str))
+                                    .color(weak_color)
+                                    .small(),
+                            );
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new("You can change this later in Settings > Keyboard Shortcuts")
+                            .weak()
+                            .small()
+                            .color(weak_color),
+                    );
 
                     // ── Files ──────────────────────────────────────────
                     Self::section_heading(ui, &t!("welcome.section.files").to_string(), text_color);

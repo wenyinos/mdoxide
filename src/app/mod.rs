@@ -13,6 +13,7 @@
 
 mod types;
 mod helpers;
+pub(crate) mod commands;
 mod file_ops;
 mod input_handling;
 mod keyboard;
@@ -25,6 +26,7 @@ mod dialogs;
 mod title_bar;
 mod status_bar;
 mod central_panel;
+mod platform;
 
 pub use helpers::modifier_symbol;
 use types::*;
@@ -84,6 +86,7 @@ use crate::ui::{
     load_app_logo_texture,
     AboutPanel,
     BacklinksPanel,
+    CommandPalette,
     FileOperationDialog,
     FileOperationResult,
     FileTreeContextAction,
@@ -142,6 +145,10 @@ pub struct FerriteApp {
     file_tree_panel: FileTreePanel,
     /// Quick file switcher (Ctrl+P) for workspace mode
     quick_switcher: QuickSwitcher,
+    /// Command palette (Alt+Space) for quick command execution
+    command_palette: CommandPalette,
+    /// Pending command from palette to dispatch after render (avoids mid-render state mutation)
+    pending_palette_command: Option<crate::config::ShortcutCommand>,
     /// Active file operation dialog (New File, Rename, Delete, etc.)
     file_operation_dialog: Option<FileOperationDialog>,
     /// Search in files panel (Ctrl+Shift+F)
@@ -230,6 +237,8 @@ pub struct FerriteApp {
     app_logo_texture: Option<egui::TextureHandle>,
     /// Whether we've logged the one-shot window diagnostic on startup.
     window_diagnostic_logged: bool,
+    /// Whether the platform-specific Alt+Space suppression has been applied.
+    platform_init_done: bool,
     /// Flag indicating CJK font check is needed after a file was opened.
     /// Set when a file is opened during the UI render pass, checked at end of update().
     /// This ensures CJK fonts are loaded immediately rather than waiting for next frame.
@@ -444,6 +453,8 @@ impl FerriteApp {
             backlinks_panel: BacklinksPanel::new(),
             file_tree_panel: FileTreePanel::new(),
             quick_switcher: QuickSwitcher::new(),
+            command_palette: CommandPalette::new(),
+            pending_palette_command: None,
             file_operation_dialog: None,
             search_panel: SearchPanel::new(),
             pipeline_panel,
@@ -488,6 +499,7 @@ impl FerriteApp {
             last_window_title: String::new(),
             app_logo_texture,
             window_diagnostic_logged: false,
+            platform_init_done: false,
             pending_cjk_check: false,
             last_active_tab_for_backlinks: usize::MAX,
             backlinks_need_refresh: true,
@@ -505,6 +517,11 @@ impl FerriteApp {
         if let Some(session) = session_for_csv {
             app.restore_csv_delimiters(&session);
         }
+
+        // Restore command palette recent commands from settings
+        let recent: std::collections::VecDeque<_> =
+            app.state.settings.command_palette_recent.iter().copied().collect();
+        app.command_palette.set_recent_commands(recent);
 
         crate::log_memory("App::new() complete");
         app
@@ -2373,6 +2390,17 @@ impl eframe::App for FerriteApp {
             );
         }
 
+        // One-shot: install platform keyboard hook to suppress Alt+Space system menu
+        if !self.platform_init_done {
+            self.platform_init_done = true;
+            platform::install_platform_hooks();
+        }
+
+        // Check if the platform hook intercepted Alt+Space this frame
+        if platform::take_palette_toggle_from_hook() {
+            self.command_palette.toggle();
+        }
+
         // Apply theme if needed (handles System theme changes)
         self.theme_manager.apply_if_needed(ctx);
 
@@ -2477,6 +2505,10 @@ impl eframe::App for FerriteApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
 
+        // Consume command palette shortcut BEFORE render to suppress OS system menu
+        // (Alt+Space on Windows/Linux) and prevent TextEdit from eating the key.
+        self.consume_command_palette_key(ctx);
+
         // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
         // built-in undo from processing them. Must happen before render_ui().
         self.consume_undo_redo_keys(ctx);
@@ -2539,6 +2571,11 @@ impl eframe::App for FerriteApp {
         // Handle keyboard shortcuts AFTER render so selection is up-to-date
         // Note: Undo/redo is handled separately above, before render
         self.handle_keyboard_shortcuts(ctx);
+
+        // Dispatch any pending command palette action AFTER render
+        if let Some(cmd) = self.pending_palette_command.take() {
+            self.dispatch_palette_command(ctx, cmd);
+        }
 
         // Handle deferred format action from ribbon with pre-captured selection
         if let Some(deferred) = deferred_format {

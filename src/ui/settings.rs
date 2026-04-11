@@ -102,6 +102,9 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::ZoomIn => "Zoom In".to_string(),
         ShortcutCommand::ZoomOut => "Zoom Out".to_string(),
         ShortcutCommand::ResetZoom => "Reset Zoom".to_string(),
+        ShortcutCommand::CommandPalette => "Command Palette".to_string(),
+        ShortcutCommand::OpenWorkspace => "Open Workspace".to_string(),
+        ShortcutCommand::CloseWorkspace => "Close Workspace".to_string(),
     }
 }
 

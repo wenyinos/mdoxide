@@ -70,6 +70,11 @@
 - [x] **Image viewer tabs** - Open PNG, JPEG, GIF, WebP, BMP files in a dedicated viewer tab with zoom (Ctrl+scroll), fit-to-window, metadata display (dimensions, format, file size). Reuses existing `image` crate and texture infrastructure.
 - [x] **PDF viewer tab** - Open PDF files using [hayro](https://github.com/LaurenzV/hayro) (pure Rust PDF renderer, MIT/Apache-2.0). Page navigation, zoom, texture caching per page. No native C/C++ dependencies.
 
+#### Command Palette ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
+- [x] **Alt+Space command launcher** - Searchable command palette with fuzzy search, recent commands, category grouping, shortcut hints. Configurable keybinding (Alt+Space default, Ctrl+Shift+P alternative). All ribbon and keyboard actions accessible.
+- [x] **Windows system menu suppression** - `WH_KEYBOARD` thread hook blocks Alt+Space at OS level. Deferred dispatch prevents mid-render crashes.
+- [x] **Open/Close Workspace commands** - Added as palette-only commands for folder workspace management.
+
 #### Executable Code Blocks *(deferred to v0.2.9+)*
 - [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
 - [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
@@ -151,11 +156,12 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ### v0.3.0 - Mermaid Crate, Markdown Enhancements, Alt Menus & Full RTL/BiDi
 **Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, traditional Alt-key menus, and completing right-to-left and bidirectional text support.
 
-#### Traditional Menu Bar ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
-*Deferred from v0.2.8 — ships in v0.3.0.*
+#### Command Discoverability ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
+*Addressed in v0.2.8 with Command Palette.*
 
-- [ ] **Alt-key menu access** - Traditional File/Edit/View menus toggled via Alt key (VS Code style).
-- [ ] **Accessibility** - Full keyboard navigation for all menu items.
+- [x] **Command Palette (Alt+Space)** - Searchable command launcher with fuzzy search across all actions. Recent commands, category grouping, shortcut hints. Configurable keybinding. Replaces the need for traditional text menus.
+- [x] **Windows Alt+Space suppression** - Thread-level keyboard hook prevents OS system menu conflict.
+- [ ] **Accessibility** - Full keyboard navigation for all menu items. *(Ongoing)*
 
 #### Unicode & Complex Script Support (Phase 3 & 4: RTL, BiDi, WYSIWYG)
 *Depends on: Phase 2 text shaping from v0.2.8*

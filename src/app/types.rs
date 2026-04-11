@@ -85,6 +85,8 @@ pub(crate) enum KeyboardAction {
     InsertToc,
     /// Toggle Frontmatter Panel (Ctrl+Shift+M)
     ToggleFrontmatter,
+    /// Open command palette (Alt+Space)
+    CommandPalette,
     /// Zoom in (Ctrl+=)
     ZoomIn,
     /// Zoom out (Ctrl+-)

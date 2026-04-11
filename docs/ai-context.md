@@ -27,7 +27,7 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 | `editor/widget.rs` | EditorWidget wrapper, integrates FerriteEditor via egui memory |
 | `markdown/` | `editor.rs` (rendered view), `parser.rs` (comrak AST), `mermaid/` (11 diagram types), `csv_viewer.rs`, `tree_viewer.rs` |
 | `terminal/` | Integrated terminal (PTY, VTE, screen, themes, split layouts) |
-| `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome |
+| `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome, command_palette |
 | `config/` | Settings persistence, session/crash recovery, snippets |
 | `fonts.rs` | Font loading, lazy CJK, complex script lazy loading (11 families) |
 | `theme/` | Light/dark themes |
@@ -72,6 +72,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 |------------|------------|
 | Add a setting | `config/settings.rs` → `Settings` struct |
 | Add keyboard shortcut | `app/keyboard.rs` → `handle_keyboard_shortcuts()` |
+| Add command to palette | `config/settings.rs` → `ShortcutCommand`, `app/commands.rs` → icon, `app/central_panel.rs` → dispatch |
 | Add/modify a UI panel | `ui/` → create or edit panel module |
 | Modify editor core | `editor/ferrite/editor.rs` (behavior), `buffer.rs` (text), `view.rs` (viewport) |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
