@@ -625,6 +625,9 @@ notification:
   wikilink_open_failed: "[[%{target}]] konnte nicht geöffnet werden: %{error}"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_loading: Große Datei (%{size} MB) wird im Hintergrund geladen...
+  file_loaded: Datei erfolgreich geladen (%{size} MB)
+  file_load_failed: 'Fehler beim Laden der Datei: %{error}'
 tree_viewer:
   collapse_all: "▶ Alles einklappen"
   expand_all: "▼ Alles aufklappen"
