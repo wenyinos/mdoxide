@@ -652,11 +652,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 ### Libraries
-- [egui](https://github.com/emilk/egui) - Immediate mode GUI library for Rust
+- [egui](https://github.com/emilk/egui) and eframe - Immediate mode GUI and native window integration
+- [ropey](https://github.com/cessen/ropey) - Rope text buffer for large-file editing
 - [comrak](https://github.com/kivikakk/comrak) - CommonMark + GFM compatible Markdown parser
-- [syntect](https://github.com/trishume/syntect) - Syntax highlighting library
+- [syntect](https://github.com/trishume/syntect) and [two-face](https://github.com/CosmicHorrorDev/two-face) - Syntax highlighting and extra language definitions
+- [harfrust](https://github.com/harfbuzz/harfrust) - OpenType text shaping for complex scripts
 - [git2](https://github.com/rust-lang/git2-rs) - libgit2 bindings for Rust
+- [portable-pty](https://github.com/wez/wezterm) and [vte](https://github.com/alacritty/vte) - Integrated terminal (PTY and ANSI parsing)
+- [image](https://github.com/image-rs/image) - Raster image decoding (markdown preview and image viewer)
 - [hayro](https://github.com/LaurenzV/hayro) - Pure Rust PDF rasterization (PDF viewer tabs)
+- [rust-i18n](https://github.com/longbridge/rust-i18n) - Internationalization
 - [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts
 
 ### Development Tools

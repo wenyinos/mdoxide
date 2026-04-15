@@ -597,11 +597,16 @@ Rust 1.70+，egui/eframe 图形界面，comrak Markdown 解析，ropey 绳索文
 ## 致谢
 
 ### 库
-- [egui](https://github.com/emilk/egui) — Rust 即时模式 GUI
+- [egui](https://github.com/emilk/egui) 与 eframe — 即时模式 GUI 与原生窗口集成
+- [ropey](https://github.com/cessen/ropey) — 大文件编辑用 rope 文本缓冲
 - [comrak](https://github.com/kivikakk/comrak) — CommonMark + GFM Markdown 解析
-- [syntect](https://github.com/trishume/syntect) — 语法高亮
+- [syntect](https://github.com/trishume/syntect) 与 [two-face](https://github.com/CosmicHorrorDev/two-face) — 语法高亮与扩展语言定义
+- [harfrust](https://github.com/harfbuzz/harfrust) — 复杂文本的 OpenType 字形排版
 - [git2](https://github.com/rust-lang/git2-rs) — libgit2 Rust 绑定
+- [portable-pty](https://github.com/wez/wezterm) 与 [vte](https://github.com/alacritty/vte) — 集成终端（PTY 与 ANSI 解析）
+- [image](https://github.com/image-rs/image) — 光栅图像解码（Markdown 预览与图片查看）
 - [hayro](https://github.com/LaurenzV/hayro) — 纯 Rust PDF 光栅化（PDF 查看标签页）
+- [rust-i18n](https://github.com/longbridge/rust-i18n) — 国际化（i18n）
 - [Inter](https://rsms.me/inter/) 与 [JetBrains Mono](https://www.jetbrains.com/lp/mono/) 字体
 
 ### 开发工具
