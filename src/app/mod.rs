@@ -336,13 +336,20 @@ impl FerriteApp {
         // This saves ~60-80 MB of RAM by not preloading all 4 CJK font files.
         let custom_font = state.settings.font_family.custom_name().map(|s| s.to_string());
         if custom_font.is_some() {
-            fonts::reload_fonts(
+            if let Some(reason) = fonts::reload_fonts(
                 &cc.egui_ctx,
                 custom_font.as_deref(),
                 state.settings.cjk_font_preference,
                 Some(&state.settings.complex_script_font_preferences),
-            );
-            info!("Loaded custom font: {:?}", state.settings.font_family);
+            ) {
+                warn!("Custom font failed at startup, reverting to Inter: {}", reason);
+                state.settings.font_family = crate::config::EditorFont::default();
+                state.pending_toast = Some(format!(
+                    "Font failed to load: {reason}. Reverted to Inter."
+                ));
+            } else {
+                info!("Loaded custom font: {:?}", state.settings.font_family);
+            }
         } else {
             // No custom font - check if we should preload CJK font
             // This loads only ONE CJK font (~20MB) based on preference or OS language
@@ -2449,6 +2456,12 @@ impl eframe::App for FerriteApp {
                 );
                 info!("Per-frame: loaded CJK font for UI language {:?}", self.state.settings.language);
             }
+        }
+
+        // Display any deferred startup toast
+        if let Some(msg) = self.state.pending_toast.take() {
+            let t = self.get_app_time();
+            self.state.show_toast(msg, t, 5.0);
         }
 
         // Update toast message (clear if expired)

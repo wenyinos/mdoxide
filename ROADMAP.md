@@ -2,87 +2,8 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.2.8 (April 2026) - Performance, Text Shaping, LSP Integration & Viewers
-**Focus:** Major performance overhaul (rendered view, editor, viewers), HarfRust text shaping for complex scripts, LSP integration (Phases 1 & 2), image/PDF viewer tabs, strict line breaks, background file loading, and 10+ bug fixes.
-
-#### Rendered View Performance ([#105](https://github.com/OlaProeis/Ferrite/issues/105))
-*Addresses slow/unusable rendered view on large documents (6k+ lines, 50k+ words). Two users reported this as a blocker in v0.2.7.*
-
-- [x] **Markdown AST caching** - Cache parsed `MarkdownDocument` using blake3 content hash (same pattern as Mermaid diagram caching). Only call `parse_markdown()` when content actually changes instead of re-parsing the full document 60 times per second.
-- [x] **Rendered view viewport culling** - Switch `ScrollArea::vertical().show()` to `.show_viewport()` and skip `render_node()` for blocks outside the visible area + 500px overscan buffer. Use `ui.allocate_space()` for off-screen content. Reduces per-frame widget construction from O(N blocks) to O(visible blocks).
-- [x] **Block-level height cache** - LRU cache of measured heights per rendered block keyed on content hash. Avoids re-measuring off-screen blocks and enables accurate scrollbar positioning with viewport culling.
-- [x] **Lazy block height estimation** - Heuristic heights for unmeasured blocks on first-frame render, render budget cap (max 20 blocks/frame), progressive refinement as user scrolls. Reduces initial lag to under 100ms for 10K+ block files.
-
-*Note: This is not a full virtual document architecture (planned v0.4.0). It brings rendered view performance closer to parity with Obsidian for large files by eliminating the most wasteful per-frame work. The raw editor (FerriteEditor) already handles large files well via virtual scrolling.*
-
-#### Editor Performance
-- [x] **Uniform height mode for large files** - Auto-enable for 100K+ line files: O(1) line positioning via `line * line_height`, no O(N) `cumulative_heights` vector, force-disabled word wrap above threshold.
-- [x] **Smarter LineCache invalidation and scaling** - Targeted `invalidate_range(start, end)` evicts only affected lines instead of full cache clear. Dynamic `max_entries(visible_lines)` scales cache size with viewport. 80%+ hit rate for unchanged regions after edits.
-- [x] **Per-frame O(N) elimination** - 7 per-frame O(N) operations on `tab.content` cached via `content_version` counter: `TextStats::from_text()`, `tab.title()/is_modified()` (blake3 hash), save button `is_modified()`, `needs_cjk()/needs_complex_script_fonts()` char scans, `should_auto_save()` tab loop, frontmatter panel content clone, MarkdownEditor content clone. Target: <16ms/frame for 50MB files.
-- [x] **Background thread file loading** - Move synchronous `std::fs::read` to background thread for files ≥5MB. Progress bar with spinner, MB loaded/total, cancellation on tab close. UI remains responsive at 60fps during load. `TabContent::Loading`/`Ready`/`Error` state tracking via `FileLoadMsg` channel.
-
-#### Viewer Performance
-- [x] **CSV raw view per-frame allocation fix** - `show_raw_view()` called `self.content.to_string()` every frame. Fixed with blake3 hash-guarded `raw_view_text` cache, rebuilt only on content change.
-- [x] **TreeViewer parse and raw view caching** - Two blake3-guarded caches: raw view text cache (skip per-frame `to_string()`), parsed tree cache (skip per-frame `parse_structured_content()`). Supports JSON/YAML/TOML.
-- [x] **Central panel undo content clone elimination** - Removed per-frame `tab.content.clone()` for undo recording across Raw, Rendered, Split, and TreeViewer modes. Raw mode leverages FerriteEditor's native EditHistory; other modes use blake3 hash-based change detection with conditional recording.
-
-#### Bug Fixes
-- [x] **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - `UTImportedTypeDeclarations` in `info_plist_ext.xml` declares `net.daringfireball.markdown` (conforms to `public.plain-text`); `Cargo.toml` `osx_info_plist_exts` merges it into bundled `Info.plist`.
-- [x] **Windows IME candidate box positioning** ([#103](https://github.com/OlaProeis/Ferrite/issues/103), [#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Applied `layer_transform_to_global()` to `IMEOutput` coordinates so the OS receives correct screen coordinates for the candidate popup.
-- [x] **Double-dash (`--`) setext headings and line collapsing** - Extended `fix_false_setext_headings()` to handle `--` (not just `-`). Preprocessing for `\n-- ` line breaks while preserving `---` horizontal rules and YAML frontmatter.
-- [x] **No space between paragraphs in rendered view** ([#109](https://github.com/OlaProeis/Ferrite/issues/109)) - Added proper paragraph spacing after paragraph blocks. Cumulative heights updated for accurate scrollbar.
-- [x] **Trailing spaces on plain text paragraphs** - Plain paragraph WYSIWYG editing dropped trailing spaces due to per-frame re-initialization from AST. Fixed with persistent egui edit buffer (keyed by `node.start_line`) using `extract_paragraph_content()` pattern.
-- [x] **Search highlight positioning in markdown tables + z-order** - Fixed find/render coordinate mapping for table cells. Resolved z-order stacking where Jump to menu rendered above Find and Search panels.
-- [x] **Search highlight misalignment after document edits** - Recompute match positions on buffer mutations. Version/hash-based auto-refresh for highlight state. Targeted cache invalidation for shaped galleys and heights.
-- [x] **Terminal CJK double-width character rendering** ([#110](https://github.com/OlaProeis/Ferrite/issues/110)) - Added `unicode-width` crate. `put_char()` advances cursor by 2 for wide chars with continuation markers. Renderer draws wide chars spanning 2 cell widths. Selection snaps to wide char boundaries.
-- [x] **Windows 11 borderless window UI offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Added `.with_transparent(true)` to `ViewportBuilder` as DWM compositing workaround for Intel HD 4600 GPU rendering offset in borderless mode. Full fix expected in v0.2.9 eframe upgrade.
-- [x] **Scrollbar not resetting when switching documents** ([#113](https://github.com/OlaProeis/Ferrite/issues/113)) - Scoped central-panel editor/preview widget IDs with `tab.id` to prevent egui `ScrollArea` state leaking across tab switches.
-- [ ] **macOS Sonoma keyboard input** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) - Same root cause as Wayland #106 (winit 0.29 input pipeline). **Target fix: v0.2.9** eframe/egui 0.31+ upgrade (Task 38).
-
-#### Markdown Rendering Settings
-- [x] **Strict line breaks setting** - "Strict line breaks" toggle in Settings → Editor (default: off). When enabled, single newlines render as hard `<br>` breaks. Wires up Comrak's `render.hardbreaks` option. Follows the Obsidian model.
-- [x] **Strict line breaks in Settings UI** - Toggle in Settings → Editor section with live update to rendered view.
-- [x] **Strict line breaks on Welcome page** - Toggle on Welcome page editor settings section (alongside word wrap, line numbers, minimap, etc.).
-
-#### Unicode & Complex Script Support (Phase 2: Text Shaping Engine)
-*Depends on: Phase 1 font loading from v0.2.7*
-
-- [x] **HarfRust integration for FerriteEditor** - Integrated [HarfRust](https://github.com/harfbuzz/harfrust) (pure-Rust HarfBuzz port, v0.5.2+) into the FerriteEditor rendering pipeline. Converts Unicode codepoint sequences into correctly positioned, contextually-formed glyphs for Arabic (contextual forms), Bengali (conjuncts), Devanagari, Tamil, and other Indic scripts.
-- [x] **Shaped galley cache** - Extended `LineCache` to store shaped text runs (glyph IDs + positions) keyed on content+font+width. LRU eviction. Invalidation on content change, font change, or viewport resize.
-- [x] **Grapheme-cluster-aware cursor** - Replaced character-based cursor movement with grapheme-cluster-aware navigation using `unicode-segmentation`. Cursor steps over entire clusters for Bengali conjuncts, Korean jamo, emoji ZWJ sequences.
-- [x] **Shaped text measurement** - Word wrap, line width, scroll offset, cursor/mouse positioning, and selection rendering all use shaped advance widths for complex-script lines. Latin text unchanged (egui path).
-
-*Note: Phase 2 provides correct rendering of all complex scripts in the Raw editor (FerriteEditor). Text direction remains LTR — Arabic/Hebrew text is shaped correctly (ligatures, contextual forms) but displayed left-to-right. Full RTL layout requires Phase 3 (v0.3.0).*
-
-#### LSP Integration (Language Server Protocol)
-*Plan: [docs/lsp-integration-plan.md](docs/lsp-integration-plan.md)*
-
-- [x] **Phase 1: Infrastructure** — Module structure (`src/lsp/`), LspManager with background thread, stdio JSON-RPC transport, extension-to-server detection mapping.
-- [x] **Phase 1: Server lifecycle** — Auto-detect language server by file extension; spawn as child process via stdio; crash restart with exponential backoff (1s→30s, reset after 60s uptime); graceful shutdown on workspace close; dismissible notification if binary not found.
-- [x] **Phase 1: Status bar & settings** — Status bar indicator (ready / indexing / not found / disabled); LSP toggle in Settings → Editor (opt-in, off by default); per-language server path overrides (`lsp_server_overrides`).
-- [x] **Phase 1: On-demand server startup** — Lazy server spawn on tab activation (not eager workspace scan). Idle server shutdown after 30s when last tab for a language closes. Tab-aware reference counting.
-- [x] **Phase 1: Windows CMD window suppression** — `CREATE_NO_WINDOW` flag on LSP server process spawn to prevent visible cmd.exe windows.
-- [x] **Phase 2: Inline diagnostics** — Error/warning squiggles under text with hover tooltips; incremental document sync (`textDocument/didOpen`, `textDocument/didChange`); diagnostic count in status bar.
-- [ ] **Phase 3: Hover & Go to Definition** — Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click). *Planned for future release.*
-- [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced, navigable with arrow keys; request cancellation for stale completions. *Planned for future release.*
-
-#### Image & PDF Viewer Tabs ([#108](https://github.com/OlaProeis/Ferrite/issues/108))
-- [x] **Image viewer tabs** - Open PNG, JPEG, GIF, WebP, BMP files in a dedicated viewer tab with zoom (Ctrl+scroll), fit-to-window, metadata display (dimensions, format, file size). Reuses existing `image` crate and texture infrastructure.
-- [x] **PDF viewer tab** - Open PDF files using [hayro](https://github.com/LaurenzV/hayro) (pure Rust PDF renderer, MIT/Apache-2.0). Page navigation, zoom, texture caching per page. No native C/C++ dependencies.
-
-#### Command Palette ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
-- [x] **Alt+Space command launcher** - Searchable command palette with fuzzy search, recent commands, category grouping, shortcut hints. Configurable keybinding (Alt+Space default, Ctrl+Shift+P alternative). All ribbon and keyboard actions accessible.
-- [x] **Windows system menu suppression** - `WH_KEYBOARD` thread hook blocks Alt+Space at OS level. Deferred dispatch prevents mid-render crashes.
-- [x] **Open/Close Workspace commands** - Added as palette-only commands for folder workspace management.
-
-#### Executable Code Blocks *(deferred to v0.2.9+)*
-- [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
-- [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
-- [ ] **Python support** - Detect `python` / `python3` and run with system interpreter.
-- [ ] **Timeout handling** - Kill long-running scripts after configurable timeout (default: 30s).
-- [ ] **Security warning** - First-run dialog explaining execution risks.
-  *Security note: Code execution is opt-in and disabled by default.*
-  *Deferred from v0.2.7 and v0.2.8 to focus on performance and LSP.*
+### v0.2.9 - Platform Stack Upgrade, Export & Code Execution
+**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), and LSP integration (all phases, deferred from v0.2.8). See [detailed plan](#v029---platform-stack-upgrade-export--code-execution-1) below.
 
 ---
 
@@ -121,7 +42,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 **Secondary focus:** First-class export from markdown to shareable files (PDF, self-contained HTML). Complements **PDF viewer tabs** (v0.2.8)—**writing → publish**, not only viewing external PDFs.
 
-**Tertiary focus:** Executable code blocks (deferred from v0.2.8) and LSP Phases 3 & 4.
+**Tertiary focus:** Executable code blocks (deferred from v0.2.8) and full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues).
 
 #### Platform & Dependency Upgrade (Task 38)
 - [ ] **Bump eframe / egui** to 0.31+ (confirm compatible versions); `cargo update`; fix breaking API changes across `main.rs`, editor input, themes, terminal, markdown UI, etc.
@@ -144,7 +65,13 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Security warning** - First-run dialog explaining execution risks.
   *Security note: Code execution is opt-in and disabled by default.*
 
-#### LSP Integration (Phases 3 & 4)
+#### LSP Integration (Phases 1–4)
+*Deferred from v0.2.8: Phase 1–2 implementation had high memory usage (rust-analyzer ~3.8 GB) and no diagnostics panel to surface warnings. Code remains in-tree behind the `lsp` feature flag; needs fixes before shipping.*
+
+- [ ] **Phase 1 fixes: Infrastructure & lifecycle** — Fix unbounded channels (add backpressure), clear diagnostics on workspace switch, cap transport frame size, properly join reader threads on shutdown.
+- [ ] **Phase 1 fix: Incremental document sync** — Switch from full-document `didChange` to `TextDocumentSyncKind::Incremental` to reduce memory churn.
+- [ ] **Phase 2 fix: Diagnostics panel** — Dedicated problems panel with click-to-navigate (bare minimum for LSP to be useful). Fix UTF-16→char column conversion for squiggle accuracy.
+- [ ] **Phase 2 fix: Memory** — Stop per-frame diagnostic cloning (`Arc<Vec<DiagnosticEntry>>`), bounded event channels, `DiagnosticMap` cleanup on workspace switch.
 - [ ] **Phase 3: Hover & Go to Definition** — Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click).
 - [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
 - [ ] **Settings** — Per-language server path override; all processing local (no network calls).
@@ -318,6 +245,9 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ---
 
 ## Recently Completed ✅
+
+### v0.2.8 (Apr 2026) - Performance, Text Shaping, LSP Integration & Viewers
+Command Palette (Alt+Space) with fuzzy search across all actions. LSP integration (Phases 1-2): inline diagnostics, server lifecycle, status bar, on-demand startup. HarfRust text shaping for Arabic, Bengali, Devanagari, and other complex scripts. Image viewer tabs (PNG/JPEG/GIF/WebP/BMP) and PDF viewer tabs (hayro, pure Rust). Major rendered view performance overhaul: AST caching, viewport culling, block height cache, lazy estimation. Per-frame O(N) elimination for large files. Background file loading for 5MB+ files. Strict line breaks (Obsidian model). Middle-click to close tabs. CSV/TreeViewer/central panel per-frame allocation fixes. Table cell rich text rendering with click-to-edit (bold, italic, strikethrough, code, nesting). 13 bug fixes including macOS .md file association (#102), Windows IME positioning (#103), custom font crash on Linux (#114), Linux Cinnamon dialog detection (#116), table inline formatting preservation and rendering (#117), terminal CJK rendering (#110), Windows 11 borderless offset (#112), and more.
 
 ### v0.2.7 (Mar 2026) - Performance, Features & Polish
 Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, Ctrl+Scroll Wheel zoom, keep text selected after formatting, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul with optional file associations, PortableApps.com Format packaging with automated CI build, Nix/NixOS flake support, German and Japanese localization, Unicode complex script font loading (Phase 1: 11 script families, 22 Unicode ranges), complex script font preferences UI (Settings → Additional Scripts), visual frontmatter editor, format toolbar moved to editor bottom, side panel toggle strip, Linux file dialog error handling with portal failure detection, flowchart modular refactoring, window control redesign, macOS .app bundle CI, task list checkbox rendering, word-wrap scroll correctness & performance fixes, preview list item wrapping fix, false setext heading fix, IME backspace fix (#91), binary file crash fix, rendered mode copy spacing fix, 20+ bug fixes including light mode visibility, scrollbar accuracy, and crash on large selection delete.

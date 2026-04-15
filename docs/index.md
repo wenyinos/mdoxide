@@ -78,6 +78,7 @@
 | [Custom Font Selection](./technical/editor/custom-font-selection.md) | System font enumeration, custom font picker, CJK regional preferences |
 | [Complex Script Font Preferences](./technical/config/complex-script-font-preferences.md) | Per-script font preferences for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. |
 | [CJK Font Preloading Verification](./technical/fonts/cjk-font-preloading-verification.md) | Verification that explicit CJK preferences preload correctly at startup |
+| [Custom Font Crash Prevention](./technical/fonts/custom-font-crash-prevention.md) | Magic-byte validation, catch_unwind, graceful fallback for invalid custom fonts |
 
 ### UI Components
 
@@ -141,6 +142,7 @@
 | [Lazy Block Height Estimation](./technical/markdown/lazy-block-height-estimation.md) | Heuristic heights for unmeasured blocks, render budget cap, progressive refinement |
 | [Paragraph Trailing Spaces](./technical/markdown/paragraph-trailing-spaces.md) | Fix for trailing spaces lost in plain paragraphs via persistent edit buffer |
 | [Rendered Paragraph Block Spacing](./technical/markdown/rendered-paragraph-block-spacing.md) | Trailing space after block paragraphs and code blocks; viewport height alignment |
+| [Table Inline Formatting](./technical/markdown/table-inline-formatting.md) | Preserve and render bold, italic, strikethrough, code in table cells (serialization + rich text display) |
 
 ### Data Viewers
 
@@ -215,6 +217,7 @@
 | [Intel Mac CPU Analysis](./technical/platform/intel-mac-cpu-issue-analysis.md) | Analysis of CPU usage issues on Intel Mac hardware |
 | **[MSI Installer Features](./technical/platform/msi-installer-features.md)** | **Windows MSI feature tree: file associations, context menu, PATH, desktop shortcut** |
 | **[Linux Portal Dialogs](./technical/platform/linux-portal-dialogs.md)** | **xdg-desktop-portal requirements for Hyprland, Sway, and minimal WMs** |
+| [Linux Cinnamon Dialogs](./technical/platform/linux-cinnamon-dialogs.md) | X-Cinnamon desktop detection, xapp/gtk portal instructions, cancellation fix |
 | [Flatpak File Dialog Portal](./technical/platform/flatpak-file-dialog-portal.md) | Open Folder/File/Save dialogs in Flatpak via xdg-desktop-portal |
 
 ### Distribution & Packaging
@@ -255,11 +258,11 @@
 | **[Flowchart Modular Refactor](./technical/mermaid/flowchart-modular-refactor.md)** | **Flowchart.rs split into 12 focused modules (types, parser, layout/, render/, utils)** |
 | [Flowchart Refactor Plan](./technical/mermaid/flowchart-refactor-plan.md) | Original analysis and refactoring plan for flowchart.rs modularization |
 
-### LSP Integration
+### LSP Integration *(deferred to v0.2.9 — feature-gated behind `lsp` Cargo feature)*
 
 | Document | Description |
 |----------|-------------|
-| [LSP Integration Plan](./lsp-integration-plan.md) | v0.2.8 planning: Language Server Protocol client (diagnostics, hover, go-to-def) |
+| [LSP Integration Plan](./lsp-integration-plan.md) | Planning: Language Server Protocol client (diagnostics, hover, go-to-def) |
 | [LSP Module Infrastructure](./technical/lsp/lsp-module-infrastructure.md) | `src/lsp/` — LspManager, stdio transport, extension-to-server detection |
 | [LSP Server Lifecycle](./technical/lsp/lsp-server-lifecycle.md) | Auto-detect/spawn servers, crash restart with backoff, clean shutdown |
 | [LSP Windows — No Console](./technical/lsp/lsp-windows-no-console.md) | CREATE_NO_WINDOW on LSP Command spawn to prevent cmd.exe flash |
@@ -309,3 +312,4 @@
 | [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
 | [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n, for Weblate extraction |
 | [v0.2.6 Test Suite](./v0.2.6-manual-test-suite.md) | Manual testing checklist for FerriteEditor release |
+| [v0.2.8 Test Suite](./v0.2.8-manual-test-suite.md) | Manual testing checklist for v0.2.8 release |

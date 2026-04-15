@@ -36,6 +36,7 @@ The shortcuts below show `Cmd/Ctrl` to indicate this cross-platform behavior.
 | **Cmd/Ctrl+W** | Close tab | Closes current tab (prompts if unsaved) |
 | **Cmd/Ctrl+Tab** | Next tab | Switches to next tab (wraps to first) |
 | **Cmd/Ctrl+Shift+Tab** | Previous tab | Switches to previous tab (wraps to last) |
+| **Middle-click tab** | Close tab | Closes the clicked tab (prompts if unsaved) |
 
 ### Edit Operations
 
@@ -273,6 +274,7 @@ Manual test checklist (use Cmd on macOS, Ctrl on Windows/Linux):
 - [ ] Cmd/Ctrl+S saves (or Save As if no path)
 - [ ] Cmd/Ctrl+Shift+S opens Save As dialog
 - [ ] Cmd/Ctrl+W closes current tab (with prompt if unsaved)
+- [ ] Middle-click on a tab closes it (with prompt if unsaved)
 - [ ] Cmd/Ctrl+Tab cycles to next tab
 - [ ] Cmd/Ctrl+Shift+Tab cycles to previous tab
 

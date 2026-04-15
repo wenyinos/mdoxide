@@ -4,7 +4,7 @@
 
 use super::FerriteApp;
 use crate::export::{copy_html_to_clipboard, generate_html_document};
-use crate::files::dialogs::{detect_linux_desktop, portal_install_instructions};
+use crate::files::dialogs::detect_linux_desktop;
 use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
@@ -62,14 +62,13 @@ impl FerriteApp {
         let path = match save_result {
             Some(p) => p,
             None => {
-                // Check if this is likely a portal failure on Linux
                 let (desktop_env, requires_portal) = detect_linux_desktop();
                 if requires_portal {
-                    warn!(
-                        "Export save dialog failed on {}. This may indicate missing xdg-desktop-portal.",
-                        desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                    debug!(
+                        "Export save dialog returned None on {} (portal-requiring desktop). \
+                         If no dialog appeared, check xdg-desktop-portal installation.",
+                        desktop_env.as_deref().unwrap_or("unknown")
                     );
-                    self.show_portal_error_dialog(desktop_env, "export");
                 } else {
                     debug!("Export save dialog cancelled");
                 }

@@ -6,16 +6,16 @@
 graph TD
     A[Coffee machine not working] --> B{Machine has power?}
     B -->|No| H[Plug in and turn on]
-    B -->|Yes| C[Out of beans or water?] -->|Yes| G[Refill beans and water]
+    B -->|Yes| C[Out of beans or water?] -->|Yes| G[Refill beans and  water]
     C -->|No| D{Filter warning?} -->|Yes| I[Replace or clean filter]
     D -->|No| F[Send for repair]
-```
+``` 
 
 Expected:
-- All 8 nodes should render (A, B, C, D, F, G, H, I)
+- All 8 nodes should render (A, B, C, D, F, G, H, I)  
 - "No" branch from B should be on LEFT, "Yes" branch on RIGHT
 - Hierarchy: A -> B -> (H, C) -> (G, D) -> (I, F)
-
+ 
 ## Chapter Flow (LR)
 
 ```mermaid

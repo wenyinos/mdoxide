@@ -119,7 +119,7 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.7 (Latest):** **Wikilinks** & **backlinks panel**. **Vim mode**. **Welcome page** for first-launch setup. **GitHub-style callouts**. **Ctrl+Scroll zoom**. **Keep text selected after formatting**. **Frontmatter editor**. Image rendering in preview. **Format toolbar** & **side panel toggles**. **Nix/NixOS flake support**. New packaging: **.deb**, **.rpm**, macOS **.app** bundles. **Single-instance** file opening. 20+ bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.2.8 (Latest):** **Command Palette** (Alt+Space). **HarfRust text shaping** for complex scripts. **Image & PDF viewer tabs**. Rendered view **performance overhaul** (AST caching, viewport culling). **Background file loading** for large files. **Strict line breaks**. **Middle-click close tabs**. 13 bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 > 📦 **v0.2.6 Highlights:** Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 

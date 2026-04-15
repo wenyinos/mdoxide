@@ -3306,6 +3306,8 @@ pub struct AppState {
     pub lsp: LspManager,
     /// Aggregated LSP diagnostics keyed by file path.
     pub diagnostics: DiagnosticMap,
+    /// Optional toast message to display on the first frame (for startup errors).
+    pub pending_toast: Option<String>,
 }
 
 impl AppState {
@@ -3336,6 +3338,7 @@ impl AppState {
             backlink_index: BacklinkIndex::new(),
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
+            pending_toast: None,
         };
 
         // Try to restore tabs from previous session
@@ -3468,6 +3471,7 @@ impl AppState {
             backlink_index: BacklinkIndex::new(),
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
+            pending_toast: None,
         };
 
         // Try to restore tabs from session data

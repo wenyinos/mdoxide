@@ -164,7 +164,7 @@ pub enum PendingAction {
 4. Dialog renders with Save/Discard/Cancel
 5. User choice triggers appropriate handler
 
-## Keyboard Shortcuts
+## Keyboard & Mouse Shortcuts
 
 | Shortcut | Action | Method |
 |----------|--------|--------|
@@ -172,6 +172,7 @@ pub enum PendingAction {
 | Ctrl+W | Close tab | `close_tab(active_index)` |
 | Ctrl+Tab | Next tab | `set_active_tab((current + 1) % count)` |
 | Ctrl+Shift+Tab | Previous tab | `set_active_tab(current - 1)` with wrap |
+| Middle-click tab | Close tab | `close_tab(tab_index)` |
 
 ## Session Persistence
 

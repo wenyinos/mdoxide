@@ -36,6 +36,10 @@ mod error;
 mod export;
 mod files;
 mod fonts;
+#[cfg(feature = "lsp")]
+mod lsp;
+#[cfg(not(feature = "lsp"))]
+#[path = "lsp_stub.rs"]
 mod lsp;
 mod markdown;
 mod path_utils;

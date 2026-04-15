@@ -5,18 +5,68 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.8] - 2026-04-14
 
 ### Added
 
-- **Command Palette** ([#59](https://github.com/OlaProeis/Ferrite/issues/59)) - Alt+Space searchable command launcher with fuzzy search across all available actions. Shows recently used commands first when empty, category-grouped browsing, keyboard shortcut hints per command. Configurable shortcut (default Alt+Space, alternative Ctrl+Shift+P selectable on Welcome page). Replaces the need for traditional menus — all ribbon and keyboard actions are discoverable through the palette.
+#### Command Palette ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
+- **Alt+Space command launcher** - Searchable command palette with fuzzy search across all available actions. Shows recently used commands first when empty, category-grouped browsing, keyboard shortcut hints per command. Configurable shortcut (default Alt+Space, alternative Ctrl+Shift+P selectable on Welcome page). Replaces the need for traditional menus — all ribbon and keyboard actions are discoverable through the palette.
   - **Platform-specific Alt+Space suppression** - On Windows, a thread-level keyboard hook (`WH_KEYBOARD`) intercepts Alt+Space before it reaches the OS window manager, preventing the system menu (Restore/Move/Size/Close) from appearing. No-op on macOS/Linux.
   - **Deferred command dispatch** - Palette commands are dispatched after render (same phase as keyboard shortcuts) to prevent mid-render state mutations that caused crashes with commands like Toggle View Mode.
   - **Open/Close Workspace** - Added to command palette as palette-only commands (no default keyboard shortcut).
 
+#### Tab Interactions ([#118](https://github.com/OlaProeis/Ferrite/issues/118))
+- **Middle-click to close tabs** - Middle-clicking a tab closes it, matching standard behavior in browsers and other tabbed applications.
+
+#### Rendered View Performance ([#105](https://github.com/OlaProeis/Ferrite/issues/105))
+*Addresses slow/unusable rendered view on large documents (6k+ lines, 50k+ words).*
+
+- **Markdown AST caching** - Cache parsed `MarkdownDocument` using blake3 content hash. Only re-parses when content actually changes instead of 60×/second.
+- **Rendered view viewport culling** - `.show_viewport()` with 500px overscan buffer. Off-screen blocks get `ui.allocate_space()` instead of full rendering. Reduces per-frame work from O(N blocks) to O(visible blocks).
+- **Block-level height cache** - LRU cache of measured heights per rendered block keyed on content hash. Enables accurate scrollbar positioning with viewport culling.
+- **Lazy block height estimation** - Heuristic heights for unmeasured blocks, render budget cap (max 20 blocks/frame), progressive refinement. Initial lag under 100ms for 10K+ block files.
+
+#### Editor Performance
+- **Uniform height mode for large files** - Auto-enabled for 100K+ line files: O(1) line positioning, no O(N) `cumulative_heights` vector, force-disabled word wrap above threshold.
+- **Smarter LineCache invalidation and scaling** - Targeted `invalidate_range(start, end)` evicts only affected lines instead of full cache clear. Dynamic `max_entries(visible_lines)` scales cache with viewport. 80%+ hit rate for unchanged regions after edits.
+- **Per-frame O(N) elimination** - 7 per-frame O(N) operations on `tab.content` cached via `content_version` counter: `TextStats::from_text()`, `tab.title()/is_modified()` (blake3 hash), save button, CJK/complex script font detection, auto-save tab loop, frontmatter panel content clone, MarkdownEditor content clone.
+- **Background thread file loading** - Files ≥5MB load on a background thread with progress bar, spinner, MB loaded/total, and cancellation on tab close. UI remains responsive at 60fps during load.
+
+#### Viewer Performance
+- **CSV raw view per-frame allocation fix** - `show_raw_view()` called `self.content.to_string()` every frame. Fixed with blake3 hash-guarded `raw_view_text` cache.
+- **TreeViewer parse and raw view caching** - Two blake3-guarded caches: raw view text cache (skip per-frame `to_string()`), parsed tree cache (skip per-frame `parse_structured_content()`). Supports JSON/YAML/TOML.
+- **Central panel undo content clone elimination** - Removed per-frame `tab.content.clone()` for undo recording across all modes. Raw mode leverages FerriteEditor's native EditHistory; other modes use blake3 hash-based change detection.
+
+#### Unicode & Complex Script Support (Phase 2: Text Shaping Engine)
+*Depends on: Phase 1 font loading from v0.2.7*
+
+- **HarfRust integration for FerriteEditor** - Integrated [HarfRust](https://github.com/harfbuzz/harfrust) (pure-Rust HarfBuzz port, v0.5.2+) for correctly positioned, contextually-formed glyphs for Arabic, Bengali, Devanagari, Tamil, and other complex scripts.
+- **Shaped galley cache** - Extended `LineCache` to store shaped text runs (glyph IDs + positions) keyed on content+font+width. LRU eviction with invalidation on content/font/viewport changes.
+- **Grapheme-cluster-aware cursor** - Replaced character-based cursor movement with grapheme-cluster-aware navigation using `unicode-segmentation`. Correct stepping over Bengali conjuncts, Korean jamo, emoji ZWJ sequences.
+- **Shaped text measurement** - Word wrap, line width, scroll offset, cursor/mouse positioning, and selection rendering all use shaped advance widths for complex-script lines.
+
+#### Image & PDF Viewer Tabs ([#108](https://github.com/OlaProeis/Ferrite/issues/108))
+- **Image viewer tabs** - Open PNG, JPEG, GIF, WebP, BMP files in a dedicated viewer tab with zoom (Ctrl+scroll), fit-to-window, metadata display (dimensions, format, file size).
+- **PDF viewer tab** - Open PDF files using [hayro](https://github.com/LaurenzV/hayro) (pure Rust PDF renderer). Page navigation, zoom, texture caching per page.
+
+#### Markdown Rendering Settings
+- **Strict line breaks setting** - "Strict line breaks" toggle in Settings → Editor (default: off). When enabled, single newlines render as hard `<br>` breaks (Obsidian model). Also available on the Welcome page.
+
 ### Fixed
 
 - **macOS .md file association** ([#102](https://github.com/OlaProeis/Ferrite/issues/102)) - Added `UTImportedTypeDeclarations` block to `info_plist_ext.xml` to properly declare the `net.daringfireball.markdown` UTI. This enables opening markdown files from Finder via "Open With Ferrite" or double-clicking when Ferrite is the default application.
+- **Windows IME candidate box positioning** ([#103](https://github.com/OlaProeis/Ferrite/issues/103), [#15](https://github.com/OlaProeis/Ferrite/issues/15)) - Applied `layer_transform_to_global()` to `IMEOutput` coordinates so the OS receives correct screen coordinates for the candidate popup.
+- **Double-dash setext headings and line collapsing** - Extended `fix_false_setext_headings()` to handle `--` (not just `-`). Preprocessing for `\n-- ` line breaks while preserving `---` horizontal rules and YAML frontmatter.
+- **No space between paragraphs in rendered view** ([#109](https://github.com/OlaProeis/Ferrite/issues/109)) - Added proper paragraph spacing after paragraph blocks. Cumulative heights updated for accurate scrollbar.
+- **Trailing spaces on plain text paragraphs** - Plain paragraph WYSIWYG editing dropped trailing spaces due to per-frame re-initialization from AST. Fixed with persistent egui edit buffer (keyed by `node.start_line`).
+- **Search highlight positioning in markdown tables + z-order** - Fixed find/render coordinate mapping for table cells. Resolved z-order stacking where Jump to menu rendered above Find and Search panels.
+- **Search highlight misalignment after document edits** - Recompute match positions on buffer mutations. Version/hash-based auto-refresh for highlight state.
+- **Terminal CJK double-width character rendering** ([#110](https://github.com/OlaProeis/Ferrite/issues/110)) - Added `unicode-width` crate. `put_char()` advances cursor by 2 for wide chars with continuation markers. Renderer draws wide chars spanning 2 cell widths. Selection snaps to wide char boundaries.
+- **Windows 11 borderless window UI offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Added `.with_transparent(true)` to `ViewportBuilder` as DWM compositing workaround for Intel HD 4600 GPU rendering offset in borderless mode.
+- **Scrollbar not resetting when switching documents** ([#113](https://github.com/OlaProeis/Ferrite/issues/113)) - Scoped central-panel editor/preview widget IDs with `tab.id` to prevent egui `ScrollArea` state leaking across tab switches.
+- **Strikethrough and inline formatting lost in tables** ([#117](https://github.com/OlaProeis/Ferrite/issues/117)) - Table cells containing `~~strikethrough~~`, `**bold**`, `*italic*`, or `***bold italic***` markdown lost their formatting during parsing/serialization because `text_content()` stripped inline markup. Replaced with `serialize_inline_content()` in both `serialize_table` and `TableData::from_node` to preserve formatting through round-trip. Additionally, table cells now render inline markdown as formatted rich text (bold, italic, strikethrough, inline code) using a custom `LayoutJob`-based parser. Click a cell to switch to raw markdown editing; click away to see rendered formatting. Supports full nesting (e.g., `**~~bold struck~~**`, `***~~triple~~***`).
+- **Linux Cinnamon file dialog detection** ([#116](https://github.com/OlaProeis/Ferrite/issues/116)) - Linux Mint Cinnamon (`XDG_CURRENT_DESKTOP=X-Cinnamon`) was not recognized as a native desktop, causing unnecessary portal fallback. Added `x-cinnamon` to native desktop detection list, updated portal install instructions to recommend `xdg-desktop-portal-xapp`/`gtk` for Cinnamon, and fixed dialog cancellation being misclassified as a portal failure.
+- **Custom font crash on Linux** ([#114](https://github.com/OlaProeis/Ferrite/issues/114)) - Selecting certain system fonts (font collections, corrupt files, unsupported formats) crashed the app via epaint panic. Added TTF/OTF magic-byte validation rejecting `.ttc` collections, WOFF, Type 1, and corrupt data. Wrapped font loading in `catch_unwind` as safety net. On failure, gracefully falls back to Inter font with toast notification. Also fixed HarfRust text shaping for custom fonts (`FONT_CUSTOM` case was missing from `ttf_bytes_for_font_id_shaping`).
 
 ## [0.2.7] - 2026-03-11
 
@@ -758,6 +808,7 @@ Complete ground-up reimplementation of the text editor:
 
 ## Version History
 
+- **0.2.8** - Command palette, LSP integration (Phases 1-2), HarfRust text shaping, image/PDF viewer tabs, rendered view performance (AST caching, viewport culling, lazy estimation), per-frame O(N) elimination, background file loading, strict line breaks, middle-click close tabs, custom font crash prevention, 13 bug fixes
 - **0.2.7** - Wikilinks & backlinks, Vim mode, welcome view, GitHub-style callouts, check for updates, Ctrl+Scroll zoom, keep text selected after formatting, frontmatter editor, format toolbar & side panel toggles, lazy CSV parsing, large file detection, single-instance protocol, MSI installer overhaul, Nix/NixOS flake support, Unicode complex script font loading (Phase 1), Linux portal dialog error handling, macOS .app bundle CI, task list checkbox rendering, flowchart refactoring, window control redesign, word-wrap scroll fixes, 20+ bug fixes
 - **0.2.6.1** - First signed release, integrated terminal workspace, productivity hub, app.rs refactoring (~15 modules), CJK memory optimization, 8+ bug fixes
 - **0.2.6** - Custom text editor with virtual scrolling (critical for large files), memory optimization fixes
@@ -771,6 +822,7 @@ Complete ground-up reimplementation of the text editor:
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
+[0.2.8]: https://github.com/OlaProeis/Ferrite/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6.1...v0.2.7
 [0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6.1
 [0.2.6]: https://github.com/OlaProeis/Ferrite/compare/v0.2.5-hotfix.3...v0.2.6

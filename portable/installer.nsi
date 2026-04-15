@@ -3,7 +3,7 @@
 ; the PortableApps.com Format specification.
 ;
 ; Build:
-;   makensis /DAPPVERSION=0.2.7 installer.nsi
+;   makensis /DAPPVERSION=0.2.8 installer.nsi
 ;
 ; If APPVERSION is not passed, defaults to "0.0.0".
 
