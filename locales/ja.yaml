@@ -593,6 +593,9 @@ notification:
   wikilink_open_failed: "[[%{target}]] を開けませんでした : %{error}"
 
 # Tree viewer (JSON/YAML/TOML)
+  large_file_loading: 大きなファイル (%{size} MB) をバックグラウンドで読み込み中...
+  file_loaded: ファイルの読み込みに成功しました (%{size} MB)
+  file_load_failed: 'ファイルの読み込みに失敗しました : %{error}'
 tree_viewer:
   collapse_all: "▶ すべて折りたたむ"
   expand_all: "▼ すべて展開"
