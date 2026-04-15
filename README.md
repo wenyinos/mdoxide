@@ -651,14 +651,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-<details>
-<summary><strong>Libraries & Tools</strong></summary>
-
 ### Libraries
 - [egui](https://github.com/emilk/egui) - Immediate mode GUI library for Rust
 - [comrak](https://github.com/kivikakk/comrak) - CommonMark + GFM compatible Markdown parser
 - [syntect](https://github.com/trishume/syntect) - Syntax highlighting library
 - [git2](https://github.com/rust-lang/git2-rs) - libgit2 bindings for Rust
+- [hayro](https://github.com/LaurenzV/hayro) - Pure Rust PDF rasterization (PDF viewer tabs)
 - [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts
 
 ### Development Tools
@@ -672,8 +670,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [@wolverin0](https://github.com/wolverin0) — Integrated Terminal Workspace & Productivity Hub ([PR #74](https://github.com/OlaProeis/Ferrite/pull/74))
 - [@abcd-ca](https://github.com/abcd-ca) — Delete Line, Move Line, macOS file associations ([PR #29](https://github.com/OlaProeis/Ferrite/pull/29), [#30](https://github.com/OlaProeis/Ferrite/pull/30))
 - [@SteelCrab](https://github.com/SteelCrab) — CJK character rendering ([PR #8](https://github.com/OlaProeis/Ferrite/pull/8))
-
-</details>
 
 ## Sponsors
 

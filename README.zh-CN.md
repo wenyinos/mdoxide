@@ -596,14 +596,12 @@ Rust 1.70+，egui/eframe 图形界面，comrak Markdown 解析，ropey 绳索文
 
 ## 致谢
 
-<details>
-<summary><strong>库与工具</strong></summary>
-
 ### 库
 - [egui](https://github.com/emilk/egui) — Rust 即时模式 GUI
 - [comrak](https://github.com/kivikakk/comrak) — CommonMark + GFM Markdown 解析
 - [syntect](https://github.com/trishume/syntect) — 语法高亮
 - [git2](https://github.com/rust-lang/git2-rs) — libgit2 Rust 绑定
+- [hayro](https://github.com/LaurenzV/hayro) — 纯 Rust PDF 光栅化（PDF 查看标签页）
 - [Inter](https://rsms.me/inter/) 与 [JetBrains Mono](https://www.jetbrains.com/lp/mono/) 字体
 
 ### 开发工具
@@ -617,8 +615,6 @@ Rust 1.70+，egui/eframe 图形界面，comrak Markdown 解析，ropey 绳索文
 - [@wolverin0](https://github.com/wolverin0) — 集成终端工作区与 Productivity Hub（[PR #74](https://github.com/OlaProeis/Ferrite/pull/74)）
 - [@abcd-ca](https://github.com/abcd-ca) — 删除行、移动行、macOS 文件关联（[PR #29](https://github.com/OlaProeis/Ferrite/pull/29)、[#30](https://github.com/OlaProeis/Ferrite/pull/30)）
 - [@SteelCrab](https://github.com/SteelCrab) — CJK 字符渲染（[PR #8](https://github.com/OlaProeis/Ferrite/pull/8)）
-
-</details>
 
 ## 赞助方
 

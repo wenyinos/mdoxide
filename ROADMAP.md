@@ -2,8 +2,8 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.2.9 - Platform Stack Upgrade, Export & Code Execution
-**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), and LSP integration (all phases, deferred from v0.2.8). See [detailed plan](#v029---platform-stack-upgrade-export--code-execution-1) below.
+### v0.2.9 - Platform Stack Upgrade, Export, Code Execution & Media Embeds
+**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), LSP integration (all phases, deferred from v0.2.8), and embedded YouTube/video playback ([#119](https://github.com/OlaProeis/Ferrite/issues/119)). See [detailed plan](#v029---platform-stack-upgrade-export--code-execution-1) below.
 
 ---
 
@@ -37,12 +37,12 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Planned Features
 
-### v0.2.9 - Platform Stack Upgrade, Export & Code Execution
+### v0.2.9 - Platform Stack Upgrade, Export, Code Execution & Media Embeds
 **Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Intended to address **Wayland keyboard input** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), **macOS Sonoma keyboard** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and **Windows 11 borderless / DPI** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) where fixes depend on newer winit/egui. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until this ships.
 
 **Secondary focus:** First-class export from markdown to shareable files (PDF, self-contained HTML). Complements **PDF viewer tabs** (v0.2.8)—**writing → publish**, not only viewing external PDFs.
 
-**Tertiary focus:** Executable code blocks (deferred from v0.2.8) and full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues).
+**Tertiary focus:** Executable code blocks (deferred from v0.2.8), full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues), and embedded YouTube/video playback via native web views ([#119](https://github.com/OlaProeis/Ferrite/issues/119)).
 
 #### Platform & Dependency Upgrade (Task 38)
 - [ ] **Bump eframe / egui** to 0.31+ (confirm compatible versions); `cargo update`; fix breaking API changes across `main.rs`, editor input, themes, terminal, markdown UI, etc.
@@ -64,6 +64,15 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Timeout handling** - Kill long-running scripts after configurable timeout (default: 30s).
 - [ ] **Security warning** - First-run dialog explaining execution risks.
   *Security note: Code execution is opt-in and disabled by default.*
+
+#### Embedded Media — YouTube / Video Embeds ([#119](https://github.com/OlaProeis/Ferrite/issues/119))
+- [ ] **Custom syntax detection** — Detect YouTube/video URLs in markdown (e.g. `{{video URL}}` or bare YouTube URLs in their own paragraph) in `markdown/parser.rs`.
+- [ ] **Embedded web view via `wry`** — Use Tauri's [`wry`](https://lib.rs/crates/wry) crate to spawn a platform-native WebView (WebView2 on Windows, WebKitGTK on Linux, WebKit on macOS) as a child window positioned over the egui rendered view.
+- [ ] **Viewport tracking** — Sync the child WebView position/size with the egui rect each frame; hide when scrolled off-screen or tab is inactive.
+- [ ] **Fallback: thumbnail + open-in-browser** — For platforms where `wry` child windows aren't viable, fetch YouTube thumbnail (`img.youtube.com`) and render as clickable image with play overlay; click opens system browser.
+- [ ] **Extensible embed system** — Design the embed trait/interface to support future providers (Vimeo, etc.).
+
+*Note: This is an exploratory feature. The `wry` child-window-over-egui approach has known challenges (z-ordering, scroll sync, platform quirks). The thumbnail fallback ensures the feature ships something usable regardless. Depends on egui 0.31+ upgrade (Task 38) for stable `RawWindowHandle` access.*
 
 #### LSP Integration (Phases 1–4)
 *Deferred from v0.2.8: Phase 1–2 implementation had high memory usage (rust-analyzer ~3.8 GB) and no diagnostics panel to surface warnings. Code remains in-tree behind the `lsp` feature flag; needs fixes before shipping.*
