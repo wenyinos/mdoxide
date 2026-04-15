@@ -38,6 +38,14 @@ const JETBRAINS_BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMo
 /// Cache for system font list (expensive to compute, do once)
 static SYSTEM_FONTS_CACHE: OnceLock<Vec<String>> = OnceLock::new();
 
+/// Cached raw bytes of the currently loaded custom font, for HarfRust shaping.
+/// Stored as a leaked `&'static [u8]` so `ttf_bytes_for_font_id_shaping` can return `&'static [u8]`.
+static CUSTOM_FONT_BYTES: std::sync::Mutex<Option<&'static [u8]>> = std::sync::Mutex::new(None);
+
+/// Last error from custom font loading, used to propagate errors from
+/// `create_font_definitions_*` back to `reload_fonts`.
+static LAST_CUSTOM_FONT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-Language CJK Font Loading State
 // ─────────────────────────────────────────────────────────────────────────────
@@ -729,10 +737,10 @@ fn load_system_font(families: &[&str]) -> Option<FontData> {
 fn load_system_font_with_preference(preference: Option<&str>, candidates: &[&str]) -> Option<FontData> {
     if let Some(pref) = preference {
         if !pref.is_empty() {
-            if let Some(data) = load_system_font_by_name(pref) {
-                return Some(data);
+            match load_system_font_by_name(pref) {
+                Ok(data) => return Some(data),
+                Err(reason) => warn!("Preferred font '{}' not available: {}", pref, reason),
             }
-            warn!("Preferred font '{}' not found, falling back to defaults", pref);
         }
     }
     let source = SystemSource::new();
@@ -758,32 +766,74 @@ fn load_system_font_with_preference(preference: Option<&str>, candidates: &[&str
     None
 }
 
+/// Validate that raw font bytes are a supported single-font format (TTF or OTF).
+///
+/// Rejects font collections (.ttc/.otc), Type 1, WOFF/WOFF2, and corrupt data.
+fn validate_font_bytes(bytes: &[u8], family_name: &str) -> Result<(), String> {
+    if bytes.len() < 4 {
+        return Err(format!("Font '{family_name}' file is too small ({} bytes)", bytes.len()));
+    }
+
+    let magic: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
+    match &magic {
+        // TrueType single font
+        [0x00, 0x01, 0x00, 0x00] => Ok(()),
+        // OpenType (CFF) single font
+        b"OTTO" => Ok(()),
+        // TrueType/OpenType collection — epaint cannot handle font indices
+        b"ttcf" => Err(format!("Font '{family_name}' is a .ttc/.otc collection, which is not supported")),
+        // WOFF
+        b"wOFF" => Err(format!("Font '{family_name}' is WOFF format, which is not supported")),
+        // WOFF2
+        b"wOF2" => Err(format!("Font '{family_name}' is WOFF2 format, which is not supported")),
+        // Type 1 (starts with '%!')
+        [0x25, 0x21, ..] => Err(format!("Font '{family_name}' is Type 1 format, which is not supported")),
+        _ => Err(format!(
+            "Font '{family_name}' has unrecognized format (magic: {:02x} {:02x} {:02x} {:02x})",
+            magic[0], magic[1], magic[2], magic[3]
+        )),
+    }
+}
+
 /// Load a specific system font by exact family name.
 ///
-/// Returns `Some(FontData)` if the font is found on the system.
-fn load_system_font_by_name(family_name: &str) -> Option<FontData> {
+/// Returns `Ok(FontData)` on success, or `Err(message)` describing why it failed.
+/// Validates font bytes and wraps font-kit calls in `catch_unwind` for safety.
+fn load_system_font_by_name(family_name: &str) -> Result<FontData, String> {
     let source = SystemSource::new();
 
     info!("Attempting to load custom font: {}", family_name);
-    if let Ok(handle) = source.select_best_match(
+    let handle = source.select_best_match(
         &[FamilyName::Title(family_name.to_string())],
         &Properties::new(),
-    ) {
-        match handle {
-            Handle::Path { path, .. } => {
-                info!("Found custom font at: {:?}", path);
-                if let Ok(bytes) = std::fs::read(&path) {
-                    return Some(FontData::from_owned(bytes));
-                }
-            }
-            Handle::Memory { bytes, .. } => {
-                info!("Found custom font in memory ({} bytes)", bytes.len());
-                return Some(FontData::from_owned(bytes.to_vec()));
-            }
+    ).map_err(|_| format!("Font '{family_name}' not found on system"))?;
+
+    let raw_bytes = match handle {
+        Handle::Path { ref path, .. } => {
+            info!("Found custom font at: {:?}", path);
+            std::fs::read(path)
+                .map_err(|e| format!("Failed to read font file {:?}: {e}", path))?
         }
+        Handle::Memory { ref bytes, .. } => {
+            info!("Found custom font in memory ({} bytes)", bytes.len());
+            bytes.to_vec()
+        }
+    };
+
+    if raw_bytes.is_empty() {
+        return Err(format!("Font '{family_name}' file is empty"));
     }
-    warn!("Custom font '{}' not found on system", family_name);
-    None
+
+    validate_font_bytes(&raw_bytes, family_name)?;
+
+    // Wrap FontData construction in catch_unwind to protect against epaint panics
+    let family_owned = family_name.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        FontData::from_owned(raw_bytes)
+    })) {
+        Ok(data) => Ok(data),
+        Err(_) => Err(format!("Font '{family_owned}' caused a panic during loading — file may be corrupt")),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -895,8 +945,9 @@ pub fn ttf_bytes_monospace_regular() -> &'static [u8] {
 
 /// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::ferrite::shaping).
 ///
-/// Named Inter/JetBrains families resolve to the matching weight/style TTF. Unknown names fall
-/// back to Inter Regular (closest default for multilingual text).
+/// Named Inter/JetBrains families resolve to the matching weight/style TTF.
+/// `FONT_CUSTOM` resolves to the cached custom font bytes when available.
+/// Unknown names fall back to Inter Regular (closest default for multilingual text).
 #[must_use]
 pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
     match &font_id.family {
@@ -911,6 +962,12 @@ pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
             FONT_JETBRAINS_BOLD => JETBRAINS_BOLD,
             FONT_JETBRAINS_ITALIC => JETBRAINS_ITALIC,
             FONT_JETBRAINS_BOLD_ITALIC => JETBRAINS_BOLD_ITALIC,
+            FONT_CUSTOM => {
+                CUSTOM_FONT_BYTES
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or(INTER_REGULAR)
+            }
             _ => INTER_REGULAR,
         },
     }
@@ -1578,15 +1635,26 @@ pub fn create_font_definitions_with_cjk_spec(
 
     // Load custom font if specified
     let custom_loaded = if let Some(font_name) = custom_font {
-        if let Some(data) = load_system_font_by_name(font_name) {
-            fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
-            info!("Loaded custom font: {}", font_name);
-            true
-        } else {
-            warn!("Custom font '{}' not found, falling back to Inter", font_name);
-            false
+        match load_system_font_by_name(font_name) {
+            Ok(data) => {
+                // Cache raw bytes for HarfRust shaping
+                let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
+                *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = Some(raw);
+                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
+                info!("Loaded custom font: {}", font_name);
+                true
+            }
+            Err(reason) => {
+                warn!("Custom font failed: {}", reason);
+                *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason);
+                false
+            }
         }
     } else {
+        *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         false
     };
 
@@ -1776,15 +1844,25 @@ pub fn create_font_definitions_with_settings(
 
     // Load custom font if specified
     let custom_loaded = if let Some(font_name) = custom_font {
-        if let Some(data) = load_system_font_by_name(font_name) {
-            fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
-            info!("Loaded custom font: {}", font_name);
-            true
-        } else {
-            warn!("Custom font '{}' not found, falling back to Inter", font_name);
-            false
+        match load_system_font_by_name(font_name) {
+            Ok(data) => {
+                let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
+                *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = Some(raw);
+                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
+                info!("Loaded custom font: {}", font_name);
+                true
+            }
+            Err(reason) => {
+                warn!("Custom font failed: {}", reason);
+                *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason);
+                false
+            }
         }
     } else {
+        *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         false
     };
 
@@ -2099,12 +2177,15 @@ fn configure_text_styles(ctx: &egui::Context) {
 /// IMPORTANT: This only reloads CJK fonts that are ALREADY loaded to avoid
 /// loading all 4 CJK fonts (~80MB) just because the preference changed.
 /// New CJK fonts are loaded lazily when text containing those scripts is detected.
+///
+/// Returns `Some(error_message)` if the custom font failed to load (the font
+/// system still falls back to Inter so the app keeps working).
 pub fn reload_fonts(
     ctx: &egui::Context,
     custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
-) {
+) -> Option<String> {
     info!(
         "Reloading fonts with custom_font={:?}, cjk_preference={:?}",
         custom_font, cjk_preference
@@ -2137,6 +2218,9 @@ pub fn reload_fonts(
     configure_text_styles(ctx);
     // Font atlas cannot be accessed until after the first Context::run()
     schedule_prewarm();
+
+    // Retrieve any error that occurred during custom font loading
+    LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 
 /// Ensure CJK fonts are loaded on-demand (loads ALL CJK fonts).

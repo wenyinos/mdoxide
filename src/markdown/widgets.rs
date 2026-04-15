@@ -14,9 +14,10 @@
 // Allow dead code for WYSIWYG widgets that are designed but not yet fully integrated
 #![allow(dead_code)]
 
-use crate::config::Theme;
+use crate::config::{EditorFont, Theme};
+use crate::fonts::get_styled_font_family;
 use crate::markdown::parser::{CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
-use eframe::egui::{self, Color32, FontId, Key, RichText, TextEdit, Ui};
+use eframe::egui::{self, Color32, FontFamily, FontId, Key, RichText, TextEdit, Ui};
 use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -898,7 +899,7 @@ fn serialize_table(
             let cells: Vec<String> = row_node
                 .children
                 .iter()
-                .map(|cell| cell.text_content())
+                .map(|cell| serialize_inline_content(cell))
                 .collect();
             rows.push(cells);
         }
@@ -953,6 +954,226 @@ fn serialize_table(
     }
 
     output
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline Markdown → LayoutJob (for table cell rich-text display)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build an egui `LayoutJob` that renders inline markdown formatting
+/// (bold, italic, strikethrough, inline code) from raw cell text.
+fn build_cell_layout_job(
+    text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+    code_bg: Color32,
+    wrap_width: f32,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = wrap_width;
+    parse_inline_markdown(
+        text, &mut job, false, false, false, font_size, editor_font, text_color, code_bg,
+    );
+    if job.sections.is_empty() {
+        let family = get_styled_font_family(false, false, editor_font);
+        job.append(
+            text,
+            0.0,
+            egui::text::TextFormat {
+                font_id: FontId::new(font_size, family),
+                color: text_color,
+                ..Default::default()
+            },
+        );
+    }
+    job
+}
+
+/// Build a LayoutJob for header cells (base bold, with inline formatting on top).
+fn build_cell_layout_job_with_base_bold(
+    text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+    code_bg: Color32,
+    wrap_width: f32,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = wrap_width;
+    parse_inline_markdown(
+        text, &mut job, true, false, false, font_size, editor_font, text_color, code_bg,
+    );
+    if job.sections.is_empty() {
+        let family = get_styled_font_family(true, false, editor_font);
+        job.append(
+            text,
+            0.0,
+            egui::text::TextFormat {
+                font_id: FontId::new(font_size, family),
+                color: text_color,
+                ..Default::default()
+            },
+        );
+    }
+    job
+}
+
+/// Recursively parse inline markdown and append formatted sections to a LayoutJob.
+fn parse_inline_markdown(
+    text: &str,
+    job: &mut egui::text::LayoutJob,
+    bold: bool,
+    italic: bool,
+    strike: bool,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+    code_bg: Color32,
+) {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    let mut plain_start = 0;
+
+    while i < len {
+        if i + 2 < len && bytes[i] == b'*' && bytes[i + 1] == b'*' && bytes[i + 2] == b'*' {
+            // *** bold+italic delimiter (must be checked before **)
+            if let Some(close) = find_closing_delimiter(&text[i + 3..], "***") {
+                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                parse_inline_markdown(
+                    &text[i + 3..i + 3 + close], job, !bold, !italic, strike,
+                    font_size, editor_font, text_color, code_bg,
+                );
+                i = i + 3 + close + 3;
+                plain_start = i;
+            } else {
+                i += 3;
+            }
+        } else if i + 1 < len && bytes[i] == b'*' && bytes[i + 1] == b'*' {
+            // ** bold delimiter
+            if let Some(close) = find_closing_delimiter(&text[i + 2..], "**") {
+                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                parse_inline_markdown(
+                    &text[i + 2..i + 2 + close], job, !bold, italic, strike,
+                    font_size, editor_font, text_color, code_bg,
+                );
+                i = i + 2 + close + 2;
+                plain_start = i;
+            } else {
+                i += 2;
+            }
+        } else if i + 1 < len && bytes[i] == b'~' && bytes[i + 1] == b'~' {
+            // ~~ strikethrough delimiter
+            if let Some(close) = find_closing_delimiter(&text[i + 2..], "~~") {
+                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                parse_inline_markdown(
+                    &text[i + 2..i + 2 + close], job, bold, italic, !strike,
+                    font_size, editor_font, text_color, code_bg,
+                );
+                i = i + 2 + close + 2;
+                plain_start = i;
+            } else {
+                i += 2;
+            }
+        } else if bytes[i] == b'`' {
+            // Inline code (no nesting)
+            if let Some(close) = find_closing_delimiter(&text[i + 1..], "`") {
+                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                let code_text = &text[i + 1..i + 1 + close];
+                job.append(
+                    code_text,
+                    0.0,
+                    egui::text::TextFormat {
+                        font_id: FontId::new(font_size * 0.9, FontFamily::Monospace),
+                        color: text_color,
+                        background: code_bg,
+                        ..Default::default()
+                    },
+                );
+                i = i + 1 + close + 1;
+                plain_start = i;
+            } else {
+                i += 1;
+            }
+        } else if bytes[i] == b'*' && (i + 1 >= len || bytes[i + 1] != b'*') {
+            // * italic delimiter (but not **)
+            if let Some(close) = find_closing_single_star(&text[i + 1..]) {
+                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                parse_inline_markdown(
+                    &text[i + 1..i + 1 + close], job, bold, !italic, strike,
+                    font_size, editor_font, text_color, code_bg,
+                );
+                i = i + 1 + close + 1;
+                plain_start = i;
+            } else {
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    flush_plain(text, plain_start, len, job, bold, italic, strike, font_size, editor_font, text_color);
+}
+
+/// Flush accumulated plain text as a formatted LayoutJob section.
+fn flush_plain(
+    text: &str,
+    start: usize,
+    end: usize,
+    job: &mut egui::text::LayoutJob,
+    bold: bool,
+    italic: bool,
+    strike: bool,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+) {
+    if start >= end {
+        return;
+    }
+    let slice = &text[start..end];
+    if slice.is_empty() {
+        return;
+    }
+    let family = get_styled_font_family(bold, italic, editor_font);
+    let mut fmt = egui::text::TextFormat {
+        font_id: FontId::new(font_size, family),
+        color: text_color,
+        ..Default::default()
+    };
+    if italic {
+        fmt.italics = true;
+    }
+    if strike {
+        fmt.strikethrough = egui::Stroke::new(1.0, text_color);
+    }
+    job.append(slice, 0.0, fmt);
+}
+
+/// Find the position of a closing delimiter in `text`, returning the byte offset
+/// of the start of the delimiter (i.e., the length of content before it).
+fn find_closing_delimiter(text: &str, delimiter: &str) -> Option<usize> {
+    text.find(delimiter)
+}
+
+/// Find a closing single `*` that is not part of `**`.
+fn find_closing_single_star(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'*' {
+            if i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+                i += 2; // skip **
+            } else {
+                return Some(i);
+            }
+        } else {
+            i += 1;
+        }
+    }
+    None
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1105,7 +1326,7 @@ impl TableData {
                     let cells: Vec<TableCellData> = row_node
                         .children
                         .iter()
-                        .map(|cell| TableCellData::new(cell.text_content()))
+                        .map(|cell| TableCellData::new(serialize_inline_content(cell)))
                         .collect();
                     Some(cells)
                 } else {
@@ -1342,6 +1563,8 @@ pub struct EditableTable<'a> {
     id: Option<egui::Id>,
     /// Hard maximum width for the table (overrides available_width)
     max_width: Option<f32>,
+    /// Editor font for styled text rendering (bold/italic variants)
+    editor_font: Option<EditorFont>,
 }
 
 impl<'a> EditableTable<'a> {
@@ -1355,6 +1578,7 @@ impl<'a> EditableTable<'a> {
             show_alignment_controls: true,
             id: None,
             max_width: None,
+            editor_font: None,
         }
     }
 
@@ -1399,6 +1623,13 @@ impl<'a> EditableTable<'a> {
     #[must_use]
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = Some(width);
+        self
+    }
+
+    /// Set the editor font for styled text rendering in non-editing cells.
+    #[must_use]
+    pub fn editor_font(mut self, font: EditorFont) -> Self {
+        self.editor_font = Some(font);
         self
     }
 
@@ -1682,91 +1913,124 @@ impl<'a> EditableTable<'a> {
 
                                             let cell_has_focus =
                                                 ui.memory(|mem| mem.has_focus(cell_id));
-                                            let enter_pressed = cell_has_focus
-                                                && ui.input_mut(|i| {
-                                                    i.consume_key(
-                                                        egui::Modifiers::NONE,
-                                                        Key::Enter,
-                                                    )
-                                                });
-                                            let tab_pressed = cell_has_focus
-                                                && ui.input_mut(|i| {
-                                                    i.consume_key(
-                                                        egui::Modifiers::NONE,
-                                                        Key::Tab,
-                                                    )
-                                                });
-                                            let shift_tab_pressed = cell_has_focus
-                                                && ui.input_mut(|i| {
-                                                    i.consume_key(
-                                                        egui::Modifiers::SHIFT,
-                                                        Key::Tab,
-                                                    )
-                                                });
+                                            let wants_focus =
+                                                pending_focus == Some((row_idx, col_idx));
 
-                                            let wrap_font = font.clone();
-                                            let wrap_color = text_color;
-                                            let mut layouter =
-                                                move |ui_inner: &egui::Ui,
-                                                      text: &str,
-                                                      _wrap_width: f32| {
-                                                    let job =
-                                                        egui::text::LayoutJob::simple(
-                                                            text.to_string(),
-                                                            wrap_font.clone(),
-                                                            wrap_color,
-                                                            inner_w,
-                                                        );
-                                                    ui_inner
-                                                        .fonts(|f| f.layout_job(job))
-                                                };
-
-                                            let output =
-                                                TextEdit::multiline(&mut cell.text)
-                                                    .id(cell_id)
-                                                    .font(font)
-                                                    .text_color(text_color)
-                                                    .frame(false)
-                                                    .desired_width(inner_w)
-                                                    .desired_rows(1)
-                                                    .layouter(&mut layouter)
-                                                    .show(ui);
-
-                                            if cell.text.contains('\n') {
-                                                cell.text =
-                                                    cell.text.replace('\n', " ");
-                                                edit_state.content_modified = true;
-                                            }
-
-                                            let response = output.response;
-                                            if pending_focus
-                                                == Some((row_idx, col_idx))
-                                            {
-                                                response.request_focus();
-                                            }
-                                            if response.has_focus() {
-                                                edit_state.focused_cell =
-                                                    Some((row_idx, col_idx));
-                                                any_cell_has_focus = true;
-                                                let nr = self.data.rows.len();
-                                                let nc = self.data.num_columns;
-                                                if tab_pressed {
-                                                    edit_state.move_next(nr, nc);
-                                                } else if shift_tab_pressed {
-                                                    edit_state.move_prev(nc);
-                                                } else if enter_pressed {
-                                                    edit_state.move_down(nr);
-                                                } else if ui.input(|i| {
-                                                    i.key_pressed(Key::Escape)
-                                                }) {
-                                                    edit_state.clear_focus();
-                                                    ui.memory_mut(|m| {
-                                                        m.surrender_focus(cell_id)
+                                            if cell_has_focus || wants_focus {
+                                                // EDITING MODE: show raw TextEdit
+                                                let enter_pressed = cell_has_focus
+                                                    && ui.input_mut(|i| {
+                                                        i.consume_key(
+                                                            egui::Modifiers::NONE,
+                                                            Key::Enter,
+                                                        )
                                                     });
+                                                let tab_pressed = cell_has_focus
+                                                    && ui.input_mut(|i| {
+                                                        i.consume_key(
+                                                            egui::Modifiers::NONE,
+                                                            Key::Tab,
+                                                        )
+                                                    });
+                                                let shift_tab_pressed = cell_has_focus
+                                                    && ui.input_mut(|i| {
+                                                        i.consume_key(
+                                                            egui::Modifiers::SHIFT,
+                                                            Key::Tab,
+                                                        )
+                                                    });
+
+                                                let wrap_font = font.clone();
+                                                let wrap_color = text_color;
+                                                let mut layouter =
+                                                    move |ui_inner: &egui::Ui,
+                                                          text: &str,
+                                                          _wrap_width: f32| {
+                                                        let job =
+                                                            egui::text::LayoutJob::simple(
+                                                                text.to_string(),
+                                                                wrap_font.clone(),
+                                                                wrap_color,
+                                                                inner_w,
+                                                            );
+                                                        ui_inner
+                                                            .fonts(|f| f.layout_job(job))
+                                                    };
+
+                                                let output =
+                                                    TextEdit::multiline(&mut cell.text)
+                                                        .id(cell_id)
+                                                        .font(font)
+                                                        .text_color(text_color)
+                                                        .frame(false)
+                                                        .desired_width(inner_w)
+                                                        .desired_rows(1)
+                                                        .layouter(&mut layouter)
+                                                        .show(ui);
+
+                                                if cell.text.contains('\n') {
+                                                    cell.text =
+                                                        cell.text.replace('\n', " ");
+                                                    edit_state.content_modified = true;
                                                 }
-                                            }
-                                            if response.changed() {
-                                                edit_state.content_modified = true;
+
+                                                let response = output.response;
+                                                if wants_focus {
+                                                    response.request_focus();
+                                                }
+                                                if response.has_focus() {
+                                                    edit_state.focused_cell =
+                                                        Some((row_idx, col_idx));
+                                                    any_cell_has_focus = true;
+                                                    let nr = self.data.rows.len();
+                                                    let nc = self.data.num_columns;
+                                                    if tab_pressed {
+                                                        edit_state.move_next(nr, nc);
+                                                    } else if shift_tab_pressed {
+                                                        edit_state.move_prev(nc);
+                                                    } else if enter_pressed {
+                                                        edit_state.move_down(nr);
+                                                    } else if ui.input(|i| {
+                                                        i.key_pressed(Key::Escape)
+                                                    }) {
+                                                        edit_state.clear_focus();
+                                                        ui.memory_mut(|m| {
+                                                            m.surrender_focus(cell_id)
+                                                        });
+                                                    }
+                                                }
+                                                if response.changed() {
+                                                    edit_state.content_modified = true;
+                                                }
+                                            } else {
+                                                // DISPLAY MODE: show rich text with inline formatting
+                                                let ef = self.editor_font.as_ref()
+                                                    .cloned()
+                                                    .unwrap_or(EditorFont::Inter);
+                                                let display_bold = is_header;
+                                                let job = if display_bold {
+                                                    build_cell_layout_job_with_base_bold(
+                                                        &cell.text, self.font_size, &ef,
+                                                        text_color, colors.code_bg, inner_w,
+                                                    )
+                                                } else {
+                                                    build_cell_layout_job(
+                                                        &cell.text, self.font_size, &ef,
+                                                        text_color, colors.code_bg, inner_w,
+                                                    )
+                                                };
+                                                let galley = ui
+                                                    .fonts(|f| f.layout_job(job));
+                                                let response = ui.add(
+                                                    egui::Label::new(galley)
+                                                        .sense(egui::Sense::click()),
+                                                );
+                                                if response.clicked()
+                                                    || response.double_clicked()
+                                                {
+                                                    edit_state.pending_focus =
+                                                        Some((row_idx, col_idx));
+                                                }
                                             }
                                         }
                                     }

@@ -378,7 +378,7 @@ impl FerriteApp {
                         self.state.set_active_tab(*tab_idx);
                         self.pending_cjk_check = true;
                     }
-                    if close_response.clicked() {
+                    if close_response.clicked() || tab_response.middle_clicked() {
                         tab_to_close = Some(*tab_idx);
                     }
                     if close_response.hovered() {
@@ -2286,13 +2286,25 @@ impl FerriteApp {
                         let custom_font = self.state.settings.font_family
                             .custom_name()
                             .map(|s| s.to_string());
-                        crate::fonts::reload_fonts(
+                        let load_err = crate::fonts::reload_fonts(
                             ui.ctx(),
                             custom_font.as_deref(),
                             self.state.settings.cjk_font_preference,
                             Some(&self.state.settings.complex_script_font_preferences),
                         );
-                        info!("Font settings changed, reloaded fonts");
+                        if let Some(reason) = load_err {
+                            self.state.settings.font_family = crate::config::EditorFont::default();
+                            self.state.mark_settings_dirty();
+                            let time = self.get_app_time();
+                            self.state.show_toast(
+                                format!("Font failed to load: {reason}. Reverted to Inter."),
+                                time,
+                                5.0,
+                            );
+                            warn!("Custom font reverted to Inter: {}", reason);
+                        } else {
+                            info!("Font settings changed, reloaded fonts");
+                        }
                     }
 
                     if prev_language != self.state.settings.language {
@@ -2317,7 +2329,7 @@ impl FerriteApp {
                     self.theme_manager.apply(ui.ctx());
                     self.state.mark_settings_dirty();
 
-                    crate::fonts::reload_fonts(
+                    let _ = crate::fonts::reload_fonts(
                         ui.ctx(),
                         None,
                         crate::config::CjkFontPreference::Auto,

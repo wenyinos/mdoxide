@@ -7,7 +7,7 @@
 //! backend). In Flatpak sandboxes, portal-based dialogs grant the app access
 //! to user-selected paths without requiring broad filesystem permissions.
 
-use log::{debug, warn};
+use log::debug;
 use rfd::FileDialog;
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -90,7 +90,8 @@ pub fn detect_linux_desktop() -> (Option<String>, bool) {
         // Desktop environments with native file dialog support
         let has_native = matches!(
             desktop_lower.as_str(),
-            "gnome" | "kde" | "plasma" | "xfce" | "mate" | "cinnamon" | "lxde" | "lxqt" | "budgie"
+            "gnome" | "kde" | "plasma" | "xfce" | "mate" | "cinnamon" | "x-cinnamon"
+                | "lxde" | "lxqt" | "budgie"
         );
 
         return (Some(desktop), requires_portal || !has_native);
@@ -138,32 +139,36 @@ pub fn detect_linux_distro() -> Option<String> {
     None
 }
 
-/// Returns the install command for xdg-desktop-portal packages based on distro.
-pub fn portal_install_instructions() -> (&'static str, Vec<&'static str>) {
+/// Returns the install command for xdg-desktop-portal packages based on distro
+/// and desktop environment. Cinnamon/Mint recommends xapp/gtk backends instead of wlr.
+pub fn portal_install_instructions(desktop_env: Option<&str>) -> (&'static str, Vec<&'static str>) {
     let distro = detect_linux_distro().unwrap_or_default();
 
-    match distro.as_str() {
-        "arch" | "manjaro" | "endeavouros" | "garuda" => (
-            "pacman -S",
-            vec!["xdg-desktop-portal", "xdg-desktop-portal-hyprland", "xdg-desktop-portal-wlr"],
-        ),
-        "debian" | "ubuntu" | "pop" | "mint" | "elementary" => (
-            "apt install",
-            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
-        ),
-        "fedora" | "nobara" => (
-            "dnf install",
-            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
-        ),
-        "opensuse" | "suse" => (
-            "zypper install",
-            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
-        ),
-        _ => (
-            "<package-manager> install",
-            vec!["xdg-desktop-portal", "xdg-desktop-portal-wlr"],
-        ),
-    }
+    let is_cinnamon = desktop_env
+        .map(|d| {
+            let d = d.to_lowercase();
+            d == "cinnamon" || d == "x-cinnamon"
+        })
+        .unwrap_or(false);
+
+    let portal_backends: &[&str] = if is_cinnamon {
+        &["xdg-desktop-portal-xapp", "xdg-desktop-portal-gtk"]
+    } else {
+        &["xdg-desktop-portal-hyprland", "xdg-desktop-portal-wlr"]
+    };
+
+    let mut packages = vec!["xdg-desktop-portal"];
+    packages.extend_from_slice(portal_backends);
+
+    let cmd = match distro.as_str() {
+        "arch" | "manjaro" | "endeavouros" | "garuda" => "pacman -S",
+        "debian" | "ubuntu" | "pop" | "mint" | "elementary" => "apt install",
+        "fedora" | "nobara" => "dnf install",
+        "opensuse" | "suse" => "zypper install",
+        _ => "<package-manager> install",
+    };
+
+    (cmd, packages)
 }
 
 /// Resolve initial directory for a file dialog, with Flatpak-aware fallback.
@@ -211,9 +216,8 @@ pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> DialogResult<PathBuf
     match result {
         Some(path) => DialogResult::Success(path),
         None => {
-            // Determine if this is likely a portal failure
-            let (desktop_env, requires_portal) = detect_linux_desktop();
-
+            // rfd's sync API returns None for both user cancellation and portal failure.
+            // Always treat as cancellation to avoid false-positive error dialogs.
             if is_flatpak() {
                 debug!(
                     "Folder dialog returned None in Flatpak (initial_dir: {:?}). \
@@ -222,19 +226,15 @@ pub fn open_folder_dialog(initial_dir: Option<&PathBuf>) -> DialogResult<PathBuf
                 );
             }
 
-            // On Linux desktops that require portals, None is likely a portal failure
+            let (desktop_env, requires_portal) = detect_linux_desktop();
             if is_linux() && requires_portal {
-                warn!(
-                    "File dialog failed on {}. This may indicate missing xdg-desktop-portal.",
-                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                debug!(
+                    "Folder dialog returned None on {} (portal-requiring desktop). \
+                     If no dialog appeared, check xdg-desktop-portal installation.",
+                    desktop_env.as_deref().unwrap_or("unknown")
                 );
-                DialogResult::Failed {
-                    is_portal_error: true,
-                    desktop_env,
-                }
-            } else {
-                DialogResult::Cancelled
             }
+            DialogResult::Cancelled
         }
     }
 }
@@ -268,19 +268,14 @@ pub fn open_multiple_files_dialog(initial_dir: Option<&PathBuf>) -> DialogResult
         Some(paths) if !paths.is_empty() => DialogResult::Success(paths),
         _ => {
             let (desktop_env, requires_portal) = detect_linux_desktop();
-
             if is_linux() && requires_portal {
-                warn!(
-                    "File open dialog failed on {}. This may indicate missing xdg-desktop-portal.",
-                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                debug!(
+                    "File open dialog returned None on {} (portal-requiring desktop). \
+                     If no dialog appeared, check xdg-desktop-portal installation.",
+                    desktop_env.as_deref().unwrap_or("unknown")
                 );
-                DialogResult::Failed {
-                    is_portal_error: true,
-                    desktop_env,
-                }
-            } else {
-                DialogResult::Cancelled
             }
+            DialogResult::Cancelled
         }
     }
 }
@@ -319,19 +314,14 @@ pub fn save_file_dialog(
         Some(path) => DialogResult::Success(path),
         None => {
             let (desktop_env, requires_portal) = detect_linux_desktop();
-
             if is_linux() && requires_portal {
-                warn!(
-                    "Save dialog failed on {}. This may indicate missing xdg-desktop-portal.",
-                    desktop_env.as_deref().unwrap_or("unknown Linux desktop")
+                debug!(
+                    "Save dialog returned None on {} (portal-requiring desktop). \
+                     If no dialog appeared, check xdg-desktop-portal installation.",
+                    desktop_env.as_deref().unwrap_or("unknown")
                 );
-                DialogResult::Failed {
-                    is_portal_error: true,
-                    desktop_env,
-                }
-            } else {
-                DialogResult::Cancelled
             }
+            DialogResult::Cancelled
         }
     }
 }

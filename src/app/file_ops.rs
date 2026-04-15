@@ -1832,7 +1832,7 @@ impl FerriteApp {
     /// This is called when a file dialog fails on Linux desktops like Hyprland
     /// that require xdg-desktop-portal but don't have it properly configured.
     pub(crate) fn show_portal_error_dialog(&mut self, desktop_env: Option<String>, operation: &str) {
-        let (cmd, packages) = portal_install_instructions();
+        let (cmd, packages) = portal_install_instructions(desktop_env.as_deref());
         let packages_str = packages.join(" ");
         let full_cmd = format!("{} {}", cmd, packages_str);
 

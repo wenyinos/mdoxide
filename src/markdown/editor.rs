@@ -1717,7 +1717,7 @@ fn render_node_with_structural_keys(
             render_thematic_break(ui, colors);
         }
         MarkdownNodeType::Table { .. } => {
-            render_table(ui, node, source, edit_state, colors, font_size);
+            render_table(ui, node, source, edit_state, colors, font_size, editor_font);
         }
         MarkdownNodeType::FrontMatter(content) => {
             render_front_matter(ui, colors, font_size, content);
@@ -1908,7 +1908,7 @@ fn render_node(
             render_thematic_break(ui, colors);
         }
         MarkdownNodeType::Table { .. } => {
-            render_table(ui, node, source, edit_state, colors, font_size);
+            render_table(ui, node, source, edit_state, colors, font_size, editor_font);
         }
         MarkdownNodeType::FrontMatter(content) => {
             render_front_matter(ui, colors, font_size, content);
@@ -5035,6 +5035,7 @@ fn render_table(
     edit_state: &mut EditState,
     colors: &EditorColors,
     font_size: f32,
+    editor_font: &EditorFont,
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
@@ -5068,6 +5069,7 @@ fn render_table(
         .with_alignment_controls(true)
         .id(table_id)
         .max_width(table_avail_width)
+        .editor_font(editor_font.clone())
         .show(ui);
 
     // Update stored data if changed

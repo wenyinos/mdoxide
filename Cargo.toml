@@ -1,6 +1,6 @@
 [package]
 name = "ferrite"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 description = "A fast, lightweight text editor for Markdown, JSON, and more"
 repository = "https://github.com/OlaProeis/Ferrite"
@@ -19,6 +19,9 @@ bundle-icon = []
 high-perf-alloc = ["mimalloc", "tikv-jemallocator"]
 # Async worker infrastructure for background operations (AI, SSH, database)
 async-workers = ["tokio", "poll-promise"]
+# Language Server Protocol integration (diagnostics, hover, go-to-def).
+# Deferred from v0.2.8 — will ship in v0.2.9 with proper diagnostics panel.
+lsp = []
 
 [dependencies]
 egui = { version = "0.28", features = ["serde"] }
