@@ -31,16 +31,44 @@ view_mode:
   raw_desc: "Edición de texto con markdown simple"
 
 # Status bar
+  rendered_desc: Editando WYSIWYG renderizado
+  split_desc: Vista previa del editor + analizador sin formato lado a lado
 status:
   untitled: "Sin título"
   no_file: "No hay archivo abierto"
 
 # File dialogs
+  encoding_heading: Codificación del archivo
+  recent_files_heading: 📄 Archivos recientes
+  vim_mode: Modo de edición Vim (Esc = Normal, i = Insertar)
+  cursor_position: Ln %{line}, Col %{col}
+  delimiter_tooltip: |-
+    Delimitador: %{delimiter}
+    %{info}Pulse para cambiar
+  header_tooltip: |-
+    Primera fila como cabeceras: %{status}
+    %{info}Pulse para cambiar
+  rainbow_tooltip: |-
+    Coloración de columnas con arcoíris: %{status}
+    Pulse para alternar
+  encoding_tooltip: |-
+    Codificación de archivo: %{encoding}
+    %{info}Pulse para cambiar
+  recent_folders_heading: 📁 Carpetas recentes
+  file_tooltip: |-
+    %{path}
+
+    Pulse: Abrir
+    Mayús+Pulsar: Abrir en segundo plano
+  folder_tooltip: |-
+    %{path}
+
+    Pulsación: Abre como pupitre
 dialog:
   unsaved_changes:
     title: "Cambios no guardados"
     save: "Guardar"
-    dont_save: "No guardes"
+    dont_save: "No guardar"
   confirm:
     cancel: "Cancelar"
     close: "Cerrar"
@@ -54,7 +82,7 @@ dialog:
     hint_folder: "nombreDeLaCarpeta"
     create: "Crear"
     rename: "Renombrar"
-    enter_new_name: "Introduce el nuevo nombre:"
+    enter_new_name: "Introduce el nombre nuevo:"
     exists_error: "Ya existe un archivo o carpeta con este nombre"
     confirm_delete: "Confirmar eliminación"
     delete_folder_warning: "⚠ Esto eliminará la carpeta y todo su contenido!"
@@ -172,3 +200,133 @@ settings:
 # Ribbon toolbar additions
 
 # Welcome page (first launch)
+    font_family: Tipografía
+    font_size: Tamaño tipográfico
+    font_inter_desc: Moderno, tipografía clara proporcional
+    font_jetbrains_desc: Tipografía mono‐espaciada para código
+    custom_font: Tipografía del sistema por defecto
+    custom_font_desc: Seleccionar desde tipografías del sistema instalado
+    select_system_font: 'Seleccionar tipografía:'
+    font_preview: 'Vista previa:'
+    font_not_found: ⚠ Tipografía no encontrada en el sistema
+    cjk_preference: Preferencia regional CJK
+    cjk_preference_hint: Elija cual tipografía CJK toma prioridad para variantes
+      de glifos regionales
+    cjk_auto: Auto (Local del sistema)
+    cjk_auto_desc: Utilizar sistema local para determinar la prioridad de 
+      tipografía CJK
+    cjk_korean: Coreano
+    cjk_korean_desc: Prioridad de variantes de glifo coreano
+    cjk_simplified_chinese: Chino simplificado
+    cjk_simplified_chinese_desc: Priorizar variantes de glifo chino simplificado
+    cjk_traditional_chinese: Chino tradicional
+    cjk_traditional_chinese_desc: Priorizar variantes de glifo de chino 
+      tradicional
+    cjk_japanese: Japonés
+    cjk_japanese_desc: Priorizar variantes de glifo japonesas
+    complex_scripts: Script adicionales
+    complex_scripts_hint: Preseleccionar tipografías para árabe, bengalí, 
+      devanagari, tailandés, hebreo, tamil, georgiano, armenio, etíope, y otros 
+      script. Las tipografías se cargan bajo demanda cuando los archivo con esos
+      scritpt son abiertos.
+    complex_script_default: Predeterminado (Sistema)
+    tab_size: Tamaño de tabulación
+    spaces: espacios
+    word_wrap: Cobertura de palabra
+    word_wrap_tooltip: Cubre líneas largas en vez de arrastre horizontal
+    show_line_numbers: Mostrar números de línea
+    line_numbers_tooltip: Exhibir números de línea en el editor del catalizador
+    show_minimap: Mostrar mini‐mapa
+    minimap_tooltip: Exhibe un mini‐mapa panel de navegación sobre el lado 
+      derecho del editor
+    minimap_mode: Modo minimapa
+    minimap_mode_auto: Auto
+    minimap_mode_auto_desc: Semántica para Markdown, píxel para código
+    minimap_mode_semantic: Semántica
+    minimap_mode_semantic_desc: Resumen de estructura con encabezados
+    minimap_mode_pixel: Píxel
+    minimap_mode_pixel_desc: Resumen de código con caracteres
+    highlight_brackets: Resaltar corchetes coincidentes
+    brackets_tooltip: Resaltar corchetas coincidentes (), [], {}, <> y parejas 
+      de énfasis ** y __ cuando el cursos está adjunto
+    auto_close_brackets: Auto-cerrar corchetes y entrecomillados
+    auto_close_tooltip: Insertar automáticamente los corchetes y entrecomillas 
+      de cierre. Cubra texto seleccionado cuando teclee una apertura.
+    syntax_highlighting: Resaltado sintáctico
+    syntax_tooltip: Habilita resaltado sintáctico para archivos de código fuente
+      (Rust, Python, JavaScript, etc.)
+    default_language: Idioma predetermnado
+    default_language_hint: Idioma para resaltado sintáctico en documentos no 
+      guardados/nuevos cuando ningún lenguaje es detectado desde la ruta del 
+      archivo
+    default_language_auto: Auto (ninguno)
+    sync_scroll_tooltip: Sincronizar posición de arrastre cuando intercambia 
+      entre vistas Cruda y Renderizada
+    use_spaces: Usar espacios para sangrado
+    use_spaces_tooltip: Utilizar espacios en vez de tabuladores para sangrado
+    vim_mode: Modo Vim
+    vim_mode_tooltip: Habilita modelo estilo Vim al editar con modos Normal, 
+      Insertar, y Visual. Utilice hjkl para navegación, i para insertar, Esc 
+      para modo normal.
+    max_line_width: Anchura máxima de línea
+    custom_width: Personal - Especifica anchura de píxel
+    code_folding: Encarpetado de código
+    enable_folding: Habilitar encarpetado de código
+    folding_tooltip: Concede colapso de secciones del documento (Ctrl+Mayús+[ 
+      para encarpetar todo, Ctrl+Mayús+] para desencarpetar)
+    show_fold_indicators: Mostrar indicadores de carpeta
+    fold_indicators_tooltip: Exhibe indicadores de carpeta en el canal (solo 
+      visual - colapso aún no implementado)
+    fold_headings: Cabeceras
+    fold_headings_tooltip: Carpeta de cabeceras de Markdown y su contenido
+    fold_code_blocks: Bloques de código
+    fold_code_blocks_tooltip: Bloques de código delimitados por pliegues 
+      (```...```)
+    fold_lists: Listados
+    fold_lists_tooltip: Plegar jerarquías de listas anidadas
+    fold_indentation: Sangrado (JSON/YAML)
+    fold_indentation_tooltip: Estructuras basadas en sangrado de pliegues en 
+      archivos JSON/YAML
+    snippets: Snippets
+    enable_snippets: Habilita expansión de Snippet
+    snippets_tooltip: 'Expanda las palabras clave en texto predefinido. Complementos
+      integrados: ;date, ;time, ;datetime, ;now'
+    builtin_snippets: 'Complementos integrados:'
+    snippet_date: ;date → AAAA-MM-DD
+    snippet_time: ;time → HH:MM
+    snippet_datetime: ;datetime → Fecha+hora
+    snippet_now: ;now → ISO 8601
+    paragraph_indent: Sangrado de párrafo
+    paragraph_indent_hint: Sangrado de primera línea para convenciones 
+      tipográficas CJK
+    paragraph_indent_custom: Personalización
+    paragraph_indent_custom_desc: Valor en personalizado
+    header_spacing: Espaciado de cabecera
+    header_spacing_hint: Espaciado vertical entre cabeceras (H1-H6) en vista 
+      interpretada
+  preview:
+    sync_scroll: Arrastre síncrono
+    default_view: Modo de vista por defecto
+  files:
+    title: Archivos
+    restore_session_tooltip: Cuando esté habilitado, restablezca anteriormente 
+      los lengüetas abiertas al inicio. Cuando inhabilitados, inicie con una 
+      única lengüeta vacía. Los datos de la sesión siempre está guardada.
+    enable_auto_save: Habilita auto-guardado por defecto
+    auto_save_tooltip: Documentos nuevos tendrán habilitado el auto-guardado. 
+      Utilice archivos temporales para prevenir pérdida de datos.
+    auto_save_delay: 'Retardo de auto-guardado:'
+    recent_files: Archivos recientes
+    clear_recent: Vaciar archivos recientes
+    clear_recent_tooltip: Quitar todos los archivos de la lista de archivos 
+      recientes
+    seconds: '%{count} segundos'
+    remember_files: Recordar los últimos %{count} archivos
+    files_count: '%{count} archivos'
+  appearance:
+    title: Apariencia
+    language: Idioma
+    language_hint: Seleccione el idioma de la pantalla para el interfaz de 
+      usuario
+    syntax_theme: Tema sintáctico
+    syntax_theme_hint: Tema del color para resalto de sintaxis del código
