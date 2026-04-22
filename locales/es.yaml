@@ -330,3 +330,382 @@ settings:
       usuario
     syntax_theme: Tema sintáctico
     syntax_theme_hint: Tema del color para resalto de sintaxis del código
+    syntax_theme_auto: Automático (coincidir con el tema de la aplicación)
+  keyboard:
+    title: Teclado
+    search_hint: Atajos de filtro...
+    reset_all: Restablecer todos los atajos
+    reset_all_tooltip: Restablecer todos los atajos de teclado a sus vínculos 
+      predeterminados
+    reset_default: Restablecer a predeterminado
+    press_key: Presione la tecla para
+    waiting: Esperando tecla…
+    cancel: Cancelar
+    apply: Aplicar
+    conflict_with: Conflictos con
+    click_to_change: Pulse para cambiar atajo
+  about:
+    title: Acerca de
+    description: Un editor de texto rápido. ligero, para Markdown, JSON, y más
+    updates: Actualizaciones
+    check_for_updates: Comprobar actualizaciones
+    checking: Comprobando actualizaciones…
+    up_to_date: Está en la última versión
+    check_again: Comprobar otra vez
+    update_available: ¡Versión nueva disponible!
+    new_version: Versión
+    view_release: Vea la versión y la descarga
+    check_failed: No se pudo comprobar las actualizaciones
+    try_again: Intentar otra vez
+    links: Enlaces
+    all_releases: Todas las versiones
+    report_issue: Informar sobre una incidencia
+    source_code: Código fuente
+    license: Licenciado bajo MIT
+  terminal:
+    title: Terminal
+    enable: Habilitar terminal integrado
+    font_size: Tamaño tipográfico
+    scrollback: Líneas de arrastre atrás
+    copy_selection: Copiar selección automáticamente
+    copy_selection_tooltip: Copiar texto automáticamente al portapapeles cunado 
+      seleccione con el ratón
+    theme: Tema del terminal
+    opacity: Opacidad del fondo
+    startup_command: Comando de arranque
+    startup_command_desc: Comando para ejecutar cuando abra un terminal nuevo 
+      (p.ej. 'echo Hola')
+    startup_command_hint: Opcional
+    monitors: Monitores detectados
+    monitors_desc: Distribución de pantalla detectada para distribución de 
+      ventana
+    monitor_label: 'Monitor %{index}:'
+    monitor_geometry: (%{width}x%{height} en %{x},%{y})
+    breathing_color: Color del indicador de respiración
+    prompt_patterns: Patrones de indicaciones personalizadas
+    prompt_patterns_desc: Patrones de expresiones regulares para detectar el 
+      mensaje de la terminal (uno por línea)
+    prompt_patterns_hint: 'p.ej., ^\w+@\w+:'
+    auto_load_layout: Diseño de carga automática
+    auto_load_layout_tooltip: Cargar automáticamente 'terminal_layout.json' 
+      desde la raíz del proyecto
+    sound_notification: Notificación sonora
+    sound_notification_desc: Reproducir un sonido cuando la terminal esté 
+      esperando una entrada
+    enable_sound: Habilitar sonido al recibir una notificación
+    enable_sound_tooltip: Reproducir un sonido de notificación cuando la 
+      terminal detecte una solicitud (esperando entrada)
+    custom_sound: Archivo de sonido personalizado (opcional)
+    custom_sound_hint: Déjelo vacío para que el sistema emita un pitido
+    opacity_format: '%{value}%'
+    focus_on_prompt: Foco de terminal en apuntador
+    font_size_format: '%{size}px'
+    auto_focus: Auto‐foco en Entrada
+    auto_focus_desc: Intercambiado automáticamente para terminal cuando inicia 
+      esperando para entrada
+    focus_on_prompt_tooltip: Auto‐enfoca un terminal cuando traduce desde 
+      ejecución a espera para entrada
+find:
+  placeholder: Búsqueda…
+  replace_placeholder: Remplazar por…
+  match_case: Coincide capitalinas
+  match_case_short: Aa
+  whole_word: Todo el mundo
+  use_regex: Utilizar ExpReg
+  replace: Remplazar
+  replace_all: Remplazar todo
+  no_results: No coincide
+  title: Buscar y remplazar
+  title_replace: Buscar y remplazar
+  title_find: Buscar
+  close_tooltip: Cerrar (Escape)
+  hide_replace: Ocultar remplazo (Ctrl+H)
+  show_replace: Mostrar remplazo (Ctrl+H)
+  prev_tooltip: Anterior (Mayús+F3)
+  next_tooltip: Siguiente (F3 o Entrar)
+  replace_tooltip: Remplazar coincidencia actual
+  replace_all_tooltip: Remplazar todas las coincidencias
+  keyboard_hints: 'Entrar/F3: Siguiente • Mayús+F3: Prev • Esc: Cerrar'
+outline:
+  panel_title: Documento
+  statistics: Estadísticas
+  tab_outline: Externo a línea
+  tab_statistics: Estad
+  summary: Cabeceras %{headings} · ~%{minutes} min leído
+  no_headings: Sin cabeceras encontradas
+  tab_links: Enlaces
+  json_structure: 📁 Estructura
+  json_values: 📊 Valores
+  json_objects: Objetos
+  json_nulls: Nulos
+  json_numbers: Números
+  json_booleans: Booleanos
+  parse_error: ⚠ Error de intérprete
+  backlinks_unavailable: Retroceso no disponible
+  productivity_unavailable: Productividad Hub no disponible
+  json_strings: Segmentos
+  json_arrays: Formaciones
+  json_total_keys: Pulsaciones totales
+  json_max_depth: Prof. max.
+  json_total_values: Valores totales
+  add_headings_hint: 'Agrega cabeceras utilizando sintaxis #'
+  close_tooltip: Cerrar línea externa (Ctrl+Mayús+O)
+  detach_tooltip: Soltar para ventana flotante
+  tab_hub: Hub
+  json_array_items: Ítemes de formación
+pipeline:
+  run: ▶ Ejecutar
+  recent: Comandos recientes
+  no_output: (sin salida)
+  cancel_tooltip: Cancelar ejecución
+  run_tooltip: Ejecutar comando (Entrar)
+  running: Ejecutando…
+  truncated: (truncado)
+  close_tooltip: Cerrar panel de conducto
+  title: ⚡ Conducto vivo
+  stdout: stdout
+  stderr: stderr
+notification:
+  undo: Deshacer (%{remaining} restantes)
+  replaced: Remplazado
+  restored_auto_save: Restaurado desde auto-guardar
+  auto_save_discarded: Auto-guardado descartado
+  session_restored: Sesión restaurada
+  large_file_performance: Archivo grande (%{size} Mb). El rendimiento puede 
+    estar afectado.
+  invalid_syntax: ✗ %{error}
+  parse_error: 'Error de intérprete: %{error}'
+  no_document_validate: Ningún documento a validar
+  valid_syntax: ✔ Válido en sintaxis %{file_type}
+  reloaded_single: 'Recargado: %{name}'
+  reloaded_multiple: '%{count} archivos recargados desde el disco'
+  external_change_single: 'Archivo cambiado externamente (cambios no guardados): %{name}'
+  external_change_multiple: '%{count} archivos cambiados externamente (tiene cambios
+    no guardados)'
+  image_added: Imagen agregada a activos
+  images_added: '%{count} imágenes agregadas a activos'
+  opened_external_single: Archivo abierto desde solicitudes externas
+  opened_external_multiple: Se han abierto %{count} archivos desde solicitudes 
+    externas
+  wikilink_not_found: '[[%{target}]] — archivo no encontrado'
+  saved: 'Guardado: %{path}'
+  opened_workspace: 'Pupitre abierto: %{name}'
+  open_folder_quick_open: Abre una carpeta primero para utilizar apertura rápida
+  open_folder_search: Abre una carpeta primero para utilizar búsqueda en 
+    archivos
+  renamed_to: 'Renombrado a: %{name}'
+  deleted: 'Borrado: %{name}'
+  created: 'Creado: %{name}'
+  nothing_to_redo: Nada que rehacer
+  outline_shown: Panel de línea externa mostrado
+  outline_hidden: Panel de línea externa ocultado
+  loaded_terminal_layout: Distribución del terminal de pupitre cargado
+  terminal_shown: Panel del terminal mostrado
+  terminal_hidden: Panel del terminal oculto
+  zen_enabled: Modo Zen habilitado
+  zen_disabled: Modo Zen inhabilitado
+  fullscreen_enter: Modo pantalla completa (F10 o Esc para salir)
+  fullscreen_exit: Salido del modo pantalla completa
+  pipeline_disabled: Característica de conducto está inhabilitada
+productivity:
+  notes:
+    ok: Aceptar
+    confirm: ¿Confirma?
+    empty_name: Note que el nombre no puede estar vacío
+    duplicate_name: Ya existe una nota con ese nombre
+    cancel_rename: Cancela renombrado
+    new_note: Nueva nota
+    rename_note: Renombrar nota
+    confirm_delete: Pulse para confirmar borrado
+    delete_note: Borrar nota
+    input_hint: Teclee sus notas aquí…
+    dock: Muelle
+    dock_tooltip: Muelle en panel de línea externa
+    title: Notaciones
+    name_label: 'Nombre:'
+    note_label: 'Nota:'
+    confirm_rename: Confirma renombrado
+  pomodoro:
+    stop: Detener
+    start_work: Inicio de función (25m)
+    start_break: Inicio interrumpido (5m)
+    title: Cronómetro Pomodoro
+    work: 'Trabajo: %{time}'
+    break_label: 'Interrupción: %{time}'
+    ready: Preparado
+    cycles: 'Ciclos: %{count}'
+  tasks:
+    move_down: Bajar
+    empty: Sin tareas aún
+    add: Agregar
+    tip: 'Consejo: Utilice - [ ] para casilla, ! o !! para prioridad'
+    move_up: Subir
+    input_hint: Tipo de tarea o - [ ] tarea…
+    title: Tareas
+    progress: '%{completed}/%{total} completado'
+  workspace_hint: Abre un pupitre para habilitar persistencia de tarea y nota
+file_dialog:
+  save_file: Guardar archivo
+  filter:
+    markdown: Archivos Markdown
+    text: Archivos de texto
+    json: Archivos JSON
+    yaml: Archivos YAML
+    toml: Archivos TOML
+    csv_tsv: Archivos CSV/TSV
+    all: Todos los archivos
+    html: Archivos HTML
+echo:
+  responses: 'Respuesta (100ms de retraso):'
+  replacement_note: Este panel será remplazado por charla IA en la Fase 8.
+shortcuts:
+  category:
+    edit: Editar
+    view: Vista
+    formatting: Formateo
+    workspace: Pupitre
+    navigation: Navegación
+    file: Archivo
+  commands:
+    save: Guardar
+    save_as: Guardar como
+    open: Abrir archivo
+    new: Nuevo archivo
+    new_tab: Nueva lengüeta
+    close_tab: Cerrar lengüeta
+    next_tab: Siguiente lengüeta
+    prev_tab: Anterior lengüeta
+    go_to_line: Ir a línea
+    quick_open: Apertura rápida
+    heading_3: Cabecera 3
+    heading_4: Cabecera 4
+    heading_5: Cabecera 5
+    heading_6: Cabecera 6
+    heading_1: Cabecera 1
+    heading_2: Cabecera 2
+    code_block: Bloque de código
+    link: Enlace
+    image: Imagen
+    blockquote: Entrecomillado
+    find: Buscar
+    find_replace: Buscar y remplazar
+    find_next: Buscar siguiente
+    find_prev: Buscar anterior
+    search_in_files: Buscar dentro del archivo
+    bold: Negrilla
+    italic: Cursiva
+    inline_code: Código alineado
+    redo: Rehacer
+    duplicate_line: Duplicar línea
+    move_line_up: Subir línea
+    move_line_down: Bajar línea
+    select_next_occurrence: Seleccionar siguiente aparición
+    cycle_theme: Ciclar tema
+    toggle_zen_mode: Conmutar modo zen
+    toggle_fullscreen: Conmutar pantalla completa
+    toggle_outline: Conmutar línea externa
+    toggle_file_tree: Conmutar árbol de archivo
+    toggle_pipeline: Conmutar conducto
+    undo: Deshacer
+    numbered_list: Listado enumerado
+    export_html: Exportar HTML
+    insert_toc: Insertar tabla de contenidos
+    open_about: Acerca de / Ayuda
+    bullet_list: Listado de botones
+    toggle_view_mode: Conmutar modo de vista
+    open_settings: Abrir ajustes
+  edit:
+    redo: Rehacer
+    find: Buscar
+    find_replace: Buscar y remplazar
+    select_all: Seleccionar todo
+    copy: Copiar
+    cut: Cortar
+    paste: Pegar
+    delete_line: Borrar línea
+    duplicate_line: Duplicar línea
+    move_line_up: Subir línea
+    move_line_down: Bajar línea
+    select_next_occurrence: Seleccionar siguiente aparición
+    undo: Deshacer
+  view:
+    toggle_view: Conmutar Bruto/Representado
+    toggle_outline: Conmutar fuera de línea
+    zoom_in: Ampliar
+    zoom_out: Reducir
+    reset_zoom: Restablecer zoom
+    settings: Ajustes
+    about: Acerca de / Ayuda
+  format:
+    bold: Negrilla
+    italic: Cursiva
+    underline: Subrayado
+    link: Insertar enlace
+    code: Alinear código
+  file:
+    new: Nuevo archivo
+    open: Abrir archivo
+    save: Guardar
+    save_as: Guardar como
+    close_tab: Cerrar lengüeta
+  nav:
+    find_next: Buscar siguiente
+    find_prev: Buscar anterior
+ribbon:
+  show_info_panel: Mostrar panel de informe
+  hide_info_panel: Ocultar panel de informe
+recovery:
+  auto_save:
+    discard: Descartar
+    restore: Restaurar
+  session:
+    title: Recuperación de sesión
+quick_switcher:
+  placeholder: Buscar archivos…
+  no_results: Ningún archivo coincide
+  recent_tooltip: Recientemente abierto
+  keyboard_hints: ↑↓ Navega  ⏎ Abre  Esc Cierra
+search:
+  placeholder: Introduzca el texto de búsqueda…
+  more_matches: '    … más coincidencias no mostradas'
+  keyboard_hints: Presione Intro para buscar • Pulse resultado para abrir • Esc 
+    para cerrar
+  title: Búsqueda en Archivos
+  label: 'Buscar:'
+about:
+  title: Acerca de / Ayuda
+  tab:
+    about: Acerca de
+    shortcuts: Recortes
+  description: Un editor de texto rápido, ligero para Markdown, JSON, y más.
+  close_hint: Pulse F1 o Escape para cerrar
+  links: Enlaces
+  github_label: 'GitHub:'
+  view_on_github: Vista en GitHub
+  github_tooltip: Abre repositorio en explorador
+  report_issue_label: 'Informe de incidencia:'
+  submit_bug: Enviar un informe de defecto
+  issue_tooltip: Abre un seguimiento de incidencia en el explorador
+  built_with: Construido con
+  lib:
+    egui: Framework IGU de modo inmediato
+stats:
+  no_data: Ninguna estadística disponible
+  text_stats: Texto
+  words: Palabras
+  characters: Caracteres
+  characters_no_spaces: Caracteres (sin espacios)
+  lines: Líneas
+  paragraphs: Párrafos
+  structure: Estructura
+  headings_total: Cabeceras
+  list_items: Elementos del listado
+  horizontal_rules: Reglas horizontales
+  media_links: Medio y Enlaces
+  links: Enlaces
+  images: Imágenes
+  code_diagrams: Código y Diagramas
+  code_blocks: Bloques de código
+  mermaid_diagrams: Diagramas de Mermaid
+  tables: Tablas
+  blockquotes: Comillas de bloque
