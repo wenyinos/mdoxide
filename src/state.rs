@@ -2347,6 +2347,8 @@ impl Tab {
             let ops = compute_edit_ops(&self.content, &new_content);
             self.edit_history.record_operations(ops);
             self.content = new_content;
+            self.content_version = self.content_version.wrapping_add(1);
+            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             self.mark_content_edited();
         }
     }
@@ -2453,6 +2455,12 @@ impl Tab {
     /// After recording, updates the snapshot in-place via `clone_from` to
     /// reuse the buffer, and refreshes the blake3 hash. This avoids a fresh
     /// allocation on the next frame.
+    ///
+    /// Also bumps `content_version` when operations were actually recorded so
+    /// the cached `is_modified()` / `text_stats()` invalidate. Without this
+    /// the title bar dirty-mark and the on-close save prompt never fire for
+    /// edits made through editors that mutate `tab.content` directly
+    /// (v0.2.8 data-loss hotfix).
     pub fn record_edit_from_snapshot(&mut self) {
         if let Some(mut old_content) = self.pending_undo_snapshot.take() {
             if old_content != self.content {
@@ -2460,6 +2468,7 @@ impl Tab {
                 self.edit_history.record_operations(ops);
                 old_content.clone_from(&self.content);
                 self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+                self.content_version = self.content_version.wrapping_add(1);
             }
             self.pending_undo_snapshot = Some(old_content);
         }

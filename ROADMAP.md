@@ -2,8 +2,10 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.2.9 - Platform Stack Upgrade, Export, Code Execution & Media Embeds
-**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), LSP integration (all phases, deferred from v0.2.8), and embedded YouTube/video playback ([#119](https://github.com/OlaProeis/Ferrite/issues/119)). See [detailed plan](#v029---platform-stack-upgrade-export--code-execution-1) below.
+### v0.3.0 - Platform Stack Upgrade, Export, Code Execution, Media Embeds, Mermaid Crate & RTL/BiDi
+**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), LSP integration (all phases, deferred from v0.2.8), embedded YouTube/video playback ([#119](https://github.com/OlaProeis/Ferrite/issues/119)), Mermaid crate extraction, and full RTL/BiDi (Phases 3–4). See [detailed plan](#v030---platform-stack-upgrade-export-code-execution-media-embeds-mermaid-crate--rtlbidi-1) below.
+
+> **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). The original v0.2.9 roadmap (platform upgrade, export, code execution, media embeds) has been rolled into v0.3.0, which was already planned as a large release. Split points for v0.3.1 will be decided once the v0.3.0 scope settles.
 
 ---
 
@@ -37,12 +39,14 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Planned Features
 
-### v0.2.9 - Platform Stack Upgrade, Export, Code Execution & Media Embeds
+### v0.3.0 - Platform Stack Upgrade, Export, Code Execution, Media Embeds, Mermaid Crate & RTL/BiDi
 **Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Intended to address **Wayland keyboard input** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), **macOS Sonoma keyboard** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and **Windows 11 borderless / DPI** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) where fixes depend on newer winit/egui. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until this ships.
 
-**Secondary focus:** First-class export from markdown to shareable files (PDF, self-contained HTML). Complements **PDF viewer tabs** (v0.2.8)—**writing → publish**, not only viewing external PDFs.
+**Secondary focus:** First-class export from markdown to shareable files (PDF, self-contained HTML). Complements **PDF viewer tabs** (v0.2.8) — **writing → publish**, not only viewing external PDFs.
 
-**Tertiary focus:** Executable code blocks (deferred from v0.2.8), full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues), and embedded YouTube/video playback via native web views ([#119](https://github.com/OlaProeis/Ferrite/issues/119)).
+**Tertiary focus:** Executable code blocks (deferred from v0.2.8), full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues), embedded YouTube/video playback via native web views ([#119](https://github.com/OlaProeis/Ferrite/issues/119)), Mermaid crate extraction, markdown rendering improvements, Alt-key menu rework, and full RTL + BiDi script support (Phases 3–4 of the Unicode shaping roadmap).
+
+*Scope note:* This is a large release. Items listed below may be split into a follow-up v0.3.1 if scope creep threatens ship-quality. Split points will be decided once the egui 0.31+ migration lands and stabilizes.
 
 #### Platform & Dependency Upgrade (Task 38)
 - [ ] **Bump eframe / egui** to 0.31+ (confirm compatible versions); `cargo update`; fix breaking API changes across `main.rs`, editor input, themes, terminal, markdown UI, etc.
@@ -86,11 +90,6 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Settings** — Per-language server path override; all processing local (no network calls).
 
 *Note: **LaTeX math** rendering in preview and export is planned under **v0.4.0**; PDF/HTML export will pick up formulas once the math engine exists.*
-
----
-
-### v0.3.0 - Mermaid Crate, Markdown Enhancements, Alt Menus & Full RTL/BiDi
-**Focus:** Extracting the Mermaid renderer as a standalone crate, improving markdown rendering, traditional Alt-key menus, and completing right-to-left and bidirectional text support.
 
 #### Command Discoverability ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
 *Addressed in v0.2.8 with Command Palette.*
@@ -254,6 +253,14 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ---
 
 ## Recently Completed ✅
+
+### v0.2.9 (Apr 2026) - Hotfix Release
+Hotfix for four critical v0.2.8 regressions. No new features.
+- **Crash in Split / Rendered view on empty documents** ([#127](https://github.com/OlaProeis/Ferrite/issues/127)) — viewport-culling bootstrap indexed `doc.root.children[0]` when `block_count == 0`. Fixed with a half-open render range.
+- **No unsaved-changes indicator (`*`) and no save prompt on close, causing silent data loss** — raw-mode edits bypassed `content_version`, so `is_modified()` stayed cached at `false`. `content_version` bumps centralized in `record_edit_from_snapshot()` / `set_content()`.
+- **Undo / redo reporting "Nothing to undo" after typing** — FerriteEditor's internal edits were never diffed into `tab.edit_history`, which is the stack Ctrl+Z / Ctrl+Y read. Fixed by snapshotting pre-edit content and recording ops per dirty frame.
+- **Selection invisible in Light mode** ([#121](https://github.com/OlaProeis/Ferrite/issues/121)) — 40% alpha made the pale light-theme selection blend into the panel. Alpha reduction is now dark-mode-only.
+- **Document side panel tab labels overlapping at default width** — raised default outline panel width from 200 → 300 px, minimum from 120 → 260 px; existing users auto-migrated by settings validator.
 
 ### v0.2.8 (Apr 2026) - Performance, Text Shaping, LSP Integration & Viewers
 Command Palette (Alt+Space) with fuzzy search across all actions. LSP integration (Phases 1-2): inline diagnostics, server lifecycle, status bar, on-demand startup. HarfRust text shaping for Arabic, Bengali, Devanagari, and other complex scripts. Image viewer tabs (PNG/JPEG/GIF/WebP/BMP) and PDF viewer tabs (hayro, pure Rust). Major rendered view performance overhaul: AST caching, viewport culling, block height cache, lazy estimation. Per-frame O(N) elimination for large files. Background file loading for 5MB+ files. Strict line breaks (Obsidian model). Middle-click to close tabs. CSV/TreeViewer/central panel per-frame allocation fixes. Table cell rich text rendering with click-to-edit (bold, italic, strikethrough, code, nesting). 13 bug fixes including macOS .md file association (#102), Windows IME positioning (#103), custom font crash on Linux (#114), Linux Cinnamon dialog detection (#116), table inline formatting preservation and rendering (#117), terminal CJK rendering (#110), Windows 11 borderless offset (#112), and more.

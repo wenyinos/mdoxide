@@ -52,15 +52,15 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.8/assets/screenshots/split-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.9/assets/screenshots/split-dark.png</image>
       <caption>Ferrite in dark mode with split view showing markdown editing and live preview</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.8/assets/screenshots/raw-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.9/assets/screenshots/raw-dark.png</image>
       <caption>Raw editing mode with syntax highlighting</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.8/assets/screenshots/zen-dark.png</image>
+      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.2.9/assets/screenshots/zen-dark.png</image>
       <caption>Zen mode for distraction-free writing</caption>
     </screenshot>
   </screenshots>
@@ -68,6 +68,18 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.9" date="2026-04-23">
+      <description>
+        <p>Hotfix release for four critical v0.2.8 regressions. No new features.</p>
+        <ul>
+          <li>Fixed crash in Split / Rendered view when opening an empty document (#127)</li>
+          <li>Fixed missing unsaved-changes indicator and missing save prompt on close (data loss)</li>
+          <li>Fixed broken Undo / Redo — "Nothing to undo" after typing</li>
+          <li>Fixed invisible text selection in Light mode (#121)</li>
+          <li>Widened document side panel default so the Outline / Stats / Links / FM / Hub tabs no longer overlap</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.8" date="2026-04-14">
       <description>
         <p>Performance, text shaping, command palette, and bug fixes</p>

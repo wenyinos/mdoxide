@@ -5,6 +5,19 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.9] - 2026-04-23
+
+Hotfix release for four critical v0.2.8 regressions. No new features — upgrade
+strongly recommended.
+
+### Fixed
+
+- **Crash in Split / Rendered view on empty documents** ([#127](https://github.com/OlaProeis/Ferrite/issues/127)) — The WYSIWYG renderer's viewport-culling bootstrap used an inclusive range `first_vis..=last_vis` that, when the document had zero blocks, iterated once and indexed `doc.root.children[0]`, aborting with "index out of bounds". Switched to a half-open range so empty documents render as a no-op. This was reproducible by launching Ferrite with Split set as the default view mode, or by clicking the Split/Rendered button on any freshly-created untitled tab.
+- **CRITICAL: No unsaved-changes indicator and no save prompt on close, leading to silent data loss** — Edits made through the raw FerriteEditor wrote the new content into `tab.content` but never bumped `content_version`, so the cached `is_modified()` kept returning its initial `false`. Result: the title bar never showed the `*` dirty mark, Ctrl+W / window close skipped the "Save changes?" dialog, and auto-save never fired. Fixed by routing raw-mode edits through `prepare_undo_snapshot_hashed` + `record_edit_from_snapshot`, and by centralizing `content_version` bumps inside `record_edit_from_snapshot` / `set_content` so every edit path (raw, rendered, tree viewer) invalidates the cache.
+- **CRITICAL: Undo / redo not working — "Nothing to undo" after typing** — The FerriteEditor maintains its own internal edit state, but `handle_undo` / `handle_redo` (the Ctrl+Z / Ctrl+Y keyboard handlers) read from `tab.edit_history`, which received no operations from raw-mode edits. Fixed by diffing the pre-edit snapshot against the post-edit content on every frame where FerriteEditor reports `is_content_dirty()` and recording the resulting ops onto `tab.edit_history`.
+- **Selection invisible in Light mode** ([#121](https://github.com/OlaProeis/Ferrite/issues/121)) — FerriteEditor draws the selection rectangle *on top of* the text galley, so the fill has to stay partly transparent (otherwise selected text would disappear behind a solid rectangle). In Light mode the theme's selection colour `(215, 230, 250)` composited at ~40% alpha over white collapsed to essentially white, making the selection invisible. Bumped `BaseColors::light().selected` to a more saturated blue `(100, 170, 245)` that stays visible at reduced alpha while still looking at home as a light-theme widget highlight.
+- **Document side panel tab labels overlapping at default width** — The Outline/Stats/Links/FM/Hub tabs split `available_width / 5` per tab, which clipped every label at the previous 200 px default. Raised the default panel width to 300 px and the minimum to 260 px so all five tab labels render in full. Existing users with a persisted `outline_width` below 260 are auto-migrated to 260 on next launch by the settings validator.
+
 ## [0.2.8] - 2026-04-14
 
 ### Added

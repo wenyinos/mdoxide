@@ -17,10 +17,13 @@ use rust_i18n::t;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Minimum width for the outline panel.
-const MIN_PANEL_WIDTH: f32 = 120.0;
+///
+/// Must match `Settings::MIN_OUTLINE_WIDTH`. Sized to keep the 5 tab
+/// labels (Outline / Stats / Links / FM / Hub) readable without clipping.
+const MIN_PANEL_WIDTH: f32 = 260.0;
 
 /// Maximum width for the outline panel.
-const MAX_PANEL_WIDTH: f32 = 400.0;
+const MAX_PANEL_WIDTH: f32 = 500.0;
 
 /// Minimum width for the outline panel when showing productivity tab.
 const MIN_PANEL_WIDTH_PRODUCTIVITY: f32 = 280.0;
@@ -115,7 +118,7 @@ impl OutlinePanel {
     /// Create a new outline panel.
     pub fn new() -> Self {
         Self {
-            width: 200.0,
+            width: 300.0,
             side: OutlinePanelSide::Right,
             current_section: None,
             active_tab: OutlinePanelTab::Outline,
@@ -1099,14 +1102,14 @@ mod tests {
     #[test]
     fn test_outline_panel_new() {
         let panel = OutlinePanel::new();
-        assert_eq!(panel.width(), 200.0);
+        assert_eq!(panel.width(), 300.0);
         assert_eq!(panel.side(), OutlinePanelSide::Right);
     }
 
     #[test]
     fn test_outline_panel_with_width() {
-        let panel = OutlinePanel::new().with_width(250.0);
-        assert_eq!(panel.width(), 250.0);
+        let panel = OutlinePanel::new().with_width(320.0);
+        assert_eq!(panel.width(), 320.0);
     }
 
     #[test]
