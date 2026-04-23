@@ -193,7 +193,11 @@ impl BaseColors {
             border: Color32::from_rgb(160, 160, 160),        // Darkened from 200 for ~3.2:1 contrast
             border_subtle: Color32::from_rgb(185, 185, 185), // Darkened from 230 for ~2.3:1 contrast
             hover: Color32::from_rgb(235, 235, 240),         // Slightly tinted for better visibility
-            selected: Color32::from_rgb(215, 230, 250),      // Slightly more saturated blue
+            // Saturated enough to remain visible at the ~40% alpha the
+            // FerriteEditor selection overlay applies on top of text (#121).
+            // At full alpha this also works as a light-theme widget-selected
+            // color without being harsh.
+            selected: Color32::from_rgb(100, 170, 245),
         }
     }
 

@@ -467,6 +467,13 @@ impl<'a> EditorWidget<'a> {
         let tab_id = self.tab.id;
         let _base_id = self.id.unwrap_or_else(|| ui.id().with("ferrite_editor"));
 
+        // Capture an undo snapshot of the pre-edit content so edits made
+        // through FerriteEditor are recorded in `tab.edit_history` (the stack
+        // that Ctrl+Z / Ctrl+Y consult via `handle_undo` / `handle_redo`).
+        // Without this the tab's edit history stays empty and users see
+        // "Nothing to undo" even after typing — a v0.2.8 regression.
+        self.tab.prepare_undo_snapshot_hashed();
+
         // Check if this is a large file (disable some features for performance)
         let content_len = self.tab.content.len();
         let is_large_file = content_len > LARGE_FILE_THRESHOLD;
@@ -791,6 +798,18 @@ impl<'a> EditorWidget<'a> {
         if changed {
             // Only allocate string when we know content changed
             self.tab.content = editor.buffer().to_string();
+            // Diff against the pre-edit snapshot captured at the top of
+            // show(). This:
+            //   1. Pushes ops onto `tab.edit_history` so Ctrl+Z / Ctrl+Y
+            //      (which read this stack via handle_undo/handle_redo)
+            //      work for raw-mode edits.
+            //   2. Bumps `content_version`, invalidating the cached
+            //      `is_modified()` so the title bar dirty-mark, the
+            //      on-close save prompt and auto-save all notice the
+            //      edit.
+            // Hotfix for v0.2.8 undo-broken / data-loss regression.
+            self.tab.record_edit_from_snapshot();
+            self.tab.mark_content_edited();
         }
 
         // Sync cursor position for outline panel / minimap bidirectional sync

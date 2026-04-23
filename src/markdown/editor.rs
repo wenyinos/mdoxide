@@ -1339,6 +1339,9 @@ impl<'a> MarkdownEditor<'a> {
 
                             // Phase 3: Render only the viewport-visible blocks,
                             // capped by the render budget.
+                            // NOTE: When block_count == 0 (empty document) the inclusive
+                            // range `first_vis..=last_vis` below would otherwise iterate
+                            // once and panic on `doc.root.children[0]`. See issue #127.
                             let vis_top = (viewport.min.y - VIEWPORT_OVERSCAN_PX).max(0.0);
                             let vis_bottom = viewport.max.y + VIEWPORT_OVERSCAN_PX;
 
@@ -1350,7 +1353,7 @@ impl<'a> MarkdownEditor<'a> {
                                 .min(block_count)
                                 .saturating_sub(1);
 
-                            if first_vis > 0 {
+                            if block_count > 0 && first_vis > 0 {
                                 let pre = (boot_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
                                     .max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, pre));
@@ -1358,7 +1361,11 @@ impl<'a> MarkdownEditor<'a> {
 
                             let mut new_measures: usize = 0;
                             let boot_is_dark = ui.visuals().dark_mode;
-                            for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
+                            // Use a half-open range so an empty document
+                            // (block_count == 0) yields an empty iterator
+                            // rather than accessing children[0].
+                            let render_end = (last_vis + 1).min(block_count);
+                            for i in first_vis..render_end {
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
                                 let block_left = ui.cursor().left();

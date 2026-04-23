@@ -1671,15 +1671,23 @@ impl FerriteEditor {
             self.view.advance_scrollbar_smoothing(total_lines);
         }
 
-        // Render selection backgrounds (before cursors) - handles all selections
+        // Render selection backgrounds (after text, before cursors).
+        //
+        // The overlay is drawn *on top* of the text galley (moving the draw
+        // order is risky because per-line wrap heights are computed inside
+        // the text loop), so we keep the fill partly transparent so syntax-
+        // coloured glyphs stay legible through the highlight. This means the
+        // theme's `selection.bg_fill` must be saturated enough to remain
+        // visible at ~40% alpha on both light and dark backgrounds — see
+        // `BaseColors::light()/dark()` for the values chosen to satisfy this
+        // (issue #121).
         if self.has_any_selection() {
-            // Make selection semi-transparent so text remains visible through the highlight
             let selection_base = ui.visuals().selection.bg_fill;
             let selection_color = Color32::from_rgba_unmultiplied(
                 selection_base.r(),
                 selection_base.g(),
                 selection_base.b(),
-                100, // ~40% alpha for visibility
+                100, // ~40% alpha — lets text shine through in both themes
             );
             self.render_all_selections(
                 &painter,

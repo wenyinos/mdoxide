@@ -2120,7 +2120,7 @@ impl Default for Settings {
             // Outline Panel
             outline_enabled: false, // Hidden by default
             outline_side: OutlinePanelSide::default(),
-            outline_width: 200.0,
+            outline_width: 300.0,
 
             // Sync Scrolling (deferred to v0.3.0 - UI removed, feature disabled)
             sync_scroll_enabled: false,
@@ -2392,7 +2392,12 @@ impl Settings {
     /// Maximum window dimension.
     pub const MAX_WINDOW_SIZE: f32 = 10000.0;
     /// Minimum outline panel width.
-    pub const MIN_OUTLINE_WIDTH: f32 = 120.0;
+    ///
+    /// Sized to ensure the 5 tab labels (Outline / Stats / Links / FM / Hub)
+    /// render without overlapping at the default font. Existing users whose
+    /// persisted `outline_width` is below this value will be bumped up to it
+    /// by `validate()` on next launch (hotfix for v0.2.8's cramped tabs).
+    pub const MIN_OUTLINE_WIDTH: f32 = 260.0;
     /// Maximum outline panel width.
     pub const MAX_OUTLINE_WIDTH: f32 = 500.0;
     /// Minimum Zen Mode column width (characters).
