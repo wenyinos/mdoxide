@@ -31,7 +31,7 @@ view_mode:
   raw_desc: "Edición de texto con markdown simple"
 
 # Status bar
-  rendered_desc: Editando WYSIWYG renderizado
+  rendered_desc: Editando WYSIWYG representada
   split_desc: Vista previa del editor + analizador sin formato lado a lado
 status:
   untitled: "Sin título"
@@ -287,15 +287,15 @@ settings:
     fold_indentation: Sangrado (JSON/YAML)
     fold_indentation_tooltip: Estructuras basadas en sangrado de pliegues en 
       archivos JSON/YAML
-    snippets: Snippets
+    snippets: Fragmentos
     enable_snippets: Habilita expansión de Snippet
     snippets_tooltip: 'Expanda las palabras clave en texto predefinido. Complementos
       integrados: ;date, ;time, ;datetime, ;now'
     builtin_snippets: 'Complementos integrados:'
     snippet_date: ;date → AAAA-MM-DD
-    snippet_time: ;time → HH:MM
+    snippet_time: ;tiempo → HH:MM
     snippet_datetime: ;datetime → Fecha+hora
-    snippet_now: ;now → ISO 8601
+    snippet_now: ;ahora → ISO 8601
     paragraph_indent: Sangrado de párrafo
     paragraph_indent_hint: Sangrado de primera línea para convenciones 
       tipográficas CJK
@@ -451,7 +451,7 @@ outline:
   add_headings_hint: 'Agrega cabeceras utilizando sintaxis #'
   close_tooltip: Cerrar línea externa (Ctrl+Mayús+O)
   detach_tooltip: Soltar para ventana flotante
-  tab_hub: Hub
+  tab_hub: Centro
   json_array_items: Ítemes de formación
 pipeline:
   run: ▶ Ejecutar
@@ -463,8 +463,17 @@ pipeline:
   truncated: (truncado)
   close_tooltip: Cerrar panel de conducto
   title: ⚡ Conducto vivo
-  stdout: stdout
-  stderr: stderr
+  stdout: salida std
+  stderr: error std
+  command_placeholder: jq '.items[]' o yq '.data' ...
+  no_output_success: (comando no produjo ninguna salida)
+  hint: |-
+    Introduzca un comando arriba para conducir su documento a través de ello.
+    Ejemplos:
+    • jq '.'           - Formato JSON
+    • jq '.items[]'    - Extraer elementos de formación
+    • '.data'       - Extrae campo YAML
+    • grep 'patrón'   - Búsqueda por patrón
 notification:
   undo: Deshacer (%{remaining} restantes)
   replaced: Remplazado
@@ -507,6 +516,40 @@ notification:
   fullscreen_enter: Modo pantalla completa (F10 o Esc para salir)
   fullscreen_exit: Salido del modo pantalla completa
   pipeline_disabled: Característica de conducto está inhabilitada
+  large_file_loading: Cargando archivo grande (%{size} Mb) en segundo plano…
+  file_loaded: Archivo cargado correctamente (%{size} Mb)
+  file_load_failed: 'Incorrecto al cargar archivo: %{error}'
+  nothing_to_undo: Nada para deshacer
+  redo: Rehacer (%{remaining} remanente)
+  pipeline_zen: Panel de conducto ocultado en Modo Zen
+  pipeline_unsupported: 'Conducto solo disponible para JSON/YAML (actual: %{file_type})'
+  pipeline_opened: Panel de conducto abierto
+  pipeline_closed: Panel de conducto cerrado
+  file_tree_shown: Árbol de archivo muestra
+  file_tree_hidden: Árbol del archivo oculto
+  open_folder_first: Abre una carpeta primero (botón 📁)
+  toc_markdown_only: TOC solo disponible para archivos de Markdown
+  toc_updated: TOC actualizado (%{count} encabezado)
+  toc_inserted: TOC insertado (%{count} cabeceras)
+  toc_inserted_empty: TOC insertado (sin cabeceras encontradas)
+  no_document_format: Ningún documento para dar formato
+  not_structured: No un archivo de datos estructurados
+  document_formatted: Documento formateado
+  format_failed: 'Formato incorrecto: %{error}'
+  replaced_count: Sustituyó %{count} suceso %{suffix}
+  no_document_export: Ningún documento para exportar
+  exported_to: Exportado a %{path}
+  export_failed: 'Exportación incorrecta: %{error}'
+  no_document_copy: Ningún documento para copiar
+  html_copied: HTML copiado al portapapeles
+  copy_failed: 'Copia incorrecta: %{error}'
+  opened_files: Abrió %{count} archivos
+  workspace_closed: Pupitre cerrado
+  file_tree_refreshed: Árbol del archivo refrescado
+  opened_background: 'Abierto en segundo plano: %{name}'
+  settings_reset: Ajuste de restablecimiento a predeterminado
+  encoding_changed: Codificación cambiada a %{encoding}
+  wikilink_open_failed: 'No se pudo abrir [[%{target}]]: %{error}'
 productivity:
   notes:
     ok: Aceptar
@@ -544,6 +587,7 @@ productivity:
     title: Tareas
     progress: '%{completed}/%{total} completado'
   workspace_hint: Abre un pupitre para habilitar persistencia de tarea y nota
+  title: Centro de Productividad
 file_dialog:
   save_file: Guardar archivo
   filter:
@@ -555,9 +599,16 @@ file_dialog:
     csv_tsv: Archivos CSV/TSV
     all: Todos los archivos
     html: Archivos HTML
+    supported: Archivos admitidos
+  open_workspace: Abrir carpeta del pupitre
+  open_files: Abrir archivos
 echo:
   responses: 'Respuesta (100ms de retraso):'
   replacement_note: Este panel será remplazado por charla IA en la Fase 8.
+  title: Demo Eco (Contenedor del Panel de IA)
+  prompt: 'Esta demuestra trabajadores asíncronos. Teclee un mensaje:'
+  demo_note: 'Demuestra: generación de trabajadores perezosos, comunicación MPSC,
+    IU no bloqueante.'
 shortcuts:
   category:
     edit: Editar
@@ -614,6 +665,10 @@ shortcuts:
     bullet_list: Listado de botones
     toggle_view_mode: Conmutar modo de vista
     open_settings: Abrir ajustes
+    delete_line: Borrar Línea
+    fold_all: Encarpetar Todo
+    unfold_all: Des‐encarpetar Todo
+    toggle_fold: Conmutar Carpeta
   edit:
     redo: Rehacer
     find: Buscar
@@ -651,15 +706,45 @@ shortcuts:
   nav:
     find_next: Buscar siguiente
     find_prev: Buscar anterior
+    next_tab: Siguiente Lengüeta
+    prev_tab: Anterior Lengüeta
+    go_to_line: Ir a Línea
+  expand_hint: Pulse una categoría para expandir/colapsar
+  workspace:
+    quick_switcher: Selector Rápido del Archivo
+    search_files: Buscar en Archivos
+    toggle_tree: Conmutar Árbol del Archivo
+  title: Atajos del Teclado
 ribbon:
   show_info_panel: Mostrar panel de informe
   hide_info_panel: Ocultar panel de informe
+  format_document: Formato del documento (Impresión detallista)
+  validate_syntax: Validar sintaxis
+  pipeline: Conducto en vivo…
+  toggle_outline: Conmutar línea saliente
+  copy_html_tooltip: Copiar HTML interpretado al portapapeles
+  export_pdf: 📄 Exportar como PDF
+  coming_soon: Vendrá pronto
+  heading_level: Cabecera %{level}
 recovery:
   auto_save:
     discard: Descartar
     restore: Restaurar
+    title: Auto‐Guardar Recuperación
+    backup_found: Fue encontrado un respaldo auto‐guardado para este archivo.
+    restore_question: ¿Desea restaurar el contenido auto‐guardado?
+    time_label: 'Último modificado: %{time}'
   session:
     title: Recuperación de sesión
+    crash_detected: Ferrite ha detectado que su sesión anterior no fue cerrada 
+      apropiadamente.
+    restore_question: ¿Le gustaría restaurar su sesión anterior?
+    restore: Restaurar Sesión
+    start_fresh: Iniciar Nuevo
+    restore_tooltip: Restaura todas las lengüetas desde la sesión anterior
+    start_fresh_tooltip: Descarta la sesión anterior e inicia con un editor 
+      vacío
+  untitled: Documento sin título
 quick_switcher:
   placeholder: Buscar archivos…
   no_results: Ningún archivo coincide
@@ -689,6 +774,14 @@ about:
   built_with: Construido con
   lib:
     egui: Framework IGU de modo inmediato
+    syntect: Resaltar sintaxis
+    notify: Vigía del sistema de archivo
+    comrak: Interpretador Markdown sazonado con GitHub
+    serde: Entramando de serialización
+  license: Licencia
+  license_type: Licencia MIT
+  copyright: © 2026 Contribuidores de Ferrite
+  version: Versión %{version}
 stats:
   no_data: Ninguna estadística disponible
   text_stats: Texto
@@ -709,3 +802,215 @@ stats:
   mermaid_diagrams: Diagramas de Mermaid
   tables: Tablas
   blockquotes: Comillas de bloque
+tree_viewer:
+  collapse_all: ▶ Colapsar todo
+  expand_all: ▼ Expandir todo
+  copy_path: 📋 Copiar ruta
+  show_raw: Mostrar en bruto
+  parse_error: '⚠ Error de intérprete:'
+  large_file_warning: El archivo es grande (%{size} Mb). Mostrando contenido en 
+    bruto.
+git:
+  modified: modificado
+  deleted: eliminado
+  renamed: renombrado
+  untracked: sin seguimiento
+  staged: escenificado
+  tracked: seguido
+  staged_modified: escenificado con cambios
+  ignored: ignorado
+  conflict: conflicto
+a11y:
+  close_button: Cerrar
+  minimize_button: Minimizar
+common:
+  ok: Aceptar
+  copy: Copiar
+  error: Error
+  dismiss: Despedir
+widgets:
+  code_block:
+    copy_tooltip: Copia al portapapeles
+    finish_tooltip: Finalizar edición
+    edit_tooltip: Editar código
+  table:
+    add_row: + Fila
+    add_column: + Columna
+    align_left: Alineado a izquierda
+    align_center: Alineado al centro
+    align_right: Alineado a la derecha
+    delete_column_label: 'Eliminar columna:'
+    delete_column: Eliminar columna %{index}
+    align_label: 'Alinear:'
+    align_none: No alineado
+    delete_row: Eliminar fila
+    add_row_tooltip: Agregar una fila nueva
+    add_column_tooltip: Agrega una columna nueva
+    alignment_tooltip: '%{alignment} (pulse para ciclar)'
+  list:
+    decrease_level: Decrementar nivel
+    increase_level: Incrementar nivel
+    remove_item: Retirar elemento
+    add_item: + Agregar elemento
+  link:
+    edit: Editar enlace
+    open: 🔗 Abrir
+    copy: 📋 Copiar
+    text_label: 'Texto:'
+    url_label: 'URL:'
+    copy_tooltip: Copia la URL al portapapeles
+csv:
+  delimiter_auto: Auto-detectar
+  error: Incorrecto al interpretar CSV
+  select_delimiter: Seleccionar Delimitador
+  header_row: Fila de Cabecera
+  has_headers_yes: ✓ Primera fila es cabecera
+  has_headers_no: ✗ Ninguna fila cabecera
+  show_raw: Mostrar en bruto
+  large_file_warning: El archivo es grande (%{size} Mb). Se muestra el contenido
+    en bruto.
+mermaid:
+  badge: mermaid
+  empty: (diagrama vacío)
+  rendering_error: Interpretando error. %{error}
+workspace:
+  close_folder: Cerrar Carpeta
+  new_file: Nuevo Archivo
+  new_folder: Nueva Carpeta
+  rename: Renombrar
+  delete: Eliminar
+  refresh: Refrescar
+  recent_folders: 📁 Carpetas Recientes
+zen:
+  enter: Introducir Modo Zen
+  exit: Salir de Modo Zen
+time:
+  seconds_ago: Hace %{count} segundos
+  minutes_ago: Hace %{count} minutos
+  hours_ago: Hace %{count} horas
+  days_ago: Hace %{count} días
+tooltip:
+  fullscreen_exit: Salir de pantalla completa (F10 o Esc)
+  fullscreen_enter: Pantalla completa (F10)
+  settings: Ajustes (Ctrl+,)
+  recent_items: |-
+    Pulse para archivos y carpetas recientes
+    Mayús+Pulsación para abrir en segundo plano
+  about_help: Acerca de / Ayuda (F1)
+  git_branch: Rama Git actual
+  new_tab: Lengüeta nueva
+welcome:
+  subtitle: Configure su editor para comenzar.
+  section:
+    appearance: Apariencia
+    editor: Editor
+    cjk: Preferencia de tipografía CJK
+    files: Archivos
+  label:
+    theme: Tema
+    language: Idioma
+  line_width_hint: Limita cuantas líneas de texto de ancho puede crecer. 
+    Establezca un valor para texto centrado en Modo Zen (F11).
+terminal:
+  not_found: Terminal no encontrado
+  fallback_title: Terminal
+  new_terminal_here: Terminal Nuevo Aquí
+  maximize_active_pane: Maximizar Panel Activo
+  split_horizontal: Desglose Horizontal
+  split_vertical: Desglose Vertical
+  rename: Renombrar
+  close: Cerrar
+  close_pane: Cerrar Panel
+  close_others: Cerrar Otros
+  scatter_to_windows: Desparramar a Ventanas
+  watching: 'Vigilando: %{path}'
+  stop_watching: Detener Vigía
+  watch_workspace_root: Vigilar Raíz de Pupitre
+  export_html: Exportar salida como HTML…
+  no_workspace_root: (Ninguna raíz pupitre fijada)
+  no_macros: Sin macros guardadas.
+  close_panel_tooltip: Cerrar panel de terminal
+  running_process_warning: Este terminal tiene un proceso en ejecución.
+  terminate_warning: Cerrarlo terminará el proceso.
+  close_terminal: Cerrar Terminal
+  close_terminal_title: ¿Cierro el terminal?
+  cancel: Cancelar
+  no_terminal: Ningún terminal. Pulse + para crear uno.
+  restore: Restaurar ⤢
+  floating_title: '#%{index} %{title}'
+  shell:
+    powershell: PowerShell
+    cmd: CMD
+    wsl: WSL
+  layout:
+    columns_2: 2 columnas
+    rows_2: 2 filas
+    grid_2x2: Rejilla 2×2
+    save_layout: Guardar disposición actual…
+    load_layout: Cargar disposición…
+    save_workspace_layout: Guardar como Disposición de Pupitre
+    custom_layout: Disposición Actual
+  workspace:
+    scatter_all: Dispersar todas las lengüetas
+    save: Guardar pupitre…
+    load: Cargar pupitre…
+    default_name: Pupitre
+  menu:
+    layouts: Distribuciones
+    workspaces: Pupitres
+    watch_mode: Modo vigía
+    macros: Macros
+  filter:
+    terminal_layout: Distribución de terminal
+    ferrite_workspace: Pupitre Ferrite
+  error:
+    shell_not_found: Compruebe que el intérprete esté instalado y la ruta sea 
+      correcta
+    pty_failed: Asignación de PTY incorrecta. Intente cerrar otros terminales o 
+      reiniciar la app
+    permission_denied: Permisos denegados. Compruebe que tenga acceso para 
+      ejecutar el intérprete
+    io_failed: E/S del terminal incorrecta. Intente cerrar y reabrir el terminal
+    layout_failed: Incorrecto al modificar la distribución del terminal
+    unexpected: Ocurrió un error inesperado. Intente restaurar el terminal
+    format: 'Terminal: %{operation} — %{hint}'
+  pop_out: Aparece un terminal
+  process_exited: Proceso del terminal '%{title} terminado
+  tab_name: Lengüeta %{index}
+title_bar:
+  restore: Restaurar
+  maximize: Maximizar
+error:
+  save_failed: |-
+    Incorrecto al guardar archivo:
+    %{error}
+  open_workspace_failed: |-
+    Incorrecto al abrir pupitre:
+    %{error}
+  open_file_failed: |-
+    Incorrecto al abrir archivo:
+    %{error}
+  create_file_failed: |-
+    Incorrecto al crear archivo:
+    %{error}
+  create_folder_failed: |-
+    Incorrecto al crear carpeta:
+    %{error}
+  rename_failed: |-
+    Incorrecto al renombrar
+    %{error}
+  delete_failed: |-
+    Incorrecto al eliminar:
+    %{error}
+  image_failed: |-
+    Incorrecto al agregar imagen:
+    %{error}
+  explorer_failed: |-
+    Incorrecto al abrir explorador:
+    %{error}
+  write_failed: |-
+    Incorrecto al escribir archivo:
+    %{error}
+  encoding_failed: 'Incorrecto al cambiar codificación: %{error}'
+tab:
+  reveal_in_explorer: Revelar en Explorador
