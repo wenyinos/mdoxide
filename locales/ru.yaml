@@ -4,31 +4,31 @@
 
 # Application metadata
 app:
-  name: ""
+  name: "Ferrite"
 
 # Menu bar items
 menu:
   file:
-    label: ""
-    open: ""
-    save: ""
-    save_as: ""
-    recent: ""
-    export: ""
-    export_html: ""
-    export_clipboard: ""
+    label: "Файл"
+    open: "Открыть"
+    save: "Сохранить"
+    save_as: "Сохранить как..."
+    recent: "Недавно открытые"
+    export: "Экспорт"
+    export_html: "Экспортировать HTML..."
+    export_clipboard: "Копировать как HTML"
   edit:
-    label: ""
+    label: "Редактировать"
   format:
-    label: ""
+    label: "Формат"
   tools:
-    label: ""
+    label: "Инструменты"
 
 # Toolbar buttons
 
 # View mode labels
 view_mode:
-  raw_desc: ""
+  raw_desc: "Редактирование разметки Markdown"
   rendered_desc: ""
   split_desc: ""
 
