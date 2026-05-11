@@ -1054,6 +1054,9 @@ pub enum Language {
     /// German (Deutsch)
     #[serde(rename = "de")]
     German,
+    /// Spanish (Español)
+    #[serde(rename = "es")]
+    Spanish,
     /// Japanese (日本語)
     #[serde(rename = "ja")]
     Japanese,
@@ -1066,6 +1069,7 @@ impl Language {
             Language::English => "en",
             Language::ChineseSimplified => "zh_Hans",
             Language::German => "de",
+            Language::Spanish => "es",
             Language::Japanese => "ja",
         }
     }
@@ -1076,6 +1080,7 @@ impl Language {
             Language::English => "English",
             Language::ChineseSimplified => "简体中文",
             Language::German => "Deutsch",
+            Language::Spanish => "Español",
             Language::Japanese => "日本語",
         }
     }
@@ -1087,6 +1092,7 @@ impl Language {
             Language::English => "English",
             Language::ChineseSimplified => "Chinese (Simplified)",
             Language::German => "German",
+            Language::Spanish => "Spanish",
             Language::Japanese => "Japanese",
         }
     }
@@ -1110,6 +1116,7 @@ impl Language {
             Language::English,
             Language::ChineseSimplified,
             Language::German,
+            Language::Spanish,
             Language::Japanese,
         ]
     }
@@ -1143,6 +1150,7 @@ impl Language {
             "en" => Some(Language::English),
             "zh" => Some(Language::ChineseSimplified),
             "de" => Some(Language::German),
+            "es" => Some(Language::Spanish),
             "ja" => Some(Language::Japanese),
             _ => None,
         }
@@ -3716,6 +3724,7 @@ mod tests {
     #[test]
     fn test_language_serialization() {
         assert_eq!(serde_json::to_string(&Language::English).unwrap(), "\"en\"");
+        assert_eq!(serde_json::to_string(&Language::Spanish).unwrap(), "\"es\"");
     }
 
     #[test]
@@ -3724,11 +3733,16 @@ mod tests {
             serde_json::from_str::<Language>("\"en\"").unwrap(),
             Language::English
         );
+        assert_eq!(
+            serde_json::from_str::<Language>("\"es\"").unwrap(),
+            Language::Spanish
+        );
     }
 
     #[test]
     fn test_language_locale_code() {
         assert_eq!(Language::English.locale_code(), "en");
+        assert_eq!(Language::Spanish.locale_code(), "es");
     }
 
     #[test]
@@ -3741,6 +3755,7 @@ mod tests {
         let all = Language::all();
         assert!(!all.is_empty());
         assert!(all.contains(&Language::English));
+        assert!(all.contains(&Language::Spanish));
     }
 
     #[test]
@@ -3827,6 +3842,11 @@ mod tests {
         assert_eq!(Language::from_locale_code("de"), Some(Language::German));
         assert_eq!(Language::from_locale_code("de-DE"), Some(Language::German));
         assert_eq!(Language::from_locale_code("de_AT"), Some(Language::German));
+
+        // Spanish
+        assert_eq!(Language::from_locale_code("es"), Some(Language::Spanish));
+        assert_eq!(Language::from_locale_code("es-ES"), Some(Language::Spanish));
+        assert_eq!(Language::from_locale_code("es_MX"), Some(Language::Spanish));
 
         // Japanese
         assert_eq!(Language::from_locale_code("ja"), Some(Language::Japanese));
