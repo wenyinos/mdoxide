@@ -42,6 +42,8 @@ This prevents the re-parsing loop that would otherwise cause cursor focus loss a
 | Enter | Move to next row (same column) |
 | Escape | Exit table editing (commits changes) |
 
+Inside the table each cell uses `TextEdit::lock_focus(true)` so **Tab stays in-tab** instead of advancing egui’s global tab order (otherwise focus jumps out and the next cell never enters edit mode). Tab is consumed before rendering so `\t` is not inserted into cell text. `Shift+Tab` must be consumed in code **before** plain `Tab`: egui matches `consume_key(NONE, Tab)` to Shift+Tab as well (`matches_logically`), so the wrong branch would run otherwise.
+
 ### Focus State Tracking
 
 The `TableEditState` struct tracks focus across frames:
@@ -54,6 +56,10 @@ pub struct TableEditState {
     pub content_modified: bool,                   // Track if edits were made
 }
 ```
+
+### Empty cells — display hit area (v0.3.0+)
+
+Cells that are not focused paint their body in **display mode** (formatted galley instead of raw `TextEdit`). An empty markdown cell layouts to a galley with no extent; a clickable `Label` built from it had **zero interactive size**, so users could not click into new empty slots (new row/column) even though row height and striping drew a visible cell ([issue #131](https://github.com/OlaProeis/Ferrite/issues/131)). `EditableTable` now reserves the padded inner rectangle with `allocate_exact_size(.., Sense::click())` and paints the galley there. **Edit mode** still uses `TextEdit::multiline(&mut cell.text)` keyed by `(row, col)`; an empty buffer is represented as `String::new()` on `TableCellData`, matching the deferred “commit on leaving the table” model.
 
 ## Architecture
 
@@ -96,6 +102,7 @@ The egui widget that renders the interactive table.
   - `TableCellData`, `TableData`, `EditableTable` structs
   - Table manipulation methods (add/remove/insert row/column)
   - Markdown generation (`to_markdown()`)
+  - Cell focus / Tab / empty-cell hits: [`table-cell-focus-navigation.md`](./table-cell-focus-navigation.md)
   
 - **Editor Integration**: `src/markdown/editor.rs`
   - `render_table()` function uses `EditableTable`

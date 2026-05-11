@@ -196,14 +196,14 @@ impl CommandPalette {
             .anchor(egui::Align2::CENTER_TOP, [0.0, 100.0])
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(bg_color)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(8.0)
+                    .corner_radius(8)
                     .shadow(egui::epaint::Shadow {
-                        offset: [0.0, 4.0].into(),
-                        blur: 12.0,
-                        spread: 0.0,
+                        offset: [0, 4],
+                        blur: 12,
+                        spread: 0,
                         color: Color32::from_black_alpha(60),
                     })
                     .show(ui, |ui| {
@@ -308,16 +308,18 @@ impl CommandPalette {
                                                 ui.add_space(16.0);
                                                 if binding.has_modifiers() {
                                                     let shortcut_str = binding.display_string();
-                                                    egui::Frame::none()
+                                                    egui::Frame::new()
                                                         .fill(shortcut_bg)
-                                                        .rounding(3.0)
-                                                        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+                                                        .corner_radius(3)
+                                                        .inner_margin(egui::Margin::symmetric(6, 2))
                                                         .show(ui, |ui| {
                                                             ui.label(
                                                                 RichText::new(shortcut_str)
                                                                     .color(secondary_color)
                                                                     .small()
-                                                                    .family(egui::FontFamily::Monospace),
+                                                                    .family(
+                                                                        egui::FontFamily::Monospace,
+                                                                    ),
                                                             );
                                                         });
                                                 }
@@ -443,6 +445,8 @@ impl CommandPalette {
             ShortcutCommand::OpenSettings,
             ShortcutCommand::ToggleTerminal,
             ShortcutCommand::ExportHtml,
+            ShortcutCommand::ExportPdf,
+            ShortcutCommand::PrintPreview,
             ShortcutCommand::ToggleZenMode,
             ShortcutCommand::CycleTheme,
             ShortcutCommand::GoToLine,

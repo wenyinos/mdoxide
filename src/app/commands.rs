@@ -104,6 +104,8 @@ fn icon_for_command(cmd: ShortcutCommand) -> &'static str {
         ShortcutCommand::OpenSettings => "⚙",
         ShortcutCommand::OpenAbout => "ℹ",
         ShortcutCommand::ExportHtml => "🌐",
+        ShortcutCommand::ExportPdf => "📄",
+        ShortcutCommand::PrintPreview => "🖨",
         ShortcutCommand::InsertToc => "📑",
         ShortcutCommand::ToggleFrontmatter => "📝",
     }

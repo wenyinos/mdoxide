@@ -1,50 +1,66 @@
 # Session Handover
 
 ## Environment
+
 - **Project:** Ferrite (markdown editor, Rust + egui)
-- **Tech Stack:** Rust 2021, egui 0.28
-- **Context file:** Always read `ai-context.md` first — it contains project rules, architecture, and conventions.
+- **Tech Stack:** Rust 2021, egui 0.31.1 + eframe 0.31.1
+- **Context file:** Always read [`docs/ai-context.md`](./ai-context.md) first — it contains project rules, architecture, and conventions.
 - **Branch:** master
 
 ## Core Handover Rules
-- **NO HISTORY:** Do not include a project history document or past task details unless they directly impact this specific task.
-- **SCOPE:** Focus ONLY on the current task detailed below.
-- Run `cargo build` or `cargo check` after code changes.
-- Mark tasks in Task Master: `in-progress` when starting, `done` when verified.
-- Document by feature under `docs/technical/` and add an entry to `docs/index.md`.
-- Prefer Task Master MCP tools over CLI when available.
-- Use Context7 MCP when needed.
 
-## Current Task: #52 — Fix Custom Font Crash on Linux (GitHub Issue #114)
-- **Status:** pending
-- **Priority:** high
-- **Complexity:** 7
-- **Dependencies:** Task 37 (done)
+- **NO HISTORY:** Do not accumulate past task narratives in this file; replace sections when tasks change.
+- **SCOPE:** Focus only on the current task detailed below.
+- Run `cargo build` or `cargo check` after code changes.
+- Mark tasks in Task Master: use MCP `set_task_status`; set **in-progress** when starting work, **done** when verified.
+- Document finished features under `docs/technical/` and add a row to [`docs/index.md`](./index.md).
+- Prefer Task Master MCP tools over the CLI where available.
+- Use Context7 MCP for library/framework documentation when needed.
+
+---
+
+## Current Task: #74 — Write technical documentation for platform upgrade
+
+- **Status:** pending (set **in-progress** when starting)
+- **Priority:** medium
+- **Complexity:** 4 / 10
+- **Dependencies:** #58 (done)
 
 ### Description
-Prevent app crash when selecting custom system fonts on Linux by catching epaint panics, validating TTF/OTF font data with magic bytes, falling back to Inter font, and adding toast notifications. Extend shaping support for `FONT_CUSTOM` in `ttf_bytes_for_font_id_shaping`.
 
-### Implementation Details
-Five changes across fonts and central panel:
-1. **Panic protection** — Wrap font loading in `std::panic::catch_unwind` in `load_system_font_by_name`.
-2. **Font validation** — Add TTF/OTF magic byte check (`\0\1\0\0` for TTF, `OTTO` for OTF) before passing data to epaint. Reject `.ttc` collections, Type 1, broken files.
-3. **Graceful fallback + toast** — On failure, reset to Inter font and show a toast notification with the error.
-4. **Fix shaping** — Add `FONT_CUSTOM` case to `ttf_bytes_for_font_id_shaping` so custom fonts get proper text shaping.
-5. **Reload integration** — Ensure `reload_fonts()` in `central_panel.rs` handles errors without propagating panics.
+Document the **eframe / egui 0.31+** upgrade and the **regression matrix** for the v0.3.0 platform refresh.
 
-### Key Files
-- `src/fonts.rs` — `load_system_font_by_name`, `FONT_CUSTOM`, `create_font_definitions_with_cjk_spec`, `ttf_bytes_for_font_id_shaping`
-- `src/app/central_panel.rs` — `reload_fonts` call
+### Details (from Task Master)
 
-### Edge Cases
-- Empty/broken font files, font collections (.ttc), non-TTF/OTF formats (Type 1, WOFF)
-- font-kit returning invalid data
-- Rapid font switching
+Create [`docs/technical/platform/eframe-egui-031-upgrade.md`](./technical/platform/eframe-egui-031-upgrade.md) describing changes, gotchas, and the regression matrix. Update [`docs/index.md`](./index.md) to link to it.
 
-### Model Selection
-- **Complexity:** 7/10 (medium-high)
-- **Recommendation:** Default model is fine. Involves panic handling, byte validation, and fallback logic but is well-scoped to two files.
+### Scope note
+
+The repo **already** contains a substantial [`eframe-egui-031-upgrade.md`](./technical/platform/eframe-egui-031-upgrade.md) and [`v0.3.0-regression-matrix.md`](./technical/platform/v0.3.0-regression-matrix.md). First validate whether Task **#74** is fully satisfied; if so, reconcile wording or cross-links and **mark #74 done**. Otherwise extend the upgrade doc (missing APIs, post-merge fixes) and ensure `docs/index.md` entries are accurate.
+
+### Test strategy
+
+Documentation is accurate and comprehensive; links resolve.
+
+### Key files
+
+| Area | Paths |
+|------|-------|
+| Upgrade narrative | [`docs/technical/platform/eframe-egui-031-upgrade.md`](./technical/platform/eframe-egui-031-upgrade.md) |
+| Regression matrix | [`docs/technical/platform/v0.3.0-regression-matrix.md`](./technical/platform/v0.3.0-regression-matrix.md) |
+| Doc index | [`docs/index.md`](./index.md) |
+| Stack context | [`docs/ai-context.md`](./ai-context.md) (reference only; update only if conventions change) |
+
+### Model selection
+
+**Complexity:** medium — technical editing and possibly light synthesis across existing docs; **fast** or **medium** models suffice.
+
+---
 
 ## Verification
-Before starting any new task:
-`cargo build`
+
+```
+cargo build
+```
+
+(Optional: `cargo test` if any Rust changes.)

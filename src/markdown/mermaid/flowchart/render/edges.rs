@@ -2,14 +2,14 @@
 
 use std::collections::HashMap;
 
-use egui::{FontId, Pos2, Rect, Rounding, Stroke, Vec2};
+use egui::{CornerRadius, FontId, Pos2, Rect, Stroke, Vec2};
 
-use super::colors::FlowchartColors;
 use super::super::types::*;
 use super::super::utils::{
     bezier_point, draw_arrow_head, draw_bezier_curve, draw_dashed_line, find_node_subgraph,
     line_rect_intersection,
 };
+use super::colors::FlowchartColors;
 
 /// Pre-computed edge label information for rendering.
 pub(crate) struct EdgeLabelInfo {
@@ -178,7 +178,7 @@ fn draw_back_edge(
         let mid = bezier_point(start, ctrl1, ctrl2, end, t);
         let label_pos = Pos2::new(mid.x - info.size.x / 2.0 - 8.0, mid.y);
         let label_rect = Rect::from_center_size(label_pos, info.size);
-        painter.rect_filled(label_rect, Rounding::same(3.0), colors.edge_label_bg);
+        painter.rect_filled(label_rect, CornerRadius::same(3), colors.edge_label_bg);
         painter.text(
             label_pos,
             egui::Align2::CENTER_CENTER,
@@ -274,7 +274,7 @@ fn draw_normal_edge(
     if let Some(info) = label_info {
         let label_rect = Rect::from_center_size(label_mid, info.size);
 
-        painter.rect_filled(label_rect, Rounding::same(3.0), colors.edge_label_bg);
+        painter.rect_filled(label_rect, CornerRadius::same(3), colors.edge_label_bg);
         painter.text(
             label_mid,
             egui::Align2::CENTER_CENTER,

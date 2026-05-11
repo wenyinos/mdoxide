@@ -6,16 +6,28 @@ Technical documentation for the document export functionality in Ferrite.
 
 The export system allows users to export markdown documents to standalone HTML files with inlined theme CSS, and copy rendered HTML to the clipboard for pasting into other applications.
 
+## Themed HTML pipeline (current)
+
+- **Main API:** `generate_html_document_export` in `src/export/html.rs`. `generate_html_document` is a thin wrapper with fixed defaults for older call sites.
+- **Options:** `HtmlExportOptions` and `HtmlExportThemeChoice` in `src/export/html_options.rs`, persisted on `Settings.html_export_options`. The modal is `render_html_export_dialog` (`src/app/dialogs.rs`); `UiState.show_html_export_dialog` gates visibility.
+- **Markdown → HTML:** comrak with `FerriteHtmlHighlighter` implementing `SyntaxHighlighterAdapter` (syntect via `get_highlighter()`, building inline HTML per line into a `String` buffer then writing to the comrak output stream).
+- **Theme CSS:** `HtmlThemeResolution` supports a single palette or light+dark with `@media (prefers-color-scheme)` for Auto. Colors come from `ThemeColors` / accent-aware rules in `html.rs`.
+- **Mermaid:** Fenced `mermaid` code blocks are replaced with placeholders before comrak, then `inject_mermaid_exports`. Flowcharts use SVG from `try_flowchart_svg_snippet` (`src/export/flowchart_svg.rs`) and `FlowchartColors`; other diagram types use a fallback figure with highlighted source. Shared types are re-exported from `markdown/mermaid/mod.rs` and `detect_mermaid_diagram_type` / `MermaidDiagramType` from `markdown/mod.rs`.
+- **Images and links:** `postprocess_images` and `postprocess_links` honor `ImageHandling` (`src/export/options.rs`), optional link base path, and self-contained / linked modes.
+
 ## Architecture
 
 ### Module Structure
 
 ```
 src/export/
-├── mod.rs          # Module exports and public API
-├── options.rs      # Export configuration types
-├── html.rs         # HTML document generation
-└── clipboard.rs    # Clipboard operations
+├── mod.rs           # Public API (HTML + PDF)
+├── options.rs       # ImageHandling and shared export types
+├── html_options.rs  # HtmlExportOptions, theme choice for HTML
+├── html.rs          # HTML document generation, comrak adapter, Mermaid inject
+├── flowchart_svg.rs # Flowchart → SVG for HTML embedding
+├── clipboard.rs     # Clipboard helpers
+└── pdf/             # PDF export (separate pipeline)
 ```
 
 ### Key Types
@@ -136,7 +148,7 @@ Export actions added to the ribbon:
 
 ### Keyboard Shortcuts
 
-- **Ctrl+Shift+E**: Export as HTML (opens save dialog)
+- **Ctrl+Shift+E**: Open HTML export options dialog, then save dialog on Export
 
 ### RibbonAction Variants
 
@@ -150,14 +162,7 @@ pub enum RibbonAction {
 
 ## Settings Persistence
 
-Export preferences stored in `Settings`:
-
-```rust
-// Export Settings
-pub last_export_directory: Option<PathBuf>,
-pub open_after_export: bool,
-pub export_embed_images: bool,
-```
+Export-related fields on `Settings` include `last_export_directory`, `last_pdf_export_directory`, `open_after_export`, `export_embed_images`, `html_export_options`, and `pdf_export_options` (PDF modal and krilla renderer; see `docs/technical/viewers/pdf-export.md`).
 
 ## Error Handling
 
@@ -243,8 +248,6 @@ Exported HTML matches in-app rendering:
 
 ## Future Enhancements
 
-- PDF export via HTML-to-PDF conversion
-- Image embedding (base64 data URIs)
-- Custom CSS injection
-- Template selection
-- Batch export multiple documents
+- Mermaid PNG raster fallback for non-flowchart diagrams
+- Batch export of multiple documents
+- User-defined HTML templates

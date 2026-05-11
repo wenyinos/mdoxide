@@ -53,6 +53,10 @@ pub(crate) enum KeyboardAction {
     SearchInFiles,
     /// Export as HTML (Ctrl+Shift+X)
     ExportHtml,
+    /// Export as PDF (Ctrl+Shift+P) — opens the export options dialog.
+    ExportPdf,
+    /// Print preview — same PDF pipeline, opens in-app viewer tab.
+    PrintPreview,
     /// Open about/help panel (F1)
     OpenAbout,
     /// Select next occurrence of current word/selection (Ctrl+Shift+G)

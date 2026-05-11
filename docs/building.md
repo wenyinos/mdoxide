@@ -259,6 +259,8 @@ chmod +x Ferrite.AppDir/AppRun
 
 ### macOS
 
+If you distribute or sideload a locally built `Ferrite.app`, Gatekeeper behavior matches other unsigned bundles. **GitHub Release** macOS artifacts through **v0.3.0** are also unsigned in CI—see **[macOS install & Gatekeeper](./install/macos.md)** for user-facing workarounds ([#130](https://github.com/OlaProeis/Ferrite/issues/130)); **v0.3.1** targets Developer ID signing + notarization ([roadmap](../ROADMAP.md)).
+
 #### Application Bundle (.app)
 
 ```bash
@@ -504,6 +506,10 @@ sudo pacman -S fontconfig
 ### macOS: Code signing failed
 
 Ensure you have a valid Developer ID certificate in Keychain Access.
+
+### macOS: Gatekeeper blocks Ferrite (15.x / Sequoia)
+
+CI-built releases are not Developer ID signed until **v0.3.1**. Users should follow **[docs/install/macos.md](./install/macos.md)** (quarantine removal or Open Anyway). Track [#130](https://github.com/OlaProeis/Ferrite/issues/130).
 
 ### Large binary size
 

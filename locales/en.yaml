@@ -2,6 +2,10 @@
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
+print_preview:
+  tab_title: "%{file} — Print preview"
+  untitled: "Untitled — Print preview"
+
 # Application metadata
 app:
   name: "Ferrite"
@@ -17,6 +21,8 @@ menu:
     export: "Export"
     export_html: "Export to HTML..."
     export_clipboard: "Copy as HTML"
+    export_pdf: "Export to PDF..."
+    print_preview: "Print preview..."
   edit:
     label: "Edit"
   format:
@@ -31,6 +37,22 @@ view_mode:
   raw_desc: "Plain markdown text editing"
   rendered_desc: "WYSIWYG rendered editing"
   split_desc: "Raw editor + rendered preview side by side"
+
+# Bottom markdown format toolbar (Raw / Split raw pane)
+format_toolbar:
+  mermaid_menu: "Mermaid…"
+  mermaid_entry_tooltip: "Insert a Mermaid diagram at the cursor"
+  mermaid_flowchart: "Flowchart"
+  mermaid_sequence: "Sequence"
+  mermaid_state: "State"
+  mermaid_class: "Class"
+  mermaid_er: "ER diagram"
+  mermaid_pie: "Pie chart"
+  mermaid_gantt: "Gantt"
+  mermaid_journey: "User journey"
+  mermaid_mindmap: "Mindmap"
+  mermaid_timeline: "Timeline"
+  mermaid_gitgraph: "Git graph"
 
 # Status bar
 status:
@@ -54,9 +76,22 @@ dialog:
     title: "Unsaved Changes"
     save: "Save"
     dont_save: "Don't Save"
+  code_execution_consent:
+    title: "Allow running code from this document?"
+    body_intro: "Running a fenced snippet starts a real subprocess on your computer using your user privileges. Ferrite does not sandbox runners or filter network access."
+    body_settings_echo: "Same caveats as in Settings → Editor → Code execution: no sandbox — only use with documents you trust."
+    enable_and_run: "Enable & run"
+    enable_and_run_tooltip: "Turn on code execution, remember this choice, and run the snippet you clicked."
+    just_enable: "Just enable"
+    just_enable_tooltip: "Turn on execution and remember consent; do not run the snippet yet."
+    cancel_tooltip: "Close without changing settings or running code (Esc)."
   confirm:
     cancel: "Cancel"
     close: "Close"
+  rename_untitled_tab:
+    title: "Rename tab"
+    hint: "Display name only (not a file path). Use Save As to save to disk."
+    apply: "Apply"
   # File operation dialogs
   file:
     new_file: "New File"
@@ -82,8 +117,31 @@ dialog:
     enter_line: "Enter line number:"
     go: "Go"
     range: "Range: 1-%{max}"
-
-# Settings panel
+  # PDF export options dialog
+  pdf_export:
+    title: "Export to PDF"
+    description: "Render the current document to a self-contained PDF file."
+    page_size: "Page size"
+    margins: "Margins"
+    custom_margins_hint: "Top / Right / Bottom / Left (in PDF points)"
+    page_break_h1: "Start each top-level heading on a new page"
+    page_numbers: "Include page numbers"
+    use_theme_colors: "Use the active editor theme (otherwise print on white)"
+    open_after_export: "Open the file after export"
+    export: "Export…"
+  html_export:
+    title: "Export to HTML"
+    description: "Generate a themed HTML file with optional outline, comments, and asset embedding."
+    self_contained: "Self-contained (embed local images; no network at view time)"
+    image_paths: "Linked images"
+    include_outline: "Include outline (table of contents)"
+    include_comments: "Include HTML comments / source markers"
+    link_base: "Base folder for relative links (leave empty to use document folder)"
+    theme: "Theme"
+    include_title: "Include document title heading"
+    syntax_highlighting: "Syntax highlighting for code fences"
+    open_after_export: "Open the file after export"
+    export: "Export…"
 settings:
   title: "Settings"
   reset_all: "Reset All"
@@ -109,6 +167,7 @@ settings:
     custom_font: "Custom System Font"
     custom_font_desc: "Select from installed system fonts"
     select_system_font: "Select Font:"
+    custom_font_pick_placeholder: "Choose a font…"
     font_preview: "Preview:"
     font_not_found: "⚠ Font not found on system"
     cjk_preference: "CJK Regional Preference"
@@ -155,6 +214,19 @@ settings:
     use_spaces_tooltip: "Use spaces instead of tabs for indentation"
     vim_mode: "Vim Mode"
     vim_mode_tooltip: "Enable Vim-style modal editing with Normal, Insert, and Visual modes. Use hjkl for navigation, i for insert, Esc for normal mode."
+    code_execution_heading: "Code execution"
+    code_execution_warning: "When enabled, rendered markdown may run commands on your computer. Disabled by default. No sandbox — use only with documents you trust."
+    code_execution_enable: "Allow code execution from markdown blocks"
+    code_execution_enable_tooltip: "Master toggle for running fenced code blocks in preview (requires a supported language and executor in a future release)"
+    code_execution_allow_shell: "Allow shell blocks (bash, sh, pwsh, …)"
+    code_execution_allow_shell_tooltip: "When off, fenced blocks tagged as shells are blocked even if execution is enabled"
+    code_execution_allow_python: "Allow Python blocks"
+    code_execution_allow_python_tooltip: "When off, fenced Python blocks are blocked even if execution is enabled"
+    code_execution_timeout: "Timeout per run"
+    code_execution_seconds_suffix: "s"
+    code_execution_timeout_tooltip: "Stopped automatically after this many seconds (5–300)"
+    code_execution_show_inline_output: "Show output panel below code blocks"
+    code_execution_show_inline_output_tooltip: "Render captured stdout/stderr (with ANSI colors) inline. When off, completion is reported via a toast only."
     max_line_width: "Maximum Line Width"
     custom_width: "Custom - Specify pixel width"
     code_folding: "Code Folding"
@@ -192,6 +264,9 @@ settings:
   files:
     title: "Files"
     restore_session_tooltip: "When enabled, restores previously open tabs on startup. When disabled, starts with a single empty tab. Session data is always saved."
+    quick_note_workflow: "Quick note workflow (ephemeral untitled tabs)"
+    quick_note_workflow_tooltip: "Pathless tabs close without a save prompt, and a modified untitled tab no longer blocks quitting. Unsaved text is still stored in the session recovery folder under your Ferrite config directory when Restore session is on."
+    quick_note_workflow_hint: "Double-click an untitled tab to set its display name. Turn off to restore the usual save confirmation for new tabs."
     enable_auto_save: "Enable Auto-Save by Default"
     auto_save_tooltip: "New documents will have auto-save enabled. Uses temp files to prevent data loss."
     auto_save_delay: "Auto-save delay:"
@@ -203,6 +278,9 @@ settings:
     files_count: "%{count} files"
   appearance:
     title: "Appearance"
+    accent_color: "Ferrite accent"
+    accent_color_hint: "Rendered headings (H1–H6), selection tint, tabs, and highlighted controls. Hyperlinks stay standard blue."
+    accent_reset: "Reset color"
     language: "Language"
     language_hint: "Select the display language for the user interface"
     syntax_theme: "Syntax Theme"
@@ -307,6 +385,7 @@ outline:
   add_headings_hint: "Add headings using # syntax"
   close_tooltip: "Close outline (Ctrl+Shift+O)"
   parse_error: "⚠ Parse Error"
+  detach: "Detach"
   detach_tooltip: "Detach to floating window"
   backlinks_unavailable: "Backlinks unavailable"
   productivity_unavailable: "Productivity Hub unavailable"
@@ -370,6 +449,26 @@ about:
   tab:
     about: "About"
     shortcuts: "Shortcuts"
+    mermaid: "Mermaid"
+  mermaid:
+    title: "Mermaid diagram syntax"
+    intro: "Place diagrams in a fenced code block with the mermaid language tag. In raw or split view, the format toolbar Insert → Mermaid… action inserts the same starter snippets as below."
+    doc_site_label: "Full reference:"
+    doc_link: "mermaid.js.org"
+    doc_tooltip: "Open https://mermaid.js.org/ in your browser"
+    snippet_label: "Starter snippet (matches Insert → Mermaid…)"
+    types:
+      flowchart: "Flowcharts draw nodes and arrows—processes, decisions, and styled shapes. Try Top-Down (TD), Left-Right (LR), and `style` / `classDef` for colors."
+      sequence: "Sequence diagrams show actors as lifelines and messages over time (`->`, `->>`, `-->>`)."
+      state: "State diagrams describe states and transitions; `stateDiagram-v2` is the modern syntax."
+      class: "Class diagrams model types and relationships such as inheritance and associations."
+      er: "Entity–relationship diagrams declare entities and cardinalities (`||--o{`, etc.)."
+      pie: "Pie charts visualize shares of a whole from labeled numeric slices."
+      gantt: "Gantt charts lay out tasks on a time axis with sections and durations."
+      journey: "User journey maps score steps inside sections for users or actors."
+      mindmap: "Mindmaps branch topics radially from a central root."
+      timeline: "Timelines list dated titles along a horizontal axis."
+      gitgraph: "Git graph shows commits and branches in a linearized history view."
   description: "A fast, lightweight text editor for Markdown, JSON, and more."
   close_hint: "Press F1 or Escape to close"
   # Links section
@@ -466,6 +565,8 @@ shortcuts:
     open_settings: "Open Settings"
     open_about: "About / Help"
     export_html: "Export HTML"
+    export_pdf: "Export PDF"
+    print_preview: "Print preview"
     insert_toc: "Insert Table of Contents"
   # File shortcuts (for help panel)
   file:
@@ -652,6 +753,29 @@ widgets:
     copy_tooltip: "Copy to clipboard"
     finish_tooltip: "Finish editing"
     edit_tooltip: "Edit code"
+    run_label: "Run"
+    run_tooltip: "Runs this snippet as a subprocess (Editor → Code execution). Focus with Tab alongside Edit and Copy."
+    run_finished: "Run finished:\n{output}"
+    run_failed: "Run failed:\n{error}"
+    run_output_heading: "Output"
+    run_status_running: "Running"
+    run_status_success: "Exit 0"
+    run_status_failure: "Exit %{code}"
+    run_status_failure_unknown: "Exit ?"
+    run_status_timed_out: "Timed out after %{secs}s"
+    run_status_cancelled: "Stopped by user"
+    run_status_failed: "Failed"
+    run_no_output: "(no stdout or stderr)"
+    run_no_output_hint: "If you expected text, add print/echo or call your function — exit 0 only means the process finished."
+    run_dismiss: "Dismiss"
+    run_dismiss_tooltip: "Hide this output panel"
+    run_stop: "Stop"
+    run_stop_tooltip: "Stop the running command"
+    run_copy_output: "Copy"
+    run_copy_output_tooltip: "Copy output to clipboard"
+    run_insert_output: "Insert as block"
+    run_insert_output_tooltip: "Insert the captured output as a fenced ```output block in the source"
+    run_stderr_heading: "stderr"
   table:
     add_row: "+ Row"
     add_column: "+ Column"
@@ -718,6 +842,7 @@ mermaid:
   badge: "mermaid"
   empty: "(empty diagram)"
   rendering_error: "Rendering error: %{error}"
+  warning_line: "Line %{line}:"
 
 # Table of Contents
 
@@ -769,6 +894,7 @@ ribbon:
   toggle_outline: "Toggle Outline"
   copy_html_tooltip: "Copy rendered HTML to clipboard"
   export_pdf: "📄 Export as PDF"
+  print_preview: "🖨 Print preview..."
   coming_soon: "Coming soon"
   heading_level: "Heading %{level}"
 
@@ -777,11 +903,13 @@ welcome:
   subtitle: "Configure your editor to get started."
   section:
     appearance: "Appearance"
+    accent_hint: "Rendered headings and UI highlights use this accent. Links stay classic blue."
     editor: "Editor"
     cjk: "CJK Font Preference"
     files: "Files"
   label:
     theme: "Theme"
+    accent_color: "Ferrite accent color"
     language: "Language"
   line_width_hint: "Limits how wide text lines can grow. Set a value for centered text in Zen Mode (F11)."
 
@@ -862,7 +990,12 @@ productivity:
     tip: "Tip: Use - [ ] for checkbox, ! or !! for priority"
     move_up: "Move up"
     move_down: "Move down"
+    delete: "Delete task"
     empty: "No tasks yet"
+    add_first: "Add your first task above"
+  pomodoro_status:
+    work: "Work session"
+    break_label: "Break"
   pomodoro:
     title: "Pomodoro Timer"
     work: "Work: %{time}"
@@ -885,6 +1018,7 @@ productivity:
     input_hint: "Type your notes here..."
     dock: "Dock"
     dock_tooltip: "Dock into outline panel"
+    close_hint: "(× also docks)"
     ok: "Ok"
     confirm: "Confirm?"
     empty_name: "Note name cannot be empty"

@@ -384,7 +384,7 @@ impl EditHistory {
                 EditOperation::Insert { pos, .. } => *pos,
                 EditOperation::Delete { pos, text } => *pos + text.chars().count(),
             });
-            
+
             group.undo(buffer);
             self.redo_stack.push(group);
             self.last_edit_time = None;
@@ -434,7 +434,7 @@ impl EditHistory {
                 EditOperation::Insert { pos, text } => *pos + text.chars().count(),
                 EditOperation::Delete { pos, .. } => *pos,
             });
-            
+
             group.redo(buffer);
             self.undo_stack.push(group);
             self.last_edit_time = None;
@@ -948,10 +948,7 @@ mod tests {
                     let len = (i % 3).max(1).min(buffer.len() - pos);
                     // Get the text to be deleted
                     let deleted: String = buffer.rope().slice(pos..pos + len).to_string();
-                    history.record_operation(EditOperation::Delete {
-                        pos,
-                        text: deleted,
-                    });
+                    history.record_operation(EditOperation::Delete { pos, text: deleted });
                     buffer.remove(pos, len);
                 }
             }

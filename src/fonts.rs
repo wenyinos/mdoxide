@@ -17,7 +17,7 @@
 use egui::{FontData, FontDefinitions, FontFamily, FontId, TextStyle};
 use log::{info, warn};
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Data - Embedded at compile time
@@ -92,26 +92,21 @@ use crate::config::CjkFontPreference;
 pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
     // Try Windows API first via GetUserDefaultLocaleName
     // Locale names follow BCP-47 format: "ja-JP", "ko-KR", "zh-CN", "zh-TW", etc.
-    
+
     #[link(name = "kernel32")]
     extern "system" {
-        fn GetUserDefaultLocaleName(
-            locale_name: *mut u16,
-            locale_name_len: i32,
-        ) -> i32;
+        fn GetUserDefaultLocaleName(locale_name: *mut u16, locale_name_len: i32) -> i32;
     }
-    
+
     let mut buffer = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
-    let len = unsafe {
-        GetUserDefaultLocaleName(buffer.as_mut_ptr(), buffer.len() as i32)
-    };
-    
+    let len = unsafe { GetUserDefaultLocaleName(buffer.as_mut_ptr(), buffer.len() as i32) };
+
     if len > 0 {
         let locale = String::from_utf16_lossy(&buffer[..(len as usize - 1)]);
         let locale_lower = locale.to_lowercase();
-        
+
         info!("Detected system locale: {}", locale);
-        
+
         // Check for CJK locales
         if locale_lower.starts_with("ja") {
             info!("System locale is Japanese - will preload Japanese font");
@@ -119,13 +114,13 @@ pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
         } else if locale_lower.starts_with("ko") {
             info!("System locale is Korean - will preload Korean font");
             return Some(CjkFontPreference::Korean);
-        } else if locale_lower.starts_with("zh-cn") 
+        } else if locale_lower.starts_with("zh-cn")
             || locale_lower.starts_with("zh-hans")
-            || locale_lower.starts_with("zh-sg") 
+            || locale_lower.starts_with("zh-sg")
         {
             info!("System locale is Simplified Chinese - will preload SC font");
             return Some(CjkFontPreference::SimplifiedChinese);
-        } else if locale_lower.starts_with("zh-tw") 
+        } else if locale_lower.starts_with("zh-tw")
             || locale_lower.starts_with("zh-hant")
             || locale_lower.starts_with("zh-hk")
             || locale_lower.starts_with("zh-mo")
@@ -134,7 +129,7 @@ pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
             return Some(CjkFontPreference::TraditionalChinese);
         }
     }
-    
+
     info!("System locale is not CJK - fonts will load on-demand");
     None
 }
@@ -164,7 +159,7 @@ pub fn detect_system_cjk_locale() -> Option<CjkFontPreference> {
         .or_else(|_| std::env::var("LANG"))
         .unwrap_or_default()
         .to_lowercase();
-    
+
     if lang.starts_with("ja") {
         Some(CjkFontPreference::Japanese)
     } else if lang.starts_with("ko") {
@@ -191,10 +186,13 @@ pub fn preload_system_locale_cjk_font(
 ) -> bool {
     // Only preload based on system locale if user preference is Auto
     if cjk_preference != CjkFontPreference::Auto {
-        info!("User has explicit CJK preference {:?} - skipping system locale preload", cjk_preference);
+        info!(
+            "User has explicit CJK preference {:?} - skipping system locale preload",
+            cjk_preference
+        );
         return false;
     }
-    
+
     if let Some(detected) = detect_system_cjk_locale() {
         // Build a spec that loads only the detected locale's font
         let spec = match detected {
@@ -216,17 +214,17 @@ pub fn preload_system_locale_cjk_font(
             },
             CjkFontPreference::Auto => return false,
         };
-        
+
         info!("Preloading CJK font for system locale: {:?}", detected);
         let fonts = create_font_definitions_with_cjk_spec(None, detected, &spec, None);
         ctx.set_fonts(fonts);
         bump_font_generation();
         configure_text_styles(ctx);
         schedule_prewarm();
-        
+
         return true;
     }
-    
+
     false
 }
 
@@ -237,10 +235,7 @@ pub fn preload_system_locale_cjk_font(
 /// without waiting for lazy detection.
 ///
 /// Returns `true` if a font was preloaded, `false` otherwise.
-pub fn preload_explicit_cjk_font(
-    ctx: &egui::Context,
-    cjk_preference: CjkFontPreference,
-) -> bool {
+pub fn preload_explicit_cjk_font(ctx: &egui::Context, cjk_preference: CjkFontPreference) -> bool {
     preload_explicit_cjk_font_with_custom(ctx, cjk_preference, None)
 }
 
@@ -278,7 +273,10 @@ pub fn preload_explicit_cjk_font_with_custom(
         CjkFontPreference::Auto => return false,
     };
 
-    info!("Preloading CJK font for explicit preference: {:?}", cjk_preference);
+    info!(
+        "Preloading CJK font for explicit preference: {:?}",
+        cjk_preference
+    );
     let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec, None);
     ctx.set_fonts(fonts);
     bump_font_generation();
@@ -734,7 +732,10 @@ fn load_system_font(families: &[&str]) -> Option<FontData> {
 }
 
 /// Load a system font, trying user preference first (if set), then falling back to candidates.
-fn load_system_font_with_preference(preference: Option<&str>, candidates: &[&str]) -> Option<FontData> {
+fn load_system_font_with_preference(
+    preference: Option<&str>,
+    candidates: &[&str],
+) -> Option<FontData> {
     if let Some(pref) = preference {
         if !pref.is_empty() {
             match load_system_font_by_name(pref) {
@@ -771,7 +772,10 @@ fn load_system_font_with_preference(preference: Option<&str>, candidates: &[&str
 /// Rejects font collections (.ttc/.otc), Type 1, WOFF/WOFF2, and corrupt data.
 fn validate_font_bytes(bytes: &[u8], family_name: &str) -> Result<(), String> {
     if bytes.len() < 4 {
-        return Err(format!("Font '{family_name}' file is too small ({} bytes)", bytes.len()));
+        return Err(format!(
+            "Font '{family_name}' file is too small ({} bytes)",
+            bytes.len()
+        ));
     }
 
     let magic: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
@@ -781,13 +785,21 @@ fn validate_font_bytes(bytes: &[u8], family_name: &str) -> Result<(), String> {
         // OpenType (CFF) single font
         b"OTTO" => Ok(()),
         // TrueType/OpenType collection — epaint cannot handle font indices
-        b"ttcf" => Err(format!("Font '{family_name}' is a .ttc/.otc collection, which is not supported")),
+        b"ttcf" => Err(format!(
+            "Font '{family_name}' is a .ttc/.otc collection, which is not supported"
+        )),
         // WOFF
-        b"wOFF" => Err(format!("Font '{family_name}' is WOFF format, which is not supported")),
+        b"wOFF" => Err(format!(
+            "Font '{family_name}' is WOFF format, which is not supported"
+        )),
         // WOFF2
-        b"wOF2" => Err(format!("Font '{family_name}' is WOFF2 format, which is not supported")),
+        b"wOF2" => Err(format!(
+            "Font '{family_name}' is WOFF2 format, which is not supported"
+        )),
         // Type 1 (starts with '%!')
-        [0x25, 0x21, ..] => Err(format!("Font '{family_name}' is Type 1 format, which is not supported")),
+        [0x25, 0x21, ..] => Err(format!(
+            "Font '{family_name}' is Type 1 format, which is not supported"
+        )),
         _ => Err(format!(
             "Font '{family_name}' has unrecognized format (magic: {:02x} {:02x} {:02x} {:02x})",
             magic[0], magic[1], magic[2], magic[3]
@@ -803,16 +815,17 @@ fn load_system_font_by_name(family_name: &str) -> Result<FontData, String> {
     let source = SystemSource::new();
 
     info!("Attempting to load custom font: {}", family_name);
-    let handle = source.select_best_match(
-        &[FamilyName::Title(family_name.to_string())],
-        &Properties::new(),
-    ).map_err(|_| format!("Font '{family_name}' not found on system"))?;
+    let handle = source
+        .select_best_match(
+            &[FamilyName::Title(family_name.to_string())],
+            &Properties::new(),
+        )
+        .map_err(|_| format!("Font '{family_name}' not found on system"))?;
 
     let raw_bytes = match handle {
         Handle::Path { ref path, .. } => {
             info!("Found custom font at: {:?}", path);
-            std::fs::read(path)
-                .map_err(|e| format!("Failed to read font file {:?}: {e}", path))?
+            std::fs::read(path).map_err(|e| format!("Failed to read font file {:?}: {e}", path))?
         }
         Handle::Memory { ref bytes, .. } => {
             info!("Found custom font in memory ({} bytes)", bytes.len());
@@ -832,8 +845,19 @@ fn load_system_font_by_name(family_name: &str) -> Result<FontData, String> {
         FontData::from_owned(raw_bytes)
     })) {
         Ok(data) => Ok(data),
-        Err(_) => Err(format!("Font '{family_owned}' caused a panic during loading — file may be corrupt")),
+        Err(_) => Err(format!(
+            "Font '{family_owned}' caused a panic during loading — file may be corrupt"
+        )),
     }
+}
+
+/// Ignore whitespace-only custom names so we never attempt to load an empty family (GitHub #133).
+#[inline]
+fn non_empty_custom_font_name(custom_font: Option<&str>) -> Option<&str> {
+    custom_font.and_then(|s| {
+        let t = s.trim();
+        (!t.is_empty()).then_some(t)
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -962,12 +986,10 @@ pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
             FONT_JETBRAINS_BOLD => JETBRAINS_BOLD,
             FONT_JETBRAINS_ITALIC => JETBRAINS_ITALIC,
             FONT_JETBRAINS_BOLD_ITALIC => JETBRAINS_BOLD_ITALIC,
-            FONT_CUSTOM => {
-                CUSTOM_FONT_BYTES
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .unwrap_or(INTER_REGULAR)
-            }
+            FONT_CUSTOM => CUSTOM_FONT_BYTES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or(INTER_REGULAR),
             _ => INTER_REGULAR,
         },
     }
@@ -1265,7 +1287,9 @@ fn load_cjk_fonts_selective(fonts: &mut FontDefinitions, spec: &CjkLoadSpec) -> 
     // Always load font data if spec requires it - set_fonts() replaces everything
     if spec.load_korean {
         if let Some(data) = load_korean_font() {
-            fonts.font_data.insert(FONT_CJK_KR.to_owned(), data);
+            fonts
+                .font_data
+                .insert(FONT_CJK_KR.to_owned(), Arc::new(data));
             state.kr_loaded = true;
             if !KOREAN_FONTS_LOADED.load(Ordering::Relaxed) {
                 KOREAN_FONTS_LOADED.store(true, Ordering::Relaxed);
@@ -1276,7 +1300,9 @@ fn load_cjk_fonts_selective(fonts: &mut FontDefinitions, spec: &CjkLoadSpec) -> 
 
     if spec.load_japanese {
         if let Some(data) = load_japanese_font() {
-            fonts.font_data.insert(FONT_CJK_JP.to_owned(), data);
+            fonts
+                .font_data
+                .insert(FONT_CJK_JP.to_owned(), Arc::new(data));
             state.jp_loaded = true;
             if !JAPANESE_FONTS_LOADED.load(Ordering::Relaxed) {
                 JAPANESE_FONTS_LOADED.store(true, Ordering::Relaxed);
@@ -1287,7 +1313,9 @@ fn load_cjk_fonts_selective(fonts: &mut FontDefinitions, spec: &CjkLoadSpec) -> 
 
     if spec.load_chinese_sc {
         if let Some(data) = load_chinese_sc_font() {
-            fonts.font_data.insert(FONT_CJK_SC.to_owned(), data);
+            fonts
+                .font_data
+                .insert(FONT_CJK_SC.to_owned(), Arc::new(data));
             state.sc_loaded = true;
             if !CHINESE_SC_FONTS_LOADED.load(Ordering::Relaxed) {
                 CHINESE_SC_FONTS_LOADED.store(true, Ordering::Relaxed);
@@ -1298,7 +1326,9 @@ fn load_cjk_fonts_selective(fonts: &mut FontDefinitions, spec: &CjkLoadSpec) -> 
 
     if spec.load_chinese_tc {
         if let Some(data) = load_chinese_tc_font() {
-            fonts.font_data.insert(FONT_CJK_TC.to_owned(), data);
+            fonts
+                .font_data
+                .insert(FONT_CJK_TC.to_owned(), Arc::new(data));
             state.tc_loaded = true;
             if !CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed) {
                 CHINESE_TC_FONTS_LOADED.store(true, Ordering::Relaxed);
@@ -1505,7 +1535,7 @@ fn load_complex_script_fonts_selective(
             if $spec_field {
                 let p = pref($pref_key);
                 if let Some(data) = $loader(p) {
-                    fonts.font_data.insert($font_key.to_owned(), data);
+                    fonts.font_data.insert($font_key.to_owned(), Arc::new(data));
                     state.$state_field = true;
                     if !$flag.load(Ordering::Relaxed) {
                         $flag.store(true, Ordering::Relaxed);
@@ -1516,17 +1546,105 @@ fn load_complex_script_fonts_selective(
         };
     }
 
-    load_script!(spec.load_arabic, load_arabic_font, FONT_ARABIC, arabic, ARABIC_FONTS_LOADED, "Arabic", "arabic");
-    load_script!(spec.load_bengali, load_bengali_font, FONT_BENGALI, bengali, BENGALI_FONTS_LOADED, "Bengali", "bengali");
-    load_script!(spec.load_devanagari, load_devanagari_font, FONT_DEVANAGARI, devanagari, DEVANAGARI_FONTS_LOADED, "Devanagari", "devanagari");
-    load_script!(spec.load_thai, load_thai_font, FONT_THAI, thai, THAI_FONTS_LOADED, "Thai", "thai");
-    load_script!(spec.load_hebrew, load_hebrew_font, FONT_HEBREW, hebrew, HEBREW_FONTS_LOADED, "Hebrew", "hebrew");
-    load_script!(spec.load_tamil, load_tamil_font, FONT_TAMIL, tamil, TAMIL_FONTS_LOADED, "Tamil", "tamil");
-    load_script!(spec.load_georgian, load_georgian_font, FONT_GEORGIAN, georgian, GEORGIAN_FONTS_LOADED, "Georgian", "georgian");
-    load_script!(spec.load_armenian, load_armenian_font, FONT_ARMENIAN, armenian, ARMENIAN_FONTS_LOADED, "Armenian", "armenian");
-    load_script!(spec.load_ethiopic, load_ethiopic_font, FONT_ETHIOPIC, ethiopic, ETHIOPIC_FONTS_LOADED, "Ethiopic", "ethiopic");
-    load_script!(spec.load_other_indic, load_other_indic_font, FONT_OTHER_INDIC, other_indic, OTHER_INDIC_FONTS_LOADED, "Other Indic", "other_indic");
-    load_script!(spec.load_southeast_asian, load_southeast_asian_font, FONT_SOUTHEAST_ASIAN, southeast_asian, SOUTHEAST_ASIAN_FONTS_LOADED, "Southeast Asian", "southeast_asian");
+    load_script!(
+        spec.load_arabic,
+        load_arabic_font,
+        FONT_ARABIC,
+        arabic,
+        ARABIC_FONTS_LOADED,
+        "Arabic",
+        "arabic"
+    );
+    load_script!(
+        spec.load_bengali,
+        load_bengali_font,
+        FONT_BENGALI,
+        bengali,
+        BENGALI_FONTS_LOADED,
+        "Bengali",
+        "bengali"
+    );
+    load_script!(
+        spec.load_devanagari,
+        load_devanagari_font,
+        FONT_DEVANAGARI,
+        devanagari,
+        DEVANAGARI_FONTS_LOADED,
+        "Devanagari",
+        "devanagari"
+    );
+    load_script!(
+        spec.load_thai,
+        load_thai_font,
+        FONT_THAI,
+        thai,
+        THAI_FONTS_LOADED,
+        "Thai",
+        "thai"
+    );
+    load_script!(
+        spec.load_hebrew,
+        load_hebrew_font,
+        FONT_HEBREW,
+        hebrew,
+        HEBREW_FONTS_LOADED,
+        "Hebrew",
+        "hebrew"
+    );
+    load_script!(
+        spec.load_tamil,
+        load_tamil_font,
+        FONT_TAMIL,
+        tamil,
+        TAMIL_FONTS_LOADED,
+        "Tamil",
+        "tamil"
+    );
+    load_script!(
+        spec.load_georgian,
+        load_georgian_font,
+        FONT_GEORGIAN,
+        georgian,
+        GEORGIAN_FONTS_LOADED,
+        "Georgian",
+        "georgian"
+    );
+    load_script!(
+        spec.load_armenian,
+        load_armenian_font,
+        FONT_ARMENIAN,
+        armenian,
+        ARMENIAN_FONTS_LOADED,
+        "Armenian",
+        "armenian"
+    );
+    load_script!(
+        spec.load_ethiopic,
+        load_ethiopic_font,
+        FONT_ETHIOPIC,
+        ethiopic,
+        ETHIOPIC_FONTS_LOADED,
+        "Ethiopic",
+        "ethiopic"
+    );
+    load_script!(
+        spec.load_other_indic,
+        load_other_indic_font,
+        FONT_OTHER_INDIC,
+        other_indic,
+        OTHER_INDIC_FONTS_LOADED,
+        "Other Indic",
+        "other_indic"
+    );
+    load_script!(
+        spec.load_southeast_asian,
+        load_southeast_asian_font,
+        FONT_SOUTHEAST_ASIAN,
+        southeast_asian,
+        SOUTHEAST_ASIAN_FONTS_LOADED,
+        "Southeast Asian",
+        "southeast_asian"
+    );
 
     if spec.any() {
         info!("Complex script fonts loaded: {:?}", spec);
@@ -1596,41 +1714,43 @@ pub fn create_font_definitions_with_cjk_spec(
     spec: &CjkLoadSpec,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
+    let custom_font = non_empty_custom_font_name(custom_font);
     let mut fonts = FontDefinitions::default();
 
     // Insert Inter font variants (always available as UI fallback)
-    fonts
-        .font_data
-        .insert(FONT_INTER.to_owned(), FontData::from_static(INTER_REGULAR));
+    fonts.font_data.insert(
+        FONT_INTER.to_owned(),
+        Arc::new(FontData::from_static(INTER_REGULAR)),
+    );
     fonts.font_data.insert(
         FONT_INTER_BOLD.to_owned(),
-        FontData::from_static(INTER_BOLD),
+        Arc::new(FontData::from_static(INTER_BOLD)),
     );
     fonts.font_data.insert(
         FONT_INTER_ITALIC.to_owned(),
-        FontData::from_static(INTER_ITALIC),
+        Arc::new(FontData::from_static(INTER_ITALIC)),
     );
     fonts.font_data.insert(
         FONT_INTER_BOLD_ITALIC.to_owned(),
-        FontData::from_static(INTER_BOLD_ITALIC),
+        Arc::new(FontData::from_static(INTER_BOLD_ITALIC)),
     );
 
     // Insert JetBrains Mono font variants
     fonts.font_data.insert(
         FONT_JETBRAINS.to_owned(),
-        FontData::from_static(JETBRAINS_REGULAR),
+        Arc::new(FontData::from_static(JETBRAINS_REGULAR)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_BOLD.to_owned(),
-        FontData::from_static(JETBRAINS_BOLD),
+        Arc::new(FontData::from_static(JETBRAINS_BOLD)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_ITALIC.to_owned(),
-        FontData::from_static(JETBRAINS_ITALIC),
+        Arc::new(FontData::from_static(JETBRAINS_ITALIC)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
-        FontData::from_static(JETBRAINS_BOLD_ITALIC),
+        Arc::new(FontData::from_static(JETBRAINS_BOLD_ITALIC)),
     );
 
     // Load custom font if specified
@@ -1640,21 +1760,29 @@ pub fn create_font_definitions_with_cjk_spec(
                 // Cache raw bytes for HarfRust shaping
                 let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
                 *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = Some(raw);
-                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
+                *LAST_CUSTOM_FONT_ERROR
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                fonts
+                    .font_data
+                    .insert(FONT_CUSTOM.to_owned(), Arc::new(data));
                 info!("Loaded custom font: {}", font_name);
                 true
             }
             Err(reason) => {
                 warn!("Custom font failed: {}", reason);
                 *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason);
+                *LAST_CUSTOM_FONT_ERROR
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = Some(reason);
                 false
             }
         }
     } else {
         *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *LAST_CUSTOM_FONT_ERROR
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         false
     };
 
@@ -1663,7 +1791,8 @@ pub fn create_font_definitions_with_cjk_spec(
 
     // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
     let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
-    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
+    let cs_state =
+        load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
 
     // Set up Proportional font family
     // Order: Custom (if set) -> Inter -> JetBrains Mono (for box-drawing/symbols) -> CJK -> complex scripts
@@ -1686,7 +1815,12 @@ pub fn create_font_definitions_with_cjk_spec(
         .push(FONT_JETBRAINS.to_owned());
 
     if cjk_state.any_loaded() {
-        add_cjk_fallbacks(&mut fonts, FontFamily::Proportional, &cjk_state, cjk_preference);
+        add_cjk_fallbacks(
+            &mut fonts,
+            FontFamily::Proportional,
+            &cjk_state,
+            cjk_preference,
+        );
     }
     if cs_state.any_loaded() {
         add_complex_script_fallbacks(&mut fonts, FontFamily::Proportional, &cs_state);
@@ -1700,7 +1834,12 @@ pub fn create_font_definitions_with_cjk_spec(
         .push(FONT_JETBRAINS.to_owned());
 
     if cjk_state.any_loaded() {
-        add_cjk_fallbacks(&mut fonts, FontFamily::Monospace, &cjk_state, cjk_preference);
+        add_cjk_fallbacks(
+            &mut fonts,
+            FontFamily::Monospace,
+            &cjk_state,
+            cjk_preference,
+        );
     }
     if cs_state.any_loaded() {
         add_complex_script_fallbacks(&mut fonts, FontFamily::Monospace, &cs_state);
@@ -1739,14 +1878,20 @@ pub fn create_font_definitions_with_cjk_spec(
         .families
         .insert(FontFamily::Name(FONT_INTER_BOLD.into()), inter_bold_family);
 
-    let mut inter_italic_family = vec![FONT_INTER_ITALIC.to_owned(), FONT_JETBRAINS_ITALIC.to_owned()];
+    let mut inter_italic_family = vec![
+        FONT_INTER_ITALIC.to_owned(),
+        FONT_JETBRAINS_ITALIC.to_owned(),
+    ];
     inter_italic_family.extend(proportional_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_ITALIC.into()),
         inter_italic_family,
     );
 
-    let mut inter_bold_italic_family = vec![FONT_INTER_BOLD_ITALIC.to_owned(), FONT_JETBRAINS_BOLD_ITALIC.to_owned()];
+    let mut inter_bold_italic_family = vec![
+        FONT_INTER_BOLD_ITALIC.to_owned(),
+        FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
+    ];
     inter_bold_italic_family.extend(proportional_fallbacks);
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_BOLD_ITALIC.into()),
@@ -1783,7 +1928,10 @@ pub fn create_font_definitions_with_cjk_spec(
 
     info!(
         "Loaded fonts: CJK(KR={}, JP={}, SC={}, TC={}), ComplexScript={}",
-        cjk_state.kr_loaded, cjk_state.jp_loaded, cjk_state.sc_loaded, cjk_state.tc_loaded,
+        cjk_state.kr_loaded,
+        cjk_state.jp_loaded,
+        cjk_state.sc_loaded,
+        cjk_state.tc_loaded,
         cs_state.any_loaded()
     );
 
@@ -1805,41 +1953,43 @@ pub fn create_font_definitions_with_settings(
     load_cjk: bool,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
+    let custom_font = non_empty_custom_font_name(custom_font);
     let mut fonts = FontDefinitions::default();
 
     // Insert Inter font variants (always available as UI fallback)
-    fonts
-        .font_data
-        .insert(FONT_INTER.to_owned(), FontData::from_static(INTER_REGULAR));
+    fonts.font_data.insert(
+        FONT_INTER.to_owned(),
+        Arc::new(FontData::from_static(INTER_REGULAR)),
+    );
     fonts.font_data.insert(
         FONT_INTER_BOLD.to_owned(),
-        FontData::from_static(INTER_BOLD),
+        Arc::new(FontData::from_static(INTER_BOLD)),
     );
     fonts.font_data.insert(
         FONT_INTER_ITALIC.to_owned(),
-        FontData::from_static(INTER_ITALIC),
+        Arc::new(FontData::from_static(INTER_ITALIC)),
     );
     fonts.font_data.insert(
         FONT_INTER_BOLD_ITALIC.to_owned(),
-        FontData::from_static(INTER_BOLD_ITALIC),
+        Arc::new(FontData::from_static(INTER_BOLD_ITALIC)),
     );
 
     // Insert JetBrains Mono font variants
     fonts.font_data.insert(
         FONT_JETBRAINS.to_owned(),
-        FontData::from_static(JETBRAINS_REGULAR),
+        Arc::new(FontData::from_static(JETBRAINS_REGULAR)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_BOLD.to_owned(),
-        FontData::from_static(JETBRAINS_BOLD),
+        Arc::new(FontData::from_static(JETBRAINS_BOLD)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_ITALIC.to_owned(),
-        FontData::from_static(JETBRAINS_ITALIC),
+        Arc::new(FontData::from_static(JETBRAINS_ITALIC)),
     );
     fonts.font_data.insert(
         FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
-        FontData::from_static(JETBRAINS_BOLD_ITALIC),
+        Arc::new(FontData::from_static(JETBRAINS_BOLD_ITALIC)),
     );
 
     // Load custom font if specified
@@ -1848,21 +1998,29 @@ pub fn create_font_definitions_with_settings(
             Ok(data) => {
                 let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
                 *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = Some(raw);
-                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                fonts.font_data.insert(FONT_CUSTOM.to_owned(), data);
+                *LAST_CUSTOM_FONT_ERROR
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                fonts
+                    .font_data
+                    .insert(FONT_CUSTOM.to_owned(), Arc::new(data));
                 info!("Loaded custom font: {}", font_name);
                 true
             }
             Err(reason) => {
                 warn!("Custom font failed: {}", reason);
                 *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason);
+                *LAST_CUSTOM_FONT_ERROR
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = Some(reason);
                 false
             }
         }
     } else {
         *CUSTOM_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        *LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *LAST_CUSTOM_FONT_ERROR
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         false
     };
 
@@ -1876,7 +2034,8 @@ pub fn create_font_definitions_with_settings(
 
     // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
     let cs_spec = ComplexScriptLoadSpec::from_loaded_flags();
-    let cs_state = load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
+    let cs_state =
+        load_complex_script_fonts_selective(&mut fonts, &cs_spec, complex_script_preferences);
 
     // Set up Proportional font family
     // Order: Custom (if set) -> Inter -> JetBrains Mono (box-drawing) -> CJK -> complex scripts
@@ -1899,7 +2058,12 @@ pub fn create_font_definitions_with_settings(
         .push(FONT_JETBRAINS.to_owned());
 
     if load_cjk {
-        add_cjk_fallbacks(&mut fonts, FontFamily::Proportional, &cjk_state, cjk_preference);
+        add_cjk_fallbacks(
+            &mut fonts,
+            FontFamily::Proportional,
+            &cjk_state,
+            cjk_preference,
+        );
     }
     if cs_state.any_loaded() {
         add_complex_script_fallbacks(&mut fonts, FontFamily::Proportional, &cs_state);
@@ -1913,7 +2077,12 @@ pub fn create_font_definitions_with_settings(
         .push(FONT_JETBRAINS.to_owned());
 
     if load_cjk {
-        add_cjk_fallbacks(&mut fonts, FontFamily::Monospace, &cjk_state, cjk_preference);
+        add_cjk_fallbacks(
+            &mut fonts,
+            FontFamily::Monospace,
+            &cjk_state,
+            cjk_preference,
+        );
     }
     if cs_state.any_loaded() {
         add_complex_script_fallbacks(&mut fonts, FontFamily::Monospace, &cs_state);
@@ -1959,14 +2128,20 @@ pub fn create_font_definitions_with_settings(
         .families
         .insert(FontFamily::Name(FONT_INTER_BOLD.into()), inter_bold_family);
 
-    let mut inter_italic_family = vec![FONT_INTER_ITALIC.to_owned(), FONT_JETBRAINS_ITALIC.to_owned()];
+    let mut inter_italic_family = vec![
+        FONT_INTER_ITALIC.to_owned(),
+        FONT_JETBRAINS_ITALIC.to_owned(),
+    ];
     inter_italic_family.extend(proportional_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_ITALIC.into()),
         inter_italic_family,
     );
 
-    let mut inter_bold_italic_family = vec![FONT_INTER_BOLD_ITALIC.to_owned(), FONT_JETBRAINS_BOLD_ITALIC.to_owned()];
+    let mut inter_bold_italic_family = vec![
+        FONT_INTER_BOLD_ITALIC.to_owned(),
+        FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
+    ];
     inter_bold_italic_family.extend(proportional_fallbacks);
     fonts.families.insert(
         FontFamily::Name(FONT_INTER_BOLD_ITALIC.into()),
@@ -2037,7 +2212,7 @@ const COMMON_SYMBOLS: &str = "←→↑↓↔↕⇐⇒⇑⇓⇄⇅↳↵⤵•�
 fn prewarm_font_atlas(ctx: &egui::Context) {
     // Use a reasonable font size that matches typical editor usage
     let font_id = FontId::new(14.0, FontFamily::Proportional);
-    
+
     // Pre-warm by querying glyph widths - this forces rasterization
     ctx.fonts(|fonts| {
         for c in BOX_DRAWING_CHARS.chars() {
@@ -2047,7 +2222,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
             let _ = fonts.glyph_width(&font_id, c);
         }
     });
-    
+
     // Also pre-warm monospace font for code blocks
     let mono_font_id = FontId::new(14.0, FontFamily::Monospace);
     ctx.fonts(|fonts| {
@@ -2055,14 +2230,16 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
             let _ = fonts.glyph_width(&mono_font_id, c);
         }
     });
-    
+
     // Bump font generation again after pre-warming to invalidate any galleys
     // that might have been created with incomplete atlas during the first frame
     bump_font_generation();
-    
-    info!("Pre-warmed font atlas with {} box-drawing and {} symbol characters",
-          BOX_DRAWING_CHARS.chars().count(),
-          COMMON_SYMBOLS.chars().count());
+
+    info!(
+        "Pre-warmed font atlas with {} box-drawing and {} symbol characters",
+        BOX_DRAWING_CHARS.chars().count(),
+        COMMON_SYMBOLS.chars().count()
+    );
 }
 
 /// Apply custom fonts to an egui context.
@@ -2220,7 +2397,10 @@ pub fn reload_fonts(
     schedule_prewarm();
 
     // Retrieve any error that occurred during custom font loading
-    LAST_CUSTOM_FONT_ERROR.lock().unwrap_or_else(|e| e.into_inner()).take()
+    LAST_CUSTOM_FONT_ERROR
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
 }
 
 /// Ensure CJK fonts are loaded on-demand (loads ALL CJK fonts).
@@ -2286,7 +2466,7 @@ pub fn load_cjk_for_text(
 ) -> bool {
     // Detect which scripts are in the text
     let detection = detect_cjk_scripts(text);
-    
+
     if !detection.has_any_cjk {
         return false;
     }
@@ -2481,6 +2661,11 @@ use crate::config::EditorFont;
 /// so they use the base custom font for all styles. The OS may synthesize
 /// bold/italic styles, but this depends on the specific font and platform.
 pub fn get_styled_font_family(bold: bool, italic: bool, editor_font: &EditorFont) -> FontFamily {
+    if let EditorFont::Custom(name) = editor_font {
+        if name.trim().is_empty() {
+            return get_styled_font_family(bold, italic, &EditorFont::Inter);
+        }
+    }
     match editor_font {
         EditorFont::JetBrainsMono => match (bold, italic) {
             (true, true) => FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into()),
@@ -2502,6 +2687,11 @@ pub fn get_styled_font_family(bold: bool, italic: bool, editor_font: &EditorFont
 
 /// Get the base font family for an editor font (regular weight, no style).
 pub fn get_base_font_family(editor_font: &EditorFont) -> FontFamily {
+    if let EditorFont::Custom(name) = editor_font {
+        if name.trim().is_empty() {
+            return get_base_font_family(&EditorFont::Inter);
+        }
+    }
     match editor_font {
         // Use Proportional instead of Named family because Named families
         // don't properly inherit CJK fallbacks when fonts are lazily loaded.
@@ -2586,6 +2776,19 @@ mod tests {
     }
 
     #[test]
+    fn test_get_styled_font_family_custom_pending_uses_inter() {
+        let pending = EditorFont::Custom(String::new());
+        assert_eq!(
+            get_styled_font_family(false, false, &pending),
+            get_styled_font_family(false, false, &EditorFont::Inter)
+        );
+        assert_eq!(
+            get_base_font_family(&pending),
+            get_base_font_family(&EditorFont::Inter)
+        );
+    }
+
+    #[test]
     fn test_get_styled_font_family_custom() {
         // Custom font always returns FONT_CUSTOM
         let custom = EditorFont::Custom("Test Font".to_string());
@@ -2630,35 +2833,35 @@ mod tests {
     #[test]
     fn test_needs_cjk_chinese() {
         // CJK Unified Ideographs (Chinese characters)
-        assert!(needs_cjk("你好世界"));           // Chinese: Hello World
-        assert!(needs_cjk("中文测试"));           // Chinese: Chinese test
-        assert!(needs_cjk("一"));                 // U+4E00 - start of CJK Unified Ideographs
-        assert!(needs_cjk("龿"));                 // U+9FFF - near end of CJK Unified Ideographs
+        assert!(needs_cjk("你好世界")); // Chinese: Hello World
+        assert!(needs_cjk("中文测试")); // Chinese: Chinese test
+        assert!(needs_cjk("一")); // U+4E00 - start of CJK Unified Ideographs
+        assert!(needs_cjk("龿")); // U+9FFF - near end of CJK Unified Ideographs
     }
 
     #[test]
     fn test_needs_cjk_japanese() {
         // Hiragana
-        assert!(needs_cjk("こんにちは"));         // Japanese: Hello
-        assert!(needs_cjk("ぁ"));                 // U+3041 - start of Hiragana
-        assert!(needs_cjk("ゟ"));                 // U+309F - end of Hiragana
+        assert!(needs_cjk("こんにちは")); // Japanese: Hello
+        assert!(needs_cjk("ぁ")); // U+3041 - start of Hiragana
+        assert!(needs_cjk("ゟ")); // U+309F - end of Hiragana
 
         // Katakana
-        assert!(needs_cjk("カタカナ"));           // Japanese: Katakana
-        assert!(needs_cjk("ァ"));                 // U+30A1 - start of Katakana
-        assert!(needs_cjk("ヿ"));                 // U+30FF - end of Katakana
+        assert!(needs_cjk("カタカナ")); // Japanese: Katakana
+        assert!(needs_cjk("ァ")); // U+30A1 - start of Katakana
+        assert!(needs_cjk("ヿ")); // U+30FF - end of Katakana
 
         // Mixed Japanese
-        assert!(needs_cjk("日本語"));             // Japanese: Japanese language (uses Kanji)
+        assert!(needs_cjk("日本語")); // Japanese: Japanese language (uses Kanji)
     }
 
     #[test]
     fn test_needs_cjk_korean() {
         // Hangul Syllables
-        assert!(needs_cjk("안녕하세요"));         // Korean: Hello
-        assert!(needs_cjk("가"));                 // U+AC00 - start of Hangul Syllables
-        assert!(needs_cjk("힣"));                 // U+D7A3 - near end of Hangul Syllables
-        assert!(needs_cjk("한국어"));             // Korean: Korean language
+        assert!(needs_cjk("안녕하세요")); // Korean: Hello
+        assert!(needs_cjk("가")); // U+AC00 - start of Hangul Syllables
+        assert!(needs_cjk("힣")); // U+D7A3 - near end of Hangul Syllables
+        assert!(needs_cjk("한국어")); // Korean: Korean language
     }
 
     #[test]
@@ -2670,48 +2873,50 @@ mod tests {
         assert!(!needs_cjk("   "));
         assert!(!needs_cjk("12345"));
         assert!(!needs_cjk("!@#$%^&*()"));
-        assert!(!needs_cjk("café résumé naïve"));  // Latin with diacritics
+        assert!(!needs_cjk("café résumé naïve")); // Latin with diacritics
     }
 
     #[test]
     fn test_needs_cjk_mixed_text() {
         // Mixed CJK and ASCII
-        assert!(needs_cjk("Hello 世界"));          // English + Chinese
-        assert!(needs_cjk("Test 테스트"));         // English + Korean
-        assert!(needs_cjk("Hello こんにちは"));    // English + Japanese
-        assert!(needs_cjk("- 你好世界"));          // Markdown list with Chinese
-        assert!(needs_cjk("# Header 标题"));       // Markdown header with Chinese
+        assert!(needs_cjk("Hello 世界")); // English + Chinese
+        assert!(needs_cjk("Test 테스트")); // English + Korean
+        assert!(needs_cjk("Hello こんにちは")); // English + Japanese
+        assert!(needs_cjk("- 你好世界")); // Markdown list with Chinese
+        assert!(needs_cjk("# Header 标题")); // Markdown header with Chinese
     }
 
     #[test]
     fn test_needs_cjk_edge_cases() {
         // CJK punctuation and symbols (U+3000-303F)
-        assert!(needs_cjk("。"));                  // CJK full stop
-        assert!(needs_cjk("、"));                  // CJK comma
-        assert!(needs_cjk("「」"));               // CJK brackets
+        assert!(needs_cjk("。")); // CJK full stop
+        assert!(needs_cjk("、")); // CJK comma
+        assert!(needs_cjk("「」")); // CJK brackets
 
         // CJK Radicals Supplement (U+2E80-2EFF)
-        assert!(needs_cjk("⺀"));                  // CJK radical
+        assert!(needs_cjk("⺀")); // CJK radical
 
         // Single CJK character in long ASCII text
-        assert!(needs_cjk("This is a very long sentence with one Chinese character: 中"));
+        assert!(needs_cjk(
+            "This is a very long sentence with one Chinese character: 中"
+        ));
     }
 
     #[test]
     fn test_is_cjk_char_boundaries() {
         // Test exact range boundaries
-        assert!(is_cjk_char('\u{4E00}'));   // CJK Unified Ideographs start
-        assert!(is_cjk_char('\u{9FFF}'));   // CJK Unified Ideographs end
-        assert!(is_cjk_char('\u{3040}'));   // Hiragana start
-        assert!(is_cjk_char('\u{309F}'));   // Hiragana end
-        assert!(is_cjk_char('\u{30A0}'));   // Katakana start
-        assert!(is_cjk_char('\u{30FF}'));   // Katakana end
-        assert!(is_cjk_char('\u{AC00}'));   // Hangul Syllables start
-        assert!(is_cjk_char('\u{D7AF}'));   // Hangul Syllables end
+        assert!(is_cjk_char('\u{4E00}')); // CJK Unified Ideographs start
+        assert!(is_cjk_char('\u{9FFF}')); // CJK Unified Ideographs end
+        assert!(is_cjk_char('\u{3040}')); // Hiragana start
+        assert!(is_cjk_char('\u{309F}')); // Hiragana end
+        assert!(is_cjk_char('\u{30A0}')); // Katakana start
+        assert!(is_cjk_char('\u{30FF}')); // Katakana end
+        assert!(is_cjk_char('\u{AC00}')); // Hangul Syllables start
+        assert!(is_cjk_char('\u{D7AF}')); // Hangul Syllables end
 
         // Just outside ranges
-        assert!(!is_cjk_char('\u{4DFF}'));  // Just before CJK Unified Ideographs
-        assert!(!is_cjk_char('\u{A000}'));  // Just after CJK Unified Ideographs
+        assert!(!is_cjk_char('\u{4DFF}')); // Just before CJK Unified Ideographs
+        assert!(!is_cjk_char('\u{A000}')); // Just after CJK Unified Ideographs
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2752,7 +2957,7 @@ mod tests {
         let result = detect_cjk_scripts("日本語");
         assert!(!result.has_korean);
         assert!(!result.has_japanese); // No Hiragana/Katakana
-        assert!(result.has_han);       // Kanji counts as Han
+        assert!(result.has_han); // Kanji counts as Han
     }
 
     #[test]
@@ -2842,11 +3047,17 @@ mod tests {
 
         // Han only with Korean preference → loads Chinese SC for Han coverage
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Korean);
-        assert!(spec.load_chinese_sc, "Korean pref + Han should load Chinese SC for Han coverage");
+        assert!(
+            spec.load_chinese_sc,
+            "Korean pref + Han should load Chinese SC for Han coverage"
+        );
 
         // Han only with Japanese preference → loads Chinese SC for Han coverage
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::Japanese);
-        assert!(spec.load_chinese_sc, "Japanese pref + Han should load Chinese SC for Han coverage");
+        assert!(
+            spec.load_chinese_sc,
+            "Japanese pref + Han should load Chinese SC for Han coverage"
+        );
 
         // Han only with Simplified Chinese preference
         let spec = CjkLoadSpec::from_detection(&detection, CjkFontPreference::SimplifiedChinese);
@@ -2912,17 +3123,17 @@ mod tests {
     #[test]
     fn test_needs_complex_scripts_other_indic() {
         assert!(needs_complex_script_fonts("ગુજરાતી")); // Gujarati
-        assert!(needs_complex_script_fonts("ਪੰਜਾਬੀ"));   // Gurmukhi
-        assert!(needs_complex_script_fonts("ಕನ್ನಡ"));     // Kannada
-        assert!(needs_complex_script_fonts("മലയാളം"));   // Malayalam
-        assert!(needs_complex_script_fonts("తెలుగు"));    // Telugu
+        assert!(needs_complex_script_fonts("ਪੰਜਾਬੀ")); // Gurmukhi
+        assert!(needs_complex_script_fonts("ಕನ್ನಡ")); // Kannada
+        assert!(needs_complex_script_fonts("മലയാളം")); // Malayalam
+        assert!(needs_complex_script_fonts("తెలుగు")); // Telugu
     }
 
     #[test]
     fn test_needs_complex_scripts_southeast_asian() {
-        assert!(needs_complex_script_fonts("မြန်မာ"));     // Myanmar
-        assert!(needs_complex_script_fonts("ខ្មែរ"));        // Khmer
-        assert!(needs_complex_script_fonts("සිංහල"));     // Sinhala
+        assert!(needs_complex_script_fonts("မြန်မာ")); // Myanmar
+        assert!(needs_complex_script_fonts("ខ្មែរ")); // Khmer
+        assert!(needs_complex_script_fonts("සිංහල")); // Sinhala
     }
 
     #[test]

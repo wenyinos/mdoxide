@@ -1,4 +1,4 @@
-//! WYSIWYG Markdown Editor Widget
+﻿//! WYSIWYG Markdown Editor Widget
 //!
 //! This module provides a WYSIWYG (What You See Is What You Get) markdown editor
 //! that renders markdown as editable egui widgets, allowing users to edit content
@@ -47,12 +47,12 @@
 
 use crate::config::{EditorFont, HeaderSpacing, MaxLineWidth, ParagraphIndent, Settings, Theme};
 use crate::fonts;
-use crate::ui::{render_nav_buttons, NavAction};
 use crate::markdown::ast_ops::{
     exit_list_to_paragraph, heading_enter, indent_list_item, merge_with_previous_list_item,
     outdent_list_item, split_list_item, split_paragraph, EditContext, EditNodeType, StructuralEdit,
 };
 use crate::markdown::cache;
+use crate::markdown::code_execution::CodeExecutionUi;
 use crate::markdown::parser::{
     CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
@@ -60,6 +60,7 @@ use crate::markdown::widgets::{
     CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
     RenderedLinkState, RenderedLinkWidget, TableData, TableEditState, WidgetColors,
 };
+use crate::ui::{render_nav_buttons, NavAction};
 use eframe::egui::{
     self, Color32, ColorImage, FontId, Key, Response, RichText, ScrollArea, TextEdit,
     TextureHandle, TextureOptions, Ui, Vec2,
@@ -67,9 +68,9 @@ use eframe::egui::{
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Editor Mode
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// The editing mode for the markdown editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -81,9 +82,9 @@ pub enum EditorMode {
     Rendered,
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Editor Output
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Result of showing the markdown editor widget.
 pub struct MarkdownEditorOutput {
@@ -125,9 +126,9 @@ pub struct LineMapping {
     pub rendered_height: f32,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Viewport Culling
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Extra pixels above and below the viewport to pre-render, avoiding pop-in
 /// during fast scrolling.
@@ -170,9 +171,9 @@ struct ViewportCullingState {
     block_measured: Vec<bool>,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Block Source Extraction (for per-block height caching)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Byte offset of the start of each line.
 /// `offsets[0]` = byte start of line 1, `offsets[1]` = byte start of line 2, etc.
@@ -216,9 +217,9 @@ fn estimate_block_height(start_line: usize, end_line: usize) -> f32 {
     (lines * ESTIMATED_LINE_HEIGHT_PX).max(ESTIMATED_LINE_HEIGHT_PX)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Rendered View Search Highlight Overlay
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Converts a byte position in the source to a 1-indexed line number.
 fn byte_pos_to_line_1indexed(line_offsets: &[usize], byte_pos: usize) -> usize {
@@ -308,7 +309,7 @@ fn paint_rendered_search_highlights(
             let visual_row = if offset_from_start == 0 {
                 0 // header
             } else if offset_from_start == 1 {
-                continue; // separator line — skip
+                continue; // separator line â€” skip
             } else {
                 offset_from_start - 1 // data rows shifted by 1 (separator removed)
             };
@@ -345,9 +346,9 @@ pub struct FocusedElement {
     pub selection: Option<(usize, usize)>,
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Theme Colors
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Theme-aware colors for the WYSIWYG editor.
 #[derive(Debug, Clone)]
@@ -377,9 +378,9 @@ pub struct EditorColors {
 }
 
 impl EditorColors {
-    /// Create colors for the given theme.
-    pub fn from_theme(theme: Theme, visuals: &egui::Visuals) -> Self {
-        match theme {
+    /// Create colors for the given theme and user accent. Hyperlink color stays standard blue.
+    pub fn from_theme(theme: Theme, visuals: &egui::Visuals, accent: Color32) -> Self {
+        let mut c = match theme {
             Theme::Dark => Self::dark(),
             Theme::Light => Self::light(),
             Theme::System => {
@@ -389,10 +390,19 @@ impl EditorColors {
                     Self::light()
                 }
             }
-        }
+        };
+        let dark = match theme {
+            Theme::Dark => true,
+            Theme::Light => false,
+            Theme::System => visuals.dark_mode,
+        };
+        c.heading = accent;
+        c.checkbox = accent;
+        c.link = crate::theme::accent::standard_link_color(dark);
+        c
     }
 
-    /// Dark theme colors.
+    /// Dark theme colors (default accent/link before `from_theme` overrides).
     pub fn dark() -> Self {
         Self {
             background: Color32::from_rgb(30, 30, 30),
@@ -427,9 +437,9 @@ impl EditorColors {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Editable Node State
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// State for an editable node in the WYSIWYG editor.
 /// This tracks the text content and modification status of each editable element.
@@ -516,9 +526,9 @@ impl EditState {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Structural Edit State
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Tracks the context of the currently focused editable widget for structural operations.
 /// This enables word processor-like keyboard behavior (Enter, Backspace, Tab).
@@ -601,9 +611,9 @@ fn check_structural_keys(ui: &Ui, cursor_at_start: bool) -> StructuralKeyAction 
     })
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Markdown Editor Widget
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// A WYSIWYG markdown editor widget.
 ///
@@ -636,6 +646,8 @@ pub struct MarkdownEditor<'a> {
     word_wrap: bool,
     /// Theme for styling
     theme: Theme,
+    /// User accent (matches Settings.accent_color)
+    accent_rgb: [u8; 3],
     /// Custom ID for the editor
     id: Option<egui::Id>,
     /// Line number to scroll to (1-indexed, from outline navigation)
@@ -660,6 +672,8 @@ pub struct MarkdownEditor<'a> {
     search_highlights: Option<Vec<(usize, usize)>>,
     /// Index of the currently focused search match
     current_search_match: usize,
+    /// Gating and cwd for running fenced code from the preview (optional).
+    code_execution: Option<CodeExecutionUi>,
 }
 
 /// Context for resolving wikilinks to actual files during rendering.
@@ -682,6 +696,7 @@ impl<'a> MarkdownEditor<'a> {
             font_family: EditorFont::default(),
             word_wrap: true,
             theme: Theme::Light,
+            accent_rgb: crate::theme::accent::DEFAULT_ACCENT_RGB,
             id: None,
             scroll_to_line: None,
             pending_scroll_offset: None,
@@ -694,6 +709,7 @@ impl<'a> MarkdownEditor<'a> {
             strict_line_breaks: false,
             search_highlights: None,
             current_search_match: 0,
+            code_execution: None,
         }
     }
 
@@ -802,6 +818,12 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    #[must_use]
+    pub fn accent_rgb(mut self, rgb: [u8; 3]) -> Self {
+        self.accent_rgb = rgb;
+        self
+    }
+
     /// Set strict line breaks mode.
     ///
     /// When enabled, soft breaks (single newlines) in markdown source are
@@ -830,13 +852,26 @@ impl<'a> MarkdownEditor<'a> {
         self.max_line_width = settings.max_line_width;
         self.paragraph_indent = settings.paragraph_indent;
         self.strict_line_breaks = settings.strict_line_breaks;
+        self.accent_rgb = settings.accent_color;
+        self.code_execution = Some(CodeExecutionUi::from_settings(settings));
+        self
+    }
+
+    /// Snapshot for code-block **Run** (preview cwd, timeouts, and permission flags).
+    #[must_use]
+    pub fn code_execution(mut self, ctx: CodeExecutionUi) -> Self {
+        self.code_execution = Some(ctx);
         self
     }
 
     /// Show the editor widget and return the output.
     pub fn show(self, ui: &mut Ui) -> MarkdownEditorOutput {
         let id = self.id.unwrap_or_else(|| ui.id().with("markdown_editor"));
-        let colors = EditorColors::from_theme(self.theme, ui.visuals());
+        let accent = Color32::from_rgb(self.accent_rgb[0], self.accent_rgb[1], self.accent_rgb[2]);
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(crate::markdown::markdown_accent_temp_id(), accent);
+        });
+        let colors = EditorColors::from_theme(self.theme, ui.visuals(), accent);
 
         match self.mode {
             EditorMode::Raw => self.show_raw_editor(ui, id),
@@ -853,7 +888,7 @@ impl<'a> MarkdownEditor<'a> {
         let font_family = fonts::get_styled_font_family(false, false, &editor_font);
 
         let scroll_output = ScrollArea::vertical()
-            .id_source(id.with("scroll"))
+            .id_salt(id.with("scroll"))
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let font_family_clone = font_family.clone();
@@ -909,7 +944,7 @@ impl<'a> MarkdownEditor<'a> {
             content_height: scroll_output.content_size.y,
             viewport_height: scroll_output.inner_rect.height(),
             line_mappings: Vec::new(), // Raw mode doesn't need line mappings
-            wikilink_clicked: None, // Raw mode doesn't have clickable wikilinks
+            wikilink_clicked: None,    // Raw mode doesn't have clickable wikilinks
         }
     }
 
@@ -933,22 +968,29 @@ impl<'a> MarkdownEditor<'a> {
         // Store wikilink resolution context in egui memory so render_wikilink can access it
         if let Some(ctx) = &self.wikilink_context {
             ui.memory_mut(|mem| {
-                mem.data.insert_temp(
-                    egui::Id::new("wikilink_resolution_context"),
-                    ctx.clone(),
-                );
+                mem.data
+                    .insert_temp(egui::Id::new("wikilink_resolution_context"), ctx.clone());
             });
         }
 
         // Store strict line breaks flag in egui memory for render_inline_node
         ui.memory_mut(|mem| {
+            mem.data
+                .insert_temp(egui::Id::new("strict_line_breaks"), self.strict_line_breaks);
+        });
+
+        let code_exec_ctx = self
+            .code_execution
+            .clone()
+            .unwrap_or_else(CodeExecutionUi::disabled);
+        ui.memory_mut(|mem| {
             mem.data.insert_temp(
-                egui::Id::new("strict_line_breaks"),
-                self.strict_line_breaks,
+                crate::markdown::code_execution::code_execution_ctx_id(),
+                code_exec_ctx,
             );
         });
 
-        // Parse the markdown content (cached by blake3 hash — skips re-parse when unchanged)
+        // Parse the markdown content (cached by blake3 hash â€” skips re-parse when unchanged)
         let doc = match cache::get_or_parse(self.content) {
             Ok(doc) => doc,
             Err(e) => {
@@ -1022,7 +1064,7 @@ impl<'a> MarkdownEditor<'a> {
 
         // Render the document in a scroll area
         let mut scroll_area = ScrollArea::vertical()
-            .id_source(id.with("rendered_scroll"))
+            .id_salt(id.with("rendered_scroll"))
             .auto_shrink([false, false]);
 
         // Priority order for scroll offset:
@@ -1031,7 +1073,10 @@ impl<'a> MarkdownEditor<'a> {
         // 3. Target scroll offset from outline navigation
         if let Some(offset) = pending_nav_scroll {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
-            log::debug!("Applied nav button scroll offset in rendered mode: {}", offset);
+            log::debug!(
+                "Applied nav button scroll offset in rendered mode: {}",
+                offset
+            );
         } else if let Some(offset) = self.pending_scroll_offset {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
             log::debug!("Applied pending scroll offset in rendered mode: {}", offset);
@@ -1053,36 +1098,37 @@ impl<'a> MarkdownEditor<'a> {
 
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
-        
+
         // Calculate content width and centering margin
         // Both Zen mode and non-zen mode use max_line_width setting
         // Zen mode: centers content; Non-zen mode: left-aligned
         let char_width = self.font_size * 0.6; // Approximate average character width
         let outer_available_width = ui.available_width();
-        
-        let (content_margin, effective_content_width) = if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
-            // max_line_width is set - constrain width
-            // Cap to available width to prevent overflow
-            let effective_width = max_width_px.min(outer_available_width);
-            
-            if self.zen_mode {
-                // Zen mode: center the content
-                let margin = if outer_available_width > effective_width {
-                    (outer_available_width - effective_width) / 2.0
+
+        let (content_margin, effective_content_width) =
+            if let Some(max_width_px) = self.max_line_width.to_pixels(char_width) {
+                // max_line_width is set - constrain width
+                // Cap to available width to prevent overflow
+                let effective_width = max_width_px.min(outer_available_width);
+
+                if self.zen_mode {
+                    // Zen mode: center the content
+                    let margin = if outer_available_width > effective_width {
+                        (outer_available_width - effective_width) / 2.0
+                    } else {
+                        0.0
+                    };
+                    (margin, Some(effective_width))
                 } else {
-                    0.0
-                };
-                (margin, Some(effective_width))
+                    // Non-zen mode: left-aligned (no margin)
+                    (0.0, Some(effective_width))
+                }
             } else {
-                // Non-zen mode: left-aligned (no margin)
-                (0.0, Some(effective_width))
-            }
-        } else {
-            // No max_line_width set - use full available width, no centering
-            (0.0, None)
-        };
-        
-        // ── Viewport culling state ──────────────────────────────────────────
+                // No max_line_width set - use full available width, no centering
+                (0.0, None)
+            };
+
+        // â”€â”€ Viewport culling state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let culling_id = id.with("viewport_culling");
         let culling_state: Option<ViewportCullingState> =
             ui.memory(|mem| mem.data.get_temp(culling_id));
@@ -1118,7 +1164,7 @@ impl<'a> MarkdownEditor<'a> {
                         ui.spacing_mut().item_spacing = Vec2::new(4.0, BLOCK_ITEM_SPACING_Y);
 
                         if has_valid_heights && block_count > 0 {
-                            // ── Fast path: cull off-screen blocks ────────────────
+                            // â”€â”€ Fast path: cull off-screen blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                             let cs = culling_state.as_ref().unwrap();
 
                             let vis_top = (viewport.min.y - VIEWPORT_OVERSCAN_PX).max(0.0);
@@ -1135,8 +1181,8 @@ impl<'a> MarkdownEditor<'a> {
                                 .saturating_sub(1);
 
                             if first_vis > 0 {
-                                let pre = (cs.block_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
-                                    .max(0.0);
+                                let pre =
+                                    (cs.block_start_y[first_vis] - BLOCK_ITEM_SPACING_Y).max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, pre));
                             }
 
@@ -1146,8 +1192,7 @@ impl<'a> MarkdownEditor<'a> {
                             let mut updated_measured = cs.block_measured.clone();
                             let mut new_measures_this_frame: usize = 0;
                             let line_offsets = line_start_byte_offsets(self.content);
-                            let rp_hash =
-                                cache::render_params_hash(content_width, self.font_size);
+                            let rp_hash = cache::render_params_hash(content_width, self.font_size);
 
                             let is_dark_mode = ui.visuals().dark_mode;
 
@@ -1174,10 +1219,8 @@ impl<'a> MarkdownEditor<'a> {
 
                                 // Paint search highlight overlays on this block
                                 if let Some(ref highlights) = self.search_highlights {
-                                    let is_table = matches!(
-                                        node.node_type,
-                                        MarkdownNodeType::Table { .. }
-                                    );
+                                    let is_table =
+                                        matches!(node.node_type, MarkdownNodeType::Table { .. });
                                     paint_rendered_search_highlights(
                                         ui,
                                         highlights,
@@ -1263,7 +1306,7 @@ impl<'a> MarkdownEditor<'a> {
                                     total_height: y,
                                     block_measured: updated_measured,
                                 });
-                                // Still have unmeasured blocks — request another frame
+                                // Still have unmeasured blocks â€” request another frame
                                 // so the progressive pass continues.
                                 if new_culling
                                     .as_ref()
@@ -1276,13 +1319,12 @@ impl<'a> MarkdownEditor<'a> {
                                 }
                             }
                         } else {
-                            // ── Bootstrap / lazy measurement pass ─────────────────
+                            // â”€â”€ Bootstrap / lazy measurement pass â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                             // Build a ViewportCullingState immediately using a mix
                             // of block-height cache hits, heuristic estimates, and a
                             // limited number of real renders (budget-capped).
                             let line_offsets = line_start_byte_offsets(self.content);
-                            let rp_hash =
-                                cache::render_params_hash(content_width, self.font_size);
+                            let rp_hash = cache::render_params_hash(content_width, self.font_size);
 
                             let mut boot_heights: Vec<f32> = Vec::with_capacity(block_count);
                             let mut boot_measured: Vec<bool> = Vec::with_capacity(block_count);
@@ -1305,10 +1347,8 @@ impl<'a> MarkdownEditor<'a> {
                                         boot_measured.push(true);
                                     }
                                     None => {
-                                        let est = estimate_block_height(
-                                            node.start_line,
-                                            node.end_line,
-                                        );
+                                        let est =
+                                            estimate_block_height(node.start_line, node.end_line);
                                         boot_heights.push(est);
                                         boot_measured.push(false);
                                     }
@@ -1354,8 +1394,7 @@ impl<'a> MarkdownEditor<'a> {
                                 .saturating_sub(1);
 
                             if block_count > 0 && first_vis > 0 {
-                                let pre = (boot_start_y[first_vis] - BLOCK_ITEM_SPACING_Y)
-                                    .max(0.0);
+                                let pre = (boot_start_y[first_vis] - BLOCK_ITEM_SPACING_Y).max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, pre));
                             }
 
@@ -1370,8 +1409,7 @@ impl<'a> MarkdownEditor<'a> {
                                 let y_before = ui.cursor().top();
                                 let block_left = ui.cursor().left();
 
-                                let within_budget =
-                                    new_measures < MAX_NEW_MEASUREMENTS_PER_FRAME;
+                                let within_budget = new_measures < MAX_NEW_MEASUREMENTS_PER_FRAME;
 
                                 if boot_measured[i] || within_budget {
                                     render_node(
@@ -1425,10 +1463,7 @@ impl<'a> MarkdownEditor<'a> {
                                     boot_heights[i] = h;
                                     boot_measured[i] = true;
                                 } else {
-                                    ui.allocate_space(Vec2::new(
-                                        content_width,
-                                        boot_heights[i],
-                                    ));
+                                    ui.allocate_space(Vec2::new(content_width, boot_heights[i]));
                                 }
 
                                 line_mappings.push(LineMapping {
@@ -1441,8 +1476,7 @@ impl<'a> MarkdownEditor<'a> {
 
                             let after_idx = last_vis + 1;
                             if after_idx < block_count {
-                                let rendered_end =
-                                    boot_start_y[last_vis] + boot_heights[last_vis];
+                                let rendered_end = boot_start_y[last_vis] + boot_heights[last_vis];
                                 let post =
                                     (boot_total - rendered_end - BLOCK_ITEM_SPACING_Y).max(0.0);
                                 ui.allocate_space(Vec2::new(content_width, post));
@@ -1479,8 +1513,7 @@ impl<'a> MarkdownEditor<'a> {
                                 }
                             }
                             let final_total: f32 = if block_count > 0 {
-                                final_start_y[block_count - 1]
-                                    + boot_heights[block_count - 1]
+                                final_start_y[block_count - 1] + boot_heights[block_count - 1]
                             } else {
                                 0.0
                             };
@@ -1518,7 +1551,7 @@ impl<'a> MarkdownEditor<'a> {
             .inner
         });
 
-        // ── Persist culling state ────────────────────────────────────────────
+        // â”€â”€ Persist culling state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if let Some(cs) = new_culling {
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(culling_id, cs);
@@ -1529,13 +1562,13 @@ impl<'a> MarkdownEditor<'a> {
         // These buttons allow quick jumping to top, middle, or bottom of the document
         let is_dark_mode = ui.visuals().dark_mode;
         let nav_action = render_nav_buttons(ui, scroll_output.inner_rect, is_dark_mode);
-        
+
         // Handle navigation button actions by storing target scroll offset in memory
         // This will be applied on the next frame
         if nav_action != NavAction::None {
             let content_height = scroll_output.content_size.y;
             let viewport_height = scroll_output.inner_rect.height();
-            
+
             let target_offset = match nav_action {
                 NavAction::Top => 0.0,
                 NavAction::Middle => {
@@ -1549,12 +1582,12 @@ impl<'a> MarkdownEditor<'a> {
                 }
                 NavAction::None => 0.0, // unreachable
             };
-            
+
             // Store the target offset in egui memory for the next frame
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(nav_scroll_id, target_offset);
             });
-            
+
             // Request repaint to apply the scroll on the next frame
             ui.ctx().request_repaint();
         }
@@ -1586,9 +1619,7 @@ impl<'a> MarkdownEditor<'a> {
 
         // Check if a wikilink was clicked this frame
         let wikilink_id = egui::Id::new("wikilink_clicked_target");
-        let wikilink_clicked = ui.memory(|mem| {
-            mem.data.get_temp::<String>(wikilink_id)
-        });
+        let wikilink_clicked = ui.memory(|mem| mem.data.get_temp::<String>(wikilink_id));
         if wikilink_clicked.is_some() {
             ui.memory_mut(|mem| {
                 mem.data.remove::<String>(wikilink_id);
@@ -1610,9 +1641,9 @@ impl<'a> MarkdownEditor<'a> {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Node Rendering
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Render a markdown node with structural key handling.
 /// This wraps the standard rendering and adds detection of Enter, Backspace, Tab, Shift+Tab
@@ -1739,7 +1770,7 @@ fn render_node_with_structural_keys(
                 // Other HTML blocks - show with subtle indicator
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new("«HTML»")
+                        RichText::new("Â«HTMLÂ»")
                             .color(colors.quote_text)
                             .small()
                             .italics(),
@@ -1930,7 +1961,7 @@ fn render_node(
                 // Other HTML blocks - show with subtle indicator
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new("«HTML»")
+                        RichText::new("Â«HTMLÂ»")
                             .color(colors.quote_text)
                             .small()
                             .italics(),
@@ -2064,10 +2095,12 @@ fn render_heading(
     let heading_widget_id = ui.id().with("heading_text").with(node.start_line);
     let heading_edit_buffer_id = ui.id().with("heading_edit_buffer").with(node.start_line);
     let heading_edit_tracking_id = ui.id().with("heading_edit_tracking").with(node.start_line);
-    
+
     // Track whether this heading was previously focused (to detect focus loss)
     let was_editing = ui.memory(|mem| {
-        mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
+        mem.data
+            .get_temp::<bool>(heading_edit_tracking_id)
+            .unwrap_or(false)
     });
 
     let available_width = ui.available_width();
@@ -2079,10 +2112,12 @@ fn render_heading(
             if let Some(editable) = edit_state.get_node_mut(node_id) {
                 let mut edit_buffer = ui.memory_mut(|mem| {
                     mem.data
-                        .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
+                        .get_temp_mut_or_insert_with(heading_edit_buffer_id, || {
+                            editable.text.clone()
+                        })
                         .clone()
                 });
-                
+
                 let text_edit = TextEdit::singleline(&mut edit_buffer)
                     .id(heading_widget_id)
                     .font(FontId::new(font_size, font_family))
@@ -2110,7 +2145,8 @@ fn render_heading(
 
                 // Update edit buffer and tracking in memory
                 ui.memory_mut(|mem| {
-                    mem.data.insert_temp(heading_edit_buffer_id, edit_buffer.clone());
+                    mem.data
+                        .insert_temp(heading_edit_buffer_id, edit_buffer.clone());
                     mem.data.insert_temp(heading_edit_tracking_id, has_focus);
                 });
 
@@ -2118,7 +2154,11 @@ fn render_heading(
                 // This prevents rebuild during active editing
                 if was_editing && !has_focus {
                     editable.modified = true;
-                    update_source_line(source, node.start_line, &format_heading(&edit_buffer, level));
+                    update_source_line(
+                        source,
+                        node.start_line,
+                        &format_heading(&edit_buffer, level),
+                    );
                     // Clear the edit buffer
                     ui.memory_mut(|mem| {
                         mem.data.remove::<String>(heading_edit_buffer_id);
@@ -2179,11 +2219,16 @@ fn render_heading_with_structural_keys(
     // Create explicit ID for heading TextEdit to prevent any potential conflicts
     let heading_widget_id = ui.id().with("heading_text_sk").with(node.start_line);
     let heading_edit_buffer_id = ui.id().with("heading_sk_edit_buffer").with(node.start_line);
-    let heading_edit_tracking_id = ui.id().with("heading_sk_edit_tracking").with(node.start_line);
-    
+    let heading_edit_tracking_id = ui
+        .id()
+        .with("heading_sk_edit_tracking")
+        .with(node.start_line);
+
     // Track whether this heading was previously focused
     let was_editing = ui.memory(|mem| {
-        mem.data.get_temp::<bool>(heading_edit_tracking_id).unwrap_or(false)
+        mem.data
+            .get_temp::<bool>(heading_edit_tracking_id)
+            .unwrap_or(false)
     });
 
     let available_width = ui.available_width();
@@ -2197,7 +2242,7 @@ fn render_heading_with_structural_keys(
                     .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
                     .clone()
             });
-            
+
             let response = ui.add(
                 TextEdit::singleline(&mut edit_buffer)
                     .id(heading_widget_id)
@@ -2209,19 +2254,24 @@ fn render_heading_with_structural_keys(
             );
 
             let _ = structural_state;
-            
+
             let has_focus = response.has_focus();
-            
+
             // Update edit buffer and tracking in memory
             ui.memory_mut(|mem| {
-                mem.data.insert_temp(heading_edit_buffer_id, edit_buffer.clone());
+                mem.data
+                    .insert_temp(heading_edit_buffer_id, edit_buffer.clone());
                 mem.data.insert_temp(heading_edit_tracking_id, has_focus);
             });
 
             // Only commit when focus is lost
             if was_editing && !has_focus {
                 editable.modified = true;
-                update_source_line(source, node.start_line, &format_heading(&edit_buffer, level));
+                update_source_line(
+                    source,
+                    node.start_line,
+                    &format_heading(&edit_buffer, level),
+                );
                 // Clear the edit buffer
                 ui.memory_mut(|mem| {
                     mem.data.remove::<String>(heading_edit_buffer_id);
@@ -2464,7 +2514,7 @@ fn render_paragraph_with_structural_keys(
             }
         });
     } else {
-        // Simple text-only paragraph — persist edit buffer in egui memory
+        // Simple text-only paragraph â€” persist edit buffer in egui memory
         // to prevent trailing spaces being stripped by AST round-trip each frame.
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
@@ -2473,7 +2523,9 @@ fn render_paragraph_with_structural_keys(
         let para_edit_tracking_id = ui.id().with("para_edit_tracking").with(node.start_line);
 
         let was_editing = ui.memory(|mem| {
-            mem.data.get_temp::<bool>(para_edit_tracking_id).unwrap_or(false)
+            mem.data
+                .get_temp::<bool>(para_edit_tracking_id)
+                .unwrap_or(false)
         });
 
         let available_width = ui.available_width();
@@ -2492,21 +2544,20 @@ fn render_paragraph_with_structural_keys(
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
-                let mut layouter =
-                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            cjk_leading,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_clone.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts(|f| f.layout_job(job))
-                    };
+                let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    let mut job = egui::text::LayoutJob::default();
+                    job.wrap.max_width = wrap_width;
+                    job.append(
+                        text,
+                        cjk_leading,
+                        egui::text::TextFormat {
+                            font_id: FontId::new(font_size, font_family_clone.clone()),
+                            color: text_color,
+                            ..Default::default()
+                        },
+                    );
+                    ui.fonts(|f| f.layout_job(job))
+                };
 
                 let widget_id = ui.id().with("para_text").with(node.start_line);
                 let text_edit = TextEdit::multiline(&mut edit_buffer)
@@ -2525,7 +2576,8 @@ fn render_paragraph_with_structural_keys(
                 let _ = structural_state;
 
                 ui.memory_mut(|mem| {
-                    mem.data.insert_temp(para_edit_buffer_id, edit_buffer.clone());
+                    mem.data
+                        .insert_temp(para_edit_buffer_id, edit_buffer.clone());
                     mem.data.insert_temp(para_edit_tracking_id, has_focus);
                 });
 
@@ -2559,7 +2611,7 @@ fn render_blockquote_with_structural_keys(
     const BASE_INDENT: f32 = 4.0;
     const BORDER_WIDTH: f32 = 4.0;
     const BORDER_GAP: f32 = 8.0;
-    
+
     let available_width = ui.available_width();
     let group_response = ui.horizontal(|ui| {
         ui.set_max_width(available_width);
@@ -2592,7 +2644,8 @@ fn render_blockquote_with_structural_keys(
         egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
         Vec2::new(BORDER_WIDTH, rect.height()),
     );
-    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+    ui.painter()
+        .rect_filled(border_rect, 0.0, colors.quote_border);
 }
 
 /// Get the color scheme for a callout type.
@@ -2604,9 +2657,9 @@ fn callout_colors(callout_type: CalloutType, is_dark: bool) -> (Color32, Color32
         CalloutType::Note => {
             if is_dark {
                 (
-                    Color32::from_rgb(56, 132, 244),   // border
-                    Color32::from_rgba_unmultiplied(56, 132, 244, 25),  // bg
-                    Color32::from_rgb(88, 166, 255),   // icon/title
+                    Color32::from_rgb(56, 132, 244),                   // border
+                    Color32::from_rgba_unmultiplied(56, 132, 244, 25), // bg
+                    Color32::from_rgb(88, 166, 255),                   // icon/title
                 )
             } else {
                 (
@@ -2709,9 +2762,7 @@ fn render_callout_with_structural_keys(
 
     let group_response = ui.push_id(scope_id, |ui| {
         let callout_id = ui.make_persistent_id("collapsed");
-        let is_collapsed = ui.data_mut(|d| {
-            *d.get_persisted_mut_or(callout_id, default_collapsed)
-        });
+        let is_collapsed = ui.data_mut(|d| *d.get_persisted_mut_or(callout_id, default_collapsed));
 
         let title_text = custom_title.unwrap_or(callout_type.display_name());
         let icon = callout_type.icon();
@@ -2729,7 +2780,7 @@ fn render_callout_with_structural_keys(
                             .font(FontId::proportional(font_size)),
                     );
 
-                    let arrow = if is_collapsed { "▶" } else { "▼" };
+                    let arrow = if is_collapsed { "â–¶" } else { "â–¼" };
                     ui.label(
                         RichText::new(arrow)
                             .color(title_color)
@@ -2829,7 +2880,7 @@ fn render_list_with_structural_keys(
             &child.node_type,
             MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
         );
-        
+
         if should_render {
             render_list_item_with_structural_keys(
                 ui,
@@ -2875,16 +2926,13 @@ fn render_list_item_with_structural_keys(
         (true, *checked)
     } else {
         // Regular Item - check if it has a TaskItem child
-        let task_child = node
-            .children
-            .iter()
-            .find_map(|c| {
-                if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
-                    Some(*checked)
-                } else {
-                    None
-                }
-            });
+        let task_child = node.children.iter().find_map(|c| {
+            if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
+                Some(*checked)
+            } else {
+                None
+            }
+        });
         (task_child.is_some(), task_child.unwrap_or(false))
     };
 
@@ -2901,7 +2949,7 @@ fn render_list_item_with_structural_keys(
 
     // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
-    // and would display them as replacement characters (□). See GitHub issue #41.
+    // and would display them as replacement characters (â–¡). See GitHub issue #41.
     // Also check for task items which need checkbox rendering
     let has_inline_formatting = para_node
         .map(|p| {
@@ -3010,9 +3058,9 @@ fn render_list_item_with_structural_keys(
             let marker = match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
-                        "\u{2022}" // bullet •
+                        "\u{2022}" // bullet â€¢
                     } else {
-                        "\u{25E6}" // white bullet ◦
+                        "\u{25E6}" // white bullet â—¦
                     }
                 }
                 .to_string(),
@@ -3275,7 +3323,7 @@ fn render_list_item_with_structural_keys(
 
                 let response = ui.add(text_edit);
 
-                // Strip newlines — list items should not contain literal newlines
+                // Strip newlines â€” list items should not contain literal newlines
                 if editable.text.contains('\n') {
                     editable.text = editable.text.replace('\n', "");
                 }
@@ -3374,21 +3422,20 @@ fn render_paragraph(
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
-                let mut layouter =
-                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            cjk_leading,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_clone.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts(|f| f.layout_job(job))
-                    };
+                let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    let mut job = egui::text::LayoutJob::default();
+                    job.wrap.max_width = wrap_width;
+                    job.append(
+                        text,
+                        cjk_leading,
+                        egui::text::TextFormat {
+                            font_id: FontId::new(font_size, font_family_clone.clone()),
+                            color: text_color,
+                            ..Default::default()
+                        },
+                    );
+                    ui.fonts(|f| f.layout_job(job))
+                };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
@@ -3413,7 +3460,10 @@ fn render_paragraph(
                         let cursor_range = egui::text::CCursorRange::one(ccursor);
                         output.state.cursor.set_char_range(Some(cursor_range));
                         output.state.store(ui.ctx(), widget_id);
-                        debug!("[PARA_DEBUG] Set cursor position to {} for paragraph (2)", cursor_pos);
+                        debug!(
+                            "[PARA_DEBUG] Set cursor position to {} for paragraph (2)",
+                            cursor_pos
+                        );
                     }
                 }
 
@@ -3465,34 +3515,37 @@ fn render_paragraph(
             });
         } else {
             let base_indent = 4.0 + indent_level as f32 * 20.0;
-            
+
             let available_width_display = ui.available_width();
-            let display_response = ui.horizontal(|ui| {
-                ui.set_max_width(available_width_display);
-                ui.add_space(base_indent);
-                
-                ui.scope(|ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        // CJK first-line indent: spacer at start (first line only)
-                        if cjk_indent > 0.0 {
-                            ui.add_space(cjk_indent);
-                        }
-                        let style = TextStyle::new();
-                        for child in &node.children {
-                            render_inline_node(
-                                ui,
-                                child,
-                                source,
-                                edit_state,
-                                colors,
-                                font_size,
-                                editor_font,
-                                style,
-                            );
-                        }
+            let display_response = ui
+                .horizontal(|ui| {
+                    ui.set_max_width(available_width_display);
+                    ui.add_space(base_indent);
+
+                    ui.scope(|ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            // CJK first-line indent: spacer at start (first line only)
+                            if cjk_indent > 0.0 {
+                                ui.add_space(cjk_indent);
+                            }
+                            let style = TextStyle::new();
+                            for child in &node.children {
+                                render_inline_node(
+                                    ui,
+                                    child,
+                                    source,
+                                    edit_state,
+                                    colors,
+                                    font_size,
+                                    editor_font,
+                                    style,
+                                );
+                            }
+                        })
                     })
-                }).response
-            }).inner;
+                    .response
+                })
+                .inner;
 
             // Make the display area interactive
             let sense_response = ui.interact(
@@ -3518,23 +3571,25 @@ fn render_paragraph(
 
                     // Calculate cursor position from click location using Galley for accuracy
                     // This maps screen position to character index in displayed text
-                    let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                        let displayed_text = node.text_content();
-                        let displayed_idx = compute_displayed_cursor_index(
-                            ui,
-                            &displayed_text,
-                            click_pos,
-                            display_response.rect,
-                            font_size,
-                            editor_font,
-                            &para_edit_state.edit_text,
-                        );
-                        // Map displayed position to raw position (accounting for formatting markers)
-                        let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
-                        Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
-                    } else {
-                        None
-                    };
+                    let cursor_pos =
+                        if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
+                            let displayed_text = node.text_content();
+                            let displayed_idx = compute_displayed_cursor_index(
+                                ui,
+                                &displayed_text,
+                                click_pos,
+                                display_response.rect,
+                                font_size,
+                                editor_font,
+                                &para_edit_state.edit_text,
+                            );
+                            // Map displayed position to raw position (accounting for formatting markers)
+                            let raw_idx =
+                                map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
+                            Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
+                        } else {
+                            None
+                        };
                     para_edit_state.pending_cursor_pos = cursor_pos;
 
                     debug!(
@@ -3568,21 +3623,20 @@ fn render_paragraph(
                     let font_family_clone = font_family.clone();
                     let text_color = colors.text;
                     let cjk_leading = cjk_indent;
-                    let mut layouter =
-                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
-                            let mut job = egui::text::LayoutJob::default();
-                            job.wrap.max_width = wrap_width;
-                            job.append(
-                                text,
-                                cjk_leading,
-                                egui::text::TextFormat {
-                                    font_id: FontId::new(font_size, font_family_clone.clone()),
-                                    color: text_color,
-                                    ..Default::default()
-                                },
-                            );
-                            ui.fonts(|f| f.layout_job(job))
-                        };
+                    let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_width;
+                        job.append(
+                            text,
+                            cjk_leading,
+                            egui::text::TextFormat {
+                                font_id: FontId::new(font_size, font_family_clone.clone()),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                     let text_edit = TextEdit::multiline(&mut editable.text)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
@@ -3638,9 +3692,9 @@ fn render_paragraph(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Text Style Accumulator
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Accumulated text styles for nested formatting.
 /// Tracks bold, italic, and strikethrough states that can be combined.
@@ -3742,10 +3796,7 @@ fn compute_displayed_cursor_index(
     });
 
     // Compute local click position relative to text_rect's top-left as Vec2
-    let local_pos = egui::Vec2::new(
-        click_pos.x - text_rect.min.x,
-        click_pos.y - text_rect.min.y,
-    );
+    let local_pos = egui::Vec2::new(click_pos.x - text_rect.min.x, click_pos.y - text_rect.min.y);
 
     // Use cursor_from_pos to get the exact character index
     let cursor = galley.cursor_from_pos(local_pos);
@@ -3786,7 +3837,8 @@ fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
 
         // Check for double-character markers first (order matters)
         // Skip these BEFORE checking if we've reached target position
-        if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~") {
+        if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~")
+        {
             raw_pos += 2;
             continue;
         }
@@ -3823,7 +3875,10 @@ fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
 
         // Check for italic markers (* or _) that are NOT part of bold
         // Only skip if it looks like a formatting marker (not standalone punctuation)
-        if (chars[raw_pos] == '*' || chars[raw_pos] == '_') && !remaining.starts_with("**") && !remaining.starts_with("__") {
+        if (chars[raw_pos] == '*' || chars[raw_pos] == '_')
+            && !remaining.starts_with("**")
+            && !remaining.starts_with("__")
+        {
             // Check context: is this likely a formatting marker?
             // A marker is usually at word boundaries or paired
             let prev_is_space = raw_pos == 0 || chars[raw_pos - 1].is_whitespace();
@@ -4048,7 +4103,7 @@ fn render_code_block(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
-    
+
     // Check if this is a mermaid diagram block
     // Mermaid blocks get special rendering with diagram type detection
     if language.eq_ignore_ascii_case("mermaid") {
@@ -4095,21 +4150,23 @@ fn render_code_block(
     // Note: The EditableCodeBlock widget has its own internal horizontal scroll area
     // for the code content, so we don't need an outer scroll wrapper here.
     // We use ui.indent() to add the base indent while preserving proper layout.
-    let output = ui.indent(code_block_id.with("indent"), |ui| {
-        // Override indent amount (default is 18.0 which is too much)
-        let saved_indent = ui.spacing().indent;
-        ui.spacing_mut().indent = BASE_INDENT;
-        
-        let result = EditableCodeBlock::new(&mut code_data)
-            .font_size(font_size)
-            .dark_mode(dark_mode)
-            .colors(widget_colors)
-            .id(code_block_id)
-            .show(ui);
-            
-        ui.spacing_mut().indent = saved_indent;
-        result
-    }).inner;
+    let output = ui
+        .indent(code_block_id.with("indent"), |ui| {
+            // Override indent amount (default is 18.0 which is too much)
+            let saved_indent = ui.spacing().indent;
+            ui.spacing_mut().indent = BASE_INDENT;
+
+            let result = EditableCodeBlock::new(&mut code_data)
+                .font_size(font_size)
+                .dark_mode(dark_mode)
+                .colors(widget_colors)
+                .id(code_block_id)
+                .show(ui);
+
+            ui.spacing_mut().indent = saved_indent;
+            result
+        })
+        .inner;
 
     // Update stored data
     ui.memory_mut(|mem| {
@@ -4140,6 +4197,37 @@ fn render_code_block(
             node.start_line, output.language
         );
     }
+
+    // Handle "Insert as block" requests from the run output panel — append a
+    // fenced ```output block right after the current code block.
+    if let Some(body) = output.insert_output_below {
+        insert_output_block_after(source, node.end_line, &body);
+        let node_id = edit_state.add_node(output.code.clone(), node.start_line, node.end_line);
+        if let Some(editable) = edit_state.get_node_mut(node_id) {
+            editable.modified = true;
+        }
+    }
+}
+
+/// Append a fenced ```output block to `source` immediately after `end_line`
+/// (1-indexed). Used by the inline run-output panel's "Insert as block" action.
+fn insert_output_block_after(source: &mut String, end_line: usize, body: &str) {
+    let mut lines: Vec<String> = source.lines().map(|s| s.to_string()).collect();
+    let insert_idx = end_line.min(lines.len());
+    let block_body = body.trim_end_matches('\n').to_string();
+    let mut block: Vec<String> = vec![String::new(), "```output".to_string()];
+    if block_body.is_empty() {
+        block.push(String::new());
+    } else {
+        for line in block_body.lines() {
+            block.push(line.to_string());
+        }
+    }
+    block.push("```".to_string());
+    let tail = lines.split_off(insert_idx);
+    lines.extend(block);
+    lines.extend(tail);
+    *source = lines.join("\n");
 }
 
 /// Render a mermaid diagram block with specialized visualization.
@@ -4169,7 +4257,7 @@ fn render_mermaid_block(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
-    
+
     // Determine if we're in dark mode based on the background color
     let dark_mode = colors.background.r() < 128;
 
@@ -4195,29 +4283,37 @@ fn render_mermaid_block(
     });
 
     // Check if the source content has changed (e.g., edited in raw mode)
-    // If so, update the cached data to match the current parsed content.
+    // If so, update the cached data to match the current parsed content while
+    // preserving the last successfully rendered source (so a transient parse
+    // failure during typing keeps the previous diagram visible).
     if mermaid_data.source != literal {
+        let preserved_good = mermaid_data.last_good_source.clone();
+        let preserved_err = mermaid_data.last_error.clone();
         mermaid_data = MermaidBlockData::new(literal);
+        mermaid_data.last_good_source = preserved_good;
+        mermaid_data.last_error = preserved_err;
     }
 
     // Add left indent and show mermaid block widget.
     // Note: The MermaidBlock widget has its own internal horizontal scroll area
     // for the diagram content, so we don't need an outer scroll wrapper here.
-    let output = ui.indent(mermaid_block_id.with("indent"), |ui| {
-        // Override indent amount (default is 18.0 which is too much)
-        let saved_indent = ui.spacing().indent;
-        ui.spacing_mut().indent = BASE_INDENT;
-        
-        let result = MermaidBlock::new(&mut mermaid_data)
-            .font_size(font_size)
-            .dark_mode(dark_mode)
-            .colors(widget_colors)
-            .id(mermaid_block_id)
-            .show(ui);
-            
-        ui.spacing_mut().indent = saved_indent;
-        result
-    }).inner;
+    let output = ui
+        .indent(mermaid_block_id.with("indent"), |ui| {
+            // Override indent amount (default is 18.0 which is too much)
+            let saved_indent = ui.spacing().indent;
+            ui.spacing_mut().indent = BASE_INDENT;
+
+            let result = MermaidBlock::new(&mut mermaid_data)
+                .font_size(font_size)
+                .dark_mode(dark_mode)
+                .colors(widget_colors)
+                .id(mermaid_block_id)
+                .show(ui);
+
+            ui.spacing_mut().indent = saved_indent;
+            result
+        })
+        .inner;
 
     // Update stored data
     ui.memory_mut(|mem| {
@@ -4251,18 +4347,22 @@ fn render_blockquote(
     const BASE_INDENT: f32 = 4.0;
     const BORDER_WIDTH: f32 = 4.0;
     const BORDER_GAP: f32 = 8.0;
-    
+
     // Create a stable ID for this blockquote's scroll area
     let blockquote_id = egui::Id::new(("blockquote", node.start_line));
-    
+
     let available_width = ui.available_width();
     let group_response = ui.horizontal(|ui| {
         ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
+        // See issue #129: auto_shrink y must be true on horizontal-only scroll
+        // areas so the perpendicular axis sizes to content height instead of
+        // claiming all remaining viewport height (egui's `max(inner, content)`
+        // rule for scroll_enabled=false / auto_shrink=false).
         egui::ScrollArea::horizontal()
-            .id_source(blockquote_id)
-            .auto_shrink([false, false])
+            .id_salt(blockquote_id)
+            .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     for child in &node.children {
@@ -4289,7 +4389,8 @@ fn render_blockquote(
         egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
         Vec2::new(BORDER_WIDTH, rect.height()),
     );
-    ui.painter().rect_filled(border_rect, 0.0, colors.quote_border);
+    ui.painter()
+        .rect_filled(border_rect, 0.0, colors.quote_border);
 }
 
 /// Render a callout (GitHub-style admonition) in non-structural mode.
@@ -4320,9 +4421,7 @@ fn render_callout(
 
     let group_response = ui.push_id(scope_id, |ui| {
         let callout_id = ui.make_persistent_id("collapsed");
-        let is_collapsed = ui.data_mut(|d| {
-            *d.get_persisted_mut_or(callout_id, default_collapsed)
-        });
+        let is_collapsed = ui.data_mut(|d| *d.get_persisted_mut_or(callout_id, default_collapsed));
 
         let title_text = custom_title.unwrap_or(callout_type.display_name());
         let icon = callout_type.icon();
@@ -4332,9 +4431,13 @@ fn render_callout(
             ui.set_max_width(available_width);
             ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
+            // See issue #129: auto_shrink y must be true so this horizontal
+            // scroll area shrinks to fit its content vertically and does not
+            // monopolise the viewport height (which would push the next block
+            // off-screen).
             egui::ScrollArea::horizontal()
-                .id_source("scroll")
-                .auto_shrink([false, false])
+                .id_salt("scroll")
+                .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
                         // Title row with icon and collapse toggle
@@ -4345,7 +4448,7 @@ fn render_callout(
                                     .font(FontId::proportional(font_size)),
                             );
 
-                            let arrow = if is_collapsed { "▶" } else { "▼" };
+                            let arrow = if is_collapsed { "â–¶" } else { "â–¼" };
                             ui.label(
                                 RichText::new(arrow)
                                     .color(title_color)
@@ -4443,7 +4546,7 @@ fn render_list(
             &child.node_type,
             MarkdownNodeType::Item | MarkdownNodeType::TaskItem { .. }
         );
-        
+
         if should_render {
             let _ = child_idx; // Suppress unused warning
             render_list_item(
@@ -4527,16 +4630,13 @@ fn render_list_item(
         (true, *checked)
     } else {
         // Regular Item - check if it has a TaskItem child
-        let task_child = node
-            .children
-            .iter()
-            .find_map(|c| {
-                if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
-                    Some(*checked)
-                } else {
-                    None
-                }
-            });
+        let task_child = node.children.iter().find_map(|c| {
+            if let MarkdownNodeType::TaskItem { checked } = &c.node_type {
+                Some(*checked)
+            } else {
+                None
+            }
+        });
         (task_child.is_some(), task_child.unwrap_or(false))
     };
 
@@ -4561,7 +4661,7 @@ fn render_list_item(
 
     // Check if paragraph has inline formatting (bold, italic, images, line breaks, etc.)
     // LineBreak must be included here because single-line TextEdit cannot render newlines,
-    // and would display them as replacement characters (□). See GitHub issue #41.
+    // and would display them as replacement characters (â–¡). See GitHub issue #41.
     let has_inline_formatting = para_node
         .map(|p| {
             p.children.iter().any(|c| {
@@ -4620,7 +4720,6 @@ fn render_list_item(
         None
     };
 
-
     // Base indentation to align with content area + nested indent
     // Use 4.0 to match BASE_INDENT used by headings, paragraphs, code blocks, etc.
     let base_indent = 4.0;
@@ -4669,9 +4768,9 @@ fn render_list_item(
             let marker = match list_type {
                 ListType::Bullet => {
                     if indent_level == 0 {
-                        "\u{2022}" // bullet •
+                        "\u{2022}" // bullet â€¢
                     } else {
-                        "\u{25E6}" // white bullet ◦
+                        "\u{25E6}" // white bullet â—¦
                     }
                 }
                 .to_string(),
@@ -4919,7 +5018,7 @@ fn render_list_item(
 
                 let output = text_edit.show(ui);
 
-                // Strip newlines — list items should not contain literal newlines
+                // Strip newlines â€” list items should not contain literal newlines
                 if edit_buffer.contains('\n') {
                     edit_buffer = edit_buffer.replace('\n', "");
                 }
@@ -5023,7 +5122,7 @@ fn render_list_item(
 fn render_thematic_break(ui: &mut Ui, colors: &EditorColors) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
-    
+
     ui.add_space(4.0); // Vertical spacing above
     ui.horizontal(|ui| {
         ui.add_space(BASE_INDENT); // Horizontal indent
@@ -5046,7 +5145,7 @@ fn render_table(
 ) {
     // Base left indent to align with paragraphs and headers
     const BASE_INDENT: f32 = 4.0;
-    
+
     // Create a unique ID for this table based on its position
     let table_id = ui.id().with("table").with(node.start_line);
 
@@ -5137,16 +5236,16 @@ fn update_table_in_source(
 /// Render front matter (YAML/TOML header).
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
     const BASE_INDENT: f32 = 4.0;
-    
+
     let available_width = ui.available_width();
     ui.horizontal(|ui| {
         ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT);
-        
-        egui::Frame::none()
+
+        egui::Frame::new()
             .fill(colors.code_bg)
-            .inner_margin(8.0)
-            .rounding(4.0)
+            .inner_margin(8)
+            .corner_radius(4)
             .show(ui, |ui| {
                 ui.label(
                     RichText::new("Front Matter")
@@ -5254,7 +5353,7 @@ fn render_link(
 ///
 /// Wikilinks are rendered as colored, underlined text (like internal links).
 /// If a `WikilinkContext` is available in egui memory, the target is checked
-/// for existence — broken links are styled with a dimmed red color.
+/// for existence â€” broken links are styled with a dimmed red color.
 /// Clicking navigates to the target file. The target is stored in egui memory
 /// and picked up by `MarkdownEditorOutput::wikilink_clicked`.
 fn render_wikilink(
@@ -5267,12 +5366,19 @@ fn render_wikilink(
     let label_text = display.unwrap_or(target);
 
     // Check if target file exists (using context stored in egui memory)
-    let target_exists = ui.memory(|mem| {
-        mem.data
-            .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
-    })
-    .map(|ctx| wikilink_target_exists(target, ctx.current_dir.as_deref(), ctx.workspace_root.as_deref()))
-    .unwrap_or(true); // Default to "exists" if no context is available
+    let target_exists = ui
+        .memory(|mem| {
+            mem.data
+                .get_temp::<WikilinkContext>(egui::Id::new("wikilink_resolution_context"))
+        })
+        .map(|ctx| {
+            wikilink_target_exists(
+                target,
+                ctx.current_dir.as_deref(),
+                ctx.workspace_root.as_deref(),
+            )
+        })
+        .unwrap_or(true); // Default to "exists" if no context is available
 
     // Color: green-ish blue for valid links, dimmed red for broken links
     let wikilink_color = if target_exists {
@@ -5295,9 +5401,7 @@ fn render_wikilink(
         rich = rich.strikethrough();
     }
 
-    let link_response = ui.add(
-        egui::Label::new(rich).sense(egui::Sense::click()),
-    );
+    let link_response = ui.add(egui::Label::new(rich).sense(egui::Sense::click()));
 
     let link_rect = link_response.rect;
 
@@ -5308,11 +5412,9 @@ fn render_wikilink(
 
     // Use manual pointer check (same pattern as RenderedLinkWidget) because
     // the parent paragraph's ui.interact() call swallows Label::clicked().
-    let (primary_released, pointer_pos) = ui.input(|i| {
-        (i.pointer.primary_released(), i.pointer.interact_pos())
-    });
-    let was_clicked =
-        primary_released && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
+    let (primary_released, pointer_pos) =
+        ui.input(|i| (i.pointer.primary_released(), i.pointer.interact_pos()));
+    let was_clicked = primary_released && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
 
     // Tooltip showing the target and status
     let tooltip = if !target_exists {
@@ -5380,9 +5482,9 @@ fn wikilink_target_exists(
     false
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Image Rendering
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Cached image data stored in egui memory to avoid reloading every frame.
 #[derive(Clone)]
@@ -5392,7 +5494,7 @@ struct CachedImageTexture {
     original_height: u32,
 }
 
-/// Result of attempting to load an image — either success or a description of the failure.
+/// Result of attempting to load an image â€” either success or a description of the failure.
 #[derive(Clone)]
 enum ImageLoadResult {
     Loaded(CachedImageTexture),
@@ -5406,13 +5508,17 @@ enum ImageLoadResult {
 /// 2. If URL is an absolute path, uses it directly.
 /// 3. Resolves relative to the current document's directory.
 /// 4. Falls back to workspace root.
-fn resolve_image_path(url: &str, current_dir: Option<&Path>, workspace_root: Option<&Path>) -> Option<PathBuf> {
+fn resolve_image_path(
+    url: &str,
+    current_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
+) -> Option<PathBuf> {
     let url = url.trim();
     if url.is_empty() {
         return None;
     }
 
-    // Skip web URLs — we only support local images
+    // Skip web URLs â€” we only support local images
     if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:") {
         return None;
     }
@@ -5453,8 +5559,7 @@ fn resolve_image_path(url: &str, current_dir: Option<&Path>, workspace_root: Opt
 fn load_image_texture(ctx: &egui::Context, path: &Path) -> Result<CachedImageTexture, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
 
-    let img = image::load_from_memory(&bytes)
-        .map_err(|e| format!("Failed to decode: {}", e))?;
+    let img = image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode: {}", e))?;
 
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
@@ -5513,7 +5618,11 @@ fn render_image(
     }
 
     let Some(resolved) = resolved_path else {
-        let hint = if url.is_empty() { "No image path" } else { "Image not found" };
+        let hint = if url.is_empty() {
+            "No image path"
+        } else {
+            "Image not found"
+        };
         render_image_placeholder(ui, colors, font_size, &alt_text, hint);
         return;
     };
@@ -5597,16 +5706,16 @@ fn render_image_placeholder(
     let frame_color = colors.quote_border;
     let bg_color = colors.code_bg;
 
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(bg_color)
         .stroke(egui::Stroke::new(1.0, frame_color))
-        .rounding(4.0)
-        .inner_margin(egui::Margin::same(8.0))
+        .corner_radius(4)
+        .inner_margin(egui::Margin::same(8))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 // Image icon
                 ui.label(
-                    RichText::new("\u{1F5BC}") // 🖼 framed picture emoji
+                    RichText::new("\u{1F5BC}") // ðŸ–¼ framed picture emoji
                         .color(frame_color)
                         .size(font_size * 1.2),
                 );
@@ -5656,9 +5765,9 @@ fn render_styled_inline(
         );
     }
 }
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Source Synchronization
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Format a heading back to markdown.
 fn format_heading(text: &str, level: HeadingLevel) -> String {
@@ -5940,9 +6049,9 @@ fn rebuild_markdown(_source: &mut String, edit_state: &EditState, _original: &st
     );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Utility Functions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Convert a character index to (line, column) position.
 fn char_index_to_line_col(text: &str, char_index: usize) -> (usize, usize) {
@@ -5983,9 +6092,9 @@ fn line_to_char_index(text: &str, target_line: usize) -> usize {
     text.len()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Memory Cleanup
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Clean up temporary data stored in egui's memory for the rendered markdown editor.
 ///
@@ -6033,17 +6142,17 @@ pub fn cleanup_rendered_editor_memory(ctx: &egui::Context) {
     log::debug!("Cleaned up rendered editor temporary memory");
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Tests
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // EditorMode Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_editor_mode_default() {
@@ -6058,9 +6167,9 @@ mod tests {
         assert_ne!(EditorMode::Raw, EditorMode::Rendered);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // EditorColors Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_dark_theme_colors() {
@@ -6076,9 +6185,9 @@ mod tests {
         assert!(colors.text.r() < 50); // Dark text
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // EditState Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_edit_state_new() {
@@ -6128,9 +6237,9 @@ mod tests {
         assert_eq!(state.next_id, 0);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // TextStyle Tests (for nested emphasis support)
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_text_style_default() {
@@ -6211,9 +6320,9 @@ mod tests {
         // Just verify it doesn't panic; visual styling tested via egui
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Format Heading Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_format_heading_h1() {
@@ -6233,9 +6342,9 @@ mod tests {
         assert_eq!(result, "## Spaced");
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Source Update Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_update_source_line() {
@@ -6321,9 +6430,9 @@ mod tests {
         assert_eq!(content, "Quoted text");
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Char Index Conversion Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_char_index_to_line_col_empty() {
@@ -6346,9 +6455,9 @@ mod tests {
         assert_eq!(char_index_to_line_col(text, 8), (1, 2));
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // MarkdownEditor Builder Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_markdown_editor_builder() {
@@ -6376,9 +6485,9 @@ mod tests {
         assert_eq!(editor.theme, Theme::Light);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Link Update Tests
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     #[test]
     fn test_update_link_in_source_simple() {
@@ -6527,5 +6636,127 @@ mod tests {
         );
         // Just URL replaced, no markdown syntax added
         assert_eq!(source, "Visit https://new-url.com today.");
+    }
+
+    // ─── Regression: consecutive fenced code blocks (issue #129) ────────────
+    //
+    // Documents the parser-level invariants the rendered-view viewport culling
+    // and block-height cache rely on. The actual layout bug — only the first
+    // fenced block visible because the inner horizontal `ScrollArea` claimed
+    // the full available height (`auto_shrink([false, false])`) — was fixed in
+    // `widgets.rs` and `editor.rs` by switching the perpendicular axis to
+    // `auto_shrink_y = true`. These tests guard the data the layout depends
+    // on so regressions in the AST or per-block source slicing surface early.
+
+    fn consecutive_fenced_doc() -> &'static str {
+        "```text\nfirst\nline 2\n```\n\n```python\ndef hello():\n    print(\"hi\")\n```\n\n```rust\nfn main() {}\n```\n"
+    }
+
+    #[test]
+    fn consecutive_fenced_blocks_parse_as_separate_ast_nodes() {
+        let doc = cache::get_or_parse(consecutive_fenced_doc())
+            .expect("markdown parses");
+        let code_blocks: Vec<_> = doc
+            .root
+            .children
+            .iter()
+            .filter(|n| matches!(n.node_type, MarkdownNodeType::CodeBlock { .. }))
+            .collect();
+        assert_eq!(
+            code_blocks.len(),
+            3,
+            "three consecutive fenced blocks must parse as three separate AST nodes"
+        );
+        for b in &code_blocks {
+            assert!(
+                b.end_line >= b.start_line && b.start_line > 0,
+                "block must have a valid 1-indexed line range (got {}..={})",
+                b.start_line,
+                b.end_line
+            );
+        }
+    }
+
+    #[test]
+    fn block_source_slice_extracts_each_consecutive_block_independently() {
+        let content = consecutive_fenced_doc();
+        let doc = cache::get_or_parse(content).expect("markdown parses");
+        let offsets = line_start_byte_offsets(content);
+
+        let blocks: Vec<_> = doc.root.children.iter().collect();
+        assert_eq!(blocks.len(), 3);
+
+        let s1 = block_source_slice(content, &offsets, blocks[0].start_line, blocks[0].end_line);
+        let s2 = block_source_slice(content, &offsets, blocks[1].start_line, blocks[1].end_line);
+        let s3 = block_source_slice(content, &offsets, blocks[2].start_line, blocks[2].end_line);
+
+        // Each block's source must contain its own fence language and not bleed
+        // into the next block's content. Distinct sources keep the per-block
+        // height cache (`cache::get_block_height`) keyed independently.
+        assert!(s1.contains("```text"));
+        assert!(s1.contains("first"));
+        assert!(!s1.contains("def hello"));
+
+        assert!(s2.contains("```python"));
+        assert!(s2.contains("def hello"));
+        assert!(!s2.contains("fn main"));
+
+        assert!(s3.contains("```rust"));
+        assert!(s3.contains("fn main"));
+        assert!(!s3.contains("def hello"));
+    }
+
+    #[test]
+    fn estimate_block_height_is_finite_and_positive_for_each_block() {
+        let doc = cache::get_or_parse(consecutive_fenced_doc())
+            .expect("markdown parses");
+        for b in &doc.root.children {
+            let h = estimate_block_height(b.start_line, b.end_line);
+            assert!(
+                h.is_finite() && h > 0.0,
+                "estimate must be finite > 0 (block {}..={} → {})",
+                b.start_line,
+                b.end_line,
+                h
+            );
+            // Heuristic must scale with line count, never collapse to a single
+            // line (otherwise viewport culling would think the block is too
+            // small to be visible and skip rendering it).
+            let lines = b.end_line.saturating_sub(b.start_line) + 1;
+            assert!(
+                h >= ESTIMATED_LINE_HEIGHT_PX * lines as f32,
+                "estimate must reflect block line count"
+            );
+        }
+    }
+
+    #[test]
+    fn block_height_cache_keys_distinguish_consecutive_blocks() {
+        // The per-block height cache hashes the block's source slice. Two
+        // consecutive but textually different code blocks must hash to
+        // different keys, otherwise the cache could pollute one block's
+        // measured height with another's and the culling state would place
+        // them at incorrect Y positions.
+        let content = consecutive_fenced_doc();
+        let offsets = line_start_byte_offsets(content);
+        let doc = cache::get_or_parse(content).expect("markdown parses");
+        let rp = cache::render_params_hash(800.0, 14.0);
+
+        cache::clear_block_height_cache();
+        for (i, b) in doc.root.children.iter().enumerate() {
+            let s = block_source_slice(content, &offsets, b.start_line, b.end_line);
+            // Use distinct, recognisable heights so a key collision would be
+            // visible in the assertion below.
+            cache::insert_block_height(s, rp, 100.0 + i as f32);
+        }
+        for (i, b) in doc.root.children.iter().enumerate() {
+            let s = block_source_slice(content, &offsets, b.start_line, b.end_line);
+            assert_eq!(
+                cache::get_block_height(s, rp),
+                Some(100.0 + i as f32),
+                "block {} key collided with another block's cached height",
+                i
+            );
+        }
     }
 }

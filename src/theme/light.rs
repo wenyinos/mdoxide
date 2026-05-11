@@ -14,7 +14,7 @@
 //! - Professional appearance suitable for extended use
 //! - Accessible color choices (WCAG AA compliant)
 
-use eframe::egui::{self, Color32, Rounding, Stroke, Visuals};
+use eframe::egui::{self, Color32, CornerRadius, Stroke, Visuals};
 
 use super::{ThemeColors, ThemeSpacing};
 
@@ -31,8 +31,8 @@ use super::{ThemeColors, ThemeSpacing};
 /// let ctx = &egui::Context::default();
 /// ctx.set_visuals(create_light_visuals());
 /// ```
-pub fn create_light_visuals() -> Visuals {
-    let colors = ThemeColors::light();
+/// Build Ferrite visuals from an already-built light palette (`ThemeColors`).
+pub(crate) fn visuals_from_palette(colors: &ThemeColors) -> Visuals {
     let spacing = ThemeSpacing::default();
 
     let mut visuals = Visuals::light();
@@ -69,7 +69,7 @@ pub fn create_light_visuals() -> Visuals {
     visuals.widgets.noninteractive.weak_bg_fill = colors.base.background_tertiary;
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, colors.base.border_subtle);
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, colors.text.primary);
-    visuals.widgets.noninteractive.rounding = Rounding::same(spacing.sm);
+    visuals.widgets.noninteractive.corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Widget Styling (Inactive/Default)
@@ -78,7 +78,7 @@ pub fn create_light_visuals() -> Visuals {
     visuals.widgets.inactive.weak_bg_fill = colors.base.background_tertiary;
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, colors.base.border);
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, colors.text.secondary);
-    visuals.widgets.inactive.rounding = Rounding::same(spacing.sm);
+    visuals.widgets.inactive.corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Widget Styling (Hovered)
@@ -87,7 +87,7 @@ pub fn create_light_visuals() -> Visuals {
     visuals.widgets.hovered.weak_bg_fill = colors.base.hover;
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, colors.ui.accent);
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.5, colors.text.primary);
-    visuals.widgets.hovered.rounding = Rounding::same(spacing.sm);
+    visuals.widgets.hovered.corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Widget Styling (Active/Pressed)
@@ -100,7 +100,7 @@ pub fn create_light_visuals() -> Visuals {
     visuals.widgets.active.weak_bg_fill = colors.base.selected;
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, colors.ui.accent_hover);
     visuals.widgets.active.fg_stroke = Stroke::new(2.0, colors.text.primary);
-    visuals.widgets.active.rounding = Rounding::same(spacing.sm);
+    visuals.widgets.active.corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Widget Styling (Open/Expanded)
@@ -109,28 +109,28 @@ pub fn create_light_visuals() -> Visuals {
     visuals.widgets.open.weak_bg_fill = colors.base.selected;
     visuals.widgets.open.bg_stroke = Stroke::new(1.0, colors.ui.accent);
     visuals.widgets.open.fg_stroke = Stroke::new(1.0, colors.text.primary);
-    visuals.widgets.open.rounding = Rounding::same(spacing.sm);
+    visuals.widgets.open.corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Window & Popup Styling
     // ─────────────────────────────────────────────────────────────────────────
-    visuals.window_rounding = Rounding::same(spacing.md);
+    visuals.window_corner_radius = CornerRadius::same(spacing.md as u8);
     visuals.window_shadow = egui::epaint::Shadow {
-        offset: egui::vec2(0.0, 2.0),
-        blur: 8.0,
-        spread: 0.0,
+        offset: [0, 2],
+        blur: 8,
+        spread: 0,
         color: Color32::from_black_alpha(25),
     };
     visuals.window_stroke = Stroke::new(1.0, colors.base.border);
 
     visuals.popup_shadow = egui::epaint::Shadow {
-        offset: egui::vec2(0.0, 4.0),
-        blur: 12.0,
-        spread: 0.0,
+        offset: [0, 4],
+        blur: 12,
+        spread: 0,
         color: Color32::from_black_alpha(30),
     };
 
-    visuals.menu_rounding = Rounding::same(spacing.sm);
+    visuals.menu_corner_radius = CornerRadius::same(spacing.sm as u8);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Miscellaneous
@@ -150,6 +150,18 @@ pub fn create_light_visuals() -> Visuals {
     visuals
 }
 
+/// Ferrite light theme egui visuals with the given Ferrite accent.
+pub fn create_light_visuals(accent: Color32) -> Visuals {
+    let mut palette = ThemeColors::light();
+    palette.apply_user_accent(accent);
+    visuals_from_palette(&palette)
+}
+
+/// Alias for callers that omit accent (defaults to canonical Ferrite blue).
+pub fn create_light_visuals_defaults() -> Visuals {
+    create_light_visuals(super::accent::default_accent())
+}
+
 /// Get the light theme colors.
 ///
 /// This is a convenience re-export of `ThemeColors::light()`.
@@ -163,13 +175,13 @@ mod tests {
 
     #[test]
     fn test_light_visuals_is_light_mode() {
-        let visuals = create_light_visuals();
+        let visuals = create_light_visuals_defaults();
         assert!(!visuals.dark_mode);
     }
 
     #[test]
     fn test_light_visuals_has_light_background() {
-        let visuals = create_light_visuals();
+        let visuals = create_light_visuals_defaults();
         // Light theme should have bright panel fill
         assert!(visuals.panel_fill.r() > 200);
         assert!(visuals.panel_fill.g() > 200);
@@ -184,14 +196,14 @@ mod tests {
 
     #[test]
     fn test_light_visuals_selection_visible() {
-        let visuals = create_light_visuals();
+        let visuals = create_light_visuals_defaults();
         // Selection should be visually distinct
         assert_ne!(visuals.selection.bg_fill, visuals.panel_fill);
     }
 
     #[test]
     fn test_light_visuals_text_contrast() {
-        let visuals = create_light_visuals();
+        let visuals = create_light_visuals_defaults();
         let colors = colors();
 
         // Text stroke should be dark for contrast on light background

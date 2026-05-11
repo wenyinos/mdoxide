@@ -57,6 +57,10 @@ dialog:
   confirm:
     cancel: "キャンセル"
     close: "閉じる"
+  rename_untitled_tab:
+    title: "タブ名の変更"
+    hint: "表示名のみ（ファイルパスではありません）。保存には「名前を付けて保存」を使います。"
+    apply: "適用"
   # File operation dialogs
   file:
     new_file: "新しいファイル"
@@ -109,6 +113,7 @@ settings:
     custom_font: "システムフォントを指定"
     custom_font_desc: "インストール済みのシステムフォントから選択"
     select_system_font: "フォントの選択 :"
+    custom_font_pick_placeholder: "フォントを選択…"
     font_preview: "プレビュー :"
     font_not_found: "⚠フォントがシステム上で見つかりませんでした"
     cjk_preference: "CJK統合漢字の優先設定"
@@ -193,6 +198,9 @@ settings:
   files:
     title: "ファイル"
     restore_session_tooltip: "有効にすると、起動時に以前開いていたタブを復元します。無効にすると、空のタブ 1つで開始します。セッションデータは常に保存されます。"
+    quick_note_workflow: "クイックメモ（無題タブをそのまま）"
+    quick_note_workflow_tooltip: "パスのないタブは保存確認なしで閉じ、無題のまま変更があっても終了をブロックしません。セッション復元がオンなら、未保存テキストは設定フォルダ内のリカバリに残ります。"
+    quick_note_workflow_hint: "無題タブをダブルクリックで表示名を設定。オフにすると従来の保存確認に戻ります。"
     enable_auto_save: "自動保存を既定で有効化"
     auto_save_tooltip: "新しいドキュメントでは自動保存が有効になります。データ損失を防ぐために一時ファイルを使用します。"
     auto_save_delay: "自動保存の遅延 :"
@@ -371,6 +379,7 @@ about:
   tab:
     about: "Ferrite について"
     shortcuts: "ショートカット"
+    mermaid: "Mermaid"
   description: "Markdown、JSON などに対応した高速で軽量なテキストエディタです。"
   close_hint: "F1 または Escape を押して閉じます"
   # Links section

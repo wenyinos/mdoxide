@@ -16,9 +16,17 @@
 
 use crate::config::{EditorFont, Theme};
 use crate::fonts::get_styled_font_family;
-use crate::markdown::parser::{CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType};
+use crate::markdown::ansi_render;
+use crate::markdown::code_execution::{
+    self as code_exec_mod, CodeExecutionUi, RunHandle, RunStatus,
+};
+use crate::markdown::parser::{
+    CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
+};
+use crate::terminal::TerminalTheme;
 use eframe::egui::{self, Color32, FontFamily, FontId, Key, RichText, TextEdit, Ui};
 use rust_i18n::t;
+use std::time::Duration;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget Output
@@ -76,8 +84,8 @@ pub struct WidgetColors {
 }
 
 impl WidgetColors {
-    /// Create colors for the given theme.
-    pub fn from_theme(theme: Theme, visuals: &egui::Visuals) -> Self {
+    /// Create colors for the given theme. `accent` is used for heading text in widgets.
+    pub fn from_theme(theme: Theme, visuals: &egui::Visuals, accent: Color32) -> Self {
         let is_dark = match theme {
             Theme::Dark => true,
             Theme::Light => false,
@@ -87,7 +95,7 @@ impl WidgetColors {
         if is_dark {
             Self {
                 text: Color32::from_rgb(220, 220, 220),
-                heading: Color32::from_rgb(100, 180, 255),
+                heading: accent,
                 code_bg: Color32::from_rgb(45, 45, 45),
                 list_marker: Color32::from_rgb(150, 150, 150),
                 muted: Color32::from_rgb(120, 120, 120),
@@ -95,12 +103,21 @@ impl WidgetColors {
         } else {
             Self {
                 text: Color32::from_rgb(30, 30, 30),
-                heading: Color32::from_rgb(0, 100, 180),
+                heading: accent,
                 code_bg: Color32::from_rgb(245, 245, 245),
                 list_marker: Color32::from_rgb(100, 100, 100),
                 muted: Color32::from_rgb(150, 150, 150),
             }
         }
+    }
+
+    /// Resolve colors using markdown frame accent when set (see [`crate::markdown::MarkdownEditor`]).
+    pub fn resolved(ui: &Ui, theme: Theme) -> Self {
+        let accent = ui
+            .ctx()
+            .data(|d| d.get_temp::<Color32>(crate::markdown::markdown_accent_temp_id()))
+            .unwrap_or_else(|| crate::theme::accent::default_accent());
+        Self::from_theme(theme, ui.visuals(), accent)
     }
 }
 
@@ -180,7 +197,7 @@ impl<'a> EditableHeading<'a> {
     pub fn show(self, ui: &mut Ui) -> WidgetOutput {
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let original_text = self.text.clone();
         let original_level = *self.level;
@@ -355,7 +372,7 @@ impl<'a> EditableParagraph<'a> {
     pub fn show(self, ui: &mut Ui) -> WidgetOutput {
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let original_text = self.text.clone();
 
@@ -512,7 +529,7 @@ impl<'a> EditableList<'a> {
     pub fn show(self, ui: &mut Ui) -> WidgetOutput {
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let original_items: Vec<ListItem> = self.items.clone();
         let original_type = *self.list_type;
@@ -588,7 +605,11 @@ impl<'a> EditableList<'a> {
                 }
 
                 // Remove button (if controls enabled)
-                if self.show_controls && ui.small_button("×").on_hover_text(t!("widgets.list.remove_item").to_string()).clicked()
+                if self.show_controls
+                    && ui
+                        .small_button("×")
+                        .on_hover_text(t!("widgets.list.remove_item").to_string())
+                        .clicked()
                 {
                     item_to_remove = Some(i);
                 }
@@ -973,7 +994,15 @@ fn build_cell_layout_job(
     let mut job = egui::text::LayoutJob::default();
     job.wrap.max_width = wrap_width;
     parse_inline_markdown(
-        text, &mut job, false, false, false, font_size, editor_font, text_color, code_bg,
+        text,
+        &mut job,
+        false,
+        false,
+        false,
+        font_size,
+        editor_font,
+        text_color,
+        code_bg,
     );
     if job.sections.is_empty() {
         let family = get_styled_font_family(false, false, editor_font);
@@ -1002,7 +1031,15 @@ fn build_cell_layout_job_with_base_bold(
     let mut job = egui::text::LayoutJob::default();
     job.wrap.max_width = wrap_width;
     parse_inline_markdown(
-        text, &mut job, true, false, false, font_size, editor_font, text_color, code_bg,
+        text,
+        &mut job,
+        true,
+        false,
+        false,
+        font_size,
+        editor_font,
+        text_color,
+        code_bg,
     );
     if job.sections.is_empty() {
         let family = get_styled_font_family(true, false, editor_font);
@@ -1040,10 +1077,28 @@ fn parse_inline_markdown(
         if i + 2 < len && bytes[i] == b'*' && bytes[i + 1] == b'*' && bytes[i + 2] == b'*' {
             // *** bold+italic delimiter (must be checked before **)
             if let Some(close) = find_closing_delimiter(&text[i + 3..], "***") {
-                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
                 parse_inline_markdown(
-                    &text[i + 3..i + 3 + close], job, !bold, !italic, strike,
-                    font_size, editor_font, text_color, code_bg,
+                    &text[i + 3..i + 3 + close],
+                    job,
+                    !bold,
+                    !italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                    code_bg,
                 );
                 i = i + 3 + close + 3;
                 plain_start = i;
@@ -1053,10 +1108,28 @@ fn parse_inline_markdown(
         } else if i + 1 < len && bytes[i] == b'*' && bytes[i + 1] == b'*' {
             // ** bold delimiter
             if let Some(close) = find_closing_delimiter(&text[i + 2..], "**") {
-                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
                 parse_inline_markdown(
-                    &text[i + 2..i + 2 + close], job, !bold, italic, strike,
-                    font_size, editor_font, text_color, code_bg,
+                    &text[i + 2..i + 2 + close],
+                    job,
+                    !bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                    code_bg,
                 );
                 i = i + 2 + close + 2;
                 plain_start = i;
@@ -1066,10 +1139,28 @@ fn parse_inline_markdown(
         } else if i + 1 < len && bytes[i] == b'~' && bytes[i + 1] == b'~' {
             // ~~ strikethrough delimiter
             if let Some(close) = find_closing_delimiter(&text[i + 2..], "~~") {
-                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
                 parse_inline_markdown(
-                    &text[i + 2..i + 2 + close], job, bold, italic, !strike,
-                    font_size, editor_font, text_color, code_bg,
+                    &text[i + 2..i + 2 + close],
+                    job,
+                    bold,
+                    italic,
+                    !strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                    code_bg,
                 );
                 i = i + 2 + close + 2;
                 plain_start = i;
@@ -1079,7 +1170,18 @@ fn parse_inline_markdown(
         } else if bytes[i] == b'`' {
             // Inline code (no nesting)
             if let Some(close) = find_closing_delimiter(&text[i + 1..], "`") {
-                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
                 let code_text = &text[i + 1..i + 1 + close];
                 job.append(
                     code_text,
@@ -1099,10 +1201,28 @@ fn parse_inline_markdown(
         } else if bytes[i] == b'*' && (i + 1 >= len || bytes[i + 1] != b'*') {
             // * italic delimiter (but not **)
             if let Some(close) = find_closing_single_star(&text[i + 1..]) {
-                flush_plain(text, plain_start, i, job, bold, italic, strike, font_size, editor_font, text_color);
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
                 parse_inline_markdown(
-                    &text[i + 1..i + 1 + close], job, bold, !italic, strike,
-                    font_size, editor_font, text_color, code_bg,
+                    &text[i + 1..i + 1 + close],
+                    job,
+                    bold,
+                    !italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                    code_bg,
                 );
                 i = i + 1 + close + 1;
                 plain_start = i;
@@ -1114,7 +1234,18 @@ fn parse_inline_markdown(
         }
     }
 
-    flush_plain(text, plain_start, len, job, bold, italic, strike, font_size, editor_font, text_color);
+    flush_plain(
+        text,
+        plain_start,
+        len,
+        job,
+        bold,
+        italic,
+        strike,
+        font_size,
+        editor_font,
+        text_color,
+    );
 }
 
 /// Flush accumulated plain text as a formatted LayoutJob section.
@@ -1639,7 +1770,7 @@ impl<'a> EditableTable<'a> {
 
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let table_id = self.id.unwrap_or_else(|| ui.id().with("editable_table"));
 
@@ -1652,7 +1783,7 @@ impl<'a> EditableTable<'a> {
 
         // Track if we should signal a change to the source
         let mut changed = false;
-        
+
         // Track if any cell has focus this frame
         let mut any_cell_has_focus = false;
 
@@ -1836,17 +1967,17 @@ impl<'a> EditableTable<'a> {
         };
 
         // Main table frame
-        egui::Frame::none()
+        egui::Frame::new()
             .stroke(egui::Stroke::new(1.0, border_color))
-            .inner_margin(egui::Margin::symmetric(4.0, 0.0))
-            .rounding(6.0)
+            .inner_margin(egui::Margin::symmetric(4, 0))
+            .corner_radius(6)
             .shadow(if is_dark {
                 egui::epaint::Shadow::NONE
             } else {
                 egui::epaint::Shadow {
-                    offset: egui::vec2(0.0, 1.0),
-                    blur: 3.0,
-                    spread: 0.0,
+                    offset: [0, 1],
+                    blur: 3,
+                    spread: 0,
                     color: egui::Color32::from_black_alpha(8),
                 }
             })
@@ -1892,57 +2023,57 @@ impl<'a> EditableTable<'a> {
                                 cell_size,
                                 egui::Layout::top_down(egui::Align::LEFT),
                                 |ui| {
-                                ui.set_min_width(cw);
-                                ui.set_max_width(cw);
+                                    ui.set_min_width(cw);
+                                    ui.set_max_width(cw);
 
-                                ui.add_space(cell_v_pad);
-                                ui.horizontal(|ui| {
-                                    ui.add_space(cell_h_pad);
-                                    let inner_w = (cw - cell_h_pad * 2.0).max(20.0);
+                                    ui.add_space(cell_v_pad);
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(cell_h_pad);
+                                        let inner_w = (cw - cell_h_pad * 2.0).max(20.0);
 
-                                    if let Some(row) =
-                                        self.data.rows.get_mut(row_idx)
-                                    {
-                                        if let Some(cell) = row.get_mut(col_idx) {
-                                            let cell_id = table_id
-                                                .with("cell")
-                                                .with(row_idx)
-                                                .with(col_idx);
-                                            let font =
-                                                FontId::proportional(self.font_size);
+                                        if let Some(row) = self.data.rows.get_mut(row_idx) {
+                                            if let Some(cell) = row.get_mut(col_idx) {
+                                                let cell_id = table_id
+                                                    .with("cell")
+                                                    .with(row_idx)
+                                                    .with(col_idx);
+                                                let font = FontId::proportional(self.font_size);
 
-                                            let cell_has_focus =
-                                                ui.memory(|mem| mem.has_focus(cell_id));
-                                            let wants_focus =
-                                                pending_focus == Some((row_idx, col_idx));
+                                                let cell_has_focus =
+                                                    ui.memory(|mem| mem.has_focus(cell_id));
+                                                let wants_focus =
+                                                    pending_focus == Some((row_idx, col_idx));
 
-                                            if cell_has_focus || wants_focus {
-                                                // EDITING MODE: show raw TextEdit
-                                                let enter_pressed = cell_has_focus
-                                                    && ui.input_mut(|i| {
-                                                        i.consume_key(
-                                                            egui::Modifiers::NONE,
-                                                            Key::Enter,
-                                                        )
-                                                    });
-                                                let tab_pressed = cell_has_focus
-                                                    && ui.input_mut(|i| {
-                                                        i.consume_key(
-                                                            egui::Modifiers::NONE,
-                                                            Key::Tab,
-                                                        )
-                                                    });
-                                                let shift_tab_pressed = cell_has_focus
-                                                    && ui.input_mut(|i| {
-                                                        i.consume_key(
-                                                            egui::Modifiers::SHIFT,
-                                                            Key::Tab,
-                                                        )
-                                                    });
+                                                if cell_has_focus || wants_focus {
+                                                    // EDITING MODE: show raw TextEdit
+                                                    // Consume Shift+Tab before plain Tab — egui
+                                                    // treats Modifiers::NONE as matching Shift+Tab too
+                                                    // (`matches_logically`).
+                                                    let shift_tab_pressed = cell_has_focus
+                                                        && ui.input_mut(|i| {
+                                                            i.consume_key(
+                                                                egui::Modifiers::SHIFT,
+                                                                Key::Tab,
+                                                            )
+                                                        });
+                                                    let tab_pressed = cell_has_focus
+                                                        && ui.input_mut(|i| {
+                                                            i.consume_key(
+                                                                egui::Modifiers::NONE,
+                                                                Key::Tab,
+                                                            )
+                                                        });
+                                                    let enter_pressed = cell_has_focus
+                                                        && ui.input_mut(|i| {
+                                                            i.consume_key(
+                                                                egui::Modifiers::NONE,
+                                                                Key::Enter,
+                                                            )
+                                                        });
 
-                                                let wrap_font = font.clone();
-                                                let wrap_color = text_color;
-                                                let mut layouter =
+                                                    let wrap_font = font.clone();
+                                                    let wrap_color = text_color;
+                                                    let mut layouter =
                                                     move |ui_inner: &egui::Ui,
                                                           text: &str,
                                                           _wrap_width: f32| {
@@ -1957,85 +2088,112 @@ impl<'a> EditableTable<'a> {
                                                             .fonts(|f| f.layout_job(job))
                                                     };
 
-                                                let output =
-                                                    TextEdit::multiline(&mut cell.text)
-                                                        .id(cell_id)
-                                                        .font(font)
-                                                        .text_color(text_color)
-                                                        .frame(false)
-                                                        .desired_width(inner_w)
-                                                        .desired_rows(1)
-                                                        .layouter(&mut layouter)
-                                                        .show(ui);
+                                                    let output =
+                                                        TextEdit::multiline(&mut cell.text)
+                                                            .id(cell_id)
+                                                            .font(font)
+                                                            .text_color(text_color)
+                                                            .frame(false)
+                                                            .desired_width(inner_w)
+                                                            .desired_rows(1)
+                                                            // Default TextEdit steals Tab focus to egui tab order;
+                                                            // stay in-tab and handle Tab→next cell ourselves.
+                                                            .lock_focus(true)
+                                                            .layouter(&mut layouter)
+                                                            .show(ui);
 
-                                                if cell.text.contains('\n') {
-                                                    cell.text =
-                                                        cell.text.replace('\n', " ");
-                                                    edit_state.content_modified = true;
-                                                }
-
-                                                let response = output.response;
-                                                if wants_focus {
-                                                    response.request_focus();
-                                                }
-                                                if response.has_focus() {
-                                                    edit_state.focused_cell =
-                                                        Some((row_idx, col_idx));
-                                                    any_cell_has_focus = true;
-                                                    let nr = self.data.rows.len();
-                                                    let nc = self.data.num_columns;
-                                                    if tab_pressed {
-                                                        edit_state.move_next(nr, nc);
-                                                    } else if shift_tab_pressed {
-                                                        edit_state.move_prev(nc);
-                                                    } else if enter_pressed {
-                                                        edit_state.move_down(nr);
-                                                    } else if ui.input(|i| {
-                                                        i.key_pressed(Key::Escape)
-                                                    }) {
-                                                        edit_state.clear_focus();
-                                                        ui.memory_mut(|m| {
-                                                            m.surrender_focus(cell_id)
-                                                        });
+                                                    if cell.text.contains('\n') {
+                                                        cell.text = cell.text.replace('\n', " ");
+                                                        edit_state.content_modified = true;
                                                     }
-                                                }
-                                                if response.changed() {
-                                                    edit_state.content_modified = true;
-                                                }
-                                            } else {
-                                                // DISPLAY MODE: show rich text with inline formatting
-                                                let ef = self.editor_font.as_ref()
-                                                    .cloned()
-                                                    .unwrap_or(EditorFont::Inter);
-                                                let display_bold = is_header;
-                                                let job = if display_bold {
-                                                    build_cell_layout_job_with_base_bold(
-                                                        &cell.text, self.font_size, &ef,
-                                                        text_color, colors.code_bg, inner_w,
-                                                    )
+
+                                                    let response = output.response;
+                                                    if wants_focus {
+                                                        response.request_focus();
+                                                    }
+                                                    if response.has_focus() {
+                                                        edit_state.focused_cell =
+                                                            Some((row_idx, col_idx));
+                                                        any_cell_has_focus = true;
+                                                        let nr = self.data.rows.len();
+                                                        let nc = self.data.num_columns;
+                                                        if shift_tab_pressed {
+                                                            edit_state.move_prev(nc);
+                                                        } else if tab_pressed {
+                                                            edit_state.move_next(nr, nc);
+                                                        } else if enter_pressed {
+                                                            edit_state.move_down(nr);
+                                                        } else if ui
+                                                            .input(|i| i.key_pressed(Key::Escape))
+                                                        {
+                                                            edit_state.clear_focus();
+                                                            ui.memory_mut(|m| {
+                                                                m.surrender_focus(cell_id)
+                                                            });
+                                                        }
+                                                    }
+                                                    if response.changed() {
+                                                        edit_state.content_modified = true;
+                                                    }
                                                 } else {
-                                                    build_cell_layout_job(
-                                                        &cell.text, self.font_size, &ef,
-                                                        text_color, colors.code_bg, inner_w,
-                                                    )
-                                                };
-                                                let galley = ui
-                                                    .fonts(|f| f.layout_job(job));
-                                                let response = ui.add(
-                                                    egui::Label::new(galley)
-                                                        .sense(egui::Sense::click()),
-                                                );
-                                                if response.clicked()
-                                                    || response.double_clicked()
-                                                {
-                                                    edit_state.pending_focus =
-                                                        Some((row_idx, col_idx));
+                                                    // DISPLAY MODE: show rich text with inline formatting
+                                                    let ef = self
+                                                        .editor_font
+                                                        .as_ref()
+                                                        .cloned()
+                                                        .unwrap_or(EditorFont::Inter);
+                                                    let display_bold = is_header;
+                                                    let job = if display_bold {
+                                                        build_cell_layout_job_with_base_bold(
+                                                            &cell.text,
+                                                            self.font_size,
+                                                            &ef,
+                                                            text_color,
+                                                            colors.code_bg,
+                                                            inner_w,
+                                                        )
+                                                    } else {
+                                                        build_cell_layout_job(
+                                                            &cell.text,
+                                                            self.font_size,
+                                                            &ef,
+                                                            text_color,
+                                                            colors.code_bg,
+                                                            inner_w,
+                                                        )
+                                                    };
+                                                    let galley =
+                                                        ui.fonts(|f| f.layout_job(job));
+                                                    // Full inner rect: empty cells need a non-zero hit
+                                                    // target (Label + empty galley was zero-sized).
+                                                    let inner_h = (row_h - cell_v_pad * 2.0)
+                                                        .max(line_height);
+                                                    let (_, response) = ui.allocate_exact_size(
+                                                        egui::vec2(inner_w, inner_h),
+                                                        egui::Sense::click(),
+                                                    );
+                                                    ui.painter().galley(
+                                                        response.rect.min,
+                                                        galley,
+                                                        text_color,
+                                                    );
+
+                                                    if response.clicked()
+                                                        || response.double_clicked()
+                                                    {
+                                                        edit_state.pending_focus =
+                                                            Some((row_idx, col_idx));
+                                                    }
+                                                    if response.hovered() {
+                                                        ui.ctx()
+                                                            .set_cursor_icon(egui::CursorIcon::Text);
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                });
-                            });
+                                    });
+                                },
+                            );
                         }
                     });
 
@@ -2058,10 +2216,8 @@ impl<'a> EditableTable<'a> {
                     } else {
                         cell_bg
                     };
-                    ui.painter().set(
-                        bg_idx,
-                        egui::Shape::rect_filled(bg_rect, 0.0, bg_color),
-                    );
+                    ui.painter()
+                        .set(bg_idx, egui::Shape::rect_filled(bg_rect, 0.0, bg_color));
                     let row_y_min = actual_rect.min.y;
                     let row_y_max = actual_rect.max.y;
 
@@ -2100,26 +2256,19 @@ impl<'a> EditableTable<'a> {
                             egui::vec2(handle_half_w * 2.0, table_h),
                         );
                         let handle_id = table_id.with("col_resize").with(ci);
-                        let response = ui.interact(
-                            handle_rect,
-                            handle_id,
-                            egui::Sense::click_and_drag(),
-                        );
+                        let response =
+                            ui.interact(handle_rect, handle_id, egui::Sense::click_and_drag());
 
                         if response.hovered() || response.dragged() {
-                            ui.ctx()
-                                .set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                         }
 
                         if response.dragged() {
                             let delta = response.drag_delta().x;
                             let mut widths = col_widths.clone();
                             let new_left = (widths[ci] + delta).max(min_col_width);
-                            let new_right =
-                                (widths[ci + 1] - delta).max(min_col_width);
-                            if new_left >= min_col_width
-                                && new_right >= min_col_width
-                            {
+                            let new_right = (widths[ci + 1] - delta).max(min_col_width);
+                            if new_left >= min_col_width && new_right >= min_col_width {
                                 widths[ci] = new_left;
                                 widths[ci + 1] = new_right;
                                 edit_state.custom_col_widths = Some(widths);
@@ -2144,14 +2293,14 @@ impl<'a> EditableTable<'a> {
                 if self.show_controls {
                     ui.add_space(2.0);
 
-                    egui::Frame::none()
+                    egui::Frame::new()
                         .fill(hover_bg)
-                        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
-                        .rounding(egui::Rounding {
-                            nw: 0.0,
-                            ne: 0.0,
-                            sw: 6.0,
-                            se: 6.0,
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .corner_radius(egui::CornerRadius {
+                            nw: 0,
+                            ne: 0,
+                            sw: 6,
+                            se: 6,
                         })
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -2159,11 +2308,9 @@ impl<'a> EditableTable<'a> {
 
                                 let add_row_btn = ui.add(
                                     egui::Button::new(
-                                        RichText::new(
-                                            t!("widgets.table.add_row").to_string(),
-                                        )
-                                        .size(self.font_size * 0.85)
-                                        .color(control_color),
+                                        RichText::new(t!("widgets.table.add_row").to_string())
+                                            .size(self.font_size * 0.85)
+                                            .color(control_color),
                                     )
                                     .frame(false),
                                 );
@@ -2177,9 +2324,7 @@ impl<'a> EditableTable<'a> {
                                     );
                                 }
                                 if add_row_btn
-                                    .on_hover_text(
-                                        t!("widgets.table.add_row_tooltip").to_string(),
-                                    )
+                                    .on_hover_text(t!("widgets.table.add_row_tooltip").to_string())
                                     .clicked()
                                 {
                                     action = Some(TableAction::AddRow);
@@ -2187,11 +2332,9 @@ impl<'a> EditableTable<'a> {
 
                                 let add_col_btn = ui.add(
                                     egui::Button::new(
-                                        RichText::new(
-                                            t!("widgets.table.add_column").to_string(),
-                                        )
-                                        .size(self.font_size * 0.85)
-                                        .color(control_color),
+                                        RichText::new(t!("widgets.table.add_column").to_string())
+                                            .size(self.font_size * 0.85)
+                                            .color(control_color),
                                     )
                                     .frame(false),
                                 );
@@ -2220,8 +2363,7 @@ impl<'a> EditableTable<'a> {
 
                                     ui.label(
                                         RichText::new(
-                                            t!("widgets.table.delete_column_label")
-                                                .to_string(),
+                                            t!("widgets.table.delete_column_label").to_string(),
                                         )
                                         .size(self.font_size * 0.8)
                                         .color(control_color),
@@ -2243,9 +2385,7 @@ impl<'a> EditableTable<'a> {
                                                 del_col_btn.rect.center(),
                                                 egui::Align2::CENTER_CENTER,
                                                 &col_label,
-                                                FontId::proportional(
-                                                    self.font_size * 0.8,
-                                                ),
+                                                FontId::proportional(self.font_size * 0.8),
                                                 control_hover_color,
                                             );
                                         }
@@ -2259,25 +2399,20 @@ impl<'a> EditableTable<'a> {
                                             )
                                             .clicked()
                                         {
-                                            action =
-                                                Some(TableAction::RemoveColumn(col));
+                                            action = Some(TableAction::RemoveColumn(col));
                                         }
                                     }
                                 }
 
-                                if self.show_alignment_controls
-                                    && self.data.num_columns > 0
-                                {
+                                if self.show_alignment_controls && self.data.num_columns > 0 {
                                     ui.add_space(4.0);
                                     ui.separator();
                                     ui.add_space(4.0);
 
                                     ui.label(
-                                        RichText::new(
-                                            t!("widgets.table.align_label").to_string(),
-                                        )
-                                        .size(self.font_size * 0.8)
-                                        .color(control_color),
+                                        RichText::new(t!("widgets.table.align_label").to_string())
+                                            .size(self.font_size * 0.8)
+                                            .color(control_color),
                                     );
 
                                     for col in 0..self.data.num_columns {
@@ -2289,24 +2424,18 @@ impl<'a> EditableTable<'a> {
                                             .unwrap_or(TableAlignment::None);
 
                                         let (align_icon, tooltip) = match align {
-                                            TableAlignment::Left => (
-                                                "⬅",
-                                                t!("widgets.table.align_left").to_string(),
-                                            ),
-                                            TableAlignment::Center => (
-                                                "⬌",
-                                                t!("widgets.table.align_center")
-                                                    .to_string(),
-                                            ),
-                                            TableAlignment::Right => (
-                                                "➡",
-                                                t!("widgets.table.align_right")
-                                                    .to_string(),
-                                            ),
-                                            TableAlignment::None => (
-                                                "—",
-                                                t!("widgets.table.align_none").to_string(),
-                                            ),
+                                            TableAlignment::Left => {
+                                                ("⬅", t!("widgets.table.align_left").to_string())
+                                            }
+                                            TableAlignment::Center => {
+                                                ("⬌", t!("widgets.table.align_center").to_string())
+                                            }
+                                            TableAlignment::Right => {
+                                                ("➡", t!("widgets.table.align_right").to_string())
+                                            }
+                                            TableAlignment::None => {
+                                                ("—", t!("widgets.table.align_none").to_string())
+                                            }
                                         };
 
                                         let align_btn = ui.add(
@@ -2318,14 +2447,10 @@ impl<'a> EditableTable<'a> {
                                             .frame(false),
                                         );
                                         if align_btn
-                                            .on_hover_text(format!(
-                                                "{} (click to cycle)",
-                                                tooltip
-                                            ))
+                                            .on_hover_text(format!("{} (click to cycle)", tooltip))
                                             .clicked()
                                         {
-                                            action =
-                                                Some(TableAction::CycleAlignment(col));
+                                            action = Some(TableAction::CycleAlignment(col));
                                         }
                                     }
                                 }
@@ -2356,13 +2481,13 @@ impl<'a> EditableTable<'a> {
         // Detect focus loss: had focus last frame but not this frame
         // This is when we commit cell edits to the source
         let focus_lost = edit_state.had_focus_last_frame && !any_cell_has_focus;
-        
+
         if focus_lost && edit_state.content_modified {
             // Focus left the table and content was modified - signal change
             changed = true;
             edit_state.content_modified = false;
         }
-        
+
         // Update focus tracking for next frame
         edit_state.had_focus_last_frame = any_cell_has_focus;
 
@@ -2371,7 +2496,8 @@ impl<'a> EditableTable<'a> {
 
         // Save the edit state back to memory
         ui.memory_mut(|mem| {
-            mem.data.insert_temp(table_id.with("edit_state"), edit_state);
+            mem.data
+                .insert_temp(table_id.with("edit_state"), edit_state);
         });
 
         // Generate markdown output
@@ -2709,6 +2835,15 @@ impl CodeBlockData {
     }
 }
 
+fn truncate_run_output(s: &str, max_chars: usize) -> String {
+    let t = s.trim_end();
+    let count = t.chars().count();
+    if count <= max_chars {
+        return t.to_string();
+    }
+    t.chars().take(max_chars).collect::<String>() + "…"
+}
+
 /// Output from the EditableCodeBlock widget.
 #[derive(Debug, Clone)]
 pub struct CodeBlockOutput {
@@ -2722,6 +2857,9 @@ pub struct CodeBlockOutput {
     pub code: String,
     /// The current language
     pub language: String,
+    /// User requested inserting the captured run output as a fenced block.
+    /// Carries the plain-text body for the new ```output block.
+    pub insert_output_below: Option<String>,
 }
 
 /// An editable code block widget with syntax highlighting and language selection.
@@ -2805,10 +2943,63 @@ impl<'a> EditableCodeBlock<'a> {
 
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         // Use the provided ID (required for uniqueness)
         let block_id = self.id.expect("EditableCodeBlock requires an explicit ID");
+
+        let exec_ctx = ui
+            .memory(|mem| {
+                mem.data
+                    .get_temp::<CodeExecutionUi>(code_exec_mod::code_execution_ctx_id())
+            })
+            .unwrap_or_else(CodeExecutionUi::disabled);
+
+        // Per-block run handle (live state) and the toast-fallback flag for
+        // when inline output is disabled in settings.
+        let run_key = block_id.with("run_handle");
+        let toast_emitted_key = block_id.with("run_toast_emitted");
+
+        let run_handle: Option<RunHandle> =
+            ui.memory(|mem| mem.data.get_temp::<RunHandle>(run_key));
+
+        // Snapshot the live state once per frame for rendering.
+        let run_snapshot: Option<RunSnapshot> = run_handle.as_ref().and_then(|h| {
+            h.lock().ok().map(|s| RunSnapshot {
+                status: s.status.clone(),
+                stdout: s.stdout.clone(),
+                stderr: s.stderr.clone(),
+                elapsed: s.elapsed(),
+                timeout_secs: s.timeout_secs,
+                cancel_requested: s.cancel_requested(),
+            })
+        });
+
+        // Toast fallback when inline output is disabled in settings.
+        if !exec_ctx.show_inline_output {
+            if let Some(ref snap) = run_snapshot {
+                if !snap.status.is_running() {
+                    let already = ui
+                        .memory(|mem| mem.data.get_temp::<bool>(toast_emitted_key))
+                        .unwrap_or(false);
+                    if !already {
+                        let msg = format_completion_toast(snap);
+                        code_exec_mod::push_code_execution_toast(ui.ctx(), msg);
+                        ui.memory_mut(|mem| mem.data.insert_temp(toast_emitted_key, true));
+                    }
+                }
+            }
+        }
+
+        // Keep repainting while a run is in progress so streaming output and
+        // elapsed time stay current.
+        if run_snapshot.as_ref().is_some_and(|s| s.status.is_running()) {
+            ui.ctx().request_repaint_after(Duration::from_millis(80));
+        }
+
+        let mut insert_output_below: Option<String> = None;
+        let mut dismiss_run = false;
+        let mut cancel_run = false;
 
         // Track changes
         let original_code = self.data.code.clone();
@@ -2836,18 +3027,18 @@ impl<'a> EditableCodeBlock<'a> {
         // Add some vertical spacing before code block
         ui.add_space(4.0);
 
-        egui::Frame::none()
+        egui::Frame::new()
             .fill(code_block_bg)
             .stroke(egui::Stroke::new(1.0, border_color))
-            .inner_margin(egui::Margin::symmetric(12.0, 8.0))
-            .rounding(6.0)
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .corner_radius(6)
             .show(ui, |ui| {
                 // Header row with language selector/label and buttons
                 ui.horizontal(|ui| {
                     if self.data.is_editing {
                         // Language dropdown in edit mode - use unique ID
                         let current_display = language_display_name(&self.data.language);
-                        egui::ComboBox::from_id_source(block_id.with("lang"))
+                        egui::ComboBox::from_id_salt(block_id.with("lang"))
                             .selected_text(current_display)
                             .width(120.0)
                             .show_ui(ui, |ui| {
@@ -2902,6 +3093,50 @@ impl<'a> EditableCodeBlock<'a> {
                         {
                             self.data.is_editing = !self.data.is_editing;
                         }
+
+                        if code_exec_mod::run_button_visible(&exec_ctx, &self.data.language) {
+                            let is_running =
+                                run_snapshot.as_ref().is_some_and(|s| s.status.is_running());
+                            let run = egui::Button::new(
+                                RichText::new(format!("▶ {}", t!("widgets.code_block.run_label")))
+                                    .small(),
+                            )
+                            .small();
+                            let run_resp = ui.add_enabled(!is_running, run).on_hover_text(format!(
+                                "{} — {}",
+                                t!("widgets.code_block.run_label"),
+                                t!("widgets.code_block.run_tooltip")
+                            ));
+                            if run_resp.clicked() {
+                                let timeout = Duration::from_secs(exec_ctx.timeout_secs as u64);
+                                let ready = exec_ctx.consent_acknowledged && exec_ctx.enable;
+                                if ready {
+                                    let handle = code_exec_mod::spawn_run(
+                                        self.data.code.clone(),
+                                        self.data.language.clone(),
+                                        exec_ctx.working_directory.clone(),
+                                        timeout,
+                                        ui.ctx().clone(),
+                                    );
+                                    ui.memory_mut(|mem| {
+                                        mem.data.insert_temp(run_key, handle);
+                                        mem.data.remove::<bool>(toast_emitted_key);
+                                    });
+                                } else {
+                                    code_exec_mod::push_pending_code_execution_consent(
+                                        ui.ctx(),
+                                        crate::state::PendingCodeRun {
+                                            code: self.data.code.clone(),
+                                            language: self.data.language.clone(),
+                                            cwd: exec_ctx.working_directory.clone(),
+                                            timeout_secs: exec_ctx.timeout_secs,
+                                            block_id,
+                                        },
+                                    );
+                                }
+                                ui.ctx().request_repaint();
+                            }
+                        }
                     });
                 });
 
@@ -2913,9 +3148,15 @@ impl<'a> EditableCodeBlock<'a> {
                 // This ensures long code lines scroll horizontally instead of expanding
                 // the parent layout and breaking max_line_width for subsequent content.
                 // See: ROADMAP.md "Blockquote/code block overflow"
+                //
+                // auto_shrink: x=false (always fill width to allow horizontal scrolling),
+                // y=true (size to content height). Setting y=false here would make the
+                // perpendicular axis claim the full available height (egui's
+                // `inner_size.max(content_size)` rule) and stretch a single code block
+                // over the entire viewport, hiding subsequent fenced blocks (issue #129).
                 egui::ScrollArea::horizontal()
                     .id_source(block_id.with("scroll"))
-                    .auto_shrink([false, false])
+                    .auto_shrink([false, true])
                     .show(ui, |ui| {
                         if self.data.is_editing {
                             // Edit mode: show plain text editor with unique ID
@@ -2931,8 +3172,11 @@ impl<'a> EditableCodeBlock<'a> {
                             // No auto-exit - user must click "Done" button
                         } else {
                             // View mode: show syntax-highlighted code
-                            let highlighted_lines =
-                                highlight_code(&self.data.code, &self.data.language, self.dark_mode);
+                            let highlighted_lines = highlight_code(
+                                &self.data.code,
+                                &self.data.language,
+                                self.dark_mode,
+                            );
 
                             ui.vertical(|ui| {
                                 if highlighted_lines.is_empty() {
@@ -2962,7 +3206,47 @@ impl<'a> EditableCodeBlock<'a> {
                             // No click-to-edit - user must click "Edit" button
                         }
                     });
+
+                // Inline output panel — rendered inside the same frame so
+                // visual grouping ties the run to its source block.
+                if exec_ctx.show_inline_output {
+                    if let Some(snap) = run_snapshot.as_ref() {
+                        let mut response = OutputPanelResponse::default();
+                        render_run_output_panel(
+                            ui,
+                            block_id,
+                            snap,
+                            self.font_size,
+                            self.dark_mode,
+                            &colors,
+                            &mut response,
+                        );
+                        if response.dismiss {
+                            dismiss_run = true;
+                        }
+                        if response.stop {
+                            cancel_run = true;
+                        }
+                        if let Some(body) = response.insert_output_below {
+                            insert_output_below = Some(body);
+                        }
+                    }
+                }
             });
+
+        if cancel_run {
+            if let Some(handle) = run_handle.as_ref() {
+                code_exec_mod::cancel(handle);
+                ui.ctx().request_repaint();
+            }
+        }
+
+        if dismiss_run {
+            ui.memory_mut(|mem| {
+                mem.data.remove::<RunHandle>(run_key);
+                mem.data.remove::<bool>(toast_emitted_key);
+            });
+        }
 
         // Add some vertical spacing after code block
         ui.add_space(4.0);
@@ -2977,7 +3261,378 @@ impl<'a> EditableCodeBlock<'a> {
             markdown: self.data.to_markdown(),
             code: self.data.code.clone(),
             language: self.data.language.clone(),
+            insert_output_below,
         }
+    }
+}
+
+/// Snapshot of a [`code_exec_mod::RunState`] taken once per frame for
+/// rendering. Cloning a frozen view keeps the lock contention minimal.
+struct RunSnapshot {
+    status: RunStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    elapsed: Duration,
+    /// Configured timeout, surfaced from `RunState.timeout_secs` so the panel
+    /// can render `Timed out after Ns` without re-reading settings.
+    timeout_secs: u32,
+    /// True once Stop has been clicked, even if the worker has not yet
+    /// observed the flag and transitioned to `RunStatus::Cancelled`.
+    cancel_requested: bool,
+}
+
+#[derive(Default)]
+struct OutputPanelResponse {
+    dismiss: bool,
+    /// User clicked the **Stop** button while the run was live.
+    stop: bool,
+    insert_output_below: Option<String>,
+}
+
+fn render_run_output_panel(
+    ui: &mut Ui,
+    block_id: egui::Id,
+    snap: &RunSnapshot,
+    font_size: f32,
+    dark_mode: bool,
+    widget_colors: &WidgetColors,
+    response: &mut OutputPanelResponse,
+) {
+    let theme = if dark_mode {
+        TerminalTheme::ferrite_dark()
+    } else {
+        TerminalTheme::ferrite_light()
+    };
+    let panel_bg = if dark_mode {
+        egui::Color32::from_rgb(24, 28, 34)
+    } else {
+        egui::Color32::from_rgb(245, 247, 250)
+    };
+    let panel_border = if dark_mode {
+        egui::Color32::from_rgb(55, 60, 68)
+    } else {
+        egui::Color32::from_rgb(205, 212, 220)
+    };
+    let muted = widget_colors.muted;
+
+    ui.add_space(6.0);
+    ui.separator();
+    ui.add_space(4.0);
+
+    let (status_glyph, status_text, status_color) = run_status_label(snap);
+    let is_running = snap.status.is_running();
+    // Subtle spinner rotation tied to elapsed time gives a visible cue that
+    // the UI thread is still ticking even when the child produces no output.
+    let display_glyph = if is_running {
+        running_spinner_frame(snap.elapsed)
+    } else {
+        status_glyph
+    };
+
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(format!("{} {}", display_glyph, status_text))
+                .color(status_color)
+                .strong()
+                .small(),
+        );
+        ui.label(
+            RichText::new(format!("· {}", format_duration(snap.elapsed)))
+                .color(muted)
+                .small(),
+        );
+        if matches!(&snap.status, RunStatus::Failed { .. }) {
+            if let RunStatus::Failed { message } = &snap.status {
+                ui.label(
+                    RichText::new(format!("· {}", truncate_run_output(message, 200)))
+                        .color(muted)
+                        .small(),
+                );
+            }
+        }
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Stop sits in the same slot as Dismiss while live; Dismiss is
+            // hidden during a run so the user only ever sees the actionable
+            // button for the current state.
+            if is_running {
+                let stop_enabled = !snap.cancel_requested;
+                let stop_btn = egui::Button::new(
+                    RichText::new(format!("⏹ {}", t!("widgets.code_block.run_stop"))).small(),
+                )
+                .small();
+                if ui
+                    .add_enabled(stop_enabled, stop_btn)
+                    .on_hover_text(t!("widgets.code_block.run_stop_tooltip").to_string())
+                    .clicked()
+                {
+                    response.stop = true;
+                }
+            } else if ui
+                .add(egui::Button::new(t!("widgets.code_block.run_dismiss").to_string()).small())
+                .on_hover_text(t!("widgets.code_block.run_dismiss_tooltip").to_string())
+                .clicked()
+            {
+                response.dismiss = true;
+            }
+            let no_output = snap.stdout.is_empty() && snap.stderr.is_empty();
+            if !no_output {
+                if ui
+                    .add(
+                        egui::Button::new(t!("widgets.code_block.run_copy_output").to_string())
+                            .small(),
+                    )
+                    .on_hover_text(t!("widgets.code_block.run_copy_output_tooltip").to_string())
+                    .clicked()
+                {
+                    let combined = combine_streams_plain(&snap.stdout, &snap.stderr);
+                    ui.ctx().copy_text(combined);
+                }
+                if ui
+                    .add(
+                        egui::Button::new(t!("widgets.code_block.run_insert_output").to_string())
+                            .small(),
+                    )
+                    .on_hover_text(t!("widgets.code_block.run_insert_output_tooltip").to_string())
+                    .clicked()
+                {
+                    response.insert_output_below =
+                        Some(combine_streams_plain(&snap.stdout, &snap.stderr));
+                }
+            }
+        });
+    });
+
+    egui::Frame::new()
+        .fill(panel_bg)
+        .stroke(egui::Stroke::new(1.0, panel_border))
+        .inner_margin(egui::Margin::symmetric(8, 6))
+        .corner_radius(4)
+        .show(ui, |ui| {
+            let stdout_lines = ansi_render::parse(&snap.stdout);
+            let stderr_lines = ansi_render::parse(&snap.stderr);
+            let no_output = stdout_lines.is_empty() && stderr_lines.is_empty();
+
+            if no_output && !snap.status.is_running() {
+                ui.vertical(|ui| {
+                    ui.label(
+                        RichText::new(t!("widgets.code_block.run_no_output").to_string())
+                            .color(muted)
+                            .italics()
+                            .font(FontId::monospace(font_size)),
+                    );
+                    if matches!(
+                        &snap.status,
+                        RunStatus::Completed {
+                            exit_code: Some(0),
+                        }
+                    ) {
+                        ui.label(
+                            RichText::new(t!("widgets.code_block.run_no_output_hint").to_string())
+                                .color(muted)
+                                .small()
+                                .italics(),
+                        );
+                    }
+                });
+                return;
+            }
+
+            egui::ScrollArea::vertical()
+                .id_salt(block_id.with("run_output_scroll"))
+                .max_height(220.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    egui::ScrollArea::horizontal()
+                        .id_salt(block_id.with("run_output_hscroll"))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ansi_render::render_lines(
+                                ui,
+                                &stdout_lines,
+                                font_size,
+                                theme.foreground,
+                                theme.background,
+                                &theme.ansi_colors,
+                            );
+
+                            if !stderr_lines.is_empty() {
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new(format!(
+                                        "── {} ──",
+                                        t!("widgets.code_block.run_stderr_heading")
+                                    ))
+                                    .color(muted)
+                                    .small()
+                                    .italics(),
+                                );
+                                ansi_render::render_lines(
+                                    ui,
+                                    &stderr_lines,
+                                    font_size,
+                                    theme.foreground,
+                                    theme.background,
+                                    &theme.ansi_colors,
+                                );
+                            }
+                        });
+                });
+        });
+}
+
+fn run_status_label(snap: &RunSnapshot) -> (&'static str, String, egui::Color32) {
+    match &snap.status {
+        RunStatus::Running => (
+            "⟳",
+            t!("widgets.code_block.run_status_running").to_string(),
+            egui::Color32::from_rgb(120, 170, 255),
+        ),
+        RunStatus::Completed { exit_code: Some(0) } => (
+            "✓",
+            t!("widgets.code_block.run_status_success").to_string(),
+            egui::Color32::from_rgb(120, 200, 130),
+        ),
+        RunStatus::Completed {
+            exit_code: Some(code),
+        } => (
+            "✗",
+            t!(
+                "widgets.code_block.run_status_failure",
+                code = code.to_string()
+            )
+            .to_string(),
+            egui::Color32::from_rgb(230, 100, 100),
+        ),
+        RunStatus::Completed { exit_code: None } => (
+            "✗",
+            t!("widgets.code_block.run_status_failure_unknown").to_string(),
+            egui::Color32::from_rgb(230, 100, 100),
+        ),
+        RunStatus::TimedOut => (
+            "✗",
+            t!(
+                "widgets.code_block.run_status_timed_out",
+                secs = snap.timeout_secs.to_string()
+            )
+            .to_string(),
+            egui::Color32::from_rgb(230, 150, 70),
+        ),
+        RunStatus::Cancelled => (
+            "✗",
+            t!("widgets.code_block.run_status_cancelled").to_string(),
+            egui::Color32::from_rgb(190, 190, 190),
+        ),
+        RunStatus::Failed { .. } => (
+            "✗",
+            t!("widgets.code_block.run_status_failed").to_string(),
+            egui::Color32::from_rgb(230, 100, 100),
+        ),
+    }
+}
+
+/// Pick a Braille spinner frame from the run's elapsed time so the running
+/// indicator visibly rotates without storing animation state in egui memory.
+fn running_spinner_frame(elapsed: Duration) -> &'static str {
+    const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let tick = (elapsed.as_millis() / 80) as usize;
+    FRAMES[tick % FRAMES.len()]
+}
+
+fn format_duration(d: Duration) -> String {
+    let total_ms = d.as_millis();
+    if total_ms < 1000 {
+        format!("{total_ms}ms")
+    } else if total_ms < 60_000 {
+        format!("{:.2}s", d.as_secs_f32())
+    } else {
+        let secs = d.as_secs();
+        format!("{}m {}s", secs / 60, secs % 60)
+    }
+}
+
+fn combine_streams_plain(stdout: &[u8], stderr: &[u8]) -> String {
+    let mut out = String::new();
+    if !stdout.is_empty() {
+        out.push_str(&strip_ansi(&String::from_utf8_lossy(stdout)));
+    }
+    if !stderr.is_empty() {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&strip_ansi(&String::from_utf8_lossy(stderr)));
+    }
+    out
+}
+
+/// Best-effort ANSI escape stripping for clipboard / fence insertion.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if let Some(&next) = chars.peek() {
+                if next == '[' {
+                    chars.next();
+                    while let Some(&cc) = chars.peek() {
+                        chars.next();
+                        if cc.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                    continue;
+                } else if next == ']' {
+                    chars.next();
+                    while let Some(&cc) = chars.peek() {
+                        chars.next();
+                        if cc == '\x07' {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn format_completion_toast(snap: &RunSnapshot) -> String {
+    let plain = combine_streams_plain(&snap.stdout, &snap.stderr);
+    match &snap.status {
+        RunStatus::Completed { exit_code: Some(0) } => t!(
+            "widgets.code_block.run_finished",
+            output = truncate_run_output(&plain, 2000)
+        )
+        .to_string(),
+        RunStatus::Completed { exit_code } => {
+            let code = exit_code.map_or_else(|| "?".to_string(), |c| c.to_string());
+            t!(
+                "widgets.code_block.run_failed",
+                error = format!("Exited with code {code}.\n{plain}")
+            )
+            .to_string()
+        }
+        RunStatus::TimedOut => t!(
+            "widgets.code_block.run_failed",
+            error = t!(
+                "widgets.code_block.run_status_timed_out",
+                secs = snap.timeout_secs.to_string()
+            )
+            .to_string()
+        )
+        .to_string(),
+        RunStatus::Cancelled => t!(
+            "widgets.code_block.run_failed",
+            error = t!("widgets.code_block.run_status_cancelled").to_string()
+        )
+        .to_string(),
+        RunStatus::Failed { message } => {
+            t!("widgets.code_block.run_failed", error = message).to_string()
+        }
+        RunStatus::Running => String::new(),
     }
 }
 
@@ -3141,7 +3796,7 @@ impl<'a> RenderedLinkWidget<'a> {
     pub fn show(self, ui: &mut Ui) -> RenderedLinkOutput {
         let colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let link_id = self.id.expect("RenderedLinkWidget requires an explicit ID");
 
@@ -3184,8 +3839,8 @@ impl<'a> RenderedLinkWidget<'a> {
         });
 
         // Check if pointer is over this link when released
-        let clicked_on_link = primary_released
-            && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
+        let clicked_on_link =
+            primary_released && pointer_pos.map_or(false, |pos| link_rect.contains(pos));
 
         // Track whether we consumed a click (to prevent parent from entering edit mode)
         let mut click_consumed = false;
@@ -3270,15 +3925,15 @@ impl<'a> RenderedLinkWidget<'a> {
                 .fixed_pos(popup_pos)
                 .order(egui::Order::Foreground)
                 .show(ui.ctx(), |ui| {
-                    egui::Frame::none()
+                    egui::Frame::new()
                         .fill(popup_bg)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .inner_margin(egui::Margin::same(12.0))
-                        .rounding(6.0)
+                        .inner_margin(egui::Margin::same(12))
+                        .corner_radius(6)
                         .shadow(egui::epaint::Shadow {
-                            offset: egui::vec2(0.0, 2.0),
-                            blur: 8.0,
-                            spread: 0.0,
+                            offset: [0, 2],
+                            blur: 8,
+                            spread: 0,
                             color: egui::Color32::from_black_alpha(40),
                         })
                         .show(ui, |ui| {
@@ -3333,8 +3988,10 @@ impl<'a> RenderedLinkWidget<'a> {
                                 let can_open = self.state.edit_url.starts_with("http://")
                                     || self.state.edit_url.starts_with("https://");
 
-                                let open_button =
-                                    ui.add_enabled(can_open, egui::Button::new(t!("widgets.link.open").to_string()));
+                                let open_button = ui.add_enabled(
+                                    can_open,
+                                    egui::Button::new(t!("widgets.link.open").to_string()),
+                                );
 
                                 // Store clicked state before consuming response
                                 let open_clicked = open_button.clicked();
@@ -3502,23 +4159,23 @@ impl MermaidDiagramType {
     pub fn icon(&self) -> &'static str {
         match self {
             Self::Flowchart => "📊",
-            Self::Sequence => "⇆",      // Simple bidirectional arrow (no variation selector)
-            Self::Class => "◇",         // Diamond shape for class diagrams
-            Self::State => "⟳",         // Circular arrow for state
+            Self::Sequence => "⇆", // Simple bidirectional arrow (no variation selector)
+            Self::Class => "◇",    // Diamond shape for class diagrams
+            Self::State => "⟳",    // Circular arrow for state
             Self::EntityRelationship => "🔗",
-            Self::UserJourney => "👤",   // Person silhouette
+            Self::UserJourney => "👤", // Person silhouette
             Self::Gantt => "📅",
-            Self::Pie => "◔",           // Circle with quarter fill for pie charts
+            Self::Pie => "◔", // Circle with quarter fill for pie charts
             Self::Quadrant => "📐",
             Self::Requirement => "📋",
             Self::GitGraph => "🌳",
             Self::C4 => "🏢",
-            Self::Mindmap => "💭",       // Thought bubble for mindmap
+            Self::Mindmap => "💭", // Thought bubble for mindmap
             Self::Timeline => "⏳",
             Self::ZenUML => "📦",
-            Self::Sankey => "≋",        // Triple tilde for flow/sankey
+            Self::Sankey => "≋", // Triple tilde for flow/sankey
             Self::XYChart => "📈",
-            Self::Block => "▦",         // Grid pattern for blocks
+            Self::Block => "▦", // Grid pattern for blocks
             Self::Unknown => "📊",
         }
     }
@@ -3554,12 +4211,10 @@ pub fn detect_mermaid_diagram_type(source: &str) -> MermaidDiagramType {
         || first_line_lower.starts_with("sequence")
     {
         MermaidDiagramType::Sequence
-    } else if first_line_lower.starts_with("classdiagram")
-        || first_line_lower.starts_with("class")
+    } else if first_line_lower.starts_with("classdiagram") || first_line_lower.starts_with("class")
     {
         MermaidDiagramType::Class
-    } else if first_line_lower.starts_with("statediagram")
-        || first_line_lower.starts_with("state")
+    } else if first_line_lower.starts_with("statediagram") || first_line_lower.starts_with("state")
     {
         MermaidDiagramType::State
     } else if first_line_lower.starts_with("erdiagram") || first_line_lower.starts_with("er") {
@@ -3614,6 +4269,13 @@ pub struct MermaidBlockData {
     pub is_rendering: bool,
     /// Original source (to detect changes)
     original_source: String,
+    /// Last source that successfully validated/rendered. Used to keep the
+    /// previous diagram visible while the user fixes a small typo, instead of
+    /// blanking the diagram on every transient parse failure.
+    pub last_good_source: Option<String>,
+    /// Most recent structured validation error (when current source fails to
+    /// parse). Preserved across frames so the warning header keeps showing.
+    pub last_error: Option<crate::markdown::mermaid::MermaidError>,
 }
 
 impl MermaidBlockData {
@@ -3629,6 +4291,8 @@ impl MermaidBlockData {
             rendered_svg: None,
             render_error: None,
             is_rendering: false,
+            last_good_source: None,
+            last_error: None,
         }
     }
 
@@ -3743,11 +4407,13 @@ impl<'a> MermaidBlock<'a> {
 
     /// Show the mermaid block widget and return the output.
     pub fn show(self, ui: &mut Ui) -> MermaidBlockOutput {
-        use crate::markdown::mermaid::{render_mermaid_diagram, RenderResult};
+        use crate::markdown::mermaid::{
+            render_mermaid_diagram, validate_mermaid_source, RenderResult,
+        };
 
         let _colors = self
             .colors
-            .unwrap_or_else(|| WidgetColors::from_theme(Theme::Light, ui.visuals()));
+            .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         // Use the provided ID or generate one
         let block_id = self.id.unwrap_or_else(|| egui::Id::new("mermaid_block"));
@@ -3798,24 +4464,24 @@ impl<'a> MermaidBlock<'a> {
         };
 
         // Main frame
-        let frame = egui::Frame::none()
+        let frame = egui::Frame::new()
             .fill(bg_color)
             .stroke(egui::Stroke::new(1.5, border_color))
-            .rounding(egui::Rounding::same(6.0))
-            .inner_margin(egui::Margin::same(0.0));
+            .corner_radius(egui::CornerRadius::same(6))
+            .inner_margin(egui::Margin::same(0));
 
         frame.show(ui, |ui| {
             ui.vertical(|ui| {
                 // Header with diagram type indicator
-                let header_frame = egui::Frame::none()
+                let header_frame = egui::Frame::new()
                     .fill(header_bg)
-                    .rounding(egui::Rounding {
-                        nw: 6.0,
-                        ne: 6.0,
-                        sw: 0.0,
-                        se: 0.0,
+                    .corner_radius(egui::CornerRadius {
+                        nw: 6,
+                        ne: 6,
+                        sw: 0,
+                        se: 0,
                     })
-                    .inner_margin(egui::Margin::symmetric(12.0, 8.0));
+                    .inner_margin(egui::Margin::symmetric(12, 8));
 
                 header_frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
@@ -3867,13 +4533,17 @@ impl<'a> MermaidBlock<'a> {
                 // Wrap in horizontal scroll area to handle wide diagrams without
                 // breaking max_line_width for subsequent content.
                 // See: ROADMAP.md "Blockquote/code block overflow"
-                let content_frame = egui::Frame::none()
-                    .inner_margin(egui::Margin::symmetric(12.0, 8.0));
+                let content_frame = egui::Frame::new()
+                    .inner_margin(egui::Margin::symmetric(12, 8));
 
                 content_frame.show(ui, |ui| {
+                    // See issue #129: auto_shrink y must be true so the inner
+                    // horizontal scroll area sizes to its content height instead
+                    // of consuming all remaining vertical space and pushing
+                    // subsequent fenced/mermaid blocks below the viewport.
                     egui::ScrollArea::horizontal()
-                        .id_source(block_id.with("scroll"))
-                        .auto_shrink([false, false])
+                        .id_salt(block_id.with("scroll"))
+                        .auto_shrink([false, true])
                         .show(ui, |ui| {
                             if self.data.show_source {
                                 // Show source code
@@ -3886,36 +4556,107 @@ impl<'a> MermaidBlock<'a> {
                                         .italics()
                                         .font(FontId::monospace(self.font_size)),
                                 );
+                                self.data.last_error = None;
                             } else {
-                                // Render diagram natively
-                                let result = render_mermaid_diagram(ui, &self.data.source, self.dark_mode, self.font_size);
-                                
-                                match result {
-                                    RenderResult::Success => {
-                                        // Diagram rendered successfully
+                                // Parse-only validate first so we know whether
+                                // to show the live source or fall back to the
+                                // last successfully rendered source.
+                                match validate_mermaid_source(&self.data.source) {
+                                    Ok(()) => {
+                                        let result = render_mermaid_diagram(
+                                            ui,
+                                            &self.data.source,
+                                            self.dark_mode,
+                                            self.font_size,
+                                        );
+                                        match result {
+                                            RenderResult::Success => {
+                                                self.data.last_good_source =
+                                                    Some(self.data.source.clone());
+                                                self.data.last_error = None;
+                                            }
+                                            RenderResult::ParseError(msg) => {
+                                                // Render-time failure (e.g. layout panic).
+                                                let err = crate::markdown::mermaid::MermaidError::from_message(
+                                                    &self.data.source,
+                                                    msg,
+                                                );
+                                                self.data.last_error = Some(err.clone());
+                                                show_validation_warning(
+                                                    ui,
+                                                    &err,
+                                                    self.font_size,
+                                                    self.dark_mode,
+                                                );
+                                                ui.add_space(8.0);
+                                                show_source_code(
+                                                    ui,
+                                                    block_id,
+                                                    &self.data.source,
+                                                    self.font_size,
+                                                    self.dark_mode,
+                                                    muted_color,
+                                                );
+                                            }
+                                            RenderResult::Unsupported(msg) => {
+                                                self.data.last_error = None;
+                                                ui.vertical_centered(|ui| {
+                                                    ui.label(
+                                                        RichText::new("🚧")
+                                                            .size(self.font_size * 2.0),
+                                                    );
+                                                    ui.add_space(4.0);
+                                                    ui.label(
+                                                        RichText::new(&msg)
+                                                            .color(accent_color)
+                                                            .size(self.font_size),
+                                                    );
+                                                });
+                                                ui.add_space(8.0);
+                                                show_source_code(
+                                                    ui,
+                                                    block_id,
+                                                    &self.data.source,
+                                                    self.font_size,
+                                                    self.dark_mode,
+                                                    muted_color,
+                                                );
+                                            }
+                                        }
                                     }
-                                    RenderResult::ParseError(msg) => {
-                                        // Show parse error
-                                        show_render_error(ui, &msg, muted_color, self.font_size, self.dark_mode);
-                                        ui.add_space(8.0);
-                                        show_source_code(ui, block_id, &self.data.source, self.font_size, self.dark_mode, muted_color);
-                                    }
-                                    RenderResult::Unsupported(msg) => {
-                                        // Show unsupported message with source
-                                        ui.vertical_centered(|ui| {
-                                            ui.label(
-                                                RichText::new("🚧")
-                                                    .size(self.font_size * 2.0),
+                                    Err(err) => {
+                                        self.data.last_error = Some(err.clone());
+                                        show_validation_warning(
+                                            ui,
+                                            &err,
+                                            self.font_size,
+                                            self.dark_mode,
+                                        );
+                                        ui.add_space(6.0);
+
+                                        if let Some(good) = self.data.last_good_source.clone() {
+                                            // Fall back to the last successful
+                                            // diagram so a transient typo
+                                            // doesn't blank the preview.
+                                            let _ = render_mermaid_diagram(
+                                                ui,
+                                                &good,
+                                                self.dark_mode,
+                                                self.font_size,
                                             );
-                                            ui.add_space(4.0);
-                                            ui.label(
-                                                RichText::new(&msg)
-                                                    .color(accent_color)
-                                                    .size(self.font_size),
+                                        } else {
+                                            // No good render to fall back to
+                                            // — show the source so the user
+                                            // can fix the issue.
+                                            show_source_code(
+                                                ui,
+                                                block_id,
+                                                &self.data.source,
+                                                self.font_size,
+                                                self.dark_mode,
+                                                muted_color,
                                             );
-                                        });
-                                        ui.add_space(8.0);
-                                        show_source_code(ui, block_id, &self.data.source, self.font_size, self.dark_mode, muted_color);
+                                        }
                                     }
                                 }
                             }
@@ -3924,13 +4665,13 @@ impl<'a> MermaidBlock<'a> {
 
                 // Render error display (if any stored in data)
                 if let Some(error) = &self.data.render_error {
-                    let error_frame = egui::Frame::none()
+                    let error_frame = egui::Frame::new()
                         .fill(if self.dark_mode {
                             egui::Color32::from_rgb(60, 30, 30)
                         } else {
                             egui::Color32::from_rgb(255, 240, 240)
                         })
-                        .inner_margin(egui::Margin::symmetric(12.0, 8.0));
+                        .inner_margin(egui::Margin::symmetric(12, 8));
 
                     error_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -3972,11 +4713,11 @@ fn show_source_code(
     muted_color: egui::Color32,
 ) {
     use crate::markdown::syntax::highlight_code;
-    
+
     let lines = highlight_code(source, "mermaid", dark_mode);
 
     egui::ScrollArea::vertical()
-        .id_source(block_id.with("scroll"))
+        .id_salt(block_id.with("scroll"))
         .max_height(300.0)
         .show(ui, |ui| {
             ui.vertical(|ui| {
@@ -4000,6 +4741,70 @@ fn show_source_code(
         });
 }
 
+/// Render the warning header for a Mermaid validation failure. Shows the
+/// offending line number, the parser message and an optional hint, all in a
+/// soft amber/red banner. When `last_good_source` is preserved on the data,
+/// this header is drawn *above* the previous good render so the user has
+/// continuous visual context while they fix the typo.
+fn show_validation_warning(
+    ui: &mut Ui,
+    error: &crate::markdown::mermaid::MermaidError,
+    font_size: f32,
+    dark_mode: bool,
+) {
+    let bg = if dark_mode {
+        egui::Color32::from_rgb(60, 45, 25)
+    } else {
+        egui::Color32::from_rgb(255, 246, 224)
+    };
+    let border = if dark_mode {
+        egui::Color32::from_rgb(180, 130, 40)
+    } else {
+        egui::Color32::from_rgb(220, 170, 70)
+    };
+    let text = if dark_mode {
+        egui::Color32::from_rgb(255, 215, 140)
+    } else {
+        egui::Color32::from_rgb(120, 80, 10)
+    };
+
+    egui::Frame::new()
+        .fill(bg)
+        .stroke(egui::Stroke::new(1.0, border))
+        .corner_radius(4)
+        .inner_margin(egui::Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("⚠").color(text).size(font_size + 1.0));
+                    ui.label(
+                        RichText::new(t!("mermaid.warning_line", line = error.line).to_string())
+                            .color(text)
+                            .strong()
+                            .size(font_size - 1.0),
+                    );
+                    ui.label(
+                        RichText::new(&error.message)
+                            .color(text)
+                            .size(font_size - 1.0),
+                    );
+                });
+                if let Some(hint) = &error.hint {
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(font_size + 6.0);
+                        ui.label(
+                            RichText::new(format!("💡 {}", hint))
+                                .color(text)
+                                .italics()
+                                .size(font_size - 2.0),
+                        );
+                    });
+                }
+            });
+        });
+}
+
 /// Show render error message.
 fn show_render_error(
     ui: &mut Ui,
@@ -4013,17 +4818,17 @@ fn show_render_error(
     } else {
         egui::Color32::from_rgb(255, 245, 245)
     };
-    
+
     let error_text = if dark_mode {
         egui::Color32::from_rgb(255, 180, 180)
     } else {
         egui::Color32::from_rgb(180, 50, 50)
     };
-    
-    egui::Frame::none()
+
+    egui::Frame::new()
         .fill(error_bg)
-        .rounding(4.0)
-        .inner_margin(egui::Margin::symmetric(8.0, 4.0))
+        .corner_radius(4)
+        .inner_margin(egui::Margin::symmetric(8, 4))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("⚠").color(error_text));
@@ -4170,8 +4975,16 @@ mod tests {
     #[test]
     fn test_widget_colors_from_theme() {
         // Just verify colors are created without panic
-        let dark = WidgetColors::from_theme(Theme::Dark, &egui::Visuals::dark());
-        let light = WidgetColors::from_theme(Theme::Light, &egui::Visuals::light());
+        let dark = WidgetColors::from_theme(
+            Theme::Dark,
+            &egui::Visuals::dark(),
+            crate::theme::accent::default_accent(),
+        );
+        let light = WidgetColors::from_theme(
+            Theme::Light,
+            &egui::Visuals::light(),
+            crate::theme::accent::default_accent(),
+        );
 
         assert!(dark.text.r() > 200); // Light text on dark
         assert!(light.text.r() < 50); // Dark text on light
@@ -4581,11 +5394,13 @@ mod tests {
             markdown: "```rust\ncode\n```".to_string(),
             code: "code".to_string(),
             language: "rust".to_string(),
+            insert_output_below: None,
         };
         assert!(output.changed);
         assert!(output.language_changed);
         assert_eq!(output.code, "code");
         assert_eq!(output.language, "rust");
+        assert!(output.insert_output_below.is_none());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -4790,10 +5605,7 @@ mod tests {
             detect_mermaid_diagram_type("unknown diagram type"),
             MermaidDiagramType::Unknown
         );
-        assert_eq!(
-            detect_mermaid_diagram_type(""),
-            MermaidDiagramType::Unknown
-        );
+        assert_eq!(detect_mermaid_diagram_type(""), MermaidDiagramType::Unknown);
     }
 
     #[test]
@@ -4830,7 +5642,10 @@ mod tests {
     #[test]
     fn test_mermaid_block_data_to_markdown() {
         let data = MermaidBlockData::new("flowchart TD\n  A --> B");
-        assert_eq!(data.to_markdown(), "```mermaid\nflowchart TD\n  A --> B\n```");
+        assert_eq!(
+            data.to_markdown(),
+            "```mermaid\nflowchart TD\n  A --> B\n```"
+        );
     }
 
     #[test]
@@ -4846,7 +5661,10 @@ mod tests {
     #[test]
     fn test_mermaid_diagram_type_display_name() {
         assert_eq!(MermaidDiagramType::Flowchart.display_name(), "Flowchart");
-        assert_eq!(MermaidDiagramType::Sequence.display_name(), "Sequence Diagram");
+        assert_eq!(
+            MermaidDiagramType::Sequence.display_name(),
+            "Sequence Diagram"
+        );
         assert_eq!(MermaidDiagramType::Class.display_name(), "Class Diagram");
         assert_eq!(MermaidDiagramType::Unknown.display_name(), "Diagram");
     }

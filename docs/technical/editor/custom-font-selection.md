@@ -27,8 +27,13 @@ Users can select any system font from Settings → Appearance → Font.
 
 1. The system font list is enumerated using `font-kit` crate on application startup
 2. Fonts are cached to avoid re-enumeration on each settings panel open
-3. When a custom font is selected, it's loaded dynamically and added to the font fallback chain
-4. The custom font name is stored in `config.json`
+3. Choosing **Custom** sets `EditorFont::Custom` with an **empty name** until the user picks a row in the combo; font reload runs **without** a custom primary face until then (Inter stays active). This avoids immediately loading the first sorted family name, which can fail on some macOS setups where enumeration names do not resolve the same way as `select_best_match` / path reads (GitHub [#133](https://github.com/OlaProeis/Ferrite/issues/133)).
+4. When a custom font is selected, it's loaded dynamically and added to the font fallback chain
+5. The custom font name is stored in `config.json`
+
+Empty custom names are normalized away when loading settings (`Settings::sanitize`).
+
+Implementation detail: [Custom font picker deferred load](../fonts/custom-font-picker-deferred-load.md).
 
 **Limitations:**
 
@@ -68,7 +73,7 @@ CJK (Chinese, Japanese, Korean) fonts render the same Unicode code points differ
 | `src/fonts.rs` | Font loading, system font enumeration, and runtime font reload |
 | `src/config/settings.rs` | `EditorFont` enum with `Custom` variant, `CjkFontPreference` enum |
 | `src/ui/settings.rs` | Settings UI for font picker and CJK preference dropdown |
-| `src/app.rs` | Font reload on settings change, initial font setup with saved settings |
+| `src/app/` (`central_panel.rs`, `mod.rs`) | Font reload when settings change; startup custom load |
 
 ### EditorFont Enum
 

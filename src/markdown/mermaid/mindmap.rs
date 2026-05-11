@@ -1,6 +1,6 @@
 //! Mindmap diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
@@ -274,10 +274,7 @@ pub fn render_mindmap(ui: &mut Ui, mindmap: &Mindmap, dark_mode: bool, font_size
         for (child_node, child_layout) in node.children.iter().zip(layout.children.iter()) {
             let child_center = child_layout.center + offset;
             let start = Pos2::new(rect.right(), center.y);
-            let end = Pos2::new(
-                child_center.x - child_layout.width / 2.0,
-                child_center.y,
-            );
+            let end = Pos2::new(child_center.x - child_layout.width / 2.0, child_center.y);
             painter.line_segment(
                 [start, end],
                 Stroke::new(1.5, colors[(level + 1) % colors.len()].gamma_multiply(0.6)),
@@ -301,9 +298,10 @@ pub fn render_mindmap(ui: &mut Ui, mindmap: &Mindmap, dark_mode: bool, font_size
         // Draw this node
         painter.rect(
             rect,
-            Rounding::same(node_height / 2.0),
+            CornerRadius::same((node_height / 2.0) as u8),
             bg_color,
             Stroke::new(2.0, color),
+            StrokeKind::Inside,
         );
         painter.text(
             center,

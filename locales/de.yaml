@@ -65,6 +65,10 @@ dialog:
   confirm:
     cancel: "Abbrechen"
     close: "Schließen"
+  rename_untitled_tab:
+    title: "Tab umbenennen"
+    hint: "Nur Anzeigename (kein Dateipfad). „Speichern unter“ speichert auf die Festplatte."
+    apply: "Übernehmen"
   # File operation dialogs
   file:
     new_file: "Datei neuanlegen"
@@ -118,6 +122,7 @@ settings:
     custom_font: "System-Schrift"
     custom_font_desc: "Aus im System installierten Schriften auswählen"
     select_system_font: "Schriftart auswählen:"
+    custom_font_pick_placeholder: "Schriftart wählen…"
     font_preview: "Vorschau:"
     font_not_found: "⚠ Schrift im System nicht gefunden"
     cjk_preference: "Regionale CJK bevorzugen"
@@ -215,6 +220,9 @@ settings:
     restore_session_tooltip: "Aktiviert: alte Karteikarten beim Start wiederherstellen.
       Deaktiviert: mit einer leeren Karteikarte starten. Sitzungsdaten werden immer
       gespeichert."
+    quick_note_workflow: "Schnellnotiz-Workflow (unbenannte Tabs)"
+    quick_note_workflow_tooltip: "Unbenannte Tabs schließen ohne Speicherdialog; Beenden mit geändertem unbenanntem Tab ohne Rückfrage. Ungespeicherter Text landet weiterhin in der Sitzungswiederherstellung, wenn Wiederherstellen aktiv ist."
+    quick_note_workflow_hint: "Doppelklick auf unbenannten Tab für den Anzeigenamen. Deaktivieren für die üblichen Speicherabfragen."
     enable_auto_save: "Standardmäßig automatische Speicherung aktivieren"
     auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert.
       Verwendung von temporären Dateien, um Datenverlust zu vermeiden."
@@ -403,6 +411,7 @@ about:
   tab:
     about: "Über"
     shortcuts: "Tastaturkürzel"
+    mermaid: "Mermaid"
   description: "Schnelle und schlanke Bearbeitung von Markdown, JSON und mehr."
   close_hint: "F1 oder Escape zum Schließen drücken"
   # Links section

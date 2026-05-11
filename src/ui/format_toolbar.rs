@@ -9,8 +9,10 @@
 
 use crate::app::modifier_symbol;
 use crate::markdown::formatting::{FormattingState, MarkdownFormatCommand};
+use crate::markdown::mermaid::{mermaid_kind_menu_label, MermaidTemplateKind};
 use crate::ui::RibbonAction;
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
+use rust_i18n::t;
 
 /// Height of the format toolbar when expanded.
 const TOOLBAR_HEIGHT_EXPANDED: f32 = 32.0;
@@ -83,27 +85,71 @@ impl FormatToolbar {
             let is_link = formatting_state.map(|s| s.is_link).unwrap_or(false);
 
             // Bold
-            if format_button(&mut button_ui, "B", &MarkdownFormatCommand::Bold.tooltip(), has_editor, is_bold, is_dark, true).clicked() {
+            if format_button(
+                &mut button_ui,
+                "B",
+                &MarkdownFormatCommand::Bold.tooltip(),
+                has_editor,
+                is_bold,
+                is_dark,
+                true,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::Bold));
             }
 
             // Italic
-            if format_button(&mut button_ui, "I", &MarkdownFormatCommand::Italic.tooltip(), has_editor, is_italic, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "I",
+                &MarkdownFormatCommand::Italic.tooltip(),
+                has_editor,
+                is_italic,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::Italic));
             }
 
             // Inline code
-            if format_button(&mut button_ui, "<>", &MarkdownFormatCommand::InlineCode.tooltip(), has_editor, is_code, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "<>",
+                &MarkdownFormatCommand::InlineCode.tooltip(),
+                has_editor,
+                is_code,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::InlineCode));
             }
 
             // Link
-            if format_button(&mut button_ui, "[~]", &MarkdownFormatCommand::Link.tooltip(), has_editor, is_link, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "[~]",
+                &MarkdownFormatCommand::Link.tooltip(),
+                has_editor,
+                is_link,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::Link));
             }
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
+            toolbar_separator(
+                &mut button_ui,
+                separator_color,
+                TOOLBAR_HEIGHT_EXPANDED - 12.0,
+            );
             button_ui.add_space(4.0);
 
             // Heading dropdown
@@ -117,60 +163,147 @@ impl FormatToolbar {
                 .width(36.0)
                 .show_ui(&mut button_ui, |ui| {
                     for level in 1..=6u8 {
-                        let is_selected = current_heading.map(|h| h as u8 == level).unwrap_or(false);
+                        let is_selected =
+                            current_heading.map(|h| h as u8 == level).unwrap_or(false);
                         let label = format!("H{}", level);
                         if ui
                             .selectable_label(is_selected, &label)
                             .on_hover_text(format!("{}+{}", modifier_symbol(), level))
                             .clicked()
                         {
-                            action = Some(RibbonAction::Format(MarkdownFormatCommand::Heading(level)));
+                            action =
+                                Some(RibbonAction::Format(MarkdownFormatCommand::Heading(level)));
                         }
                     }
                 });
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
+            toolbar_separator(
+                &mut button_ui,
+                separator_color,
+                TOOLBAR_HEIGHT_EXPANDED - 12.0,
+            );
             button_ui.add_space(4.0);
 
             // List buttons
             let is_bullet = formatting_state.map(|s| s.is_bullet_list).unwrap_or(false);
-            let is_numbered = formatting_state.map(|s| s.is_numbered_list).unwrap_or(false);
+            let is_numbered = formatting_state
+                .map(|s| s.is_numbered_list)
+                .unwrap_or(false);
 
-            if format_button(&mut button_ui, "−", &MarkdownFormatCommand::BulletList.tooltip(), has_editor, is_bullet, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "−",
+                &MarkdownFormatCommand::BulletList.tooltip(),
+                has_editor,
+                is_bullet,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::BulletList));
             }
 
-            if format_button(&mut button_ui, "1.", &MarkdownFormatCommand::NumberedList.tooltip(), has_editor, is_numbered, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "1.",
+                &MarkdownFormatCommand::NumberedList.tooltip(),
+                has_editor,
+                is_numbered,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::NumberedList));
             }
 
             // Blockquote
             let is_quote = formatting_state.map(|s| s.is_blockquote).unwrap_or(false);
-            if format_button(&mut button_ui, ">", &MarkdownFormatCommand::Blockquote.tooltip(), has_editor, is_quote, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                ">",
+                &MarkdownFormatCommand::Blockquote.tooltip(),
+                has_editor,
+                is_quote,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::Blockquote));
             }
 
             // Code block
             let is_code_block = formatting_state.map(|s| s.is_code_block).unwrap_or(false);
-            if format_button(&mut button_ui, "{}", &MarkdownFormatCommand::CodeBlock.tooltip(), has_editor, is_code_block, is_dark, false).clicked() {
+            if format_button(
+                &mut button_ui,
+                "{}",
+                &MarkdownFormatCommand::CodeBlock.tooltip(),
+                has_editor,
+                is_code_block,
+                is_dark,
+                false,
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::Format(MarkdownFormatCommand::CodeBlock));
             }
 
             button_ui.add_space(4.0);
-            toolbar_separator(&mut button_ui, separator_color, TOOLBAR_HEIGHT_EXPANDED - 12.0);
+            toolbar_separator(
+                &mut button_ui,
+                separator_color,
+                TOOLBAR_HEIGHT_EXPANDED - 12.0,
+            );
             button_ui.add_space(4.0);
 
             // Table of Contents
             if toolbar_icon_button(
                 &mut button_ui,
                 "☰",
-                &format!("Insert/Update Table of Contents ({}+Shift+U)", modifier_symbol()),
+                &format!(
+                    "Insert/Update Table of Contents ({}+Shift+U)",
+                    modifier_symbol()
+                ),
                 has_editor,
                 is_dark,
-            ).clicked() {
+            )
+            .clicked()
+            {
                 action = Some(RibbonAction::InsertToc);
             }
+
+            button_ui.add_space(4.0);
+            toolbar_separator(
+                &mut button_ui,
+                separator_color,
+                TOOLBAR_HEIGHT_EXPANDED - 12.0,
+            );
+            button_ui.add_space(4.0);
+
+            // Mermaid diagram templates
+            egui::ComboBox::from_id_salt("format_bar_mermaid_dropdown")
+                .selected_text(
+                    RichText::new(t!("format_toolbar.mermaid_menu").to_string()).size(11.0),
+                )
+                .width(108.0)
+                .show_ui(&mut button_ui, |ui| {
+                    ui.set_min_width(160.0);
+                    for &kind in MermaidTemplateKind::ALL {
+                        let label = mermaid_kind_menu_label(kind);
+                        if ui
+                            .selectable_label(false, &label)
+                            .on_hover_text(t!("format_toolbar.mermaid_entry_tooltip").to_string())
+                            .clicked()
+                        {
+                            action = Some(RibbonAction::Format(
+                                MarkdownFormatCommand::InsertMermaid(kind),
+                            ));
+                        }
+                    }
+                });
 
             // Collapse button (right-aligned)
             button_ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -255,7 +388,11 @@ fn format_button(
     bold_text: bool,
 ) -> egui::Response {
     let text_color = if enabled {
-        if is_dark { Color32::from_rgb(220, 220, 220) } else { Color32::from_rgb(50, 50, 50) }
+        if is_dark {
+            Color32::from_rgb(220, 220, 220)
+        } else {
+            Color32::from_rgb(50, 50, 50)
+        }
     } else if is_dark {
         Color32::from_rgb(100, 100, 100)
     } else {
@@ -287,21 +424,35 @@ fn format_button(
     );
 
     if active && enabled {
-        ui.painter().rect_filled(btn.rect, egui::Rounding::same(3.0), active_bg);
+        ui.painter()
+            .rect_filled(btn.rect, egui::CornerRadius::same(3), active_bg);
         let font_id = if bold_text {
             egui::FontId::new(11.0, egui::FontFamily::Name("Inter-Bold".into()))
         } else {
             egui::FontId::proportional(11.0)
         };
-        ui.painter().text(btn.rect.center(), egui::Align2::CENTER_CENTER, icon, font_id, text_color);
+        ui.painter().text(
+            btn.rect.center(),
+            egui::Align2::CENTER_CENTER,
+            icon,
+            font_id,
+            text_color,
+        );
     } else if btn.hovered() && enabled {
-        ui.painter().rect_filled(btn.rect, egui::Rounding::same(3.0), hover_bg);
+        ui.painter()
+            .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
         let font_id = if bold_text {
             egui::FontId::new(11.0, egui::FontFamily::Name("Inter-Bold".into()))
         } else {
             egui::FontId::proportional(11.0)
         };
-        ui.painter().text(btn.rect.center(), egui::Align2::CENTER_CENTER, icon, font_id, text_color);
+        ui.painter().text(
+            btn.rect.center(),
+            egui::Align2::CENTER_CENTER,
+            icon,
+            font_id,
+            text_color,
+        );
     }
 
     btn.on_hover_text(tooltip)
@@ -316,7 +467,11 @@ fn toolbar_icon_button(
     is_dark: bool,
 ) -> egui::Response {
     let text_color = if enabled {
-        if is_dark { Color32::from_rgb(220, 220, 220) } else { Color32::from_rgb(50, 50, 50) }
+        if is_dark {
+            Color32::from_rgb(220, 220, 220)
+        } else {
+            Color32::from_rgb(50, 50, 50)
+        }
     } else if is_dark {
         Color32::from_rgb(100, 100, 100)
     } else {
@@ -337,7 +492,8 @@ fn toolbar_icon_button(
     );
 
     if btn.hovered() && enabled {
-        ui.painter().rect_filled(btn.rect, egui::Rounding::same(3.0), hover_bg);
+        ui.painter()
+            .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
     }
 
     ui.painter().text(

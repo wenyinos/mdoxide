@@ -1,6 +1,6 @@
 //! Entity-Relationship diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
@@ -376,7 +376,8 @@ pub fn render_er_diagram(ui: &mut Ui, diagram: &ERDiagram, dark_mode: bool, font
             .filter_map(|(idx, rel)| {
                 rel.label.as_ref().map(|label| {
                     let size = text_measurer.measure(label, label_font_size);
-                    let label_size = Vec2::new(size.width * text_width_factor + 16.0, size.height + 8.0);
+                    let label_size =
+                        Vec2::new(size.width * text_width_factor + 16.0, size.height + 8.0);
                     (idx, (label.clone(), label_size))
                 })
             })
@@ -443,10 +444,9 @@ pub fn render_er_diagram(ui: &mut Ui, diagram: &ERDiagram, dark_mode: bool, font
 
     // Draw relations first
     for (rel_idx, relation) in diagram.relations.iter().enumerate() {
-        if let (Some(&from_pos), Some(&to_pos)) = (
-            entity_pos.get(&relation.from),
-            entity_pos.get(&relation.to),
-        ) {
+        if let (Some(&from_pos), Some(&to_pos)) =
+            (entity_pos.get(&relation.from), entity_pos.get(&relation.to))
+        {
             let from_size = entity_sizes
                 .get(&relation.from)
                 .copied()
@@ -529,20 +529,21 @@ pub fn render_er_diagram(ui: &mut Ui, diagram: &ERDiagram, dark_mode: bool, font
             // Draw box
             painter.rect(
                 rect,
-                Rounding::same(4.0),
+                CornerRadius::same(4),
                 entity_fill,
                 Stroke::new(2.0, entity_stroke),
+                StrokeKind::Inside,
             );
 
             // Draw header
             let header_rect = Rect::from_min_size(rect.min, Vec2::new(size.x, header_height));
             painter.rect_filled(
                 header_rect,
-                Rounding {
-                    nw: 4.0,
-                    ne: 4.0,
-                    sw: 0.0,
-                    se: 0.0,
+                CornerRadius {
+                    nw: 4,
+                    ne: 4,
+                    sw: 0,
+                    se: 0,
                 },
                 header_fill,
             );

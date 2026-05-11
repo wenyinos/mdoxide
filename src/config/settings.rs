@@ -36,33 +36,73 @@ pub struct KeyModifiers {
 impl KeyModifiers {
     /// Create modifiers with only Ctrl/Command
     pub const fn ctrl() -> Self {
-        Self { ctrl: true, shift: false, alt: false, raw_ctrl: false }
+        Self {
+            ctrl: true,
+            shift: false,
+            alt: false,
+            raw_ctrl: false,
+        }
     }
 
     /// Create modifiers with Ctrl+Shift
     pub const fn ctrl_shift() -> Self {
-        Self { ctrl: true, shift: true, alt: false, raw_ctrl: false }
+        Self {
+            ctrl: true,
+            shift: true,
+            alt: false,
+            raw_ctrl: false,
+        }
+    }
+
+    /// Create modifiers with Ctrl/Command + Alt
+    pub const fn ctrl_alt() -> Self {
+        Self {
+            ctrl: true,
+            shift: false,
+            alt: true,
+            raw_ctrl: false,
+        }
     }
 
     /// Create modifiers with only Alt
     pub const fn alt() -> Self {
-        Self { ctrl: false, shift: false, alt: true, raw_ctrl: false }
+        Self {
+            ctrl: false,
+            shift: false,
+            alt: true,
+            raw_ctrl: false,
+        }
     }
 
     /// Create modifiers with only Shift
     pub const fn shift() -> Self {
-        Self { ctrl: false, shift: true, alt: false, raw_ctrl: false }
+        Self {
+            ctrl: false,
+            shift: true,
+            alt: false,
+            raw_ctrl: false,
+        }
     }
 
     /// No modifiers
     pub const fn none() -> Self {
-        Self { ctrl: false, shift: false, alt: false, raw_ctrl: false }
+        Self {
+            ctrl: false,
+            shift: false,
+            alt: false,
+            raw_ctrl: false,
+        }
     }
 
     /// Create modifiers with only raw Ctrl (physical Ctrl key on all platforms)
     /// This is used for shortcuts that need the actual Ctrl key, not Command on macOS
     pub const fn raw_ctrl() -> Self {
-        Self { ctrl: false, shift: false, alt: false, raw_ctrl: true }
+        Self {
+            ctrl: false,
+            shift: false,
+            alt: false,
+            raw_ctrl: true,
+        }
     }
 
     /// Convert to egui::Modifiers for comparison
@@ -97,13 +137,21 @@ impl KeyModifiers {
         if self.raw_ctrl {
             parts.push("Ctrl"); // Always show "Ctrl" for raw_ctrl, even on macOS
         } else if self.ctrl {
-            parts.push(if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" });
+            parts.push(if cfg!(target_os = "macos") {
+                "Cmd"
+            } else {
+                "Ctrl"
+            });
         }
         if self.shift {
             parts.push("Shift");
         }
         if self.alt {
-            parts.push(if cfg!(target_os = "macos") { "Option" } else { "Alt" });
+            parts.push(if cfg!(target_os = "macos") {
+                "Option"
+            } else {
+                "Alt"
+            });
         }
         parts.join("+")
     }
@@ -114,20 +162,84 @@ impl KeyModifiers {
 #[serde(rename_all = "snake_case")]
 pub enum KeyCode {
     // Letters
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
     // Numbers
-    Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
+    Num0,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
     // Function keys
-    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
     // Special keys
-    Escape, Tab, Backspace, Enter, Space,
-    ArrowLeft, ArrowRight, ArrowUp, ArrowDown,
-    Home, End, PageUp, PageDown, Insert, Delete,
+    Escape,
+    Tab,
+    Backspace,
+    Enter,
+    Space,
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Insert,
+    Delete,
     // Punctuation
-    Comma, Period, Semicolon, Colon,
-    OpenBracket, CloseBracket,
-    Backslash, Slash, Minus, Equals, Backtick,
+    Comma,
+    Period,
+    Semicolon,
+    Colon,
+    OpenBracket,
+    CloseBracket,
+    Backslash,
+    Slash,
+    Minus,
+    Equals,
+    Backtick,
 }
 
 impl KeyCode {
@@ -306,37 +418,83 @@ impl KeyCode {
     pub fn display_string(&self) -> &'static str {
         match self {
             // Letters
-            KeyCode::A => "A", KeyCode::B => "B", KeyCode::C => "C", KeyCode::D => "D",
-            KeyCode::E => "E", KeyCode::F => "F", KeyCode::G => "G", KeyCode::H => "H",
-            KeyCode::I => "I", KeyCode::J => "J", KeyCode::K => "K", KeyCode::L => "L",
-            KeyCode::M => "M", KeyCode::N => "N", KeyCode::O => "O", KeyCode::P => "P",
-            KeyCode::Q => "Q", KeyCode::R => "R", KeyCode::S => "S", KeyCode::T => "T",
-            KeyCode::U => "U", KeyCode::V => "V", KeyCode::W => "W", KeyCode::X => "X",
-            KeyCode::Y => "Y", KeyCode::Z => "Z",
+            KeyCode::A => "A",
+            KeyCode::B => "B",
+            KeyCode::C => "C",
+            KeyCode::D => "D",
+            KeyCode::E => "E",
+            KeyCode::F => "F",
+            KeyCode::G => "G",
+            KeyCode::H => "H",
+            KeyCode::I => "I",
+            KeyCode::J => "J",
+            KeyCode::K => "K",
+            KeyCode::L => "L",
+            KeyCode::M => "M",
+            KeyCode::N => "N",
+            KeyCode::O => "O",
+            KeyCode::P => "P",
+            KeyCode::Q => "Q",
+            KeyCode::R => "R",
+            KeyCode::S => "S",
+            KeyCode::T => "T",
+            KeyCode::U => "U",
+            KeyCode::V => "V",
+            KeyCode::W => "W",
+            KeyCode::X => "X",
+            KeyCode::Y => "Y",
+            KeyCode::Z => "Z",
             // Numbers
-            KeyCode::Num0 => "0", KeyCode::Num1 => "1", KeyCode::Num2 => "2",
-            KeyCode::Num3 => "3", KeyCode::Num4 => "4", KeyCode::Num5 => "5",
-            KeyCode::Num6 => "6", KeyCode::Num7 => "7", KeyCode::Num8 => "8",
+            KeyCode::Num0 => "0",
+            KeyCode::Num1 => "1",
+            KeyCode::Num2 => "2",
+            KeyCode::Num3 => "3",
+            KeyCode::Num4 => "4",
+            KeyCode::Num5 => "5",
+            KeyCode::Num6 => "6",
+            KeyCode::Num7 => "7",
+            KeyCode::Num8 => "8",
             KeyCode::Num9 => "9",
             // Function keys
-            KeyCode::F1 => "F1", KeyCode::F2 => "F2", KeyCode::F3 => "F3",
-            KeyCode::F4 => "F4", KeyCode::F5 => "F5", KeyCode::F6 => "F6",
-            KeyCode::F7 => "F7", KeyCode::F8 => "F8", KeyCode::F9 => "F9",
-            KeyCode::F10 => "F10", KeyCode::F11 => "F11", KeyCode::F12 => "F12",
+            KeyCode::F1 => "F1",
+            KeyCode::F2 => "F2",
+            KeyCode::F3 => "F3",
+            KeyCode::F4 => "F4",
+            KeyCode::F5 => "F5",
+            KeyCode::F6 => "F6",
+            KeyCode::F7 => "F7",
+            KeyCode::F8 => "F8",
+            KeyCode::F9 => "F9",
+            KeyCode::F10 => "F10",
+            KeyCode::F11 => "F11",
+            KeyCode::F12 => "F12",
             // Special keys
-            KeyCode::Escape => "Esc", KeyCode::Tab => "Tab", KeyCode::Backspace => "Backspace",
-            KeyCode::Enter => "Enter", KeyCode::Space => "Space",
-            KeyCode::ArrowLeft => "←", KeyCode::ArrowRight => "→",
-            KeyCode::ArrowUp => "↑", KeyCode::ArrowDown => "↓",
-            KeyCode::Home => "Home", KeyCode::End => "End",
-            KeyCode::PageUp => "PgUp", KeyCode::PageDown => "PgDn",
-            KeyCode::Insert => "Ins", KeyCode::Delete => "Del",
+            KeyCode::Escape => "Esc",
+            KeyCode::Tab => "Tab",
+            KeyCode::Backspace => "Backspace",
+            KeyCode::Enter => "Enter",
+            KeyCode::Space => "Space",
+            KeyCode::ArrowLeft => "←",
+            KeyCode::ArrowRight => "→",
+            KeyCode::ArrowUp => "↑",
+            KeyCode::ArrowDown => "↓",
+            KeyCode::Home => "Home",
+            KeyCode::End => "End",
+            KeyCode::PageUp => "PgUp",
+            KeyCode::PageDown => "PgDn",
+            KeyCode::Insert => "Ins",
+            KeyCode::Delete => "Del",
             // Punctuation
-            KeyCode::Comma => ",", KeyCode::Period => ".",
-            KeyCode::Semicolon => ";", KeyCode::Colon => ":",
-            KeyCode::OpenBracket => "[", KeyCode::CloseBracket => "]",
-            KeyCode::Backslash => "\\", KeyCode::Slash => "/",
-            KeyCode::Minus => "-", KeyCode::Equals => "=",
+            KeyCode::Comma => ",",
+            KeyCode::Period => ".",
+            KeyCode::Semicolon => ";",
+            KeyCode::Colon => ":",
+            KeyCode::OpenBracket => "[",
+            KeyCode::CloseBracket => "]",
+            KeyCode::Backslash => "\\",
+            KeyCode::Slash => "/",
+            KeyCode::Minus => "-",
+            KeyCode::Equals => "=",
             KeyCode::Backtick => "`",
         }
     }
@@ -469,6 +627,9 @@ pub enum ShortcutCommand {
     OpenSettings,
     OpenAbout,
     ExportHtml,
+    ExportPdf,
+    /// Render the current Markdown to PDF and open it in an in-app viewer tab (same pipeline as Export PDF).
+    PrintPreview,
     InsertToc,
     ToggleFrontmatter,
 }
@@ -479,24 +640,74 @@ impl ShortcutCommand {
         use ShortcutCommand::*;
         &[
             // File operations
-            Save, SaveAs, Open, New, NewTab, CloseTab, OpenWorkspace, CloseWorkspace,
+            Save,
+            SaveAs,
+            Open,
+            New,
+            NewTab,
+            CloseTab,
+            OpenWorkspace,
+            CloseWorkspace,
             // Navigation
-            NextTab, PrevTab, GoToLine, QuickOpen,
+            NextTab,
+            PrevTab,
+            GoToLine,
+            QuickOpen,
             // View
-            ToggleViewMode, CycleTheme, ToggleZenMode, ToggleOutline, ToggleFileTree, TogglePipeline, ToggleTerminal, ToggleProductivityHub,
-            ZoomIn, ZoomOut, ResetZoom,
+            ToggleViewMode,
+            CycleTheme,
+            ToggleZenMode,
+            ToggleOutline,
+            ToggleFileTree,
+            TogglePipeline,
+            ToggleTerminal,
+            ToggleProductivityHub,
+            ZoomIn,
+            ZoomOut,
+            ResetZoom,
             // Edit
-            Undo, Redo, DeleteLine, DuplicateLine, MoveLineUp, MoveLineDown, SelectNextOccurrence,
+            Undo,
+            Redo,
+            DeleteLine,
+            DuplicateLine,
+            MoveLineUp,
+            MoveLineDown,
+            SelectNextOccurrence,
             // Search
-            Find, FindReplace, FindNext, FindPrev, SearchInFiles,
+            Find,
+            FindReplace,
+            FindNext,
+            FindPrev,
+            SearchInFiles,
             // Formatting
-            FormatBold, FormatItalic, FormatInlineCode, FormatCodeBlock, FormatLink, FormatImage,
-            FormatBlockquote, FormatBulletList, FormatNumberedList,
-            FormatHeading1, FormatHeading2, FormatHeading3, FormatHeading4, FormatHeading5, FormatHeading6,
+            FormatBold,
+            FormatItalic,
+            FormatInlineCode,
+            FormatCodeBlock,
+            FormatLink,
+            FormatImage,
+            FormatBlockquote,
+            FormatBulletList,
+            FormatNumberedList,
+            FormatHeading1,
+            FormatHeading2,
+            FormatHeading3,
+            FormatHeading4,
+            FormatHeading5,
+            FormatHeading6,
             // Folding
-            FoldAll, UnfoldAll, ToggleFoldAtCursor,
+            FoldAll,
+            UnfoldAll,
+            ToggleFoldAtCursor,
             // Other
-            CommandPalette, OpenSettings, OpenAbout, ExportHtml, InsertToc, ToggleFrontmatter,
+            CommandPalette,
+            OpenSettings,
+            OpenAbout,
+            ExportHtml,
+            ExportPdf,
+            PrintPreview,
+            InsertToc,
+            ToggleFrontmatter,
         ]
     }
 
@@ -569,6 +780,8 @@ impl ShortcutCommand {
             ShortcutCommand::OpenSettings => "Open Settings",
             ShortcutCommand::OpenAbout => "Open About",
             ShortcutCommand::ExportHtml => "Export HTML",
+            ShortcutCommand::ExportPdf => "Export PDF",
+            ShortcutCommand::PrintPreview => "Print Preview",
             ShortcutCommand::InsertToc => "Insert/Update TOC",
             ShortcutCommand::ToggleFrontmatter => "Toggle Frontmatter Panel",
         }
@@ -577,36 +790,75 @@ impl ShortcutCommand {
     /// Get the category for grouping in UI
     pub fn category(&self) -> &'static str {
         match self {
-            ShortcutCommand::Save | ShortcutCommand::SaveAs | ShortcutCommand::Open
-            | ShortcutCommand::New | ShortcutCommand::NewTab | ShortcutCommand::CloseTab
-            | ShortcutCommand::OpenWorkspace | ShortcutCommand::CloseWorkspace => "File",
+            ShortcutCommand::Save
+            | ShortcutCommand::SaveAs
+            | ShortcutCommand::Open
+            | ShortcutCommand::New
+            | ShortcutCommand::NewTab
+            | ShortcutCommand::CloseTab
+            | ShortcutCommand::OpenWorkspace
+            | ShortcutCommand::CloseWorkspace => "File",
 
-            ShortcutCommand::NextTab | ShortcutCommand::PrevTab | ShortcutCommand::GoToLine
+            ShortcutCommand::NextTab
+            | ShortcutCommand::PrevTab
+            | ShortcutCommand::GoToLine
             | ShortcutCommand::QuickOpen => "Navigation",
 
-            ShortcutCommand::ToggleViewMode | ShortcutCommand::CycleTheme | ShortcutCommand::ToggleZenMode
-            | ShortcutCommand::ToggleFullscreen | ShortcutCommand::ToggleOutline | ShortcutCommand::ToggleFileTree
-            | ShortcutCommand::TogglePipeline | ShortcutCommand::ToggleTerminal
+            ShortcutCommand::ToggleViewMode
+            | ShortcutCommand::CycleTheme
+            | ShortcutCommand::ToggleZenMode
+            | ShortcutCommand::ToggleFullscreen
+            | ShortcutCommand::ToggleOutline
+            | ShortcutCommand::ToggleFileTree
+            | ShortcutCommand::TogglePipeline
+            | ShortcutCommand::ToggleTerminal
             | ShortcutCommand::ToggleProductivityHub
-            | ShortcutCommand::ZoomIn | ShortcutCommand::ZoomOut | ShortcutCommand::ResetZoom => "View",
+            | ShortcutCommand::ZoomIn
+            | ShortcutCommand::ZoomOut
+            | ShortcutCommand::ResetZoom => "View",
 
-            ShortcutCommand::Undo | ShortcutCommand::Redo | ShortcutCommand::DeleteLine
-            | ShortcutCommand::DuplicateLine | ShortcutCommand::MoveLineUp | ShortcutCommand::MoveLineDown
+            ShortcutCommand::Undo
+            | ShortcutCommand::Redo
+            | ShortcutCommand::DeleteLine
+            | ShortcutCommand::DuplicateLine
+            | ShortcutCommand::MoveLineUp
+            | ShortcutCommand::MoveLineDown
             | ShortcutCommand::SelectNextOccurrence => "Edit",
 
-            ShortcutCommand::Find | ShortcutCommand::FindReplace | ShortcutCommand::FindNext
-            | ShortcutCommand::FindPrev | ShortcutCommand::SearchInFiles => "Search",
+            ShortcutCommand::Find
+            | ShortcutCommand::FindReplace
+            | ShortcutCommand::FindNext
+            | ShortcutCommand::FindPrev
+            | ShortcutCommand::SearchInFiles => "Search",
 
-            ShortcutCommand::FormatBold | ShortcutCommand::FormatItalic | ShortcutCommand::FormatInlineCode
-            | ShortcutCommand::FormatCodeBlock | ShortcutCommand::FormatLink | ShortcutCommand::FormatImage
-            | ShortcutCommand::FormatBlockquote | ShortcutCommand::FormatBulletList | ShortcutCommand::FormatNumberedList
-            | ShortcutCommand::FormatHeading1 | ShortcutCommand::FormatHeading2 | ShortcutCommand::FormatHeading3
-            | ShortcutCommand::FormatHeading4 | ShortcutCommand::FormatHeading5 | ShortcutCommand::FormatHeading6 => "Format",
+            ShortcutCommand::FormatBold
+            | ShortcutCommand::FormatItalic
+            | ShortcutCommand::FormatInlineCode
+            | ShortcutCommand::FormatCodeBlock
+            | ShortcutCommand::FormatLink
+            | ShortcutCommand::FormatImage
+            | ShortcutCommand::FormatBlockquote
+            | ShortcutCommand::FormatBulletList
+            | ShortcutCommand::FormatNumberedList
+            | ShortcutCommand::FormatHeading1
+            | ShortcutCommand::FormatHeading2
+            | ShortcutCommand::FormatHeading3
+            | ShortcutCommand::FormatHeading4
+            | ShortcutCommand::FormatHeading5
+            | ShortcutCommand::FormatHeading6 => "Format",
 
-            ShortcutCommand::FoldAll | ShortcutCommand::UnfoldAll | ShortcutCommand::ToggleFoldAtCursor => "Folding",
+            ShortcutCommand::FoldAll
+            | ShortcutCommand::UnfoldAll
+            | ShortcutCommand::ToggleFoldAtCursor => "Folding",
 
-            ShortcutCommand::CommandPalette | ShortcutCommand::OpenSettings | ShortcutCommand::OpenAbout
-            | ShortcutCommand::ExportHtml | ShortcutCommand::InsertToc | ShortcutCommand::ToggleFrontmatter => "Other",
+            ShortcutCommand::CommandPalette
+            | ShortcutCommand::OpenSettings
+            | ShortcutCommand::OpenAbout
+            | ShortcutCommand::ExportHtml
+            | ShortcutCommand::ExportPdf
+            | ShortcutCommand::PrintPreview
+            | ShortcutCommand::InsertToc
+            | ShortcutCommand::ToggleFrontmatter => "Other",
         }
     }
 
@@ -681,6 +933,8 @@ impl ShortcutCommand {
             ShortcutCommand::OpenSettings => KeyBinding::new(M::ctrl(), Comma),
             ShortcutCommand::OpenAbout => KeyBinding::new(M::none(), F1),
             ShortcutCommand::ExportHtml => KeyBinding::new(M::ctrl_shift(), X),
+            ShortcutCommand::ExportPdf => KeyBinding::new(M::ctrl_shift(), P),
+            ShortcutCommand::PrintPreview => KeyBinding::new(M::ctrl_alt(), P),
             ShortcutCommand::InsertToc => KeyBinding::new(M::ctrl_shift(), U),
             ShortcutCommand::ToggleFrontmatter => KeyBinding::new(M::ctrl_shift(), M),
         }
@@ -736,7 +990,11 @@ impl KeyboardShortcuts {
     }
 
     /// Find which command uses a given binding, if any
-    pub fn find_conflict(&self, binding: &KeyBinding, exclude: Option<ShortcutCommand>) -> Option<ShortcutCommand> {
+    pub fn find_conflict(
+        &self,
+        binding: &KeyBinding,
+        exclude: Option<ShortcutCommand>,
+    ) -> Option<ShortcutCommand> {
         for cmd in ShortcutCommand::all() {
             if exclude == Some(*cmd) {
                 continue;
@@ -750,7 +1008,16 @@ impl KeyboardShortcuts {
 
     /// Get all commands grouped by category
     pub fn commands_by_category() -> Vec<(&'static str, Vec<ShortcutCommand>)> {
-        let categories = ["File", "Navigation", "View", "Edit", "Search", "Format", "Folding", "Other"];
+        let categories = [
+            "File",
+            "Navigation",
+            "View",
+            "Edit",
+            "Search",
+            "Format",
+            "Folding",
+            "Other",
+        ];
         categories
             .iter()
             .map(|&cat| {
@@ -1296,9 +1563,16 @@ impl EditorFont {
     }
 
     /// Get the custom font name if this is a custom font.
+    ///
+    /// Returns `None` when the user chose **Custom** but has not picked a family yet
+    /// (`Custom("")`), or when the name is whitespace-only — load paths should treat that
+    /// like no custom font (Inter until a real family is chosen). See GitHub #133.
     pub fn custom_name(&self) -> Option<&str> {
         match self {
-            EditorFont::Custom(name) => Some(name),
+            EditorFont::Custom(name) => {
+                let t = name.trim();
+                (!t.is_empty()).then_some(t)
+            }
             _ => None,
         }
     }
@@ -1361,7 +1635,9 @@ impl CjkFontPreference {
             CjkFontPreference::Auto => "Use system locale to determine CJK font priority",
             CjkFontPreference::Korean => "Prioritize Korean glyph variants",
             CjkFontPreference::SimplifiedChinese => "Prioritize Simplified Chinese glyph variants",
-            CjkFontPreference::TraditionalChinese => "Prioritize Traditional Chinese glyph variants",
+            CjkFontPreference::TraditionalChinese => {
+                "Prioritize Traditional Chinese glyph variants"
+            }
             CjkFontPreference::Japanese => "Prioritize Japanese glyph variants",
         }
     }
@@ -1652,6 +1928,16 @@ fn default_true() -> bool {
     true
 }
 
+/// Default timeout for markdown code-block execution (seconds).
+fn default_code_execution_timeout_secs() -> u32 {
+    30
+}
+
+/// Helper for serde default Ferrite accent RGB.
+fn default_accent_color_rgb() -> [u8; 3] {
+    crate::theme::accent::DEFAULT_ACCENT_RGB
+}
+
 /// User preferences and application settings.
 ///
 /// This struct is serialized to JSON and persisted to the user's config directory.
@@ -1664,6 +1950,11 @@ pub struct Settings {
     // ─────────────────────────────────────────────────────────────────────────
     /// Color theme (light, dark, or system)
     pub theme: Theme,
+
+    /// Ferrite accent RGB: rendered headings (H1–H6), checkboxes in preview, editor selection tint,
+    /// and highlighted UI widgets. Markdown hyperlink color is fixed (standard blue) for readability.
+    #[serde(default = "default_accent_color_rgb")]
+    pub accent_color: [u8; 3],
 
     /// Editor view mode (editor only, preview only, or split view)
     pub view_mode: ViewMode,
@@ -1710,6 +2001,11 @@ pub struct Settings {
     /// Uses temp-file based strategy to avoid overwriting main file prematurely
     /// Default is 15000ms (15 seconds)
     pub auto_save_delay_ms: u32,
+
+    /// Notepad++-style quick notes: pathless tabs close and exit without save prompts;
+    /// unsaved buffers persist via session recovery when **Restore session** is on.
+    #[serde(default)]
+    pub quick_note_workflow: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Session & History
@@ -1786,6 +2082,17 @@ pub struct Settings {
 
     /// Whether to embed images as base64 in exports
     pub export_embed_images: bool,
+
+    /// Last directory used for PDF export.
+    pub last_pdf_export_directory: Option<std::path::PathBuf>,
+
+    /// Persisted HTML export options.
+    #[serde(default)]
+    pub html_export_options: crate::export::HtmlExportOptions,
+
+    /// Persisted PDF export options.
+    #[serde(default)]
+    pub pdf_export_options: crate::export::PdfExportOptions,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Workspace Settings
@@ -2045,7 +2352,6 @@ pub struct Settings {
     // ─────────────────────────────────────────────────────────────────────────
     // LSP (Language Server Protocol)
     // ─────────────────────────────────────────────────────────────────────────
-
     /// Whether the LSP client is enabled (auto-detect and spawn language servers).
     /// Default off so markdown-only users are unaffected.
     #[serde(default)]
@@ -2057,9 +2363,37 @@ pub struct Settings {
     pub lsp_server_overrides: std::collections::HashMap<String, String>,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Code execution (rendered markdown — opt-in, runs local processes)
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Master switch: allow running code from markdown fenced blocks.
+    /// Disabled by default; enabling runs subprocesses on your machine.
+    #[serde(default)]
+    pub enable_code_execution: bool,
+
+    /// When `enable_code_execution`, allow shell/script blocks (e.g. `bash`, `sh`, `pwsh`).
+    #[serde(default = "default_true")]
+    pub allow_shell: bool,
+
+    /// When `enable_code_execution`, allow `python` fenced blocks.
+    #[serde(default = "default_true")]
+    pub allow_python: bool,
+
+    /// Hard limit in seconds for each code execution (clamped 5–300).
+    #[serde(default = "default_code_execution_timeout_secs")]
+    pub code_execution_timeout_secs: u32,
+
+    /// Render captured output inline below the code block (transient panel).
+    /// When `false`, completion falls back to a toast notification.
+    #[serde(default = "default_true")]
+    pub code_execution_show_inline_output: bool,
+
+    /// User acknowledged code-execution risk (consent dialog or enabling via Settings).
+    #[serde(default)]
+    pub code_execution_consent_acknowledged: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Panel Visibility (Future Features)
     // ─────────────────────────────────────────────────────────────────────────
-
     /// Whether the AI assistant panel is visible
     #[serde(default)]
     pub ai_panel_visible: bool,
@@ -2086,6 +2420,7 @@ impl Default for Settings {
         Self {
             // Appearance
             theme: Theme::default(),
+            accent_color: crate::theme::accent::DEFAULT_ACCENT_RGB,
             view_mode: ViewMode::default(),
             show_line_numbers: true,
             font_size: 14.0,
@@ -2099,6 +2434,7 @@ impl Default for Settings {
             use_spaces: true,
             auto_save_enabled_default: false,
             auto_save_delay_ms: 15000, // 15 seconds default
+            quick_note_workflow: false,
 
             // Session & History
             restore_session: true, // Restore previous session by default
@@ -2129,6 +2465,9 @@ impl Default for Settings {
             last_export_directory: None,
             open_after_export: false,
             export_embed_images: true, // Standalone files by default
+            last_pdf_export_directory: None,
+            pdf_export_options: crate::export::PdfExportOptions::default(),
+            html_export_options: crate::export::HtmlExportOptions::default(),
 
             // Workspace Settings
             recent_workspaces: Vec::new(),
@@ -2139,30 +2478,30 @@ impl Default for Settings {
             zen_mode_enabled: false,
 
             // Code Folding Settings
-            folding_enabled: true,           // Folding enabled by default
-            folding_show_indicators: false,  // Hide fold indicators by default (they don't collapse yet)
-            fold_headings: true,             // Fold headings by default
-            fold_code_blocks: true,          // Fold code blocks by default
-            fold_lists: true,                // Fold lists by default
-            fold_indentation: true,          // Indentation folding for JSON/YAML
+            folding_enabled: true,          // Folding enabled by default
+            folding_show_indicators: false, // Hide fold indicators by default (they don't collapse yet)
+            fold_headings: true,            // Fold headings by default
+            fold_code_blocks: true,         // Fold code blocks by default
+            fold_lists: true,               // Fold lists by default
+            fold_indentation: true,         // Indentation folding for JSON/YAML
 
             // Live Pipeline Settings
-            pipeline_enabled: true,          // Feature enabled by default
-            pipeline_debounce_ms: 500,       // 500ms debounce
+            pipeline_enabled: true,    // Feature enabled by default
+            pipeline_debounce_ms: 500, // 500ms debounce
             pipeline_max_output_bytes: 1024 * 1024, // 1 MB max output
-            pipeline_max_runtime_ms: 30000,  // 30 seconds max runtime
-            pipeline_panel_height: 200.0,    // Default panel height
+            pipeline_max_runtime_ms: 30000, // 30 seconds max runtime
+            pipeline_panel_height: 200.0, // Default panel height
             pipeline_recent_commands: Vec::new(),
             command_palette_recent: Vec::new(),
 
             // Minimap Settings
-            minimap_enabled: true,           // Minimap enabled by default
-            minimap_width: 120.0,            // Default semantic minimap width
+            minimap_enabled: true,                // Minimap enabled by default
+            minimap_width: 120.0,                 // Default semantic minimap width
             minimap_mode: MinimapMode::default(), // Auto mode by default
 
             // Bracket Matching Settings
-            highlight_matching_pairs: true,  // Bracket matching enabled by default
-            auto_close_brackets: true,       // Auto-close brackets enabled by default
+            highlight_matching_pairs: true, // Bracket matching enabled by default
+            auto_close_brackets: true,      // Auto-close brackets enabled by default
 
             // Syntax Highlighting Settings
             syntax_highlighting_enabled: true, // Syntax highlighting enabled by default
@@ -2188,7 +2527,7 @@ impl Default for Settings {
 
             // Markdown Rendering Settings
             header_spacing: HeaderSpacing::default(), // Normal by default
-            strict_line_breaks: false, // Standard markdown: soft breaks are spaces
+            strict_line_breaks: false,                // Standard markdown: soft breaks are spaces
 
             // Snippets Settings
             snippets_enabled: true, // Snippet expansion enabled by default
@@ -2200,13 +2539,13 @@ impl Default for Settings {
             keyboard_shortcuts: KeyboardShortcuts::default(),
 
             // Terminal Settings
-            terminal_enabled: true,           // Terminal feature enabled by default
-            terminal_panel_height: 300.0,     // Default panel height
-            terminal_font_size: 14.0,         // Default terminal font size
+            terminal_enabled: true, // Terminal feature enabled by default
+            terminal_panel_height: 300.0, // Default panel height
+            terminal_font_size: 14.0, // Default terminal font size
             terminal_scrollback_lines: 10000, // Default scrollback buffer size
-            terminal_copy_on_select: false,   // Manual copy by default
+            terminal_copy_on_select: false, // Manual copy by default
             terminal_theme_name: String::from("Ferrite Dark"), // Default theme
-            terminal_opacity: 1.0, // Opaque by default
+            terminal_opacity: 1.0,  // Opaque by default
             terminal_startup_command: String::new(),
             terminal_prompt_patterns: vec![
                 r"^>\s*$".to_string(),
@@ -2226,6 +2565,14 @@ impl Default for Settings {
             // LSP
             lsp_enabled: false, // Disabled by default (markdown-only users unaffected)
             lsp_server_overrides: std::collections::HashMap::new(),
+
+            // Code execution (future runtime will respect these flags)
+            enable_code_execution: false,
+            allow_shell: true,
+            allow_python: true,
+            code_execution_timeout_secs: 30,
+            code_execution_show_inline_output: true,
+            code_execution_consent_acknowledged: false,
 
             // Panel Visibility
             ai_panel_visible: false,
@@ -2257,6 +2604,16 @@ impl Settings {
             language: detected_language,
             ..Self::default()
         }
+    }
+
+    /// User-selected Ferrite accent as [`egui::Color32`].
+    #[inline]
+    pub fn ferrite_accent_rgb(&self) -> egui::Color32 {
+        egui::Color32::from_rgb(
+            self.accent_color[0],
+            self.accent_color[1],
+            self.accent_color[2],
+        )
     }
 
     /// Add a file to the recent files list.
@@ -2430,6 +2787,10 @@ impl Settings {
     pub const MIN_CUSTOM_LINE_WIDTH: u32 = 400;
     /// Maximum custom line width in pixels.
     pub const MAX_CUSTOM_LINE_WIDTH: u32 = 2000;
+    /// Minimum code execution timeout (seconds).
+    pub const MIN_CODE_EXECUTION_TIMEOUT_SECS: u32 = 5;
+    /// Maximum code execution timeout (seconds).
+    pub const MAX_CODE_EXECUTION_TIMEOUT_SECS: u32 = 300;
 
     /// Sanitize settings by clamping values to valid ranges.
     ///
@@ -2467,19 +2828,13 @@ impl Settings {
         const MIN_POSITION: f32 = -10000.0;
         if let Some(x) = self.window_size.x {
             if !x.is_finite() || x < MIN_POSITION || x > MAX_POSITION {
-                log::warn!(
-                    "Invalid window X position {}, resetting to default",
-                    x
-                );
+                log::warn!("Invalid window X position {}, resetting to default", x);
                 self.window_size.x = None;
             }
         }
         if let Some(y) = self.window_size.y {
             if !y.is_finite() || y < MIN_POSITION || y > MAX_POSITION {
-                log::warn!(
-                    "Invalid window Y position {}, resetting to default",
-                    y
-                );
+                log::warn!("Invalid window Y position {}, resetting to default", y);
                 self.window_size.y = None;
             }
         }
@@ -2516,18 +2871,21 @@ impl Settings {
             .clamp(Self::MIN_ZEN_COLUMN_WIDTH, Self::MAX_ZEN_COLUMN_WIDTH);
 
         // Clamp pipeline settings
-        self.pipeline_debounce_ms = self
-            .pipeline_debounce_ms
-            .clamp(Self::MIN_PIPELINE_DEBOUNCE_MS, Self::MAX_PIPELINE_DEBOUNCE_MS);
-        self.pipeline_max_output_bytes = self
-            .pipeline_max_output_bytes
-            .clamp(Self::MIN_PIPELINE_OUTPUT_BYTES, Self::MAX_PIPELINE_OUTPUT_BYTES);
+        self.pipeline_debounce_ms = self.pipeline_debounce_ms.clamp(
+            Self::MIN_PIPELINE_DEBOUNCE_MS,
+            Self::MAX_PIPELINE_DEBOUNCE_MS,
+        );
+        self.pipeline_max_output_bytes = self.pipeline_max_output_bytes.clamp(
+            Self::MIN_PIPELINE_OUTPUT_BYTES,
+            Self::MAX_PIPELINE_OUTPUT_BYTES,
+        );
         self.pipeline_max_runtime_ms = self
             .pipeline_max_runtime_ms
             .clamp(Self::MIN_PIPELINE_RUNTIME_MS, Self::MAX_PIPELINE_RUNTIME_MS);
-        self.pipeline_panel_height = self
-            .pipeline_panel_height
-            .clamp(Self::MIN_PIPELINE_PANEL_HEIGHT, Self::MAX_PIPELINE_PANEL_HEIGHT);
+        self.pipeline_panel_height = self.pipeline_panel_height.clamp(
+            Self::MIN_PIPELINE_PANEL_HEIGHT,
+            Self::MAX_PIPELINE_PANEL_HEIGHT,
+        );
         self.pipeline_recent_commands
             .truncate(Self::MAX_PIPELINE_RECENT_COMMANDS);
         self.command_palette_recent.truncate(20);
@@ -2541,6 +2899,18 @@ impl Settings {
         if let MaxLineWidth::Custom(px) = self.max_line_width {
             let clamped = px.clamp(Self::MIN_CUSTOM_LINE_WIDTH, Self::MAX_CUSTOM_LINE_WIDTH);
             self.max_line_width = MaxLineWidth::Custom(clamped);
+        }
+
+        self.code_execution_timeout_secs = self.code_execution_timeout_secs.clamp(
+            Self::MIN_CODE_EXECUTION_TIMEOUT_SECS,
+            Self::MAX_CODE_EXECUTION_TIMEOUT_SECS,
+        );
+
+        // Custom("") means "picker not finalized"; normalize so saves and restarts don't persist a limbo state.
+        if let EditorFont::Custom(ref name) = self.font_family {
+            if name.trim().is_empty() {
+                self.font_family = EditorFont::Inter;
+            }
         }
     }
 
@@ -2575,6 +2945,16 @@ mod tests {
         assert_eq!(settings.window_size.width, 1200.0);
         assert_eq!(settings.window_size.height, 800.0);
         assert_eq!(settings.split_ratio, 0.5);
+    }
+
+    #[test]
+    fn test_editor_font_custom_name_skips_pending_empty() {
+        assert!(EditorFont::Custom(String::new()).custom_name().is_none());
+        assert!(EditorFont::Custom("  ".to_string()).custom_name().is_none());
+        assert_eq!(
+            EditorFont::Custom("Helvetica".to_string()).custom_name(),
+            Some("Helvetica")
+        );
     }
 
     #[test]
@@ -2794,7 +3174,10 @@ mod tests {
         assert!(!ViewMode::Rendered.description().is_empty());
         assert!(!ViewMode::Split.description().is_empty());
         // Ensure descriptions are different
-        assert_ne!(ViewMode::Raw.description(), ViewMode::Rendered.description());
+        assert_ne!(
+            ViewMode::Raw.description(),
+            ViewMode::Rendered.description()
+        );
         assert_ne!(ViewMode::Raw.description(), ViewMode::Split.description());
     }
 
@@ -2977,10 +3360,16 @@ mod tests {
 
     #[test]
     fn test_log_level_serialization() {
-        assert_eq!(serde_json::to_string(&LogLevel::Debug).unwrap(), "\"debug\"");
+        assert_eq!(
+            serde_json::to_string(&LogLevel::Debug).unwrap(),
+            "\"debug\""
+        );
         assert_eq!(serde_json::to_string(&LogLevel::Info).unwrap(), "\"info\"");
         assert_eq!(serde_json::to_string(&LogLevel::Warn).unwrap(), "\"warn\"");
-        assert_eq!(serde_json::to_string(&LogLevel::Error).unwrap(), "\"error\"");
+        assert_eq!(
+            serde_json::to_string(&LogLevel::Error).unwrap(),
+            "\"error\""
+        );
         assert_eq!(serde_json::to_string(&LogLevel::Off).unwrap(), "\"off\"");
     }
 
@@ -3187,10 +3576,22 @@ mod tests {
 
     #[test]
     fn test_max_line_width_serialization() {
-        assert_eq!(serde_json::to_string(&MaxLineWidth::Off).unwrap(), "\"off\"");
-        assert_eq!(serde_json::to_string(&MaxLineWidth::Col80).unwrap(), "\"80\"");
-        assert_eq!(serde_json::to_string(&MaxLineWidth::Col100).unwrap(), "\"100\"");
-        assert_eq!(serde_json::to_string(&MaxLineWidth::Col120).unwrap(), "\"120\"");
+        assert_eq!(
+            serde_json::to_string(&MaxLineWidth::Off).unwrap(),
+            "\"off\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MaxLineWidth::Col80).unwrap(),
+            "\"80\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MaxLineWidth::Col100).unwrap(),
+            "\"100\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MaxLineWidth::Col120).unwrap(),
+            "\"120\""
+        );
         assert_eq!(
             serde_json::to_string(&MaxLineWidth::Custom(600)).unwrap(),
             "{\"custom\":600}"
@@ -3280,17 +3681,23 @@ mod tests {
     fn test_settings_sanitize_custom_line_width() {
         // Test clamping of custom line width
         let mut settings = Settings::default();
-        
+
         // Below minimum
         settings.max_line_width = MaxLineWidth::Custom(100);
         settings.sanitize();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(Settings::MIN_CUSTOM_LINE_WIDTH));
-        
+        assert_eq!(
+            settings.max_line_width,
+            MaxLineWidth::Custom(Settings::MIN_CUSTOM_LINE_WIDTH)
+        );
+
         // Above maximum
         settings.max_line_width = MaxLineWidth::Custom(5000);
         settings.sanitize();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(Settings::MAX_CUSTOM_LINE_WIDTH));
-        
+        assert_eq!(
+            settings.max_line_width,
+            MaxLineWidth::Custom(Settings::MAX_CUSTOM_LINE_WIDTH)
+        );
+
         // Valid value unchanged
         settings.max_line_width = MaxLineWidth::Custom(800);
         settings.sanitize();
@@ -3403,9 +3810,18 @@ mod tests {
     #[test]
     fn test_language_from_locale_code_supported_languages() {
         // Chinese Simplified
-        assert_eq!(Language::from_locale_code("zh-CN"), Some(Language::ChineseSimplified));
-        assert_eq!(Language::from_locale_code("zh_Hans"), Some(Language::ChineseSimplified));
-        assert_eq!(Language::from_locale_code("zh"), Some(Language::ChineseSimplified));
+        assert_eq!(
+            Language::from_locale_code("zh-CN"),
+            Some(Language::ChineseSimplified)
+        );
+        assert_eq!(
+            Language::from_locale_code("zh_Hans"),
+            Some(Language::ChineseSimplified)
+        );
+        assert_eq!(
+            Language::from_locale_code("zh"),
+            Some(Language::ChineseSimplified)
+        );
 
         // German
         assert_eq!(Language::from_locale_code("de"), Some(Language::German));
@@ -3414,7 +3830,10 @@ mod tests {
 
         // Japanese
         assert_eq!(Language::from_locale_code("ja"), Some(Language::Japanese));
-        assert_eq!(Language::from_locale_code("ja-JP"), Some(Language::Japanese));
+        assert_eq!(
+            Language::from_locale_code("ja-JP"),
+            Some(Language::Japanese)
+        );
     }
 
     #[test]
@@ -3469,7 +3888,10 @@ mod tests {
     #[test]
     fn test_csv_rainbow_columns_default() {
         let settings = Settings::default();
-        assert!(!settings.csv_rainbow_columns, "Rainbow columns should be disabled by default");
+        assert!(
+            !settings.csv_rainbow_columns,
+            "Rainbow columns should be disabled by default"
+        );
     }
 
     #[test]
@@ -3506,9 +3928,18 @@ mod tests {
 
     #[test]
     fn test_minimap_mode_serialization() {
-        assert_eq!(serde_json::to_string(&MinimapMode::Auto).unwrap(), "\"auto\"");
-        assert_eq!(serde_json::to_string(&MinimapMode::Semantic).unwrap(), "\"semantic\"");
-        assert_eq!(serde_json::to_string(&MinimapMode::Pixel).unwrap(), "\"pixel\"");
+        assert_eq!(
+            serde_json::to_string(&MinimapMode::Auto).unwrap(),
+            "\"auto\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MinimapMode::Semantic).unwrap(),
+            "\"semantic\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MinimapMode::Pixel).unwrap(),
+            "\"pixel\""
+        );
     }
 
     #[test]
@@ -3540,8 +3971,14 @@ mod tests {
         assert!(!MinimapMode::Auto.description().is_empty());
         assert!(!MinimapMode::Semantic.description().is_empty());
         assert!(!MinimapMode::Pixel.description().is_empty());
-        assert_ne!(MinimapMode::Auto.description(), MinimapMode::Semantic.description());
-        assert_ne!(MinimapMode::Auto.description(), MinimapMode::Pixel.description());
+        assert_ne!(
+            MinimapMode::Auto.description(),
+            MinimapMode::Semantic.description()
+        );
+        assert_ne!(
+            MinimapMode::Auto.description(),
+            MinimapMode::Pixel.description()
+        );
     }
 
     #[test]
@@ -3556,7 +3993,7 @@ mod tests {
     #[test]
     fn test_minimap_mode_use_semantic() {
         // Auto mode: semantic for markdown, pixel for others
-        assert!(MinimapMode::Auto.use_semantic(true));  // markdown -> semantic
+        assert!(MinimapMode::Auto.use_semantic(true)); // markdown -> semantic
         assert!(!MinimapMode::Auto.use_semantic(false)); // non-markdown -> pixel
 
         // Semantic mode: always semantic regardless of file type
@@ -3622,12 +4059,12 @@ mod tests {
     #[test]
     fn test_key_modifiers_display_string() {
         assert_eq!(KeyModifiers::none().display_string(), "");
-        
+
         let ctrl_only = KeyModifiers::ctrl();
         let display = ctrl_only.display_string();
         // On macOS it's "Cmd", on others "Ctrl"
         assert!(display == "Ctrl" || display == "Cmd");
-        
+
         let ctrl_shift = KeyModifiers::ctrl_shift();
         let display = ctrl_shift.display_string();
         assert!(display.contains("Shift"));
@@ -3643,9 +4080,18 @@ mod tests {
 
     #[test]
     fn test_key_code_deserialization() {
-        assert_eq!(serde_json::from_str::<KeyCode>("\"s\"").unwrap(), KeyCode::S);
-        assert_eq!(serde_json::from_str::<KeyCode>("\"f11\"").unwrap(), KeyCode::F11);
-        assert_eq!(serde_json::from_str::<KeyCode>("\"escape\"").unwrap(), KeyCode::Escape);
+        assert_eq!(
+            serde_json::from_str::<KeyCode>("\"s\"").unwrap(),
+            KeyCode::S
+        );
+        assert_eq!(
+            serde_json::from_str::<KeyCode>("\"f11\"").unwrap(),
+            KeyCode::F11
+        );
+        assert_eq!(
+            serde_json::from_str::<KeyCode>("\"escape\"").unwrap(),
+            KeyCode::Escape
+        );
     }
 
     #[test]
@@ -3662,7 +4108,7 @@ mod tests {
         let binding = KeyBinding::new(KeyModifiers::ctrl(), KeyCode::S);
         let display = binding.display_string();
         assert!(display.contains("S"));
-        
+
         let binding_no_mods = KeyBinding::new(KeyModifiers::none(), KeyCode::F11);
         assert_eq!(binding_no_mods.display_string(), "F11");
     }
@@ -3713,11 +4159,11 @@ mod tests {
     #[test]
     fn test_keyboard_shortcuts_custom_binding() {
         let mut shortcuts = KeyboardShortcuts::default();
-        
+
         // Set a custom binding
         let custom = KeyBinding::new(KeyModifiers::alt(), KeyCode::S);
         shortcuts.set(ShortcutCommand::Save, custom);
-        
+
         // Check it returns the custom binding
         let binding = shortcuts.get(ShortcutCommand::Save);
         assert!(binding.modifiers.alt);
@@ -3728,15 +4174,18 @@ mod tests {
     #[test]
     fn test_keyboard_shortcuts_reset() {
         let mut shortcuts = KeyboardShortcuts::default();
-        
+
         // Set a custom binding
-        shortcuts.set(ShortcutCommand::Save, KeyBinding::new(KeyModifiers::alt(), KeyCode::S));
+        shortcuts.set(
+            ShortcutCommand::Save,
+            KeyBinding::new(KeyModifiers::alt(), KeyCode::S),
+        );
         assert!(shortcuts.is_custom(ShortcutCommand::Save));
-        
+
         // Reset to default
         shortcuts.reset(ShortcutCommand::Save);
         assert!(!shortcuts.is_custom(ShortcutCommand::Save));
-        
+
         // Should return default binding again
         let binding = shortcuts.get(ShortcutCommand::Save);
         assert!(binding.modifiers.ctrl);
@@ -3745,14 +4194,20 @@ mod tests {
     #[test]
     fn test_keyboard_shortcuts_reset_all() {
         let mut shortcuts = KeyboardShortcuts::default();
-        
+
         // Set some custom bindings
-        shortcuts.set(ShortcutCommand::Save, KeyBinding::new(KeyModifiers::alt(), KeyCode::S));
-        shortcuts.set(ShortcutCommand::Open, KeyBinding::new(KeyModifiers::alt(), KeyCode::O));
-        
+        shortcuts.set(
+            ShortcutCommand::Save,
+            KeyBinding::new(KeyModifiers::alt(), KeyCode::S),
+        );
+        shortcuts.set(
+            ShortcutCommand::Open,
+            KeyBinding::new(KeyModifiers::alt(), KeyCode::O),
+        );
+
         // Reset all
         shortcuts.reset_all();
-        
+
         // All should be defaults now
         assert!(!shortcuts.is_custom(ShortcutCommand::Save));
         assert!(!shortcuts.is_custom(ShortcutCommand::Open));
@@ -3761,13 +4216,15 @@ mod tests {
     #[test]
     fn test_keyboard_shortcuts_conflict_detection() {
         let mut shortcuts = KeyboardShortcuts::default();
-        
+
         // Get Save binding
         let save_binding = shortcuts.get(ShortcutCommand::Save);
-        
+
         // There should be no conflict when checking against Save itself
-        assert!(shortcuts.find_conflict(&save_binding, Some(ShortcutCommand::Save)).is_none());
-        
+        assert!(shortcuts
+            .find_conflict(&save_binding, Some(ShortcutCommand::Save))
+            .is_none());
+
         // If we don't exclude, Save should be found as using this binding
         assert_eq!(
             shortcuts.find_conflict(&save_binding, None),
@@ -3778,8 +4235,11 @@ mod tests {
     #[test]
     fn test_keyboard_shortcuts_serialization() {
         let mut shortcuts = KeyboardShortcuts::default();
-        shortcuts.set(ShortcutCommand::Save, KeyBinding::new(KeyModifiers::alt(), KeyCode::S));
-        
+        shortcuts.set(
+            ShortcutCommand::Save,
+            KeyBinding::new(KeyModifiers::alt(), KeyCode::S),
+        );
+
         let json = serde_json::to_string(&shortcuts).unwrap();
         assert!(json.contains("save"));
         assert!(json.contains("alt"));
@@ -3789,7 +4249,7 @@ mod tests {
     fn test_keyboard_shortcuts_deserialization() {
         let json = r#"{"bindings": {"save": {"modifiers": {"ctrl": false, "shift": false, "alt": true}, "key": "s"}}}"#;
         let shortcuts: KeyboardShortcuts = serde_json::from_str(json).unwrap();
-        
+
         let binding = shortcuts.get(ShortcutCommand::Save);
         assert!(binding.modifiers.alt);
         assert!(!binding.modifiers.ctrl);
@@ -3867,5 +4327,19 @@ mod tests {
         assert_eq!(loaded.ai_panel_visible, true);
         assert_eq!(loaded.database_panel_visible, true);
         assert_eq!(loaded.ssh_panel_visible, false);
+    }
+
+    #[test]
+    fn test_code_execution_consent_defaults_and_roundtrip() {
+        let s = Settings::default();
+        assert!(!s.code_execution_consent_acknowledged);
+
+        let mut settings = Settings::default();
+        settings.code_execution_consent_acknowledged = true;
+        settings.enable_code_execution = true;
+        let json = serde_json::to_string(&settings).unwrap();
+        let loaded: Settings = serde_json::from_str(&json).unwrap();
+        assert!(loaded.code_execution_consent_acknowledged);
+        assert!(loaded.enable_code_execution);
     }
 }

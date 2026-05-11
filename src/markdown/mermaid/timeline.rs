@@ -1,6 +1,6 @@
 //! Timeline diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Stroke, Ui, Vec2};
+use egui::{Color32, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 
 /// A period in a timeline.
 #[derive(Debug, Clone)]
@@ -217,6 +217,7 @@ pub fn render_timeline(ui: &mut Ui, timeline: &Timeline, dark_mode: bool, font_s
                 event_rect,
                 4.0,
                 Stroke::new(1.0, color.gamma_multiply(0.5)),
+                StrokeKind::Inside,
             );
             painter.text(
                 event_rect.center(),

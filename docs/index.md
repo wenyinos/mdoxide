@@ -7,6 +7,7 @@
 ## Core Context
 - [AI Context](./ai-context.md) - Core project architecture, rules, and conventions (attach to every AI chat)
 - [README](../README.md) - Project overview and installation
+- [macOS install & Gatekeeper](./install/macos.md) - Unsigned CI bundles, Gatekeeper / quarantine workarounds (#130); signing in v0.3.1
 - [Building Guide](./building.md) - Build from source instructions
 - [CLI Reference](./cli.md) - Command-line interface documentation
 - [Contributing](../CONTRIBUTING.md) - Contribution guidelines
@@ -27,8 +28,10 @@
 | [Internationalization](./technical/config/i18n.md) | rust-i18n integration, Language enum, translation keys, adding languages |
 | [Multi-Encoding Support](./technical/config/multi-encoding.md) | Character encoding detection (chardetng), manual selection, save in original encoding |
 | [Snippets System](./technical/config/snippets-system.md) | Text expansion system with built-in date/time snippets and custom user snippets |
-| [New File Save Prompt](./technical/config/new-file-save-prompt.md) | Skip save prompt for unmodified untitled files, should_prompt_to_save() logic |
+| [New File Save Prompt](./technical/config/new-file-save-prompt.md) | Skip save prompt for unmodified untitled files, `should_prompt_to_save(&Settings)` logic |
+| [Quick note workflow](./technical/config/quick-note-workflow.md) | Ephemeral untitled tabs: optional no-prompt close/quit; session recovery; rename |
 | [Default View Mode](./technical/config/default-view-mode.md) | Per-file-type default view mode configuration |
+| [Code execution settings](./technical/config/code-execution-settings.md) | Opt-in prefs for markdown code-block runners (timeout, shell/Python gates) |
 
 ### Editor Core
 
@@ -79,6 +82,7 @@
 | [Complex Script Font Preferences](./technical/config/complex-script-font-preferences.md) | Per-script font preferences for Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, etc. |
 | [CJK Font Preloading Verification](./technical/fonts/cjk-font-preloading-verification.md) | Verification that explicit CJK preferences preload correctly at startup |
 | [Custom Font Crash Prevention](./technical/fonts/custom-font-crash-prevention.md) | Magic-byte validation, catch_unwind, graceful fallback for invalid custom fonts |
+| [Custom font picker deferred load](./technical/fonts/custom-font-picker-deferred-load.md) | Custom mode waits for an explicit combo pick before loading; fixes macOS #133 toast |
 
 ### UI Components
 
@@ -101,7 +105,7 @@
 | [Keyboard Shortcut Customization](./technical/ui/keyboard-shortcut-customization.md) | Settings panel for rebinding shortcuts with conflict detection, persistence |
 | [Light Mode Contrast](./technical/ui/light-mode-contrast.md) | WCAG AA color tokens, contrast ratios, border/text improvements |
 | [Light Mode Strong Text Fix](./technical/ui/light-mode-strong-text-fix.md) | Fix invisible RichText::strong() labels in light mode |
-| [Theme System](./technical/ui/theme-system.md) | Unified theming with ThemeColors, ThemeManager, light/dark themes, runtime switching |
+| [Theme System](./technical/ui/theme-system.md) | Light/dark/System themes, ThemeManager, **user-configurable Ferrite accent** (headings, selection, chrome; links stay classic blue) |
 | [Adaptive Toolbar](./technical/ui/adaptive-toolbar.md) | File-type aware toolbar, conditional buttons for Markdown vs JSON/YAML/TOML |
 | [Navigation Buttons](./technical/ui/nav-buttons.md) | Document navigation overlay for quick jumping to top, middle, or bottom |
 | [Frontmatter Panel](./technical/ui/frontmatter-panel.md) | Visual YAML frontmatter editor, form-based key-value editing, tag chips, bidirectional sync |
@@ -117,12 +121,18 @@
 | [WYSIWYG Interactions](./technical/markdown/wysiwyg-interactions.md) | WYSIWYG user interaction patterns and behaviors |
 | [Editable Widgets](./technical/markdown/editable-widgets.md) | Standalone editable widgets for headings, paragraphs, lists |
 | [Editable Code Blocks](./technical/markdown/editable-code-blocks.md) | Syntax-highlighted code blocks with edit mode, language selection |
+| [Code block Run](./technical/markdown/code-block-run.md) | Run control in rendered/split preview: background worker, ANSI inline output (CRLF-safe on Windows), ✓/✗ exit, insert-as-fenced-block, **Stop** + hard timeout |
+| [Code execution consent dialog](./technical/markdown/code-execution-consent-dialog.md) | First-run modal when clicking **Run** before consent; queues payload; Settings toggle skips modal |
+| [Code block Run cancellation & timeout](./technical/markdown/code-block-cancellation.md) | `RunStatus::Cancelled`, atomic cancel token, Stop button, `Timed out after Ns` / `Stopped by user` labels, reader-thread shutdown |
 | [Editable Links](./technical/markdown/editable-links.md) | Hover-based link editing with popup menu, autolink support |
-| [Editable Tables](./technical/markdown/editable-tables.md) | Table editing with cell navigation and formatting |
+| [Editable Tables](./technical/markdown/editable-tables.md) | GFM table editing, deferred commits, toolbar, markdown sync |
+| [Table cell focus & navigation](./technical/markdown/table-cell-focus-navigation.md) | Empty-cell hit targets, Tab / Shift+Tab in-table (`lock_focus`, consume order) |
 | [Click-to-Edit Formatting](./technical/markdown/click-to-edit-formatting.md) | Hybrid editing for formatted list items and paragraphs |
 | [Formatting Toolbar](./technical/markdown/formatting-toolbar.md) | Markdown formatting toolbar, keyboard shortcuts, selection handling |
 | [Emphasis Rendering](./technical/markdown/emphasis-rendering.md) | Bold, italic, strikethrough rendering in WYSIWYG |
 | [Table of Contents](./technical/markdown/table-of-contents.md) | TOC generation from headings, anchor links, update/insert modes |
+| [Mermaid insert toolbar](./technical/markdown/mermaid-insert-toolbar.md) | Format toolbar combo: insert fenced Mermaid templates at cursor (Raw / Split) |
+| [Mermaid syntax help](./technical/mermaid/mermaid-syntax-help.md) | About / Help (F1) tab: per-diagram descriptions and snippets aligned with Insert → Mermaid… |
 | [List Editing Fixes](./technical/markdown/list-editing-fixes.md) | Frontmatter offset fix, edit buffer persistence, deferred commits, rendered-mode undo/redo |
 | [List Editing Debug](./technical/markdown/list-editing-debug.md) | Debugging list editing issues and fixes |
 | [Task List Checkbox](./technical/markdown/task-list-checkbox.md) | Interactive task list checkboxes in rendered view, click-to-toggle with source sync |
@@ -138,6 +148,7 @@
 | [Markdown AST Caching](./technical/markdown/markdown-ast-caching.md) | Blake3 content-hash AST cache to skip re-parsing unchanged markdown |
 | [Rendered View Viewport Culling](./technical/markdown/rendered-view-viewport-culling.md) | show_viewport() two-phase culling with 500px overscan for large-document performance |
 | [Block-Level Height Cache](./technical/markdown/block-level-height-cache.md) | Per-block blake3-keyed LRU height cache for off-screen block measurement skip |
+| [Consecutive Fenced Blocks Fix](./technical/markdown/consecutive-fenced-blocks-fix.md) | issue #129 — horizontal `ScrollArea` `auto_shrink_y` fix so consecutive fenced blocks all stay visible |
 | [Strict Line Breaks](./technical/markdown/strict-line-breaks.md) | Optional setting treating single newlines as hard `<br>` breaks |
 | [Lazy Block Height Estimation](./technical/markdown/lazy-block-height-estimation.md) | Heuristic heights for unmeasured blocks, render budget cap, progressive refinement |
 | [Paragraph Trailing Spaces](./technical/markdown/paragraph-trailing-spaces.md) | Fix for trailing spaces lost in plain paragraphs via persistent edit buffer |
@@ -156,10 +167,13 @@
 | [CSV Raw View Caching](./technical/viewers/csv-raw-view-caching.md) | Blake3 hash-guarded raw text cache to eliminate per-frame string allocation |
 | [Image Viewer](./technical/viewers/image-viewer.md) | Dedicated image viewer tabs (PNG/JPEG/GIF/WebP/BMP) with zoom and metadata |
 | [PDF Viewer](./technical/viewers/pdf-viewer.md) | Read-only PDF viewer tabs with hayro rendering, page navigation, zoom |
+| [Print preview](./technical/viewers/print-preview.md) | Same `render_markdown_to_pdf` as Export PDF; temp file → `PdfViewer` tab; ephemeral session/temp cleanup |
 | [Tree Viewer](./technical/viewers/tree-viewer.md) | JSON/YAML/TOML tree viewer with inline editing, expand/collapse, path copying |
 | [Tree Viewer Caching](./technical/viewers/tree-viewer-caching.md) | Blake3-guarded parse cache and raw text buffer to avoid per-frame work |
 | [Live Pipeline](./technical/viewers/live-pipeline.md) | JSON/YAML command piping through shell commands (jq, yq), recent history |
-| [Document Export](./technical/viewers/document-export.md) | HTML export with themed CSS, Copy-as-HTML clipboard functionality |
+| [Document Export](./technical/viewers/document-export.md) | Themed HTML export (options dialog, Mermaid SVG, syntect blocks), clipboard HTML, PDF export pointer |
+| [Themed HTML export](./technical/viewers/themed-html-export.md) | Implementation map: comrak adapter, Mermaid SVG, theme resolution, image/link post-process |
+| **[PDF Export](./technical/viewers/pdf-export.md)** | **v0.3.x: Native-Rust PDF export via `krilla` (fonts, page size/margins, H1 page-break dialog, link annotations)** |
 
 ### File Operations & Workspaces
 
@@ -201,16 +215,19 @@
 | Document | Description |
 |----------|-------------|
 | [eframe Window](./technical/platform/eframe-window.md) | Window lifecycle, dynamic titles, responsive layout, state persistence |
+| **[eframe/egui 0.31 Upgrade](./technical/platform/eframe-egui-031-upgrade.md)** | **v0.3.0 GUI stack bump from 0.28 → 0.31.1 — breaking API migration patterns and validation** |
+| **[v0.3.0 Cross-Platform Regression Matrix](./technical/platform/v0.3.0-regression-matrix.md)** | **Manual regression test matrix for the egui 0.31 upgrade across Windows 11, macOS 14, Linux X11, and Wayland** |
 | [Custom Title Bar](./technical/platform/custom-title-bar.md) | Windows-style custom title bar implementation |
 | [Window Resize](./technical/platform/window-resize.md) | Custom resize handles for borderless windows, edge detection |
 | [Windows Borderless Window](./technical/platform/windows-borderless-window.md) | Top edge resize fix, fullscreen toggle (F10), title bar button area exclusion |
 | [Windows Borderless Transparent Fix](./technical/platform/windows-borderless-transparent-fix.md) | Fix rendering offset (black bars) on Intel GPUs via `with_transparent(true)` DWM workaround |
-|| [Windows Path Normalization](./technical/platform/windows-path-normalization.md) | Strip Windows `\\?\` prefix from canonicalized paths |
+| [Windows Path Normalization](./technical/platform/windows-path-normalization.md) | Strip Windows `\\?\` prefix from canonicalized paths |
 | [Linux Cursor Flicker Fix](./technical/platform/linux-cursor-flicker-fix.md) | Title bar exclusion zone to prevent cursor conflicts with window controls |
 | **[Idle Mode Optimization](./technical/platform/idle-mode-optimization.md)** | **Tiered idle repaint system to reduce CPU usage on all platforms** |
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
 | **[Single-Instance Protocol](./technical/platform/single-instance.md)** | **Lock file + TCP IPC to open files in existing window** |
 | **[macOS .app Bundle CI](./technical/platform/macos-app-bundle-ci.md)** | **CI workflow for proper macOS .app bundle packaging** |
+| [macOS Gatekeeper (GitHub Releases)](./technical/platform/macos-gatekeeper-github-releases.md) | Unsigned v0.3.0 artifacts, doc map (#130), release checklist; signing in v0.3.1 |
 | [macOS Markdown file association](./technical/platform/macos-markdown-file-association.md) | UTI for .md files, Finder Open With / default app |
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
@@ -245,6 +262,7 @@
 | [Flowchart Branch Ordering](./technical/mermaid/flowchart-branch-ordering.md) | Decision node branch positioning, edge declaration order, barycenter algorithm |
 | [Flowchart Subgraph Title](./technical/mermaid/flowchart-subgraph-title.md) | Subgraph title width expansion, preventing title truncation |
 | [Flowchart Asymmetric Shape](./technical/mermaid/flowchart-asymmetric-shape.md) | Asymmetric (flag) shape rendering, text centering |
+| [Flowchart shapes & style](./technical/mermaid/flowchart-shapes-and-style.md) | Trapezoid, double circle, `style nodeId`, `color:` in classDef, merge precedence |
 | [Flowchart Viewport Clipping](./technical/mermaid/flowchart-viewport-clipping.md) | Viewport clipping fix, negative coordinate shifting |
 | [Flowchart linkStyle](./technical/mermaid/flowchart-linkstyle.md) | Edge styling via linkStyle directive, stroke color/width customization |
 | [Flowchart Crash Prevention](./technical/mermaid/flowchart-crash-prevention.md) | Infinite loop safety, panic handling, graceful degradation |
@@ -255,8 +273,10 @@
 | [Sequence Control Blocks](./technical/mermaid/sequence-control-blocks.md) | Sequence diagram loop/alt/opt/par blocks, nested parsing, block rendering |
 | [Sequence Activations & Notes](./technical/mermaid/sequence-activations-notes.md) | Activation boxes, notes, +/- shorthand, state tracking |
 | [State Composite Nested](./technical/mermaid/state-composite-nested.md) | State diagram composite and nested state support |
+| [State pseudostates (fork/join/history)](./technical/mermaid/state-pseudostates-fork-join-history.md) | `<<fork>>` / `<<join>>` bars and `[H]` / `[H*]` history glyphs in native state diagrams |
 | **[Flowchart Modular Refactor](./technical/mermaid/flowchart-modular-refactor.md)** | **Flowchart.rs split into 12 focused modules (types, parser, layout/, render/, utils)** |
 | [Flowchart Refactor Plan](./technical/mermaid/flowchart-refactor-plan.md) | Original analysis and refactoring plan for flowchart.rs modularization |
+| **[Mermaid Inline Validation](./technical/mermaid/mermaid-inline-validation.md)** | **Parse-time validation: warning header (line + hint), last-good fallback, raw-editor squiggles for broken `mermaid` blocks** |
 
 ### LSP Integration *(deferred to v0.2.9 — feature-gated behind `lsp` Cargo feature)*
 
@@ -283,6 +303,7 @@
 | **[app.rs Refactoring Plan](./technical/planning/app-rs-refactoring-plan.md)** | **Split 7,634-line app.rs into ~15 focused modules under src/app/** |
 | **[Mermaid Crate Plan](./mermaid-crate-plan.md)** | **Extract Mermaid renderer as standalone pure-Rust crate** |
 | **[Math Support Plan](./math-support-plan.md)** | **v0.4.0 planning: Native LaTeX/TeX math rendering (pure Rust)** |
+| **[PDF Export Pipeline](./technical/planning/pdf-export-pipeline.md)** | **v0.3.x decision doc: native-Rust PDF export via `krilla` + `krilla-svg`, browser fallback retained** |
 
 ### Performance
 
@@ -309,6 +330,8 @@
 
 | Guide | Description |
 |-------|-------------|
+| [macOS install & Gatekeeper](./install/macos.md) | Unsigned CI bundles, macOS 15.x / Sequoia, `xattr` quarantine removal, temporary workarounds until v0.3.1 signing |
+| [GitHub Release checklist](./github-release-checklist.md) | Maintainer steps; macOS Gatekeeper blurb to paste into release notes (#130) |
 | [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
 | [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n, for Weblate extraction |
 | [v0.2.6 Test Suite](./v0.2.6-manual-test-suite.md) | Manual testing checklist for FerriteEditor release |

@@ -24,8 +24,8 @@ async-workers = ["tokio", "poll-promise"]
 lsp = []
 
 [dependencies]
-egui = { version = "0.28", features = ["serde"] }
-eframe = "0.28"
+egui = { version = "0.31", features = ["serde"] }
+eframe = "0.31"
 comrak = "0.22"
 syntect = "5.1"
 two-face = "0.5"  # Extra syntax definitions (PowerShell, TypeScript, etc.)
@@ -104,6 +104,12 @@ unicode-width = "0.1"
 
 # PDF rendering (pure Rust, CPU-based)
 hayro = "0.5"
+
+# PDF generation (pure Rust, same author as hayro)
+# See docs/technical/planning/pdf-export-pipeline.md for the design rationale.
+# `simple-text` enables surface.draw_text(); `raster-images` enables PNG/JPEG embedding.
+krilla = { version = "0.7", features = ["simple-text", "raster-images"] }
+krilla-svg = "0.7"
 
 # High-performance memory allocators (platform-specific)
 # mimalloc for Windows: faster allocation, reduced fragmentation

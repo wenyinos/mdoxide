@@ -1,6 +1,6 @@
 //! Class diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
@@ -37,12 +37,12 @@ pub struct Class {
 /// Relationship type between classes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassRelationType {
-    Inheritance,  // --|>
-    Composition,  // *--
-    Aggregation,  // o--
-    Association,  // --
-    Dependency,   // ..>
-    Realization,  // ..|>
+    Inheritance, // --|>
+    Composition, // *--
+    Aggregation, // o--
+    Association, // --
+    Dependency,  // ..>
+    Realization, // ..|>
 }
 
 /// A relationship between classes.
@@ -91,7 +91,11 @@ pub fn parse_class_diagram(source: &str) -> Result<ClassDiagram, String> {
                 // class Interface <<interface>>
                 let start = rest.find("<<").unwrap();
                 let end = rest.find(">>").unwrap();
-                let name = rest[..start].trim().trim_end_matches('{').trim().to_string();
+                let name = rest[..start]
+                    .trim()
+                    .trim_end_matches('{')
+                    .trim()
+                    .to_string();
                 let stereo = rest[start + 2..end].trim().to_string();
                 (name, Some(stereo))
             } else {
@@ -278,12 +282,7 @@ fn parse_class_relation(line: &str) -> Option<ClassRelation> {
 }
 
 /// Render a class diagram to the UI.
-pub fn render_class_diagram(
-    ui: &mut Ui,
-    diagram: &ClassDiagram,
-    dark_mode: bool,
-    font_size: f32,
-) {
+pub fn render_class_diagram(ui: &mut Ui, diagram: &ClassDiagram, dark_mode: bool, font_size: f32) {
     let margin = 30.0_f32;
     let class_min_width = 120.0_f32;
     let member_height = font_size + 4.0;
@@ -509,20 +508,21 @@ pub fn render_class_diagram(
             // Draw box
             painter.rect(
                 rect,
-                Rounding::same(4.0),
+                CornerRadius::same(4),
                 class_fill,
                 Stroke::new(2.0, class_stroke),
+                StrokeKind::Inside,
             );
 
             // Draw header
             let header_rect = Rect::from_min_size(rect.min, Vec2::new(size.x, header_height));
             painter.rect_filled(
                 header_rect,
-                Rounding {
-                    nw: 4.0,
-                    ne: 4.0,
-                    sw: 0.0,
-                    se: 0.0,
+                CornerRadius {
+                    nw: 4,
+                    ne: 4,
+                    sw: 0,
+                    se: 0,
                 },
                 header_fill,
             );

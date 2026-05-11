@@ -2,10 +2,12 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.3.0 - Platform Stack Upgrade, Export, Code Execution, Media Embeds, Mermaid Crate & RTL/BiDi
-**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Fixes Wayland keyboard input ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), macOS Sonoma keyboard ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and Windows 11 borderless/DPI ([#112](https://github.com/OlaProeis/Ferrite/issues/112)). Also: PDF/HTML export, executable code blocks (deferred from v0.2.8), LSP integration (all phases, deferred from v0.2.8), embedded YouTube/video playback ([#119](https://github.com/OlaProeis/Ferrite/issues/119)), Mermaid crate extraction, and full RTL/BiDi (Phases 3–4). See [detailed plan](#v030---platform-stack-upgrade-export-code-execution-media-embeds-mermaid-crate--rtlbidi-1) below.
+### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
+**Status:** Feature scope for v0.3.0 is **implemented on `main`** (egui 0.31 stack, export, code run, Mermaid wave, accent, hub polish, and listed bugfixes). **Remaining before tag:** final QA (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping ([#112](https://github.com/OlaProeis/Ferrite/issues/112) / [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111)), release artifacts, and `CHANGELOG` / version bump. Optional follow-ups (e.g. Quick Note workflow #128) stay tracked as tasks and do not block the tag.
 
-> **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). The original v0.2.9 roadmap (platform upgrade, export, code execution, media embeds) has been rolled into v0.3.0, which was already planned as a large release. Split points for v0.3.1 will be decided once the v0.3.0 scope settles.
+**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), and **user-configurable Ferrite accent**. See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below (checkboxes updated to match reality).
+
+> **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). The original v0.2.9 plan (platform upgrade, export, code execution, embeds) was rolled into v0.3.0; remaining work that didn't fit was split into v0.3.1 / v0.3.2.
 
 ---
 
@@ -24,9 +26,16 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ### Platform & Distribution
 - [x] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Fixed: CI now packages proper `.app` bundle via `cargo-bundle`.
-- [ ] **Wayland keyboard input on Ubuntu 24.04** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) - No keyboard input on GNOME/Mutter Wayland. Root cause: winit 0.29.15 (via eframe 0.28) Wayland backend bug. Workaround: `WAYLAND_DISPLAY= ferrite`. **Fix scheduled: v0.2.9** — upgrade to eframe/egui 0.31+ (winit 0.31+ rewritten Wayland backend). Task 38.
-- [ ] **macOS Sonoma keyboard input** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) - No keyboard input on macOS Sonoma 14.2. Likely same class of issue as #106 (winit 0.29 input pipeline). **Fix scheduled: v0.2.9** — eframe/egui 0.31+ upgrade (Task 38).
-- [x] **Windows 11 borderless window offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Fixed in v0.2.8 with `.with_transparent(true)` DWM workaround. Full fix via eframe/egui 0.31+ expected in v0.2.9 (Tasks 38 & 46).
+- [ ] **macOS 15.x Gatekeeper on unsigned GitHub releases** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - **v0.3.0** `.app` artifacts lack Developer ID signing / notarization; users may need quarantine removal or **Open Anyway**. Documented: [`docs/install/macos.md`](docs/install/macos.md). **Fix: v0.3.1** — signing & notarization in CI.
+- [ ] **Wayland keyboard input on Ubuntu 24.04** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) - No keyboard input on GNOME/Mutter Wayland was a known **winit 0.29 / eframe 0.28** failure mode. **v0.3.0** ships **egui 0.31 / winit 0.31** (Task 57). **Release gate:** confirm on real Ubuntu 24.04 Wayland before closing #106; until then the workaround remains `WAYLAND_DISPLAY= ferrite` for 0.2.x builds.
+- [ ] **macOS Sonoma keyboard input** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) - Same class of issue as #106 on older stack. **v0.3.0** ships the 0.31 stack; **release gate:** verify on Sonoma hardware before closing #111.
+- [x] **Windows 11 borderless window offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Fixed in v0.2.8 with `.with_transparent(true)` DWM workaround. Full fix via eframe/egui 0.31+ expected in v0.3.0 (Tasks 38 & 46).
+
+### v0.3.0 Regression Matrix - Known Non-Blocker Issues
+Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11). Documented in [`docs/technical/platform/v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md) §6. Not v0.3.0 blockers; triage scheduled for v0.3.x.
+
+- [ ] **I-1: Status-bar `?` button overlaps bottom-right corner resize grab zone** (WIN-5) — Dragging from the bottom-right corner to resize triggers the Help action on release. Same class of bug as the previously-fixed top-right Close-button overlap. Needs an analogous button-area exclusion in `src/ui/window.rs` resize hit-testing or a margin between the `?` button and the corner.
+- [ ] **I-2: Terminal local-echo of CJK input shows `????`** (TRM-3) — The shell receives the correct bytes (output renders correctly), so this is a Windows console active-code-page issue, not a Ferrite render-path bug. Likely fixed by `chcp 65001`; document as a recommendation for CJK terminal users.
 
 ### Terminal
 - [x] **CJK double-width character overlap in terminal** ([#110](https://github.com/OlaProeis/Ferrite/issues/110)) - Fixed in v0.2.8. Added `unicode-width` crate, 2-column cursor advancement, wide char rendering spanning 2 cells.
@@ -39,129 +48,135 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ## Planned Features
 
-### v0.3.0 - Platform Stack Upgrade, Export, Code Execution, Media Embeds, Mermaid Crate & RTL/BiDi
-**Primary focus:** **eframe / egui 0.31+** (Task 38) — large dependency migration with full cross-platform QA. Intended to address **Wayland keyboard input** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)), **macOS Sonoma keyboard** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)), and **Windows 11 borderless / DPI** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) where fixes depend on newer winit/egui. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until this ships.
+### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
 
-**Secondary focus:** First-class export from markdown to shareable files (PDF, self-contained HTML). Complements **PDF viewer tabs** (v0.2.8) — **writing → publish**, not only viewing external PDFs.
+**Theme:** Modernize the platform stack, ship first-class export, give code blocks a Run button, and finally deliver the long-promised Mermaid improvements.
 
-**Tertiary focus:** Executable code blocks (deferred from v0.2.8), full LSP integration (Phases 1–4, deferred from v0.2.8 due to memory/usability issues), embedded YouTube/video playback via native web views ([#119](https://github.com/OlaProeis/Ferrite/issues/119)), Mermaid crate extraction, markdown rendering improvements, Alt-key menu rework, and full RTL + BiDi script support (Phases 3–4 of the Unicode shaping roadmap).
+**Four legs:**
+1. **eframe / egui 0.31+ migration** (Task 38) — closes [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111), [#112](https://github.com/OlaProeis/Ferrite/issues/112).
+2. **PDF + HTML export** — markdown becomes shareable, complementing the v0.2.8 PDF *viewer*.
+3. **Executable code blocks** — `▶ Run` for shell and Python, opt-in with security dialog.
+4. **Mermaid improvements (first wave)** — diagram insertion toolbar, syntax hints, authoring validation, flowchart shapes, state diagram fork/join + history states.
 
-*Scope note:* This is a large release. Items listed below may be split into a follow-up v0.3.1 if scope creep threatens ship-quality. Split points will be decided once the egui 0.31+ migration lands and stabilizes.
+*Scope discipline:* LSP, YouTube/video embeds, GitHub HTML parity, and the heavier Mermaid items (Git Graph rewrite, mmdr integration, manual layout) are scheduled for **v0.3.1**. The Mermaid crate extraction and additional file-format viewers are **v0.3.2**. RTL/BiDi and LaTeX math are **v0.4.0**. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until v0.3.0 ships.
 
 #### Platform & Dependency Upgrade (Task 38)
-- [ ] **Bump eframe / egui** to 0.31+ (confirm compatible versions); `cargo update`; fix breaking API changes across `main.rs`, editor input, themes, terminal, markdown UI, etc.
-- [ ] **Regression pass** — Windows, macOS, Linux X11, **Ubuntu 24.04 Wayland** (native Wayland, no XWayland override); IME, LSP, terminal input, HarfRust/shaped text.
+- [x] **Bump eframe / egui** to 0.31.1 (Task 57) — `cargo update`; breaking API changes fixed across `main.rs`, editor input, themes, terminal, markdown UI, etc. See [`docs/technical/platform/eframe-egui-031-upgrade.md`](docs/technical/platform/eframe-egui-031-upgrade.md).
+- [x] **Regression pass** (Task 58) — matrix in [`docs/technical/platform/v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md); executed on Win10 as Win11 proxy (I-3 smart-paste crash fixed). macOS-AS / macOS-Intel / Linux-X11 / Linux-Wayland rows **deferred to CI / community**; **KBD-8 (Wayland)** and **KBD-9 (macOS Sonoma)** remain release gates before tagging. Non-blockers **I-1**, **I-2** documented in-matrix / Known Issues.
 - [ ] **Close or update** GitHub issues #106, #111, #112 once verified on the new stack.
 
-#### PDF & Print
-- [ ] **PDF export** - Export markdown to PDF with sensible defaults (margins, page breaks, code blocks, tables). Implementation TBD: e.g. HTML intermediate + system/headless print pipeline, or a Rust PDF stack for simpler paths; evaluate quality vs. bundle size.
-- [ ] **Print preview** *(optional)* - Quick preview of paginated output before saving PDF where the pipeline supports it.
+#### PDF & Print Export
+- [x] **PDF export** — Native Rust pipeline via **krilla** + **krilla-svg** (2-pass: layout + PDF). File → Export → PDF… with page size, margins, optional page break before H1. See [`docs/technical/viewers/pdf-export.md`](docs/technical/viewers/pdf-export.md), decision doc [`docs/technical/planning/pdf-export-pipeline.md`](docs/technical/planning/pdf-export-pipeline.md).
+- [x] **Print preview** — Reuses export PDF path; opens temp PDF in **PdfViewer** tab. See [`docs/technical/viewers/print-preview.md`](docs/technical/viewers/print-preview.md).
 
 #### HTML Export
-- [ ] **Themed / self-contained HTML** - Stronger parity between exported HTML and in-app appearance: embedded or linked CSS reflecting light/dark (or user-chosen) theme, improved Mermaid/code/table styling for static pages.
-- [ ] **Export options** - User-tunable toggles where useful (e.g. include outline, strip comments, base path for assets).
+- [x] **Themed / self-contained HTML** — Theme-aware export, Mermaid → SVG, syntect-styled code; see [`docs/technical/viewers/themed-html-export.md`](docs/technical/viewers/themed-html-export.md).
+- [x] **Export options** — Dialog toggles (outline, comments, base path, theme choice, etc.) as implemented in [`src/export/html_options.rs`](src/export/html_options.rs) / export flow.
 
 #### Executable Code Blocks
-- [ ] **Run button on code blocks** - Add `▶ Run` button to fenced code blocks.
-- [ ] **Shell / Bash execution** - Execute shell snippets via `std::process::Command`.
-- [ ] **Python support** - Detect `python` / `python3` and run with system interpreter.
-- [ ] **Timeout handling** - Kill long-running scripts after configurable timeout (default: 30s).
-- [ ] **Security warning** - First-run dialog explaining execution risks.
-  *Security note: Code execution is opt-in and disabled by default.*
+- [x] **Run button on code blocks** — Rendered/split preview; supported fenced languages (shell, Python). See [`docs/technical/markdown/code-block-run.md`](docs/technical/markdown/code-block-run.md).
+- [x] **Shell / Python execution** — Background worker, **ANSI** output inline, exit status, insert-output helpers.
+- [x] **Timeout handling** — Configurable; hard kill; **Stop** control. See [`docs/technical/markdown/code-block-cancellation.md`](docs/technical/markdown/code-block-cancellation.md).
+- [x] **Security** — Opt-in master toggle; first-run **consent** dialog; per-language gates + timeout in Settings. See [`docs/technical/markdown/code-execution-consent-dialog.md`](docs/technical/markdown/code-execution-consent-dialog.md), [`docs/technical/config/code-execution-settings.md`](docs/technical/config/code-execution-settings.md).
+
+#### Mermaid Improvements — First Wave ([#4](https://github.com/OlaProeis/Ferrite/issues/4))
+- [x] **Diagram insertion toolbar** — Insert → Mermaid… templates; see [`docs/technical/markdown/mermaid-insert-toolbar.md`](docs/technical/markdown/mermaid-insert-toolbar.md).
+- [x] **Syntax hints in Help panel** — F1 / About; see [`docs/technical/mermaid/mermaid-syntax-help.md`](docs/technical/mermaid/mermaid-syntax-help.md).
+- [x] **Inline validation** — Warning header + editor squiggles; see [`docs/technical/mermaid/mermaid-inline-validation.md`](docs/technical/mermaid/mermaid-inline-validation.md).
+- [x] **Flowchart enhancements** — Shapes + `style` / classDef; see [`docs/technical/mermaid/flowchart-shapes-and-style.md`](docs/technical/mermaid/flowchart-shapes-and-style.md).
+- [x] **State diagram enhancements** — Fork/join + history pseudostates; see [`docs/technical/mermaid/state-pseudostates-fork-join-history.md`](docs/technical/mermaid/state-pseudostates-fork-join-history.md).
+
+#### Bugfixes & polish (v0.3.0 bucket)
+- [x] **Consecutive fenced code blocks** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Split/rendered view visibility; see [`docs/technical/markdown/consecutive-fenced-blocks-fix.md`](docs/technical/markdown/consecutive-fenced-blocks-fix.md).
+- [x] **Empty table cells: click-to-edit & tab focus** ([#131](https://github.com/OlaProeis/Ferrite/issues/131)) — Hit targets and focus; see [`docs/technical/markdown/table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md).
+- [x] **macOS Gatekeeper / unsigned .app** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — User-facing workaround docs: [`docs/install/macos.md`](docs/install/macos.md), release checklist notes.
+- [x] **Custom font picker error on Intel macOS** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred load / toast fix; see [`docs/technical/fonts/custom-font-picker-deferred-load.md`](docs/technical/fonts/custom-font-picker-deferred-load.md).
+
+#### Appearance — Ferrite accent color
+- [x] **User-configurable accent** — Color picker in **Settings → Appearance** and on the **Welcome** screen; persisted as `Settings.accent_color`. Replaces the default blue for rendered **H1–H6**, editor **selection** tint, **tabs/active controls**, **view mode segment** (R/S/V), **outline/productivity** highlights, **Productivity Hub** (Add / Start work / notes ➕ / dock-detach), and **status bar** (LSP line, git branch). **Hyperlinks** in rendered markdown stay classic blue (`theme::accent::standard_link_color`). Documented in [`docs/technical/ui/theme-system.md`](docs/technical/ui/theme-system.md) (section *Ferrite accent color*).
+
+#### UX & Polish — Productivity Hub Refresh
+- [x] **Hub visual redesign** - Card-based layout matching the rest of the app's design language; themed colors derived from `ui.visuals()`, bordered priority chips, prominent centered Pomodoro timer (34 px monospace), reorder/delete affordances that recede until hover.
+- [x] **`×` re-docks instead of hiding** - Closing the floating Productivity Hub via the title-bar `×` now routes back to the docked sidebar tab (mirrors the explicit `⤵ Dock` button), so the panel can never become unreachable mid-session without a restart or hotkey.
+- [x] **Stable docked panel resizing** - Productivity Hub no longer auto-expands the sidebar or "snaps back" when the user drags the resize handle. Root cause was egui's `SidePanel::PanelState` storing the content's `min_rect`, so any wide widget permanently grew the panel. Fix: lock the outer footprint via `allocate_exact_size` and render content inside a clipped `child_ui` whose allocations don't propagate to the parent.
+- [x] **Detached window stops auto-growing** - Floating Productivity Hub opens at the current dock width (`default_size`) and is capped via `max_size`, so the auto-resize loop in `egui::containers::Resize` (`desired_size = max(desired, last_content_size)`) cannot run away. Notes textarea bound via `desired_width(ui.available_width())` instead of `f32::INFINITY`.
+- [x] **Sidebar scrollbar/resize cursor flicker** - Increased `style.spacing.scroll.bar_outer_margin` to 6 px so vertical scrollbars no longer overlap the side panel resize hit zone (fixes the rapid cursor flicker between resize and normal pointer at the sidebar edge).
+
+---
+
+### v0.3.1 - LSP, Embeds, GitHub HTML Parity & Mermaid (Heavy)
+
+**Theme:** Ship LSP for real, land the exploratory webview features, reach GitHub-style HTML parity, and tackle the Mermaid items that need real engineering effort.
+
+#### LSP Integration (All 4 Phases) — Drop the feature flag
+*Deferred from v0.2.8: Phase 1–2 implementation had high memory usage (rust-analyzer ~3.8 GB) and no diagnostics panel to surface warnings. Code remains in-tree behind the `lsp` feature flag; this release fixes it and ships it.*
+
+- [ ] **Phase 1 fixes: Infrastructure & lifecycle** - Fix unbounded channels (add backpressure), clear diagnostics on workspace switch, cap transport frame size, properly join reader threads on shutdown.
+- [ ] **Phase 1 fix: Incremental document sync** - Switch from full-document `didChange` to `TextDocumentSyncKind::Incremental` to reduce memory churn.
+- [ ] **Phase 2 fix: Diagnostics panel** - Dedicated problems panel with click-to-navigate (bare minimum for LSP to be useful). Fix UTF-16→char column conversion for squiggle accuracy.
+- [ ] **Phase 2 fix: Memory** - Stop per-frame diagnostic cloning (`Arc<Vec<DiagnosticEntry>>`), bounded event channels, `DiagnosticMap` cleanup on workspace switch.
+- [ ] **Phase 3: Hover & Go to Definition** - Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click).
+- [ ] **Phase 4: Autocomplete** - Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
+- [ ] **Settings** - Per-language server path override; all processing local (no network calls).
+- [ ] **Drop `lsp` Cargo feature flag** - LSP becomes a default feature once Phases 1–2 are field-tested.
 
 #### Embedded Media — YouTube / Video Embeds ([#119](https://github.com/OlaProeis/Ferrite/issues/119))
-- [ ] **Custom syntax detection** — Detect YouTube/video URLs in markdown (e.g. `{{video URL}}` or bare YouTube URLs in their own paragraph) in `markdown/parser.rs`.
-- [ ] **Embedded web view via `wry`** — Use Tauri's [`wry`](https://lib.rs/crates/wry) crate to spawn a platform-native WebView (WebView2 on Windows, WebKitGTK on Linux, WebKit on macOS) as a child window positioned over the egui rendered view.
-- [ ] **Viewport tracking** — Sync the child WebView position/size with the egui rect each frame; hide when scrolled off-screen or tab is inactive.
-- [ ] **Fallback: thumbnail + open-in-browser** — For platforms where `wry` child windows aren't viable, fetch YouTube thumbnail (`img.youtube.com`) and render as clickable image with play overlay; click opens system browser.
-- [ ] **Extensible embed system** — Design the embed trait/interface to support future providers (Vimeo, etc.).
+*Depends on: stabilized eframe/egui 0.31+ (Task 38) for reliable `RawWindowHandle` access.*
 
-*Note: This is an exploratory feature. The `wry` child-window-over-egui approach has known challenges (z-ordering, scroll sync, platform quirks). The thumbnail fallback ensures the feature ships something usable regardless. Depends on egui 0.31+ upgrade (Task 38) for stable `RawWindowHandle` access.*
+- [ ] **Custom syntax detection** - Detect YouTube/video URLs in markdown (e.g. `{{video URL}}` or bare YouTube URLs in their own paragraph) in `markdown/parser.rs`.
+- [ ] **Embedded web view via `wry`** - Use Tauri's [`wry`](https://lib.rs/crates/wry) crate to spawn a platform-native WebView (WebView2 on Windows, WebKitGTK on Linux, WebKit on macOS) as a child window positioned over the egui rendered view.
+- [ ] **Viewport tracking** - Sync the child WebView position/size with the egui rect each frame; hide when scrolled off-screen or tab is inactive.
+- [ ] **Fallback: thumbnail + open-in-browser** - For platforms where `wry` child windows aren't viable, fetch YouTube thumbnail (`img.youtube.com`) and render as clickable image with play overlay; click opens system browser.
+- [ ] **Extensible embed system** - Design the embed trait/interface to support future providers (Vimeo, etc.).
 
-#### LSP Integration (Phases 1–4)
-*Deferred from v0.2.8: Phase 1–2 implementation had high memory usage (rust-analyzer ~3.8 GB) and no diagnostics panel to surface warnings. Code remains in-tree behind the `lsp` feature flag; needs fixes before shipping.*
+*Note: This is an exploratory feature. The `wry` child-window-over-egui approach has known challenges (z-ordering, scroll sync, platform quirks). The thumbnail fallback ensures the feature ships something usable regardless.*
 
-- [ ] **Phase 1 fixes: Infrastructure & lifecycle** — Fix unbounded channels (add backpressure), clear diagnostics on workspace switch, cap transport frame size, properly join reader threads on shutdown.
-- [ ] **Phase 1 fix: Incremental document sync** — Switch from full-document `didChange` to `TextDocumentSyncKind::Incremental` to reduce memory churn.
-- [ ] **Phase 2 fix: Diagnostics panel** — Dedicated problems panel with click-to-navigate (bare minimum for LSP to be useful). Fix UTF-16→char column conversion for squiggle accuracy.
-- [ ] **Phase 2 fix: Memory** — Stop per-frame diagnostic cloning (`Arc<Vec<DiagnosticEntry>>`), bounded event channels, `DiagnosticMap` cleanup on workspace switch.
-- [ ] **Phase 3: Hover & Go to Definition** — Hover documentation with configurable delay; Go to Definition (F12 or Ctrl+Click).
-- [ ] **Phase 4: Autocomplete** — Completion popup on typing or Ctrl+Space, debounced (e.g. 150ms), navigable with arrow keys; request cancellation for stale completions.
-- [ ] **Settings** — Per-language server path override; all processing local (no network calls).
+#### HTML Rendering — GitHub Parity (Phase 1 & 2)
+**Phase 1 – Block Elements**
+- [ ] `<div align="...">`, `<details><summary>`, `<br>`
 
-*Note: **LaTeX math** rendering in preview and export is planned under **v0.4.0**; PDF/HTML export will pick up formulas once the math engine exists.*
+**Phase 2 – Inline Elements**
+- [ ] `<kbd>`, `<sup>`, `<sub>`, `<img width/height>`
 
-#### Command Discoverability ([#59](https://github.com/OlaProeis/Ferrite/issues/59))
-*Addressed in v0.2.8 with Command Palette.*
+*Note: Safe subset only (no scripts, styles, iframes). Phase 3 (nested HTML, HTML tables) is in v0.3.2.*
 
-- [x] **Command Palette (Alt+Space)** - Searchable command launcher with fuzzy search across all actions. Recent commands, category grouping, shortcut hints. Configurable keybinding. Replaces the need for traditional text menus.
-- [x] **Windows Alt+Space suppression** - Thread-level keyboard hook prevents OS system menu conflict.
-- [ ] **Accessibility** - Full keyboard navigation for all menu items. *(Ongoing)*
+#### Mermaid Improvements — Second Wave (Heavy)
+- [ ] **Git Graph rewrite** - Horizontal timeline, branch lanes, and merge visualization.
+- [ ] **Evaluate `mermaid-rs-renderer` (mmdr) parser integration** - The [mmdr crate](https://github.com/1jehuang/mermaid-rs-renderer) (first released Jan 2026, after our renderer shipped) supports 23 diagram types with comprehensive Mermaid syntax coverage in pure Rust. Evaluate borrowing or depending on mmdr's parser for broader syntax support while keeping our native egui rendering layer. mmdr outputs SVG (not egui primitives), so a full replacement is not viable — but the parser could fill gaps in our syntax coverage for diagram types we haven't implemented yet (Sankey, Kanban, Quadrant, XY Chart, C4, Block, Architecture, Requirement, ZenUML, Packet, Radar, Treemap). Assess: parser API stability, dependency weight (`default-features = false` drops CLI+PNG deps), AST compatibility with our layout/render pipeline.
+- [ ] **Manual layout support**
+  - Comment-based position hints: `%% @pos <node_id> <x> <y>`
+  - Drag-to-reposition in rendered view with source auto-update
+  - Export option to strip layout hints ("Export clean")
 
-#### Unicode & Complex Script Support (Phase 3 & 4: RTL, BiDi, WYSIWYG)
-*Depends on: Phase 2 text shaping from v0.2.8*
+#### Platform & Distribution
+**Windows**
+- [ ] **Inno Setup installer** - Alternative to MSI for users who prefer it; smaller download.
 
-**Phase 3: Right-to-Left Layout & Bidirectional Text**
-- [ ] **RTL text layout in FerriteEditor** - Render Arabic, Hebrew, and other RTL scripts right-to-left within lines. Shaped glyph runs are placed from the right edge; line alignment respects detected paragraph direction.
-- [ ] **Unicode BiDi algorithm** - Implement the Unicode Bidirectional Algorithm (UAX #9) via the `unicode-bidi` crate for mixed-direction text (e.g., English embedded in Arabic). Resolves embedding levels, reorders glyph runs per line, and handles directional isolates/overrides.
-- [ ] **RTL cursor navigation** - Arrow keys move in visual order (left arrow moves left visually, regardless of text direction). Home/End respect paragraph direction. Selection handles disjoint byte ranges in BiDi text.
-- [ ] **RTL selection rendering** - Selection highlighting for BiDi text may produce multiple visual rectangles per logical selection range. Click-to-position respects visual glyph boundaries.
-- [ ] **RTL line wrapping** - Word wrap respects script direction. Break opportunities follow UAX #14 (Unicode Line Breaking Algorithm) for correct behavior with Arabic, Hebrew, Thai, and other scripts.
+**macOS**
+- [ ] **App signing & notarization** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - Apple Developer Program enrollment; CI integration for Developer ID sign + notarize so GitHub **DMG/tar.gz** installs avoid Gatekeeper friction (follow-up to unsigned **v0.3.0** macOS artifacts).
 
-**Phase 4: WYSIWYG & UI Chrome**
-- [ ] **Shaped text in WYSIWYG editor** - Integrate text shaping into the rendered markdown view (`markdown/editor.rs`). RichText labels use shaped runs for correct Arabic/Bengali rendering in headings, paragraphs, lists, and tables.
-- [ ] **Shaped text in Mermaid diagrams** - Update `TextMeasurer` to use shaped advance widths so diagram node labels render complex scripts correctly.
-- [ ] **UI label shaping** - If egui has native shaping by this point (via Parley or direct HarfRust integration), adopt it. Otherwise, provide a shaping wrapper for critical UI surfaces (file tree, outline panel, status bar) where non-Latin file/heading names appear.
+---
 
-*Note: Full RTL+BiDi is one of the hardest problems in text editing. This phase has high risk in cursor positioning, selection handling, and find/replace with mixed-direction text. Thorough testing with real Arabic, Hebrew, and Bengali content is essential.*
+### v0.3.2 - Mermaid Crate, GitHub HTML Phase 3 & Format Coverage
 
-#### 1. Mermaid Crate Extraction
+**Theme:** Architectural cleanup (Mermaid as a standalone crate), fill in the GitHub HTML rendering tail, and broaden the file-type viewer set.
+
+#### Mermaid Crate Extraction
 - [ ] **Standalone crate** - Backend-agnostic architecture with SVG, PNG, and egui outputs.
 - [ ] **Public API** - `parse()`, `layout()`, `render()` pipeline.
 - [ ] **SVG export** - Generate valid SVG files from diagrams.
 - [ ] **PNG export** - Rasterize via `resvg`.
 - [ ] **WASM compatibility** - SVG backend usable in browsers.
 
-#### 2. Mermaid Diagram Improvements
-- [ ] **Evaluate `mermaid-rs-renderer` (mmdr) parser integration** - The [mmdr crate](https://github.com/1jehuang/mermaid-rs-renderer) (first released Jan 2026, after our renderer shipped) supports 23 diagram types with comprehensive Mermaid syntax coverage in pure Rust. Evaluate borrowing or depending on mmdr's parser for broader syntax support while keeping our native egui rendering layer. mmdr outputs SVG (not egui primitives), so a full replacement is not viable — but the parser could fill gaps in our syntax coverage for diagram types we haven't implemented yet (Sankey, Kanban, Quadrant, XY Chart, C4, Block, Architecture, Requirement, ZenUML, Packet, Radar, Treemap). Assess: parser API stability, dependency weight (`default-features = false` drops CLI+PNG deps), AST compatibility with our layout/render pipeline.
-- [ ] **Diagram insertion toolbar** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Toolbar button to insert Mermaid code blocks.
-- [ ] **Syntax hints in Help** ([#4](https://github.com/OlaProeis/Ferrite/issues/4)) - Help panel with diagram syntax examples.
-- [ ] **Git Graph rewrite** - Horizontal timeline, branch lanes, and merge visualization.
-- [ ] **Flowchart enhancements** - More node shapes; `style` directive for per-node styling.
-- [ ] **State diagram enhancements** - Fork/join pseudostates; shallow/deep history states.
-- [ ] **Manual layout support**
-  - Comment-based position hints: `%% @pos <node_id> <x> <y>`
-  - Drag-to-reposition in rendered view with source auto-update
-  - Export option to strip layout hints ("Export clean")
+#### Mermaid Improvements — Tail (mmdr-unlocked diagram types)
+*Conditional on the v0.3.1 mmdr evaluation succeeding.*
+- [ ] **New diagram types** (subset of: Sankey, Kanban, Quadrant, XY Chart, C4, Block, Architecture, Requirement, ZenUML, Packet, Radar, Treemap) — pick the most user-requested.
 
-#### 3. Markdown Enhancements
-- [x] **Wikilinks support** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - `[[wikilinks]]` syntax with click-to-navigate. *(Completed in v0.2.7)*
-- [x] **Backlinks panel** ([#1](https://github.com/OlaProeis/Ferrite/issues/1)) - Show documents linking to current file with graph-based indexing. *(Completed in v0.2.7)*
+#### HTML Rendering — GitHub Parity (Phase 3)
+- [ ] **Phase 3 – Advanced** - Nested HTML, HTML tables.
 
-#### 4. HTML Rendering (GitHub Parity)
-**Phase 1 – Block Elements**
-- [ ] `<div align="...">`, `<details><summary>`, `<br>`
-**Phase 2 – Inline Elements**
-- [ ] `<kbd>`, `<sup>`, `<sub>`, `<img width/height>`
-**Phase 3 – Advanced**
-- [ ] Nested HTML, HTML tables
-*Note: Safe subset only (no scripts, styles, iframes).*
+#### Additional Format Support
 
-#### 5. Platform & Distribution
-**Windows**
-- [ ] Inno Setup installer
-- [x] File associations (`.md`, `.json`, `.yaml`, `.toml`) — done via MSI installer (v0.2.7)
-- [x] Context menu integration — done via MSI installer (v0.2.7)
-- [x] Optional add-to-PATH — done via MSI installer (v0.2.7)
-- [x] PortableApps.com listing — PAF packaging and CI automation done (v0.2.7); forum submission pending
-**macOS**
-- [ ] App signing & notarization
-
-#### 6. Mermaid Authoring Improvements
-- [ ] **Mermaid authoring hints** ([#4](https://github.com/OlaProeis/Ferrite/issues/4))
-  Inline hints and validation feedback when editing Mermaid diagrams to catch syntax errors and common mistakes early.
-
-#### 7. Additional Format Support
 ##### XML Tree Viewer
 - [ ] **XML file support** - Open `.xml` files with syntax highlighting.
 - [ ] **Tree view** - Reuse JSON/YAML tree viewer for hierarchical XML display.
@@ -179,14 +194,17 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ---
 
-### v0.4.0 - Math Support & Document Formats
-**Focus:** Native LaTeX math rendering and "page-less" Office document viewing.
+### v0.4.0 - Math, Complex Scripts, Office Documents
+
+**Theme:** Three of the hardest text-rendering problems, taken seriously: native LaTeX math, full RTL/BiDi support, and "page-less" Office document viewing.
 
 #### Math Rendering Engine
-- [ ] **LaTeX parser** - `$...$` inline and `$$...$$` display math.
-- [ ] **Layout engine** - TeX-style box model (fractions, radicals, scripts).
-- [ ] **Math fonts** - Embedded glyph subset for consistent rendering.
-- [ ] **egui integration** - Render in preview and split views.
+*Plan: parse via [`pulldown-latex`](https://crates.io/crates/pulldown-latex) (LaTeX → MathML, ~95% KaTeX-compatible, actively maintained); build the MathML→egui layout/render layer ourselves. Avoids reinventing the parser — lets us focus on TeX-style box layout and glyph metrics. See `docs/math-support-plan.md` for details.*
+
+- [ ] **LaTeX parser integration** - Adopt `pulldown-latex` (or evaluate [`math-core`](https://github.com/tmke8/math-core)) for `$...$` inline and `$$...$$` display math.
+- [ ] **MathML → egui layout engine** - TeX-style box model (fractions, radicals, scripts, large operators).
+- [ ] **Math fonts** - Embedded glyph subset (Latin Modern Math or STIX) for consistent rendering.
+- [ ] **egui integration** - Render in preview and split views; pick up math automatically in PDF/HTML export.
 
 **Supported LaTeX (Target)**
 - [ ] Fractions, subscripts/superscripts, Greek letters
@@ -199,14 +217,31 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] Click-to-edit rendered math
 - [ ] Symbol palette
 
+#### Unicode & Complex Script Support — Phase 3 & 4: RTL, BiDi, WYSIWYG
+*Depends on: Phase 2 text shaping from v0.2.8. Full RTL+BiDi is one of the hardest problems in text editing; pairing it with the v0.4.0 "complex documents done right" theme rather than rushing it into v0.3.x.*
+
+**Phase 3: Right-to-Left Layout & Bidirectional Text**
+- [ ] **RTL text layout in FerriteEditor** - Render Arabic, Hebrew, and other RTL scripts right-to-left within lines. Shaped glyph runs are placed from the right edge; line alignment respects detected paragraph direction.
+- [ ] **Unicode BiDi algorithm** - Implement the Unicode Bidirectional Algorithm (UAX #9) via the `unicode-bidi` crate for mixed-direction text (e.g., English embedded in Arabic). Resolves embedding levels, reorders glyph runs per line, and handles directional isolates/overrides.
+- [ ] **RTL cursor navigation** - Arrow keys move in visual order (left arrow moves left visually, regardless of text direction). Home/End respect paragraph direction. Selection handles disjoint byte ranges in BiDi text.
+- [ ] **RTL selection rendering** - Selection highlighting for BiDi text may produce multiple visual rectangles per logical selection range. Click-to-position respects visual glyph boundaries.
+- [ ] **RTL line wrapping** - Word wrap respects script direction. Break opportunities follow UAX #14 (Unicode Line Breaking Algorithm) for correct behavior with Arabic, Hebrew, Thai, and other scripts.
+
+**Phase 4: WYSIWYG & UI Chrome**
+- [ ] **Shaped text in WYSIWYG editor** - Integrate text shaping into the rendered markdown view (`markdown/editor.rs`). RichText labels use shaped runs for correct Arabic/Bengali rendering in headings, paragraphs, lists, and tables.
+- [ ] **Shaped text in Mermaid diagrams** - Update `TextMeasurer` to use shaped advance widths so diagram node labels render complex scripts correctly.
+- [ ] **UI label shaping** - If egui has native shaping by this point (via Parley or direct HarfRust integration), adopt it. Otherwise, provide a shaping wrapper for critical UI surfaces (file tree, outline panel, status bar) where non-Latin file/heading names appear.
+
 #### Office Document Support (Read‑Only)
 **DOCX**
 - [ ] Page-less rendering, text & tables, images
 - [ ] Export DOCX → Markdown (lossy, with warnings)
+
 **XLSX**
 - [ ] Sheet selector, table rendering
 - [ ] Basic number/date formatting
 - [ ] Lazy loading for large sheets
+
 **OpenDocument**
 - [ ] ODT / ODS viewing with shared renderers
 
@@ -228,6 +263,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Custom themes** - Import/export.
 - [ ] **Virtual/ghost text** - AI suggestions.
 - [ ] **Column/box selection** - Rectangular selection.
+- [ ] **Accessibility** - Full keyboard navigation for all menu items, screen reader support.
 
 ### Additional Document Formats (Candidates)
 - [ ] **PDF viewing (read-only)** - Page-by-page PDF rendering via native library bindings (PDFium or MuPDF). Requires shipping platform-specific native libraries (~20MB per platform). Complex cross-compilation. Low priority — OS viewers handle this well.
@@ -253,6 +289,16 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 ---
 
 ## Recently Completed ✅
+
+### v0.3.0 (target: May 2026) — platform, export, run, diagrams *(pending version tag)*
+Work listed here is **implemented on `main`**; see **[Unreleased] — v0.3.0** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list. Highlights:
+- **eframe / egui 0.31.1** platform bump (Tasks 57–58; regression matrix doc; Windows proxy pass complete).
+- **PDF export** (krilla + krilla-svg) and **print preview** (temp PDF → viewer tab).
+- **Themed HTML export** with options dialog and Mermaid as SVG.
+- **Executable fenced code blocks** — Run, shell/Python, ANSI output, timeout + Stop, first-run consent, Settings (opt-in).
+- **Mermaid first wave** — insert templates, F1 syntax help, inline validation, flowchart shapes/style, state fork/join + history.
+- **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar).
+- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
 
 ### v0.2.9 (Apr 2026) - Hotfix Release
 Hotfix for four critical v0.2.8 regressions. No new features.

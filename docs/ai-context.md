@@ -1,6 +1,6 @@
 # Ferrite - AI Context
 
-Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
+Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file or `current-handover-prompt.md` — only update when explicitly requested.
@@ -12,9 +12,9 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 - Use Context7 MCP tool to fetch library documentation when needed (resolve library ID first, then fetch docs).
 
 ## Tech Stack
-- **Language:** Rust 2021, egui 0.28 + eframe (immediate-mode GUI)
+- **Language:** Rust 2021, egui 0.31.1 + eframe (immediate-mode GUI; bumped from 0.28 in v0.3.0 — see `docs/technical/platform/eframe-egui-031-upgrade.md`)
 - **Text:** ropey (rope buffer), comrak (Markdown AST), syntect (syntax highlighting), harfrust (OTL shaping)
-- **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3 | **PDF:** hayro
+- **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3 | **PDF read:** hayro | **PDF write:** krilla + krilla-svg
 - **Memory:** mimalloc (Windows), jemalloc (Unix)
 
 ## Architecture
@@ -25,13 +25,13 @@ Rust (edition 2021) + egui 0.28 markdown editor. Immediate-mode GUI — no retai
 | `state.rs` | All application state (`AppState`, `Tab`, `TabKind`, `SpecialTabKind`, `FileType`) |
 | `editor/ferrite/` | Rope-based editor (`ropey`): buffer, cursor, history, view, rendering, line_cache |
 | `editor/widget.rs` | EditorWidget wrapper, integrates FerriteEditor via egui memory |
-| `markdown/` | `editor.rs` (rendered view), `parser.rs` (comrak AST), `mermaid/` (11 diagram types), `csv_viewer.rs`, `tree_viewer.rs` |
+| `markdown/` | `editor.rs` (rendered view), `code_execution.rs` (fenced Run + `RunHandle`/`RunStatus`), `ansi_render.rs` (vte-backed SGR parser for inline run output), `parser.rs` (comrak AST), `mermaid/` (11 diagram types + `validation.rs` for `MermaidError` / inline diagnostics), `csv_viewer.rs`, `tree_viewer.rs` |
 | `terminal/` | Integrated terminal (PTY, VTE, screen, themes, split layouts) |
 | `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome, command_palette |
 | `config/` | Settings persistence, session/crash recovery, snippets |
 | `fonts.rs` | Font loading, lazy CJK, complex script lazy loading (11 families) |
-| `theme/` | Light/dark themes |
-| `vcs/git.rs`, `workspaces/`, `export/`, `preview/`, `platform/` | Git, folder mode, HTML export, sync scroll, platform-specific |
+| `theme/` | Light/dark themes, **user accent** (`accent.rs`, ThemeManager sync) |
+| `vcs/git.rs`, `workspaces/`, `export/`, `preview/`, `platform/` | Git, folder mode, HTML+PDF export (`export/pdf/` = krilla 2-pass renderer), sync scroll, platform-specific |
 
 **FerriteEditor:** `src/editor/ferrite/` — rope-based, O(log n) ops, virtual scrolling, multi-cursor, code folding, IME/CJK. ~1x file size RAM. `EditorWidget` creates/retrieves from egui memory. Docs: `docs/technical/editor/architecture.md`
 
@@ -76,13 +76,16 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | Add/modify a UI panel | `ui/` → create or edit panel module |
 | Modify editor core | `editor/ferrite/editor.rs` (behavior), `buffer.rs` (text), `view.rs` (viewport) |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
+| Rendered table cells (hits, Tab focus) | `markdown/widgets.rs` `EditableTable` — [`table-cell-focus-navigation.md`](./technical/markdown/table-cell-focus-navigation.md) |
 | Modify markdown parsing | `markdown/parser.rs` |
 | Modify central panel | `app/central_panel.rs` |
 | Add special tab | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` |
 | Add viewer tab | `state.rs` → `TabKind` variant + state struct, `app/central_panel.rs` → render method |
 | Add global/per-tab state | `state.rs` → `AppState` / `Tab` struct |
 | Add i18n string | `locales/en.yaml` + `t!("key")` |
-| Mermaid diagrams | `markdown/mermaid/` (flowchart has `types`, `parser`, `layout/`, `render/`) |
+| Mermaid diagrams | `markdown/mermaid/` (flowchart has `types`, `parser`, `layout/`, `render/`); insert snippets: `mermaid/templates.rs`; F1 **Mermaid** help: `ui/about.rs` + `docs/technical/mermaid/mermaid-syntax-help.md`; validation: `mermaid/validation.rs` |
+| Themed HTML export | `export/html.rs`, `export/html_options.rs`, `export/flowchart_svg.rs`; `app/dialogs.rs` (HTML export dialog) |
+| PDF print preview | `app/export.rs` (`handle_print_preview`), `state.rs` (`PdfViewerState` ephemeral temp + session skip); docs: `docs/technical/viewers/print-preview.md` |
 | Terminal | `terminal/` (pty, screen, widget, layout) |
 | Git/VCS | `vcs/git.rs` |
 
@@ -96,6 +99,10 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | O(N) | User-initiated ONLY | Find All, Save, Export |
 
 **Never** call `buffer.to_string()` in per-frame code.
+
+## Recently Changed
+
+- **2026-05:** User-configurable **Ferrite accent** (`Settings.accent_color`): Settings/Welcome color picker; drives headings, selection tint, tabs, view R/S/V segment, productivity hub, status LSP/branch; markdown links unchanged. See `docs/technical/ui/theme-system.md`.
 
 ## Build & Test
 

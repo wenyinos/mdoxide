@@ -10,6 +10,10 @@ Improved the save prompt logic to skip unnecessary prompts for unmodified untitl
 
 ## Implementation Details
 
+### Quick note workflow (opt-in)
+
+When `Settings.quick_note_workflow` is true, `should_prompt_to_save` also returns **false** for all **pathless** tabs (even if modified), so close/quit does not block. See [quick-note-workflow.md](./quick-note-workflow.md).
+
 ### New Methods Added to Tab
 
 ```rust
@@ -24,12 +28,14 @@ pub fn is_empty_untitled(&self) -> bool {
 }
 
 /// Determine if we should prompt to save before closing
-pub fn should_prompt_to_save(&self) -> bool {
-    // Don't prompt for unmodified files
+pub fn should_prompt_to_save(&self, settings: &Settings) -> bool {
+    // … special tabs, loading, etc. …
+    if settings.quick_note_workflow && self.is_new_file() {
+        return false;
+    }
     if !self.is_modified() {
         return false;
     }
-    // Don't prompt for empty untitled files
     if self.is_new_file() && self.content.is_empty() {
         return false;
     }
@@ -39,8 +45,8 @@ pub fn should_prompt_to_save(&self) -> bool {
 
 ### Updated Methods
 
-- `close_tab()` - Now uses `should_prompt_to_save()` instead of `is_modified()`
-- `has_unsaved_changes()` - Now uses `should_prompt_to_save()` for consistency
+- `close_tab()` - Uses `should_prompt_to_save(&self.settings)`
+- `has_unsaved_changes()` - Uses the same for consistency (and exit confirmation)
 
 ## Behavior Matrix
 
@@ -48,6 +54,7 @@ pub fn should_prompt_to_save(&self) -> bool {
 |----------|-------------|
 | New file, unmodified (empty) | No |
 | New file, with content | Yes |
+| New file, with content (quick note workflow) | No |
 | New file, typed then deleted | No |
 | Existing file, unmodified | No |
 | Existing file, modified | Yes |

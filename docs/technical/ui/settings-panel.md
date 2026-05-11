@@ -27,6 +27,7 @@ Configure visual preferences:
 | Setting | Description | Range/Options |
 |---------|-------------|---------------|
 | Theme | Color scheme | Light, Dark, System |
+| Ferrite accent | Primary UI tint (headings, selection, tabs, view picker, etc.) | RGB color picker + reset; links in preview stay standard blue — see [Theme System](./theme-system.md#ferrite-accent-color-user-configurable) |
 | Font Size | Editor text size | 8-72px (Small/Medium/Large presets) |
 
 ### Editor

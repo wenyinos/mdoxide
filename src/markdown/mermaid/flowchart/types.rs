@@ -14,7 +14,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FlowDirection {
     #[default]
-    TopDown,   // TD or TB
+    TopDown, // TD or TB
     BottomUp,  // BT
     LeftRight, // LR
     RightLeft, // RL
@@ -24,13 +24,16 @@ pub enum FlowDirection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NodeShape {
     #[default]
-    Rectangle,     // [text]
+    Rectangle, // [text]
     RoundRect,     // (text)
     Stadium,       // ([text])
     Diamond,       // {text}
     Hexagon,       // {{text}}
     Parallelogram, // [/text/]
+    Trapezoid,     // [/text\]
+    TrapezoidInv,  // [\text/]
     Circle,        // ((text))
+    DoubleCircle,  // (((text)))
     Cylinder,      // [(text)]
     Subroutine,    // [[text]]
     Asymmetric,    // >text]
@@ -48,7 +51,7 @@ pub struct FlowNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EdgeStyle {
     #[default]
-    Solid,  // ---
+    Solid, // ---
     Dotted, // -.-
     Thick,  // ===
 }
@@ -57,7 +60,7 @@ pub enum EdgeStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ArrowHead {
     #[default]
-    Arrow,  // >
+    Arrow, // >
     Circle, // o
     Cross,  // x
     None,
@@ -99,6 +102,8 @@ pub struct NodeStyle {
     pub stroke: Option<Color32>,
     /// Stroke width
     pub stroke_width: Option<f32>,
+    /// Label text color (`color:` in classDef / style)
+    pub color: Option<Color32>,
 }
 
 impl Default for NodeStyle {
@@ -107,6 +112,43 @@ impl Default for NodeStyle {
             fill: None,
             stroke: None,
             stroke_width: None,
+            color: None,
+        }
+    }
+}
+
+impl NodeStyle {
+    /// Merge class-based style with per-node `style` directive; explicit `style` fields win.
+    pub fn merge_class_and_inline(
+        class: Option<&NodeStyle>,
+        inline: Option<&NodeStyle>,
+    ) -> Option<NodeStyle> {
+        match (class, inline) {
+            (None, None) => None,
+            (Some(c), None) => Some(c.clone()),
+            (None, Some(i)) => Some(i.clone()),
+            (Some(c), Some(i)) => Some(NodeStyle {
+                fill: i.fill.or(c.fill),
+                stroke: i.stroke.or(c.stroke),
+                stroke_width: i.stroke_width.or(c.stroke_width),
+                color: i.color.or(c.color),
+            }),
+        }
+    }
+
+    /// Apply only `Some` fields from `overlay` (e.g. merging multiple `style` lines for one node).
+    pub fn apply_overlay(&mut self, overlay: &NodeStyle) {
+        if overlay.fill.is_some() {
+            self.fill = overlay.fill;
+        }
+        if overlay.stroke.is_some() {
+            self.stroke = overlay.stroke;
+        }
+        if overlay.stroke_width.is_some() {
+            self.stroke_width = overlay.stroke_width;
+        }
+        if overlay.color.is_some() {
+            self.color = overlay.color;
         }
     }
 }
@@ -132,6 +174,8 @@ pub struct Flowchart {
     pub class_defs: HashMap<String, NodeStyle>,
     /// Node class assignments: node_id -> class_name
     pub node_classes: HashMap<String, String>,
+    /// Per-node `style nodeId …` directives (override class fields where set)
+    pub node_styles: HashMap<String, NodeStyle>,
     /// Link styles: edge_index -> LinkStyle
     pub link_styles: HashMap<usize, LinkStyle>,
     /// Default style applied to all edges without explicit style

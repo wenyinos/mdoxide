@@ -9,6 +9,7 @@
 use crate::app::modifier_symbol;
 use crate::config::ViewMode;
 use crate::state::FileType;
+use crate::theme::accent;
 use eframe::egui::{self, Color32, Response, RichText, Sense, Vec2};
 
 /// Height of the segmented control.
@@ -65,6 +66,7 @@ impl ViewModeSegment {
         current_mode: ViewMode,
         file_type: FileType,
         is_dark: bool,
+        ferrite_accent: Color32,
     ) -> Option<ViewSegmentAction> {
         let mut action: Option<ViewSegmentAction> = None;
 
@@ -81,9 +83,9 @@ impl ViewModeSegment {
         };
 
         let selected_bg = if is_dark {
-            Color32::from_rgb(70, 130, 180) // Steel blue for dark mode
+            ferrite_accent
         } else {
-            Color32::from_rgb(255, 255, 255) // White pill for light mode
+            accent::lerp_color(ferrite_accent, Color32::WHITE, 0.2)
         };
 
         let hover_bg = if is_dark {
@@ -125,15 +127,11 @@ impl ViewModeSegment {
         let (rect, _response) = ui.allocate_exact_size(size, Sense::hover());
 
         // Draw outer border/shadow for depth
-        ui.painter().rect_filled(
-            rect.expand(1.0),
-            CORNER_ROUNDING + 1.0,
-            border_color,
-        );
+        ui.painter()
+            .rect_filled(rect.expand(1.0), CORNER_ROUNDING + 1.0, border_color);
 
         // Draw pill background
-        ui.painter()
-            .rect_filled(rect, CORNER_ROUNDING, bg_color);
+        ui.painter().rect_filled(rect, CORNER_ROUNDING, bg_color);
 
         // Define segment data: (mode, icon, tooltip, action, enabled)
         // Using text icons for cross-platform compatibility
@@ -209,11 +207,8 @@ impl ViewModeSegment {
             // Draw hover effect (only for non-selected, enabled segments)
             if !is_selected && segment_response.hovered() && *enabled {
                 let hover_rect = segment_rect.shrink(INNER_PADDING);
-                ui.painter().rect_filled(
-                    hover_rect,
-                    CORNER_ROUNDING - INNER_PADDING,
-                    hover_bg,
-                );
+                ui.painter()
+                    .rect_filled(hover_rect, CORNER_ROUNDING - INNER_PADDING, hover_bg);
             }
 
             // Determine icon color
@@ -261,6 +256,7 @@ impl ViewModeSegment {
         ui: &mut egui::Ui,
         current_mode: ViewMode,
         is_dark: bool,
+        ferrite_accent: Color32,
     ) -> Option<ViewSegmentAction> {
         let mut action: Option<ViewSegmentAction> = None;
 
@@ -272,9 +268,9 @@ impl ViewModeSegment {
         };
 
         let selected_bg = if is_dark {
-            Color32::from_rgb(70, 130, 180)
+            ferrite_accent
         } else {
-            Color32::from_rgb(255, 255, 255)
+            accent::lerp_color(ferrite_accent, Color32::WHITE, 0.2)
         };
 
         let hover_bg = if is_dark {
@@ -310,8 +306,7 @@ impl ViewModeSegment {
         // Draw border and background
         ui.painter()
             .rect_filled(rect.expand(1.0), CORNER_ROUNDING + 1.0, border_color);
-        ui.painter()
-            .rect_filled(rect, CORNER_ROUNDING, bg_color);
+        ui.painter().rect_filled(rect, CORNER_ROUNDING, bg_color);
 
         let segments = [
             (ViewMode::Raw, "R", "Raw Editor", ViewSegmentAction::SetRaw),
@@ -360,17 +355,14 @@ impl ViewModeSegment {
                 Vec2::new(SEGMENT_WIDTH, SEGMENT_HEIGHT),
             );
 
-            let is_selected =
-                current_mode == *mode || (current_mode == ViewMode::Split && *mode == ViewMode::Raw);
+            let is_selected = current_mode == *mode
+                || (current_mode == ViewMode::Split && *mode == ViewMode::Raw);
             let segment_response = ui.allocate_rect(segment_rect, Sense::click());
 
             if !is_selected && segment_response.hovered() {
                 let hover_rect = segment_rect.shrink(INNER_PADDING);
-                ui.painter().rect_filled(
-                    hover_rect,
-                    CORNER_ROUNDING - INNER_PADDING,
-                    hover_bg,
-                );
+                ui.painter()
+                    .rect_filled(hover_rect, CORNER_ROUNDING - INNER_PADDING, hover_bg);
             }
 
             let icon_color = if is_selected {
@@ -428,7 +420,7 @@ impl TitleBarButton {
         is_dark: bool,
     ) -> Response {
         let size = Vec2::new(28.0, 24.0); // Slightly taller for better alignment
-        
+
         let text_color = if is_dark {
             Color32::from_rgb(220, 220, 220)
         } else {
@@ -456,10 +448,10 @@ impl TitleBarButton {
         // Draw background on hover or if active
         if is_active {
             ui.painter()
-                .rect_filled(btn.rect, egui::Rounding::same(3.0), active_bg);
+                .rect_filled(btn.rect, egui::CornerRadius::same(3), active_bg);
         } else if btn.hovered() {
             ui.painter()
-                .rect_filled(btn.rect, egui::Rounding::same(3.0), hover_bg);
+                .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
         }
 
         // Draw icon centered
@@ -477,13 +469,9 @@ impl TitleBarButton {
     /// Show an auto-save indicator button with special styling.
     ///
     /// Green tint when enabled, muted when disabled.
-    pub fn show_auto_save(
-        ui: &mut egui::Ui,
-        enabled: bool,
-        is_dark: bool,
-    ) -> Response {
+    pub fn show_auto_save(ui: &mut egui::Ui, enabled: bool, is_dark: bool) -> Response {
         let size = Vec2::new(28.0, 24.0); // Match other title bar buttons
-        
+
         let icon = if enabled { "⏱" } else { "⏸" };
         let tooltip = if enabled {
             "Auto-Save: ON (click to disable)"
@@ -518,7 +506,7 @@ impl TitleBarButton {
 
         if btn.hovered() {
             ui.painter()
-                .rect_filled(btn.rect, egui::Rounding::same(3.0), hover_bg);
+                .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
         }
 
         // Draw icon centered with appropriate color

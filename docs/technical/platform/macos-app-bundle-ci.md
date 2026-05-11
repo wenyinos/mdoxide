@@ -2,7 +2,7 @@
 
 ## Overview
 
-macOS releases are now packaged as proper `.app` bundles instead of raw binaries. This allows Gatekeeper to properly identify the application and enables users to launch by double-clicking without security warnings.
+macOS releases are packaged as proper `.app` bundles instead of raw binaries so Finder, Spotlight, and document associations behave like a normal Mac app. **GitHub CI builds are still not Developer ID signed or notarized** (as of **v0.3.0**), so Gatekeeper may still warn or block on downloaded artifacts—see **[macOS install & Gatekeeper](../../install/macos.md)** and [#130](https://github.com/OlaProeis/Ferrite/issues/130). Signing + notarization is planned for **v0.3.1**.
 
 ## Key Changes
 
@@ -90,7 +90,7 @@ The `assets/macos/info_plist_ext.xml` extends `Info.plist` with document type de
 1. Download `ferrite-macos-arm64.tar.gz` (Apple Silicon) or `ferrite-macos-x64.tar.gz` (Intel)
 2. Extract the archive
 3. Drag `Ferrite.app` to Applications folder
-4. Double-click to launch
+4. Launch the app (if Gatekeeper intervenes on downloaded builds, see [`docs/install/macos.md`](../../install/macos.md))
 
 ### For Developers (Local Testing)
 
@@ -111,6 +111,7 @@ cargo bundle --release
 
 | File | Purpose |
 |------|---------|
+| [`docs/install/macos.md`](../../install/macos.md) | User-facing Gatekeeper / quarantine troubleshooting |
 | `.github/workflows/release.yml` | CI workflow for building releases |
 | `Cargo.toml` | Bundle metadata configuration |
 | `assets/icons/macos/Ferrite.icns` | Application icon |

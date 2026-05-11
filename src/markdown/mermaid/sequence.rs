@@ -1,6 +1,6 @@
 //! Sequence diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
@@ -18,7 +18,7 @@ pub struct Participant {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MessageType {
     #[default]
-    Solid,      // ->>
+    Solid, // ->>
     SolidOpen,  // ->
     Dotted,     // -->>
     DottedOpen, // -->
@@ -192,7 +192,11 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
 
             if !participant_map.contains_key(&id) {
                 participant_map.insert(id.clone(), diagram.participants.len());
-                diagram.participants.push(Participant { id, label, is_actor });
+                diagram.participants.push(Participant {
+                    id,
+                    label,
+                    is_actor,
+                });
             }
             continue;
         }
@@ -712,9 +716,10 @@ pub fn render_sequence_diagram(
             } else {
                 painter.rect(
                     rect,
-                    Rounding::same(4.0),
+                    CornerRadius::same(4),
                     colors.bg,
                     Stroke::new(2.0, colors.stroke),
+                    StrokeKind::Inside,
                 );
                 painter.text(
                     rect.center(),
@@ -848,7 +853,10 @@ fn draw_message(
             painter.line_segment([from_pos, to_pos], stroke);
         }
 
-        let is_solid_head = matches!(message.message_type, MessageType::Solid | MessageType::Dotted);
+        let is_solid_head = matches!(
+            message.message_type,
+            MessageType::Solid | MessageType::Dotted
+        );
         let dir = (to_pos - from_pos).normalized();
         let arrow_size = 8.0;
         let perp = Vec2::new(-dir.y, dir.x);
@@ -908,14 +916,20 @@ fn draw_statements(
                 let y = *current_y + offset.y;
 
                 if message.activate_target {
-                    let state = activation_state
-                        .entry(message.to.clone())
-                        .or_default();
+                    let state = activation_state.entry(message.to.clone()).or_default();
                     state.start_ys.push(*current_y);
                     state.depth += 1;
                 }
 
-                draw_message(painter, message, participant_x, y, offset, colors, font_size);
+                draw_message(
+                    painter,
+                    message,
+                    participant_x,
+                    y,
+                    offset,
+                    colors,
+                    font_size,
+                );
                 *current_y += layout.message_height;
 
                 if message.deactivate_target {
@@ -941,13 +955,20 @@ fn draw_statements(
             }
             SeqStatement::Note(note) => {
                 let y = *current_y + offset.y;
-                draw_note(painter, note, participant_x, y, offset, layout, colors, font_size);
+                draw_note(
+                    painter,
+                    note,
+                    participant_x,
+                    y,
+                    offset,
+                    layout,
+                    colors,
+                    font_size,
+                );
                 *current_y += layout.message_height;
             }
             SeqStatement::Activate(participant_id) => {
-                let state = activation_state
-                    .entry(participant_id.clone())
-                    .or_default();
+                let state = activation_state.entry(participant_id.clone()).or_default();
                 state.start_ys.push(*current_y);
                 state.depth += 1;
             }
@@ -1007,9 +1028,10 @@ fn draw_activation_box(
 
     painter.rect(
         rect,
-        Rounding::same(2.0),
+        CornerRadius::same(2),
         colors.activation_fill,
         Stroke::new(1.5, colors.activation_stroke),
+        StrokeKind::Inside,
     );
 }
 
@@ -1149,9 +1171,10 @@ fn draw_block(
     let fill_color = colors.block_fill(&block.kind);
     painter.rect(
         block_rect,
-        Rounding::same(4.0),
+        CornerRadius::same(4),
         fill_color,
         Stroke::new(1.5, colors.block_stroke),
+        StrokeKind::Inside,
     );
 
     let label_text = block.kind.display_name().to_string();
@@ -1169,7 +1192,7 @@ fn draw_block(
         ),
     );
 
-    painter.rect_filled(label_rect, Rounding::ZERO, colors.block_stroke);
+    painter.rect_filled(label_rect, CornerRadius::ZERO, colors.block_stroke);
 
     painter.text(
         label_rect.left_center() + Vec2::new(6.0, 0.0),

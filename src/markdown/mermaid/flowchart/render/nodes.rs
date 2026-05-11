@@ -1,9 +1,9 @@
 //! Node shape rendering for flowchart diagrams.
 
-use egui::{FontId, Pos2, Rect, Rounding, Stroke, Vec2};
+use egui::{CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2};
 
-use super::colors::FlowchartColors;
 use super::super::types::{FlowNode, NodeLayout, NodeShape, NodeStyle};
+use super::colors::FlowchartColors;
 
 /// Draw a single flowchart node with its shape and label.
 pub(crate) fn draw_node(
@@ -25,10 +25,12 @@ pub(crate) fn draw_node(
     let stroke_color = custom_style
         .and_then(|s| s.stroke)
         .unwrap_or(colors.node_stroke);
-    let stroke_width = custom_style
-        .and_then(|s| s.stroke_width)
-        .unwrap_or(2.0);
+    let stroke_width = custom_style.and_then(|s| s.stroke_width).unwrap_or(2.0);
     let stroke = Stroke::new(stroke_width, stroke_color);
+
+    let text_color = custom_style
+        .and_then(|s| s.color)
+        .unwrap_or(colors.node_text);
 
     // For diamond and circle, also check custom fill
     let diamond_fill = custom_style
@@ -40,7 +42,13 @@ pub(crate) fn draw_node(
 
     match node.shape {
         NodeShape::Rectangle | NodeShape::Subroutine => {
-            painter.rect(rect, Rounding::same(4.0), fill_color, stroke);
+            painter.rect(
+                rect,
+                CornerRadius::same(4),
+                fill_color,
+                stroke,
+                StrokeKind::Inside,
+            );
             if matches!(node.shape, NodeShape::Subroutine) {
                 // Draw double vertical lines
                 let inset = 8.0;
@@ -61,12 +69,12 @@ pub(crate) fn draw_node(
             }
         }
         NodeShape::RoundRect | NodeShape::Stadium => {
-            let rounding = if matches!(node.shape, NodeShape::Stadium) {
-                Rounding::same(layout.size.y / 2.0)
+            let corner_radius = if matches!(node.shape, NodeShape::Stadium) {
+                CornerRadius::same((layout.size.y / 2.0) as u8)
             } else {
-                Rounding::same(12.0)
+                CornerRadius::same(12)
             };
-            painter.rect(rect, rounding, fill_color, stroke);
+            painter.rect(rect, corner_radius, fill_color, stroke, StrokeKind::Inside);
         }
         NodeShape::Diamond => {
             let points = [
@@ -84,6 +92,13 @@ pub(crate) fn draw_node(
         NodeShape::Circle => {
             let radius = layout.size.x.min(layout.size.y) / 2.0;
             painter.circle(center, radius, circle_fill, stroke);
+        }
+        NodeShape::DoubleCircle => {
+            let radius = layout.size.x.min(layout.size.y) / 2.0;
+            let inner_r = (radius - 5.0).max(radius * 0.55);
+            painter.circle(center, radius, circle_fill, stroke);
+            let inner_stroke = Stroke::new(stroke.width.max(1.0), stroke.color);
+            painter.circle(center, inner_r, egui::Color32::TRANSPARENT, inner_stroke);
         }
         NodeShape::Hexagon => {
             let inset = layout.size.x * 0.15;
@@ -103,7 +118,13 @@ pub(crate) fn draw_node(
         }
         NodeShape::Cylinder => {
             // Simplified cylinder as rounded rect with ellipse hints
-            painter.rect(rect, Rounding::same(4.0), fill_color, stroke);
+            painter.rect(
+                rect,
+                CornerRadius::same(4),
+                fill_color,
+                stroke,
+                StrokeKind::Inside,
+            );
             let ellipse_height = 8.0;
             painter.line_segment(
                 [
@@ -120,6 +141,34 @@ pub(crate) fn draw_node(
                 Pos2::new(rect.right(), rect.top()),
                 Pos2::new(rect.right() - skew, rect.bottom()),
                 Pos2::new(rect.left(), rect.bottom()),
+            ];
+            painter.add(egui::Shape::convex_polygon(
+                points.to_vec(),
+                fill_color,
+                stroke,
+            ));
+        }
+        NodeShape::Trapezoid => {
+            let skew = layout.size.x * 0.15;
+            let points = [
+                Pos2::new(rect.left() + skew, rect.top()),
+                Pos2::new(rect.right() - skew, rect.top()),
+                Pos2::new(rect.right(), rect.bottom()),
+                Pos2::new(rect.left(), rect.bottom()),
+            ];
+            painter.add(egui::Shape::convex_polygon(
+                points.to_vec(),
+                fill_color,
+                stroke,
+            ));
+        }
+        NodeShape::TrapezoidInv => {
+            let skew = layout.size.x * 0.15;
+            let points = [
+                Pos2::new(rect.left(), rect.top()),
+                Pos2::new(rect.right(), rect.top()),
+                Pos2::new(rect.right() - skew, rect.bottom()),
+                Pos2::new(rect.left() + skew, rect.bottom()),
             ];
             painter.add(egui::Shape::convex_polygon(
                 points.to_vec(),
@@ -160,6 +209,6 @@ pub(crate) fn draw_node(
         egui::Align2::CENTER_CENTER,
         &node.label,
         FontId::proportional(font_size),
-        colors.node_text,
+        text_color,
     );
 }

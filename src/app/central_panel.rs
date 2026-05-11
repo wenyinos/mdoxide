@@ -4,41 +4,26 @@
 //! editor widget (raw/rendered/split views), CSV viewer, tree viewer,
 //! minimap, and navigation buttons.
 
+use super::helpers::{char_index_to_line_col, get_formatting_state_for, modifier_symbol};
+use super::types::{DeferredFormatAction, HeadingNavRequest};
 use super::FerriteApp;
-use super::types::{ DeferredFormatAction, HeadingNavRequest };
-use super::helpers::{ char_index_to_line_col, get_formatting_state_for, modifier_symbol };
-use crate::config::{ ShortcutCommand, Theme, ViewMode };
+use crate::config::{ShortcutCommand, Theme, ViewMode};
 use crate::editor::{
-    cleanup_ferrite_editor,
-    DocumentOutline,
-    EditorWidget,
-    FindReplacePanel,
-    Minimap,
-    SearchHighlights,
-    SemanticMinimap,
+    cleanup_ferrite_editor, DocumentOutline, EditorWidget, FindReplacePanel, Minimap,
+    SearchHighlights, SemanticMinimap,
 };
 use crate::markdown::{
-    apply_raw_format,
-    cleanup_rendered_editor_memory,
-    get_structured_file_type,
-    get_tabular_file_type,
-    CsvViewer,
-    CsvViewerState,
-    EditorMode,
-    FormattingState,
-    MarkdownEditor,
-    MarkdownFormatCommand,
-    TreeViewer,
-    TreeViewerState,
-    WikilinkContext,
+    apply_raw_format, cleanup_rendered_editor_memory, get_structured_file_type,
+    get_tabular_file_type, CodeExecutionUi, CsvViewer, CsvViewerState, EditorMode, FormattingState,
+    MarkdownEditor, MarkdownFormatCommand, TreeViewer, TreeViewerState, WikilinkContext,
 };
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
-use crate::state::{ FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabKind };
+use crate::state::{FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabContent, TabKind};
 use crate::theme::ThemeColors;
-use crate::ui::{ FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction };
+use crate::ui::{FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction};
 use eframe::egui;
-use log::{ debug, info, trace, warn };
+use log::{debug, info, trace, warn};
 use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::Path;
@@ -57,8 +42,7 @@ struct ImageViewerTexture {
 
 fn load_viewer_image(ctx: &egui::Context, path: &Path) -> Result<ImageViewerTexture, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
-    let img = image::load_from_memory(&bytes)
-        .map_err(|e| format!("Failed to decode: {}", e))?;
+    let img = image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode: {}", e))?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
 
@@ -109,29 +93,46 @@ fn render_pdf_page(
 
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
-        Err(e) => return PdfPageTexture {
-            texture: None, width: 0, height: 0,
-            page_index, zoom,
-            error: Some(format!("Failed to read file: {}", e)),
-        },
+        Err(e) => {
+            return PdfPageTexture {
+                texture: None,
+                width: 0,
+                height: 0,
+                page_index,
+                zoom,
+                error: Some(format!("Failed to read file: {}", e)),
+            }
+        }
     };
 
     let pdf_data = std::sync::Arc::new(bytes);
     let pdf = match Pdf::new(pdf_data) {
         Ok(p) => p,
-        Err(e) => return PdfPageTexture {
-            texture: None, width: 0, height: 0,
-            page_index, zoom,
-            error: Some(format!("Failed to parse PDF: {:?}", e)),
-        },
+        Err(e) => {
+            return PdfPageTexture {
+                texture: None,
+                width: 0,
+                height: 0,
+                page_index,
+                zoom,
+                error: Some(format!("Failed to parse PDF: {:?}", e)),
+            }
+        }
     };
 
     let pages = pdf.pages();
     if page_index >= pages.len() {
         return PdfPageTexture {
-            texture: None, width: 0, height: 0,
-            page_index, zoom,
-            error: Some(format!("Page {} out of range (total: {})", page_index + 1, pages.len())),
+            texture: None,
+            width: 0,
+            height: 0,
+            page_index,
+            zoom,
+            error: Some(format!(
+                "Page {} out of range (total: {})",
+                page_index + 1,
+                pages.len()
+            )),
         };
     }
 
@@ -176,17 +177,53 @@ fn render_pdf_page(
 }
 
 impl FerriteApp {
+    fn render_untitled_tab_rename_dialog(&mut self, ctx: &egui::Context) {
+        let Some((tab_idx, mut buffer)) = self.state.ui.rename_untitled_tab.take() else {
+            return;
+        };
+        let mut open = true;
+        let mut apply_clicked = false;
+        let mut cancel_clicked = false;
+        egui::Window::new(t!("dialog.rename_untitled_tab.title"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(360.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label(t!("dialog.rename_untitled_tab.hint"));
+                ui.add_space(6.0);
+                ui.text_edit_singleline(&mut buffer);
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button(t!("dialog.rename_untitled_tab.apply")).clicked() {
+                        apply_clicked = true;
+                    }
+                    if ui.button(t!("dialog.confirm.cancel")).clicked() {
+                        cancel_clicked = true;
+                    }
+                });
+            });
+        if apply_clicked {
+            self.state.apply_untitled_tab_rename(tab_idx, buffer);
+        } else if open && !cancel_clicked {
+            self.state.ui.rename_untitled_tab = Some((tab_idx, buffer));
+        }
+    }
+
     /// Render the central panel containing tabs and editor content.
     ///
     /// Returns a deferred format action if one was requested.
     pub(crate) fn render_central_panel(
         &mut self,
         ctx: &egui::Context,
-        is_dark: bool
+        is_dark: bool,
     ) -> Option<DeferredFormatAction> {
         let zen_mode = self.state.is_zen_mode();
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
         let mut pending_wikilink_target: Option<String> = None;
+
+        self.render_untitled_tab_rename_dialog(ctx);
 
         // Get the theme-appropriate fill color from the current visuals
         let fill_color = ctx.style().visuals.panel_fill;
@@ -292,6 +329,20 @@ impl FerriteApp {
                         egui::Id::new("tab").with(idx),
                         egui::Sense::click_and_drag()
                     );
+
+                    if tab_response.double_clicked() {
+                        if let Some(tab) = self.state.tab(*tab_idx) {
+                            if matches!(tab.kind, TabKind::Document)
+                                && tab.path.is_none()
+                                && matches!(tab.tab_content, TabContent::Ready)
+                            {
+                                self.state.ui.rename_untitled_tab = Some((
+                                    *tab_idx,
+                                    tab.untitled_rename_buffer_initial(),
+                                ));
+                            }
+                        }
+                    }
 
                     // Handle drag-and-drop for tab reordering
                     if tab_response.dragged() {
@@ -508,7 +559,11 @@ impl FerriteApp {
                 let vim_mode = self.state.settings.vim_mode;
 
                 // Get theme colors for line number styling
-                let theme_colors = ThemeColors::from_theme(theme, ui.visuals());
+                let theme_colors = ThemeColors::from_theme(
+                    theme,
+                    ui.visuals(),
+                    self.state.settings.ferrite_accent_rgb(),
+                );
 
                 // Prepare search highlights if find panel is open
                 let search_highlights = if
@@ -696,12 +751,26 @@ impl FerriteApp {
                                 .and_then(|t| t.path.clone());
 
                             // Collect diagnostics for the active tab's file (cloned to avoid borrow conflict)
-                            let tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
+                            let mut tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
                                 tab_path_for_syntax
                                     .as_ref()
                                     .and_then(|p| self.state.diagnostics.get(p))
                                     .map(|d| d.to_vec())
                                     .unwrap_or_default();
+
+                            // Append Mermaid parse-time validation diagnostics
+                            // for markdown files so the raw editor shows
+                            // squiggles under broken ```mermaid``` blocks.
+                            if is_markdown_file {
+                                if let Some(content) = self.state
+                                    .active_tab()
+                                    .map(|t| t.content.clone())
+                                {
+                                    tab_diagnostics.extend(
+                                        crate::markdown::compute_mermaid_diagnostics(&content),
+                                    );
+                                }
+                            }
 
                             // Raw mode: FerriteEditor owns undo via EditHistory
                             // — no central-panel snapshot needed.
@@ -1148,12 +1217,40 @@ impl FerriteApp {
                                     .and_then(|t| t.path.clone());
 
                                 // Collect diagnostics for the active tab's file
-                                let tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
+                                let mut tab_diagnostics: Vec<crate::lsp::state::DiagnosticEntry> =
                                     tab_path_for_syntax
                                         .as_ref()
                                         .and_then(|p| self.state.diagnostics.get(p))
                                         .map(|d| d.to_vec())
                                         .unwrap_or_default();
+
+                                // Append Mermaid parse-time validation diagnostics
+                                // for markdown files so the raw editor shows
+                                // squiggles under broken ```mermaid``` blocks.
+                                {
+                                    let is_md = self.state
+                                        .active_tab()
+                                        .map(|tab| match &tab.path {
+                                            Some(path) => path
+                                                .extension()
+                                                .and_then(|e| e.to_str())
+                                                .map(|ext| ext.eq_ignore_ascii_case("md")
+                                                    || ext.eq_ignore_ascii_case("markdown"))
+                                                .unwrap_or(false),
+                                            None => true,
+                                        })
+                                        .unwrap_or(true);
+                                    if is_md {
+                                        if let Some(content) = self.state
+                                            .active_tab()
+                                            .map(|t| t.content.clone())
+                                        {
+                                            tab_diagnostics.extend(
+                                                crate::markdown::compute_mermaid_diagnostics(&content),
+                                            );
+                                        }
+                                    }
+                                }
 
                                 // Check if file is markdown (for auto mode minimap selection)
                                 let is_markdown_file_split = self.state
@@ -1701,6 +1798,16 @@ impl FerriteApp {
                                     // Edits here modify tab.content directly, with proper undo/redo support
                                     // Collect workspace root before mutable borrow
                                     let ws_root = self.state.workspace_root().cloned();
+                                    let accent_rgb = self.state.settings.accent_color;
+                                    let code_exec = CodeExecutionUi::from_settings_with_workdir(
+                                        &self.state.settings,
+                                        self.state.active_tab().and_then(|t| {
+                                            t.path
+                                                .as_ref()
+                                                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                                        }),
+                                    );
+
                                     if let Some(tab) = self.state.active_tab_mut() {
                                         tab.prepare_undo_snapshot_hashed();
 
@@ -1718,11 +1825,13 @@ impl FerriteApp {
                                             .font_family(font_family.clone())
                                             .word_wrap(word_wrap)
                                             .theme(theme)
+                                            .accent_rgb(accent_rgb)
                                             .max_line_width(max_line_width)
                                             .zen_mode(zen_mode, zen_max_column_width)
                                             .paragraph_indent(paragraph_indent)
                                             .header_spacing(header_spacing)
                                             .wikilink_context(wl_ctx)
+                                            .code_execution(code_exec)
                                             .id(egui::Id::new("split_preview_rendered").with(tab.id))
                                             .pending_scroll_offset(pending_preview_scroll);
                                         if let Some(ref sh) = search_highlights {
@@ -1944,10 +2053,19 @@ impl FerriteApp {
                                 let zen_max_column_width = self.state.settings.zen_max_column_width;
                                 let paragraph_indent = self.state.settings.paragraph_indent;
                                 let header_spacing = self.state.settings.header_spacing;
+                                let accent_rgb = self.state.settings.accent_color;
 
                                 // Collect workspace root before mutable borrow
                                 let ws_root = self.state.workspace_root().cloned();
                                 let mut rendered_content_changed = false;
+                                let code_exec = CodeExecutionUi::from_settings_with_workdir(
+                                    &self.state.settings,
+                                    self.state.active_tab().and_then(|t| {
+                                        t.path
+                                            .as_ref()
+                                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                                    }),
+                                );
                                 if let Some(tab) = self.state.active_tab_mut() {
                                     tab.prepare_undo_snapshot_hashed();
 
@@ -1969,11 +2087,13 @@ impl FerriteApp {
                                         .font_family(font_family.clone())
                                         .word_wrap(word_wrap)
                                         .theme(theme)
+                                        .accent_rgb(accent_rgb)
                                         .max_line_width(max_line_width)
                                         .zen_mode(zen_mode, zen_max_column_width)
                                         .paragraph_indent(paragraph_indent)
                                         .header_spacing(header_spacing)
                                         .wikilink_context(wl_ctx)
+                                        .code_execution(code_exec)
                                         .id(egui::Id::new("main_editor_rendered").with(tab.id))
                                         .scroll_to_line(scroll_to_line)
                                         .pending_scroll_offset(pending_offset);
@@ -2130,7 +2250,7 @@ impl FerriteApp {
                     &all_files,
                     recent_files,
                     &workspace.root_path,
-                    is_dark
+                    is_dark,
                 );
 
                 // Handle file selection
@@ -2146,7 +2266,8 @@ impl FerriteApp {
                         }
                         Err(e) => {
                             warn!("Failed to open file: {}", e);
-                            self.state.show_error(format!("Failed to open file:\n{}", e));
+                            self.state
+                                .show_error(format!("Failed to open file:\n{}", e));
                         }
                     }
                 }
@@ -2163,8 +2284,12 @@ impl FerriteApp {
 
             if let Some(cmd) = palette_output.selected_command {
                 self.command_palette.record_recent(cmd);
-                self.state.settings.command_palette_recent =
-                    self.command_palette.recent_commands().iter().copied().collect();
+                self.state.settings.command_palette_recent = self
+                    .command_palette
+                    .recent_commands()
+                    .iter()
+                    .copied()
+                    .collect();
                 self.state.mark_settings_dirty();
                 self.pending_palette_command = Some(cmd);
             }
@@ -2264,8 +2389,7 @@ impl FerriteApp {
                 let prev_cjk_preference = self.state.settings.cjk_font_preference;
                 let prev_language = self.state.settings.language;
 
-                let workspace_for_settings =
-                    self.state.workspace_root().map(|p| p.to_path_buf());
+                let workspace_for_settings = self.state.workspace_root().map(|p| p.to_path_buf());
                 let output = self.settings_panel.show_inline(
                     ui,
                     &mut self.state.settings,
@@ -2275,15 +2399,19 @@ impl FerriteApp {
 
                 if output.changed {
                     self.theme_manager.set_theme(self.state.settings.theme);
+                    self.theme_manager
+                        .sync_accent_rgb(self.state.settings.accent_color);
                     self.theme_manager.apply(ui.ctx());
                     self.state.mark_settings_dirty();
 
-                    let font_changed =
-                        prev_font_family != self.state.settings.font_family ||
-                        prev_cjk_preference != self.state.settings.cjk_font_preference;
+                    let font_changed = prev_font_family != self.state.settings.font_family
+                        || prev_cjk_preference != self.state.settings.cjk_font_preference;
 
                     if font_changed {
-                        let custom_font = self.state.settings.font_family
+                        let custom_font = self
+                            .state
+                            .settings
+                            .font_family
                             .custom_name()
                             .map(|s| s.to_string());
                         let load_err = crate::fonts::reload_fonts(
@@ -2309,7 +2437,10 @@ impl FerriteApp {
 
                     if prev_language != self.state.settings.language {
                         if let Some(cjk_pref) = self.state.settings.language.required_cjk_font() {
-                            let custom_font = self.state.settings.font_family
+                            let custom_font = self
+                                .state
+                                .settings
+                                .font_family
                                 .custom_name()
                                 .map(|s| s.to_string());
                             crate::fonts::preload_explicit_cjk_font_with_custom(
@@ -2317,7 +2448,10 @@ impl FerriteApp {
                                 cjk_pref,
                                 custom_font.as_deref(),
                             );
-                            info!("Loaded CJK fonts for language: {:?}", self.state.settings.language);
+                            info!(
+                                "Loaded CJK fonts for language: {:?}",
+                                self.state.settings.language
+                            );
                         }
                     }
                 }
@@ -2326,6 +2460,8 @@ impl FerriteApp {
                     let default_settings = crate::config::Settings::default();
                     self.state.settings = default_settings;
                     self.theme_manager.set_theme(self.state.settings.theme);
+                    self.theme_manager
+                        .sync_accent_rgb(self.state.settings.accent_color);
                     self.theme_manager.apply(ui.ctx());
                     self.state.mark_settings_dirty();
 
@@ -2337,7 +2473,8 @@ impl FerriteApp {
                     );
 
                     let time = self.get_app_time();
-                    self.state.show_toast(t!("notification.settings_reset").to_string(), time, 2.0);
+                    self.state
+                        .show_toast(t!("notification.settings_reset").to_string(), time, 2.0);
                 }
             }
             SpecialTabKind::About => {
@@ -2354,6 +2491,8 @@ impl FerriteApp {
 
                 if changed {
                     self.theme_manager.set_theme(self.state.settings.theme);
+                    self.theme_manager
+                        .sync_accent_rgb(self.state.settings.accent_color);
                     self.theme_manager.apply(ui.ctx());
                     self.state.mark_settings_dirty(); // so it persists
 
@@ -2361,7 +2500,10 @@ impl FerriteApp {
                     // labels rendered via i18n don't show as squares.
                     if prev_language != self.state.settings.language {
                         if let Some(cjk_pref) = self.state.settings.language.required_cjk_font() {
-                            let custom_font = self.state.settings.font_family
+                            let custom_font = self
+                                .state
+                                .settings
+                                .font_family
                                 .custom_name()
                                 .map(|s| s.to_string());
                             crate::fonts::preload_explicit_cjk_font_with_custom(
@@ -2369,7 +2511,10 @@ impl FerriteApp {
                                 cjk_pref,
                                 custom_font.as_deref(),
                             );
-                            info!("Loaded CJK fonts for language: {:?}", self.state.settings.language);
+                            info!(
+                                "Loaded CJK fonts for language: {:?}",
+                                self.state.settings.language
+                            );
                         }
                     }
 
@@ -2405,22 +2550,20 @@ impl FerriteApp {
         let cache_id = egui::Id::new("image_viewer_texture").with(&path);
         let cached: Option<ImageViewerTexture> = ui.data(|d| d.get_temp(cache_id));
 
-        let load_result = cached.unwrap_or_else(|| {
-            match load_viewer_image(ctx, &path) {
-                Ok(tex) => {
-                    ui.data_mut(|d| d.insert_temp(cache_id, tex.clone()));
-                    tex
-                }
-                Err(msg) => {
-                    let failed = ImageViewerTexture {
-                        texture: None,
-                        width: 0,
-                        height: 0,
-                        error: Some(msg),
-                    };
-                    ui.data_mut(|d| d.insert_temp(cache_id, failed.clone()));
-                    failed
-                }
+        let load_result = cached.unwrap_or_else(|| match load_viewer_image(ctx, &path) {
+            Ok(tex) => {
+                ui.data_mut(|d| d.insert_temp(cache_id, tex.clone()));
+                tex
+            }
+            Err(msg) => {
+                let failed = ImageViewerTexture {
+                    texture: None,
+                    width: 0,
+                    height: 0,
+                    error: Some(msg),
+                };
+                ui.data_mut(|d| d.insert_temp(cache_id, failed.clone()));
+                failed
             }
         });
 
@@ -2552,9 +2695,12 @@ impl FerriteApp {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 16.0;
             ui.label(
-                egui::RichText::new(format!("{}  |  {}  |  {}  |  {}%", dims_text, format_label, size_text, zoom_pct))
-                    .small()
-                    .color(ui.visuals().text_color().gamma_multiply(0.7)),
+                egui::RichText::new(format!(
+                    "{}  |  {}  |  {}  |  {}%",
+                    dims_text, format_label, size_text, zoom_pct
+                ))
+                .small()
+                .color(ui.visuals().text_color().gamma_multiply(0.7)),
             );
         });
     }
@@ -2764,7 +2910,10 @@ impl FerriteApp {
             ui.spacing_mut().item_spacing.x = 8.0;
 
             let prev_enabled = current_page > 0;
-            if ui.add_enabled(prev_enabled, egui::Button::new("\u{25C0}").small()).clicked() {
+            if ui
+                .add_enabled(prev_enabled, egui::Button::new("\u{25C0}").small())
+                .clicked()
+            {
                 if let Some(tab) = self.state.tab_mut(active_idx) {
                     if let TabKind::PdfViewer(ref mut vs) = tab.kind {
                         vs.current_page = current_page.saturating_sub(1);
@@ -2774,13 +2923,13 @@ impl FerriteApp {
                 ctx.request_repaint();
             }
 
-            ui.label(
-                egui::RichText::new(format!("{} / {}", current_page + 1, page_count))
-                    .small(),
-            );
+            ui.label(egui::RichText::new(format!("{} / {}", current_page + 1, page_count)).small());
 
             let next_enabled = current_page + 1 < page_count;
-            if ui.add_enabled(next_enabled, egui::Button::new("\u{25B6}").small()).clicked() {
+            if ui
+                .add_enabled(next_enabled, egui::Button::new("\u{25B6}").small())
+                .clicked()
+            {
                 if let Some(tab) = self.state.tab_mut(active_idx) {
                     if let TabKind::PdfViewer(ref mut vs) = tab.kind {
                         vs.current_page = current_page + 1;
@@ -2812,11 +2961,7 @@ impl FerriteApp {
     // ─────────────────────────────────────────────────────────────────────
 
     /// Render a progress indicator for a tab whose file is still loading.
-    fn render_loading_tab(
-        &self,
-        ui: &mut egui::Ui,
-        progress: &crate::state::LoadingProgress,
-    ) {
+    fn render_loading_tab(&self, ui: &mut egui::Ui, progress: &crate::state::LoadingProgress) {
         let avail = ui.available_size();
 
         ui.allocate_ui_at_rect(
@@ -2826,7 +2971,8 @@ impl FerriteApp {
             ),
             |ui| {
                 ui.vertical_centered(|ui| {
-                    let file_name = progress.path
+                    let file_name = progress
+                        .path
                         .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("file");
@@ -2881,10 +3027,7 @@ impl FerriteApp {
                             .strong(),
                     );
                     ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new(error)
-                            .color(ui.visuals().warn_fg_color),
-                    );
+                    ui.label(egui::RichText::new(error).color(ui.visuals().warn_fg_color));
                 });
             },
         );
@@ -2904,7 +3047,9 @@ impl FerriteApp {
             ShortcutCommand::Save => self.handle_save_file(),
             ShortcutCommand::SaveAs => self.handle_save_as_file(),
             ShortcutCommand::Open => self.handle_open_file(),
-            ShortcutCommand::New | ShortcutCommand::NewTab => { self.state.new_tab(); }
+            ShortcutCommand::New | ShortcutCommand::NewTab => {
+                self.state.new_tab();
+            }
             ShortcutCommand::CloseTab => self.handle_close_current_tab(ctx),
             ShortcutCommand::OpenWorkspace => self.handle_open_workspace(),
             ShortcutCommand::CloseWorkspace => self.handle_close_workspace(),
@@ -2925,12 +3070,14 @@ impl FerriteApp {
             ShortcutCommand::ToggleProductivityHub => {
                 if self.state.settings.productivity_panel_docked {
                     if self.state.settings.outline_enabled
-                        && self.outline_panel.active_tab() == crate::ui::OutlinePanelTab::Productivity
+                        && self.outline_panel.active_tab()
+                            == crate::ui::OutlinePanelTab::Productivity
                     {
                         self.state.settings.outline_enabled = false;
                     } else {
                         self.state.settings.outline_enabled = true;
-                        self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Productivity);
+                        self.outline_panel
+                            .set_active_tab(crate::ui::OutlinePanelTab::Productivity);
                     }
                 } else {
                     self.state.settings.productivity_panel_visible =
@@ -2957,21 +3104,51 @@ impl FerriteApp {
             ShortcutCommand::FindPrev => self.handle_find_prev(),
             ShortcutCommand::SearchInFiles => self.handle_search_in_files(),
             // Format
-            ShortcutCommand::FormatBold => self.handle_format_command(ctx, MarkdownFormatCommand::Bold),
-            ShortcutCommand::FormatItalic => self.handle_format_command(ctx, MarkdownFormatCommand::Italic),
-            ShortcutCommand::FormatInlineCode => self.handle_format_command(ctx, MarkdownFormatCommand::InlineCode),
-            ShortcutCommand::FormatCodeBlock => self.handle_format_command(ctx, MarkdownFormatCommand::CodeBlock),
-            ShortcutCommand::FormatLink => self.handle_format_command(ctx, MarkdownFormatCommand::Link),
-            ShortcutCommand::FormatImage => self.handle_format_command(ctx, MarkdownFormatCommand::Image),
-            ShortcutCommand::FormatBlockquote => self.handle_format_command(ctx, MarkdownFormatCommand::Blockquote),
-            ShortcutCommand::FormatBulletList => self.handle_format_command(ctx, MarkdownFormatCommand::BulletList),
-            ShortcutCommand::FormatNumberedList => self.handle_format_command(ctx, MarkdownFormatCommand::NumberedList),
-            ShortcutCommand::FormatHeading1 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(1)),
-            ShortcutCommand::FormatHeading2 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(2)),
-            ShortcutCommand::FormatHeading3 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(3)),
-            ShortcutCommand::FormatHeading4 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(4)),
-            ShortcutCommand::FormatHeading5 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(5)),
-            ShortcutCommand::FormatHeading6 => self.handle_format_command(ctx, MarkdownFormatCommand::Heading(6)),
+            ShortcutCommand::FormatBold => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Bold)
+            }
+            ShortcutCommand::FormatItalic => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Italic)
+            }
+            ShortcutCommand::FormatInlineCode => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::InlineCode)
+            }
+            ShortcutCommand::FormatCodeBlock => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::CodeBlock)
+            }
+            ShortcutCommand::FormatLink => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Link)
+            }
+            ShortcutCommand::FormatImage => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Image)
+            }
+            ShortcutCommand::FormatBlockquote => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Blockquote)
+            }
+            ShortcutCommand::FormatBulletList => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::BulletList)
+            }
+            ShortcutCommand::FormatNumberedList => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::NumberedList)
+            }
+            ShortcutCommand::FormatHeading1 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(1))
+            }
+            ShortcutCommand::FormatHeading2 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(2))
+            }
+            ShortcutCommand::FormatHeading3 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(3))
+            }
+            ShortcutCommand::FormatHeading4 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(4))
+            }
+            ShortcutCommand::FormatHeading5 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(5))
+            }
+            ShortcutCommand::FormatHeading6 => {
+                self.handle_format_command(ctx, MarkdownFormatCommand::Heading(6))
+            }
             // Folding
             ShortcutCommand::FoldAll => {
                 if self.state.settings.folding_enabled {
@@ -2999,13 +3176,16 @@ impl FerriteApp {
             ShortcutCommand::CommandPalette => {} // Already open
             ShortcutCommand::OpenSettings => self.state.toggle_settings(),
             ShortcutCommand::OpenAbout => self.state.toggle_about(),
-            ShortcutCommand::ExportHtml => self.handle_export_html(ctx),
+            ShortcutCommand::ExportHtml => self.handle_open_html_export_dialog(),
+            ShortcutCommand::ExportPdf => self.handle_open_pdf_export_dialog(),
+            ShortcutCommand::PrintPreview => self.handle_print_preview(ctx),
             ShortcutCommand::InsertToc => self.handle_insert_toc(),
             ShortcutCommand::ToggleFrontmatter => {
                 if !self.state.settings.outline_enabled {
                     self.state.settings.outline_enabled = true;
                 }
-                self.outline_panel.set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
+                self.outline_panel
+                    .set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
                 self.state.mark_settings_dirty();
             }
         }

@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use egui::{FontId, Pos2, Rect, Rounding, Stroke, Vec2};
+use egui::{CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2};
 
-use super::colors::FlowchartColors;
 use super::super::types::{Flowchart, SubgraphLayout};
+use super::colors::FlowchartColors;
 
 /// Draw a subgraph background and title.
 pub(crate) fn draw_subgraph(
@@ -28,9 +28,10 @@ pub(crate) fn draw_subgraph(
     // Draw visible background with rounded corners and thicker stroke
     painter.rect(
         rect,
-        Rounding::same(8.0),
+        CornerRadius::same(8),
         fill_color,
         Stroke::new(2.0, colors.subgraph_stroke),
+        StrokeKind::Inside,
     );
 
     // Draw prominent title if present

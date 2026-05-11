@@ -6,6 +6,7 @@
 
 use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
+use crate::theme::accent;
 use crate::ui::backlinks_panel::BacklinksPanel;
 use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::productivity_panel::ProductivityPanel;
@@ -24,12 +25,6 @@ const MIN_PANEL_WIDTH: f32 = 260.0;
 
 /// Maximum width for the outline panel.
 const MAX_PANEL_WIDTH: f32 = 500.0;
-
-/// Minimum width for the outline panel when showing productivity tab.
-const MIN_PANEL_WIDTH_PRODUCTIVITY: f32 = 280.0;
-
-/// Maximum width for the outline panel when showing productivity tab.
-const MAX_PANEL_WIDTH_PRODUCTIVITY: f32 = 500.0;
 
 /// Indentation per heading level.
 const INDENT_PER_LEVEL: f32 = 16.0;
@@ -185,6 +180,7 @@ impl OutlinePanel {
         outline: &DocumentOutline,
         doc_stats: Option<&DocumentStats>,
         is_dark: bool,
+        ui_accent: Color32,
         productivity_panel: Option<&mut ProductivityPanel>,
         backlinks_panel: Option<&BacklinksPanel>,
         frontmatter_panel: Option<&mut FrontmatterPanel>,
@@ -216,11 +212,12 @@ impl OutlinePanel {
             Color32::from_rgb(120, 120, 120)
         };
 
-        let highlight_bg = if is_dark {
-            Color32::from_rgb(60, 80, 110)
-        } else {
-            Color32::from_rgb(220, 235, 250)
-        };
+        let highlight_bg = accent::panel_highlight_fill(
+            panel_bg,
+            ui_accent,
+            is_dark,
+            if is_dark { 0.38 } else { 0.31 },
+        );
 
         let hover_bg = if is_dark {
             Color32::from_rgb(50, 50, 55)
@@ -228,12 +225,11 @@ impl OutlinePanel {
             Color32::from_rgb(235, 235, 240)
         };
 
-        let needs_wide = matches!(self.active_tab, OutlinePanelTab::Productivity | OutlinePanelTab::Frontmatter);
-        let min_w = if needs_wide { MIN_PANEL_WIDTH_PRODUCTIVITY } else { MIN_PANEL_WIDTH };
-        let max_w = if needs_wide { MAX_PANEL_WIDTH_PRODUCTIVITY } else { MAX_PANEL_WIDTH };
-        let default_w = if needs_wide { self.width.max(MIN_PANEL_WIDTH_PRODUCTIVITY) } else { self.width };
-
-        // Create the side panel
+        // Use a single, stable width range for all tabs. Re-applying a
+        // tab-specific minimum each frame caused the panel to snap back when
+        // dragged narrow on the Productivity / Frontmatter tabs (felt like a
+        // slow animation as `default_width` and `min_width` recalculated).
+        // The new card-based Hub layout adapts cleanly down to MIN_PANEL_WIDTH.
         let panel = match self.side {
             OutlinePanelSide::Left => egui::SidePanel::left("outline_panel"),
             OutlinePanelSide::Right => egui::SidePanel::right("outline_panel"),
@@ -241,9 +237,8 @@ impl OutlinePanel {
 
         panel
             .resizable(true)
-            .default_width(default_w)
-            .min_width(min_w)
-            .max_width(max_w)
+            .default_width(self.width)
+            .width_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
             .frame(
                 egui::Frame::none()
                     .fill(panel_bg)
@@ -338,18 +333,25 @@ impl OutlinePanel {
                 } else if self.active_tab == OutlinePanelTab::Productivity {
                     // Productivity Hub content
                     if let Some(panel) = productivity_panel {
-                        // Detach button
+                        let accent_btn = ui_accent;
+
+                        // Detach action row, styled to match the floating
+                        // window's Dock button so the affordance reads as
+                        // bidirectional.
                         ui.horizontal(|ui| {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.add_space(4.0);
+                                ui.add_space(6.0);
                                 if ui
-                                    .add(
+                                    .add_sized(
+                                        Vec2::new(70.0, 22.0),
                                         egui::Button::new(
-                                            RichText::new("Detach")
-                                                .size(10.0)
-                                                .color(muted_color),
-                                        )
-                                        .frame(false),
+                                            RichText::new(format!(
+                                                "⤴ {}",
+                                                t!("outline.detach")
+                                            ))
+                                            .size(11.0)
+                                            .color(accent_btn),
+                                        ),
                                     )
                                     .on_hover_text(t!("outline.detach_tooltip").to_string())
                                     .clicked()
@@ -359,16 +361,42 @@ impl OutlinePanel {
                             });
                         });
 
-                        ui.separator();
+                        ui.add_space(4.0);
 
-                        // Render productivity content inline with padding
+                        // Strictly allocate a fixed-width rectangle for
+                        // productivity content. egui's `SidePanel` stores
+                        // the rendered content's `min_rect` in `PanelState`,
+                        // so any widget inside that asks for more width
+                        // would permanently grow the sidebar (and prevent
+                        // the user from shrinking it back). By using an
+                        // explicit `allocate_exact_size` and rendering
+                        // inside a clipped child UI, we lock the outer
+                        // footprint to exactly the panel width regardless
+                        // of what any individual widget reports.
+                        let avail_w = ui.available_width();
+                        let avail_h = ui.available_height();
+                        let (content_rect, _) = ui.allocate_exact_size(
+                            Vec2::new(avail_w, avail_h),
+                            Sense::hover(),
+                        );
+
+                        let mut child_ui = ui.child_ui(
+                            content_rect,
+                            egui::Layout::top_down(egui::Align::Min),
+                            None,
+                        );
+                        child_ui.set_clip_rect(content_rect);
+                        child_ui.set_max_width(avail_w);
+
                         ScrollArea::vertical()
                             .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                egui::Frame::none()
-                                    .inner_margin(egui::Margin::symmetric(4.0, 3.0))
+                            .show(&mut child_ui, |ui| {
+                                ui.set_max_width(avail_w);
+                                egui::Frame::new()
+                                    .inner_margin(egui::Margin::symmetric(6, 4))
                                     .show(ui, |ui| {
-                                        let repaint = panel.show_content(ui, ctx);
+                                        ui.set_max_width(avail_w - 12.0);
+                                        let repaint = panel.show_content(ui, ctx, ui_accent);
                                         output.needs_repaint = repaint;
                                     });
                             });
@@ -474,6 +502,7 @@ impl OutlinePanel {
                                                         highlight_bg,
                                                         hover_bg,
                                                         is_dark,
+                                                        ui_accent,
                                                     );
 
                                                     if response.clicked() {
@@ -607,10 +636,34 @@ impl OutlinePanel {
         });
         ui.add_space(4.0);
 
-        self.render_stat_row(ui, &t!("outline.json_objects"), stats.object_count, key_color, muted_color);
-        self.render_stat_row(ui, &t!("outline.json_arrays"), stats.array_count, key_color, muted_color);
-        self.render_stat_row(ui, &t!("outline.json_total_keys"), stats.total_keys, key_color, muted_color);
-        self.render_stat_row(ui, &t!("outline.json_max_depth"), stats.max_depth, muted_color, muted_color);
+        self.render_stat_row(
+            ui,
+            &t!("outline.json_objects"),
+            stats.object_count,
+            key_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("outline.json_arrays"),
+            stats.array_count,
+            key_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("outline.json_total_keys"),
+            stats.total_keys,
+            key_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("outline.json_max_depth"),
+            stats.max_depth,
+            muted_color,
+            muted_color,
+        );
 
         ui.add_space(12.0);
 
@@ -635,16 +688,40 @@ impl OutlinePanel {
         );
 
         if stats.string_count > 0 {
-            self.render_stat_row(ui, &t!("outline.json_strings"), stats.string_count, string_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("outline.json_strings"),
+                stats.string_count,
+                string_color,
+                muted_color,
+            );
         }
         if stats.number_count > 0 {
-            self.render_stat_row(ui, &t!("outline.json_numbers"), stats.number_count, number_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("outline.json_numbers"),
+                stats.number_count,
+                number_color,
+                muted_color,
+            );
         }
         if stats.bool_count > 0 {
-            self.render_stat_row(ui, &t!("outline.json_booleans"), stats.bool_count, bool_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("outline.json_booleans"),
+                stats.bool_count,
+                bool_color,
+                muted_color,
+            );
         }
         if stats.null_count > 0 {
-            self.render_stat_row(ui, &t!("outline.json_nulls"), stats.null_count, muted_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("outline.json_nulls"),
+                stats.null_count,
+                muted_color,
+                muted_color,
+            );
         }
 
         if stats.total_array_items > 0 {
@@ -708,11 +785,27 @@ impl OutlinePanel {
 
         // Tab definitions: (tab enum, icon, label)
         let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
-            (OutlinePanelTab::Outline, "📑", t!("outline.tab_outline").to_string()),
-            (OutlinePanelTab::Statistics, "📊", t!("outline.tab_statistics").to_string()),
-            (OutlinePanelTab::Backlinks, "🔗", t!("outline.tab_links").to_string()),
+            (
+                OutlinePanelTab::Outline,
+                "📑",
+                t!("outline.tab_outline").to_string(),
+            ),
+            (
+                OutlinePanelTab::Statistics,
+                "📊",
+                t!("outline.tab_statistics").to_string(),
+            ),
+            (
+                OutlinePanelTab::Backlinks,
+                "🔗",
+                t!("outline.tab_links").to_string(),
+            ),
             (OutlinePanelTab::Frontmatter, "📝", "FM".to_string()),
-            (OutlinePanelTab::Productivity, "📋", t!("outline.tab_hub").to_string()),
+            (
+                OutlinePanelTab::Productivity,
+                "📋",
+                t!("outline.tab_hub").to_string(),
+            ),
         ];
 
         ui.horizontal(|ui| {
@@ -732,19 +825,17 @@ impl OutlinePanel {
                 }
 
                 let is_active = self.active_tab == *tab;
-                let (rect, response) = ui.allocate_exact_size(
-                    Vec2::new(tab_width, TAB_HEIGHT),
-                    Sense::click(),
-                );
+                let (rect, response) =
+                    ui.allocate_exact_size(Vec2::new(tab_width, TAB_HEIGHT), Sense::click());
 
                 let bg = if is_active { active_tab_bg } else { tab_bg };
                 ui.painter().rect_filled(
                     rect,
-                    egui::Rounding {
-                        nw: 4.0,
-                        ne: 4.0,
-                        sw: 0.0,
-                        se: 0.0,
+                    egui::CornerRadius {
+                        nw: 4,
+                        ne: 4,
+                        sw: 0,
+                        se: 0,
                     },
                     bg,
                 );
@@ -847,11 +938,41 @@ impl OutlinePanel {
         });
         ui.add_space(4.0);
 
-        self.render_stat_row(ui, &t!("stats.words"), stats.text.words, word_color, muted_color);
-        self.render_stat_row(ui, &t!("stats.characters"), stats.text.characters, word_color, muted_color);
-        self.render_stat_row(ui, &t!("stats.characters_no_spaces"), stats.text.characters_no_spaces, muted_color, muted_color);
-        self.render_stat_row(ui, &t!("stats.lines"), stats.text.lines, muted_color, muted_color);
-        self.render_stat_row(ui, &t!("stats.paragraphs"), stats.text.paragraphs, muted_color, muted_color);
+        self.render_stat_row(
+            ui,
+            &t!("stats.words"),
+            stats.text.words,
+            word_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("stats.characters"),
+            stats.text.characters,
+            word_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("stats.characters_no_spaces"),
+            stats.text.characters_no_spaces,
+            muted_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("stats.lines"),
+            stats.text.lines,
+            muted_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("stats.paragraphs"),
+            stats.text.paragraphs,
+            muted_color,
+            muted_color,
+        );
 
         ui.add_space(12.0);
 
@@ -871,7 +992,13 @@ impl OutlinePanel {
 
         // Headings breakdown
         if stats.heading_count > 0 {
-            self.render_stat_row(ui, &t!("stats.headings_total"), stats.heading_count, heading_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("stats.headings_total"),
+                stats.heading_count,
+                heading_color,
+                muted_color,
+            );
 
             // Show per-level counts if any are non-zero
             for (i, &count) in stats.headings_by_level.iter().enumerate() {
@@ -887,11 +1014,23 @@ impl OutlinePanel {
         ui.add_space(4.0);
 
         if stats.list_item_count > 0 {
-            self.render_stat_row(ui, &t!("stats.list_items"), stats.list_item_count, muted_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("stats.list_items"),
+                stats.list_item_count,
+                muted_color,
+                muted_color,
+            );
         }
 
         if stats.horizontal_rule_count > 0 {
-            self.render_stat_row(ui, &t!("stats.horizontal_rules"), stats.horizontal_rule_count, muted_color, muted_color);
+            self.render_stat_row(
+                ui,
+                &t!("stats.horizontal_rules"),
+                stats.horizontal_rule_count,
+                muted_color,
+                muted_color,
+            );
         }
 
         ui.add_space(12.0);
@@ -910,15 +1049,31 @@ impl OutlinePanel {
         });
         ui.add_space(4.0);
 
-        self.render_stat_row(ui, &t!("stats.links"), stats.link_count, link_color, muted_color);
-        self.render_stat_row(ui, &t!("stats.images"), stats.image_count, link_color, muted_color);
+        self.render_stat_row(
+            ui,
+            &t!("stats.links"),
+            stats.link_count,
+            link_color,
+            muted_color,
+        );
+        self.render_stat_row(
+            ui,
+            &t!("stats.images"),
+            stats.image_count,
+            link_color,
+            muted_color,
+        );
 
         ui.add_space(12.0);
 
         // ─────────────────────────────────────────────────────────────────────
         // Code & Diagrams Section
         // ─────────────────────────────────────────────────────────────────────
-        if stats.code_block_count > 0 || stats.mermaid_count > 0 || stats.table_count > 0 || stats.blockquote_count > 0 {
+        if stats.code_block_count > 0
+            || stats.mermaid_count > 0
+            || stats.table_count > 0
+            || stats.blockquote_count > 0
+        {
             ui.horizontal(|ui| {
                 ui.add_space(8.0);
                 ui.label(
@@ -931,16 +1086,40 @@ impl OutlinePanel {
             ui.add_space(4.0);
 
             if stats.code_block_count > 0 {
-                self.render_stat_row(ui, &t!("stats.code_blocks"), stats.code_block_count, code_color, muted_color);
+                self.render_stat_row(
+                    ui,
+                    &t!("stats.code_blocks"),
+                    stats.code_block_count,
+                    code_color,
+                    muted_color,
+                );
             }
             if stats.mermaid_count > 0 {
-                self.render_stat_row(ui, &t!("stats.mermaid_diagrams"), stats.mermaid_count, code_color, muted_color);
+                self.render_stat_row(
+                    ui,
+                    &t!("stats.mermaid_diagrams"),
+                    stats.mermaid_count,
+                    code_color,
+                    muted_color,
+                );
             }
             if stats.table_count > 0 {
-                self.render_stat_row(ui, &t!("stats.tables"), stats.table_count, code_color, muted_color);
+                self.render_stat_row(
+                    ui,
+                    &t!("stats.tables"),
+                    stats.table_count,
+                    code_color,
+                    muted_color,
+                );
             }
             if stats.blockquote_count > 0 {
-                self.render_stat_row(ui, &t!("stats.blockquotes"), stats.blockquote_count, muted_color, muted_color);
+                self.render_stat_row(
+                    ui,
+                    &t!("stats.blockquotes"),
+                    stats.blockquote_count,
+                    muted_color,
+                    muted_color,
+                );
             }
         }
 
@@ -960,6 +1139,7 @@ impl OutlinePanel {
         highlight_bg: Color32,
         hover_bg: Color32,
         is_dark: bool,
+        ui_accent: Color32,
     ) -> Response {
         let indent = item.indent_level() as f32 * INDENT_PER_LEVEL;
 
@@ -970,10 +1150,10 @@ impl OutlinePanel {
         // Draw background for current or hovered item
         if is_current {
             ui.painter()
-                .rect_filled(rect, egui::Rounding::same(3.0), highlight_bg);
+                .rect_filled(rect, egui::CornerRadius::same(3), highlight_bg);
         } else if response.hovered() {
             ui.painter()
-                .rect_filled(rect, egui::Rounding::same(3.0), hover_bg);
+                .rect_filled(rect, egui::CornerRadius::same(3), hover_bg);
         }
 
         // Draw collapse/expand indicator if has children
@@ -992,7 +1172,7 @@ impl OutlinePanel {
 
         // Level indicator (H1, H2, etc.)
         let level_text = format!("H{}", item.level);
-        let level_color = heading_level_color(item.level, is_dark);
+        let level_color = heading_level_color(item.level, is_dark, ui_accent);
 
         let level_pos = egui::pos2(
             text_start_x + (if has_children { 12.0 } else { 0.0 }),
@@ -1051,10 +1231,10 @@ impl OutlinePanel {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Get a color for the heading level indicator.
-fn heading_level_color(level: u8, is_dark: bool) -> Color32 {
+fn heading_level_color(level: u8, is_dark: bool, accent: Color32) -> Color32 {
     if is_dark {
         match level {
-            1 => Color32::from_rgb(130, 180, 255), // Blue
+            1 => accent,
             2 => Color32::from_rgb(150, 220, 150), // Green
             3 => Color32::from_rgb(220, 180, 120), // Orange
             4 => Color32::from_rgb(200, 150, 200), // Purple
@@ -1063,7 +1243,7 @@ fn heading_level_color(level: u8, is_dark: bool) -> Color32 {
         }
     } else {
         match level {
-            1 => Color32::from_rgb(40, 100, 180),  // Blue
+            1 => accent::lerp_color(accent, Color32::BLACK, 0.08),
             2 => Color32::from_rgb(50, 140, 50),   // Green
             3 => Color32::from_rgb(180, 120, 40),  // Orange
             4 => Color32::from_rgb(140, 80, 140),  // Purple
@@ -1141,9 +1321,10 @@ mod tests {
     #[test]
     fn test_heading_level_colors() {
         // Just verify colors are returned without panic
+        let a = crate::theme::accent::default_accent();
         for level in 1..=6 {
-            let _dark = heading_level_color(level, true);
-            let _light = heading_level_color(level, false);
+            let _dark = heading_level_color(level, true, a);
+            let _light = heading_level_color(level, false, a);
         }
     }
 }

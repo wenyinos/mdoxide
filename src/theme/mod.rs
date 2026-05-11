@@ -44,6 +44,7 @@
 //! - **Syntax colors**: Keywords, strings, comments, etc.
 //! - **UI colors**: Accent, success, warning, error
 
+pub mod accent;
 pub mod dark;
 pub mod light;
 pub mod manager;
@@ -76,12 +77,27 @@ pub struct ThemeColors {
 }
 
 impl ThemeColors {
-    /// Create theme colors for the given theme variant.
+    /// Apply the user-selected accent (headings, checkbox, UI accent, selection).
+    /// Markdown / UI hyperlinks intentionally stay [`accent::standard_link_color`].
+    pub fn apply_user_accent(&mut self, accent: Color32) {
+        let dark = self.is_dark();
+        self.editor.heading = accent;
+        self.editor.checkbox = accent;
+        self.ui.accent = accent;
+        self.ui.accent_hover = accent::accent_hover(accent, dark);
+        self.base.selected = accent::selection_fill(accent, dark);
+    }
+
+    /// Create theme colors for the given theme variant with a Ferrite accent.
     ///
     /// This is the primary way to get themed colors. It automatically
     /// selects the appropriate palette based on the theme setting.
-    pub fn from_theme(theme: crate::config::Theme, visuals: &eframe::egui::Visuals) -> Self {
-        match theme {
+    pub fn from_theme(
+        theme: crate::config::Theme,
+        visuals: &eframe::egui::Visuals,
+        accent: Color32,
+    ) -> Self {
+        let mut palette = match theme {
             crate::config::Theme::Dark => Self::dark(),
             crate::config::Theme::Light => Self::light(),
             crate::config::Theme::System => {
@@ -91,7 +107,9 @@ impl ThemeColors {
                     Self::light()
                 }
             }
-        }
+        };
+        palette.apply_user_accent(accent);
+        palette
     }
 
     /// Get the light theme colors.
@@ -138,9 +156,9 @@ impl ThemeColors {
     /// ```
     pub fn to_visuals(&self) -> eframe::egui::Visuals {
         if self.is_dark() {
-            dark::create_dark_visuals()
+            dark::visuals_from_palette(self)
         } else {
-            light::create_light_visuals()
+            light::visuals_from_palette(self)
         }
     }
 
@@ -150,8 +168,9 @@ impl ThemeColors {
     pub fn visuals_for_theme(
         theme: crate::config::Theme,
         system_visuals: &eframe::egui::Visuals,
+        accent: Color32,
     ) -> eframe::egui::Visuals {
-        Self::from_theme(theme, system_visuals).to_visuals()
+        Self::from_theme(theme, system_visuals, accent).to_visuals()
     }
 }
 
@@ -190,9 +209,9 @@ impl BaseColors {
             background: Color32::from_rgb(255, 255, 255),
             background_secondary: Color32::from_rgb(250, 250, 250),
             background_tertiary: Color32::from_rgb(245, 245, 245),
-            border: Color32::from_rgb(160, 160, 160),        // Darkened from 200 for ~3.2:1 contrast
+            border: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1 contrast
             border_subtle: Color32::from_rgb(185, 185, 185), // Darkened from 230 for ~2.3:1 contrast
-            hover: Color32::from_rgb(235, 235, 240),         // Slightly tinted for better visibility
+            hover: Color32::from_rgb(235, 235, 240), // Slightly tinted for better visibility
             // Saturated enough to remain visible at the ~40% alpha the
             // FerriteEditor selection overlay applies on top of text (#121).
             // At full alpha this also works as a light-theme widget-selected
@@ -249,11 +268,11 @@ impl TextColors {
     pub fn light() -> Self {
         Self {
             primary: Color32::from_rgb(30, 30, 30),
-            secondary: Color32::from_rgb(75, 75, 75),        // Slightly darkened for better contrast
-            muted: Color32::from_rgb(100, 100, 100),         // Darkened from 120 for ~5.3:1 contrast
-            disabled: Color32::from_rgb(140, 140, 140),      // Darkened from 160 for better visibility
-            link: Color32::from_rgb(0, 90, 170),             // Slightly darkened for better contrast
-            code: Color32::from_rgb(70, 70, 70),             // Darkened for better readability
+            secondary: Color32::from_rgb(75, 75, 75), // Slightly darkened for better contrast
+            muted: Color32::from_rgb(100, 100, 100),  // Darkened from 120 for ~5.3:1 contrast
+            disabled: Color32::from_rgb(140, 140, 140), // Darkened from 160 for better visibility
+            link: Color32::from_rgb(0, 90, 170),      // Slightly darkened for better contrast
+            code: Color32::from_rgb(70, 70, 70),      // Darkened for better readability
         }
     }
 
@@ -313,15 +332,15 @@ impl EditorThemeColors {
     /// - list_marker: ~5.3:1 (WCAG AA compliant)
     pub fn light() -> Self {
         Self {
-            heading: Color32::from_rgb(0, 90, 165),           // Slightly darkened for better contrast
+            heading: Color32::from_rgb(0, 90, 165), // Slightly darkened for better contrast
             blockquote_border: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1
-            blockquote_text: Color32::from_rgb(85, 85, 85),   // Darkened from 100 for better readability
-            code_block_bg: Color32::from_rgb(243, 244, 246),  // Slightly lighter for better code contrast
+            blockquote_text: Color32::from_rgb(85, 85, 85), // Darkened from 100 for better readability
+            code_block_bg: Color32::from_rgb(243, 244, 246), // Slightly lighter for better code contrast
             code_block_border: Color32::from_rgb(175, 180, 190), // Darkened for better visibility
             horizontal_rule: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1
-            list_marker: Color32::from_rgb(85, 85, 85),       // Darkened from 100 for better visibility
-            checkbox: Color32::from_rgb(0, 90, 165),          // Consistent with heading color
-            table_border: Color32::from_rgb(170, 175, 185),   // Darkened for better visibility
+            list_marker: Color32::from_rgb(85, 85, 85), // Darkened from 100 for better visibility
+            checkbox: Color32::from_rgb(0, 90, 165),    // Consistent with heading color
+            table_border: Color32::from_rgb(170, 175, 185), // Darkened for better visibility
             table_header_bg: Color32::from_rgb(240, 242, 245),
         }
     }
@@ -514,6 +533,7 @@ impl ThemeSpacing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::accent;
 
     #[test]
     fn test_theme_colors_light() {
@@ -535,12 +555,18 @@ mod tests {
 
     #[test]
     fn test_theme_colors_from_theme() {
-        let dark_colors =
-            ThemeColors::from_theme(crate::config::Theme::Dark, &eframe::egui::Visuals::dark());
+        let dark_colors = ThemeColors::from_theme(
+            crate::config::Theme::Dark,
+            &eframe::egui::Visuals::dark(),
+            accent::default_accent(),
+        );
         assert!(dark_colors.is_dark());
 
-        let light_colors =
-            ThemeColors::from_theme(crate::config::Theme::Light, &eframe::egui::Visuals::light());
+        let light_colors = ThemeColors::from_theme(
+            crate::config::Theme::Light,
+            &eframe::egui::Visuals::light(),
+            accent::default_accent(),
+        );
         assert!(!light_colors.is_dark());
     }
 
@@ -647,6 +673,7 @@ mod tests {
         let visuals = ThemeColors::visuals_for_theme(
             crate::config::Theme::Light,
             &eframe::egui::Visuals::light(),
+            accent::default_accent(),
         );
         assert!(!visuals.dark_mode);
     }
@@ -656,6 +683,7 @@ mod tests {
         let visuals = ThemeColors::visuals_for_theme(
             crate::config::Theme::Dark,
             &eframe::egui::Visuals::dark(),
+            accent::default_accent(),
         );
         assert!(visuals.dark_mode);
     }
@@ -666,12 +694,14 @@ mod tests {
         let dark_visuals = ThemeColors::visuals_for_theme(
             crate::config::Theme::System,
             &eframe::egui::Visuals::dark(),
+            accent::default_accent(),
         );
         assert!(dark_visuals.dark_mode);
 
         let light_visuals = ThemeColors::visuals_for_theme(
             crate::config::Theme::System,
             &eframe::egui::Visuals::light(),
+            accent::default_accent(),
         );
         assert!(!light_visuals.dark_mode);
     }

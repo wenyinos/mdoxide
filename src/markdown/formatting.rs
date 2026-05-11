@@ -28,6 +28,7 @@
 //! assert_eq!(result.text, "**Hello** world");
 //! ```
 
+use crate::markdown::mermaid::{snippet_fenced_block, MermaidTemplateKind};
 use crate::markdown::parser::HeadingLevel;
 use crate::string_utils::{ceil_char_boundary, floor_char_boundary};
 
@@ -60,6 +61,8 @@ pub enum MarkdownFormatCommand {
     NumberedList,
     /// Blockquote
     Blockquote,
+    /// Insert a fenced `mermaid` code block with a starter template (`MermaidTemplateKind`).
+    InsertMermaid(MermaidTemplateKind),
 }
 
 impl MarkdownFormatCommand {
@@ -83,6 +86,7 @@ impl MarkdownFormatCommand {
             Self::BulletList => "Ctrl+Shift+B",
             Self::NumberedList => "Ctrl+Shift+N",
             Self::Blockquote => "Ctrl+Q",
+            Self::InsertMermaid(_) => "—",
         }
     }
 
@@ -106,6 +110,7 @@ impl MarkdownFormatCommand {
             Self::BulletList => "\u{2022}", // bullet •
             Self::NumberedList => "1.",
             Self::Blockquote => "\u{275D}", // heavy double turned comma quotation mark ❝
+            Self::InsertMermaid(_) => "△",
         }
     }
 
@@ -123,6 +128,24 @@ impl MarkdownFormatCommand {
             Self::BulletList => "Bullet List",
             Self::NumberedList => "Numbered List",
             Self::Blockquote => "Blockquote",
+            Self::InsertMermaid(kind) => {
+                return format!(
+                    "Mermaid: {}",
+                    match kind {
+                        MermaidTemplateKind::Flowchart => "Flowchart",
+                        MermaidTemplateKind::Sequence => "Sequence",
+                        MermaidTemplateKind::State => "State",
+                        MermaidTemplateKind::Class => "Class",
+                        MermaidTemplateKind::Er => "ER",
+                        MermaidTemplateKind::Pie => "Pie",
+                        MermaidTemplateKind::Gantt => "Gantt",
+                        MermaidTemplateKind::Journey => "Journey",
+                        MermaidTemplateKind::Mindmap => "Mindmap",
+                        MermaidTemplateKind::Timeline => "Timeline",
+                        MermaidTemplateKind::GitGraph => "Git graph",
+                    }
+                );
+            }
         };
         format!("{} ({})", name, self.shortcut_label())
     }
@@ -241,7 +264,43 @@ pub fn apply_raw_format(
         MarkdownFormatCommand::BulletList => apply_list_format(text, selection, false),
         MarkdownFormatCommand::NumberedList => apply_list_format(text, selection, true),
         MarkdownFormatCommand::Blockquote => apply_blockquote_format(text, selection),
+        MarkdownFormatCommand::InsertMermaid(kind) => {
+            apply_mermaid_snippet_format(text, selection, kind)
+        }
     }
+}
+
+/// Insert or replace the selection with a fenced `mermaid` block using a built-in template.
+fn apply_mermaid_snippet_format(
+    text: &str,
+    selection: Option<(usize, usize)>,
+    kind: MermaidTemplateKind,
+) -> FormatResult {
+    let (start, end) = selection.unwrap_or((text.len(), text.len()));
+    let start = floor_char_boundary(text, start.min(text.len()));
+    let end = ceil_char_boundary(text, end.min(text.len()));
+    let (start, end) = if start > end {
+        (end, start)
+    } else {
+        (start, end)
+    };
+
+    let core = snippet_fenced_block(kind);
+    let prefix = if start > 0 && !text[..start].ends_with('\n') {
+        "\n"
+    } else {
+        ""
+    };
+    let suffix = if end < text.len() && !text[end..].starts_with('\n') {
+        "\n"
+    } else {
+        ""
+    };
+    let block = format!("{prefix}{core}{suffix}");
+
+    let new_text = format!("{}{}{}", &text[..start], block, &text[end..]);
+    let cursor = start + block.len();
+    FormatResult::with_cursor(new_text, cursor)
 }
 
 /// Apply inline formatting with delimiters (bold, italic, code, strikethrough).
@@ -786,6 +845,7 @@ fn count_non_overlapping(text: &str, pattern: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::markdown::mermaid::MermaidTemplateKind;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Bold Formatting Tests
@@ -958,6 +1018,29 @@ mod tests {
         assert!(result.text.ends_with("\n```"));
     }
 
+    #[test]
+    fn test_insert_mermaid_inserts_fence_and_flowchart() {
+        let result = apply_raw_format(
+            "Hello",
+            Some((0, 0)),
+            MarkdownFormatCommand::InsertMermaid(MermaidTemplateKind::Flowchart),
+        );
+        assert!(result.text.contains("```mermaid\n"));
+        assert!(result.text.contains("flowchart TD"));
+        assert!(result.text.contains("\n```"));
+        assert!(result.text.contains("Hello"));
+    }
+
+    #[test]
+    fn test_insert_mermaid_each_kind_distinct() {
+        use std::collections::HashSet;
+        let mut bodies = HashSet::new();
+        for &kind in MermaidTemplateKind::ALL {
+            let body = kind.snippet_body();
+            assert!(bodies.insert(body), "duplicate snippet for {:?}", kind);
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Formatting State Detection Tests
     // ─────────────────────────────────────────────────────────────────────────
@@ -1032,8 +1115,7 @@ mod tests {
     #[test]
     fn test_italic_preserves_selection() {
         // Select 'world' → becomes '*world*'
-        let result =
-            apply_raw_format("Hello world", Some((6, 11)), MarkdownFormatCommand::Italic);
+        let result = apply_raw_format("Hello world", Some((6, 11)), MarkdownFormatCommand::Italic);
         assert_eq!(result.text, "Hello *world*");
         assert_eq!(result.selection, Some((6, 13)));
     }
@@ -1041,8 +1123,11 @@ mod tests {
     #[test]
     fn test_inline_code_preserves_selection() {
         // Select 'code' → becomes '`code`'
-        let result =
-            apply_raw_format("some code here", Some((5, 9)), MarkdownFormatCommand::InlineCode);
+        let result = apply_raw_format(
+            "some code here",
+            Some((5, 9)),
+            MarkdownFormatCommand::InlineCode,
+        );
         assert_eq!(result.text, "some `code` here");
         assert_eq!(result.selection, Some((5, 11)));
     }
@@ -1050,8 +1135,11 @@ mod tests {
     #[test]
     fn test_strikethrough_preserves_selection() {
         // Select 'old' → becomes '~~old~~'
-        let result =
-            apply_raw_format("the old text", Some((4, 7)), MarkdownFormatCommand::Strikethrough);
+        let result = apply_raw_format(
+            "the old text",
+            Some((4, 7)),
+            MarkdownFormatCommand::Strikethrough,
+        );
         assert_eq!(result.text, "the ~~old~~ text");
         assert_eq!(result.selection, Some((4, 11)));
     }
@@ -1059,8 +1147,7 @@ mod tests {
     #[test]
     fn test_bold_toggle_off_preserves_selection() {
         // Select '**Hello**' → toggle off → 'Hello' selected
-        let result =
-            apply_raw_format("**Hello** world", Some((0, 9)), MarkdownFormatCommand::Bold);
+        let result = apply_raw_format("**Hello** world", Some((0, 9)), MarkdownFormatCommand::Bold);
         assert_eq!(result.text, "Hello world");
         assert!(!result.applied);
         assert_eq!(result.selection, Some((0, 5))); // "Hello" selected
@@ -1069,8 +1156,7 @@ mod tests {
     #[test]
     fn test_surrounding_bold_toggle_off_preserves_selection() {
         // Cursor inside **Hello** with just 'Hello' selected → remove surrounding **
-        let result =
-            apply_raw_format("**Hello** world", Some((2, 7)), MarkdownFormatCommand::Bold);
+        let result = apply_raw_format("**Hello** world", Some((2, 7)), MarkdownFormatCommand::Bold);
         assert_eq!(result.text, "Hello world");
         assert!(!result.applied);
         assert_eq!(result.selection, Some((0, 5))); // "Hello" selected
@@ -1090,7 +1176,11 @@ mod tests {
     #[test]
     fn test_bold_chinese_chars() {
         // Chinese characters: 你好 (each char is 3 bytes)
-        let result = apply_raw_format("Hello 你好 World", Some((6, 12)), MarkdownFormatCommand::Bold);
+        let result = apply_raw_format(
+            "Hello 你好 World",
+            Some((6, 12)),
+            MarkdownFormatCommand::Bold,
+        );
         assert!(result.text.contains("**你好**"));
     }
 
@@ -1111,21 +1201,33 @@ mod tests {
     #[test]
     fn test_heading_norwegian() {
         // Test heading formatting with Norwegian text
-        let result = apply_raw_format("Østersjøen", Some((0, 0)), MarkdownFormatCommand::Heading(1));
+        let result = apply_raw_format(
+            "Østersjøen",
+            Some((0, 0)),
+            MarkdownFormatCommand::Heading(1),
+        );
         assert_eq!(result.text, "# Østersjøen");
     }
 
     #[test]
     fn test_list_format_with_unicode() {
         // Test list formatting with unicode content
-        let result = apply_raw_format("日本語テスト", Some((0, 0)), MarkdownFormatCommand::BulletList);
+        let result = apply_raw_format(
+            "日本語テスト",
+            Some((0, 0)),
+            MarkdownFormatCommand::BulletList,
+        );
         assert_eq!(result.text, "- 日本語テスト");
     }
 
     #[test]
     fn test_blockquote_with_accented_chars() {
         // Test blockquote with accented characters: café, naïve
-        let result = apply_raw_format("Café naïve", Some((0, 0)), MarkdownFormatCommand::Blockquote);
+        let result = apply_raw_format(
+            "Café naïve",
+            Some((0, 0)),
+            MarkdownFormatCommand::Blockquote,
+        );
         assert_eq!(result.text, "> Café naïve");
     }
 

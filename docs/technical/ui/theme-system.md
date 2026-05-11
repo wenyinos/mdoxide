@@ -6,11 +6,45 @@ This document describes the theming system for Ferrite, covering architecture, c
 
 The theme system provides a comprehensive set of colors, fonts, and spacing values for consistent UI styling. It supports light and dark themes with proper contrast and accessibility, plus a System theme that follows the OS preference.
 
+**Ferrite accent color:** Users can pick a primary accent (RGB) in **Settings → Appearance** and on the **Welcome** screen. It replaces the default blue across most “brand” UI chrome; **hyperlink** colors in rendered markdown stay a fixed classic blue (`theme::accent::standard_link_color`) so links remain recognizable.
+
+## Ferrite accent color (user-configurable)
+
+### Settings and persistence
+
+- **Field:** `Settings.accent_color: [u8; 3]` (serde default matches `theme::accent::DEFAULT_ACCENT_RGB`).
+- **Helper:** `Settings::ferrite_accent_rgb()` → `egui::Color32` for UI code.
+- **Sync:** `ThemeManager::sync_accent_rgb(accent_color)` runs when settings apply so egui `Visuals` (selection, widgets) stay aligned.
+
+### What uses the accent
+
+Including but not limited to:
+
+- **Rendered markdown:** H1–H6 heading color; widget chrome derived via `ThemeColors::from_theme(..., accent)` / `EditorColors` / `WidgetColors`.
+- **Editor:** Selection tint, minimap heading indicators (semantic), find-replace accents.
+- **Shell UI:** Active tabs, ribbon/outline/productivity highlights where wired; **view mode segment** (R / S / V) selected pill; **Productivity Hub** (Add, Start work, notes ➕, dock/detach affordances); **status bar** LSP summary and git branch label (via a blended `status_accent` for legibility).
+
+### What does *not* follow the accent
+
+- **Markdown links** in preview: always `standard_link_color(dark_mode)` — not the user accent.
+
+### Code entry points
+
+| Area | Location |
+|------|----------|
+| Accent math / link constant | `src/theme/accent.rs` |
+| Theme palette + `apply_user_accent` | `src/theme/mod.rs` |
+| Visuals build | `src/theme/dark.rs`, `src/theme/light.rs`, `src/theme/manager.rs` |
+| View picker | `src/ui/view_segment.rs` (`ferrite_accent` argument) |
+| Status bar LSP / branch | `src/app/status_bar.rs` |
+| Productivity Hub | `src/ui/productivity_panel.rs` (`show_content`, floating `show`) |
+
 ## Architecture
 
 ```
 src/theme/
 ├── mod.rs       # ThemeColors struct and core types
+├── accent.rs    # User accent RGB, helpers (selection_fill, panel_highlight_fill, link color)
 ├── colors.rs    # Color constants and utilities
 ├── light.rs     # Light theme egui::Visuals configuration
 ├── dark.rs      # Dark theme egui::Visuals configuration
@@ -105,8 +139,9 @@ use crate::config::Theme;
 let colors = ThemeColors::light();
 let colors = ThemeColors::dark();
 
-// Get colors based on user setting
-let colors = ThemeColors::from_theme(theme, &ctx.style().visuals);
+// Get colors based on user setting and Ferrite accent (from Settings)
+let accent = settings.ferrite_accent_rgb();
+let colors = ThemeColors::from_theme(theme, &ctx.style().visuals, accent);
 
 // Use colors in UI
 ui.label(RichText::new("Hello").color(colors.text.primary));
@@ -122,8 +157,10 @@ let colors = ThemeColors::dark();
 let visuals = colors.to_visuals();
 ctx.set_visuals(visuals);
 
-// Or use the convenience method
-let visuals = ThemeColors::visuals_for_theme(Theme::Dark, &ctx.style().visuals);
+// Or use the convenience method (pass user accent Color32)
+let accent = settings.ferrite_accent_rgb();
+let visuals =
+    ThemeColors::visuals_for_theme(Theme::Dark, &ctx.style().visuals, accent);
 ctx.set_visuals(visuals);
 ```
 
@@ -279,6 +316,7 @@ impl ThemeColors {
 | File | Purpose |
 |------|---------|
 | `src/theme/mod.rs` | Core types: ThemeColors, BaseColors, TextColors, etc. |
+| `src/theme/accent.rs` | User accent RGB, `standard_link_color`, blends (`selection_fill`, etc.) |
 | `src/theme/colors.rs` | Color constants and utility functions |
 | `src/theme/light.rs` | Light theme → egui::Visuals conversion |
 | `src/theme/dark.rs` | Dark theme → egui::Visuals conversion |

@@ -3,7 +3,10 @@
 //! This module implements the Welcome panel displayed on first launch,
 //! allowing users to configure theme, language, fonts, and editor preferences.
 
-use crate::config::{CjkFontPreference, KeyBinding, KeyCode, KeyModifiers, Language, MaxLineWidth, Settings, ShortcutCommand, Theme, ViewMode};
+use crate::config::{
+    CjkFontPreference, KeyBinding, KeyCode, KeyModifiers, Language, MaxLineWidth, Settings,
+    ShortcutCommand, Theme, ViewMode,
+};
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
 
@@ -49,12 +52,12 @@ impl WelcomePanel {
         let mut changed = false;
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::Frame::none()
+            egui::Frame::new()
                 .inner_margin(egui::Margin {
-                    left: 80.0,
-                    right: 40.0,
-                    top: 60.0,
-                    bottom: 40.0,
+                    left: 80,
+                    right: 40,
+                    top: 60,
+                    bottom: 40,
                 })
                 .show(ui, |ui| {
                     ui.set_max_width(560.0);
@@ -121,6 +124,36 @@ impl WelcomePanel {
                             }
                         }
                     });
+
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(t!("welcome.label.accent_color").to_string())
+                                .strong()
+                                .color(text_color),
+                        );
+                        ui.add_space(8.0);
+                        let mut c = egui::Color32::from_rgb(
+                            settings.accent_color[0],
+                            settings.accent_color[1],
+                            settings.accent_color[2],
+                        );
+                        if ui.color_edit_button_srgba(&mut c).changed() {
+                            settings.accent_color = [c.r(), c.g(), c.b()];
+                            changed = true;
+                        }
+                        ui.add_space(8.0);
+                        if ui.small_button(t!("settings.appearance.accent_reset")).clicked() {
+                            settings.accent_color = crate::theme::accent::DEFAULT_ACCENT_RGB;
+                            changed = true;
+                        }
+                    });
+                    ui.label(
+                        RichText::new(t!("welcome.section.accent_hint").to_string())
+                            .small()
+                            .weak()
+                            .color(weak_color),
+                    );
 
                     // ── Language ───────────────────────────────────────
                     ui.add_space(10.0);

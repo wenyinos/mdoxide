@@ -23,6 +23,8 @@ pub enum ExportFormat {
     HtmlFile,
     /// Copy rendered HTML to clipboard
     ClipboardHtml,
+    /// Export as a self-contained PDF document
+    PdfFile,
 }
 
 impl ExportFormat {
@@ -31,6 +33,7 @@ impl ExportFormat {
         match self {
             ExportFormat::HtmlFile => "HTML File",
             ExportFormat::ClipboardHtml => "Copy as HTML",
+            ExportFormat::PdfFile => "PDF File",
         }
     }
 
@@ -39,6 +42,7 @@ impl ExportFormat {
         match self {
             ExportFormat::HtmlFile => Some("html"),
             ExportFormat::ClipboardHtml => None,
+            ExportFormat::PdfFile => Some("pdf"),
         }
     }
 
@@ -47,12 +51,17 @@ impl ExportFormat {
         match self {
             ExportFormat::HtmlFile => "🌐",
             ExportFormat::ClipboardHtml => "📋",
+            ExportFormat::PdfFile => "📄",
         }
     }
 
     /// Get all available export formats.
     pub fn all() -> &'static [ExportFormat] {
-        &[ExportFormat::HtmlFile, ExportFormat::ClipboardHtml]
+        &[
+            ExportFormat::HtmlFile,
+            ExportFormat::ClipboardHtml,
+            ExportFormat::PdfFile,
+        ]
     }
 }
 

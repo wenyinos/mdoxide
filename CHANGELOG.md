@@ -5,6 +5,52 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v0.3.0 work-in-progress
+
+### Added
+
+#### Platform (egui 0.31 / eframe 0.31)
+- **eframe / egui stack upgraded to 0.31.x** (Task 57) — Dependency bump from 0.28 with API migrations across themes, fonts, editor, markdown, terminal, and UI. See `docs/technical/platform/eframe-egui-031-upgrade.md`. Intended to address platform input/windowing issues tied to older winit (e.g. [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111)); confirm on target OS builds before closing.
+- **Cross-platform regression matrix for the egui 0.31 upgrade** (Task 58) — `docs/technical/platform/v0.3.0-regression-matrix.md` defines stable test IDs (LAU/FILE/KBD/IME/TRM/DLG/WIN/MMD/FNT/THM) covering every egui 0.31 risk surface across Win11 / macOS-AS / macOS-Intel / Linux-X11 / Linux-Wayland with explicit release-gate criteria. Executed on Win10 as a Win11 proxy; macOS and Linux rows deferred to CI / external contributors until filled in.
+
+#### Export — PDF & HTML
+- **Native PDF export** (Tasks 60–61) — File → Export → PDF… with options for page size, margins, optional page break before H1, and link annotations. Implemented with **krilla** + **krilla-svg** (see `docs/technical/planning/pdf-export-pipeline.md`, `docs/technical/viewers/pdf-export.md`).
+- **Print preview** (Task 62) — Reuses the same PDF render path as export; writes a temp PDF and opens it in the in-app **PdfViewer** tab (`docs/technical/viewers/print-preview.md`).
+- **Themed HTML export** (Task 63) — Stronger parity with in-app rendering: theme-aware CSS, Mermaid as inline SVG, syntect-highlighted code blocks, export options dialog (`docs/technical/viewers/themed-html-export.md`, `docs/technical/viewers/document-export.md`).
+
+#### Executable fenced code blocks
+- **Code execution settings** (Task 64) — Editor → Code execution: master enable, shell/Python toggles, timeout (default 30s, max 300s). See `docs/technical/config/code-execution-settings.md`.
+- **Run on fenced blocks** (Tasks 65–66) — **Run** control in rendered/split preview for supported languages; background worker; inline ANSI-colored output (`ansi_render` / vte-style SGR); exit status; insert output as fenced block. See `docs/technical/markdown/code-block-run.md`.
+- **Timeout and Stop** (Task 67) — Hard timeout and user **Stop**; clear labels for timeout vs cancel (`docs/technical/markdown/code-block-cancellation.md`).
+- **First-run consent** (Task 68) — Modal before first **Run**; queue payload until user accepts; can be skipped via Settings (`docs/technical/markdown/code-execution-consent-dialog.md`).
+
+#### Mermaid — first wave ([#4](https://github.com/OlaProeis/Ferrite/issues/4))
+- **Insert → Mermaid…** (Tasks 69–70) — Toolbar templates per diagram type; **About/Help** syntax section and snippets aligned with insert (`docs/technical/markdown/mermaid-insert-toolbar.md`, `docs/technical/mermaid/mermaid-syntax-help.md`).
+- **Inline validation** (Task 71) — Parse-time errors: warning header in preview, last-good diagram fallback, squiggles in raw editor (`docs/technical/mermaid/mermaid-inline-validation.md`).
+- **Flowchart shapes & style** (Task 72) — Extra shapes and `style` / classDef plumbing (`docs/technical/mermaid/flowchart-shapes-and-style.md`).
+- **State diagrams: fork/join & history** (Task 73) — `<<fork>>` / `<<join>>` bars and `[H]` / `[H*]` glyphs (`docs/technical/mermaid/state-pseudostates-fork-join-history.md`).
+
+#### Appearance & hub
+- **User-configurable Ferrite accent** — Color picker in **Settings → Appearance** and **Welcome**; drives headings, selection, tabs, view mode segment, productivity hub chrome, status bar (LSP line, git branch); markdown links keep the standard link color. See `docs/technical/ui/theme-system.md`.
+- **Productivity Hub polish** — Card layout, Pomodoro emphasis, floating **×** re-docks to sidebar (does not hide the hub), stable docked widths via clipped child UI, floating window size cap, scrollbar margin vs resize handle (`docs/technical/productivity/productivity-panel.md`).
+
+#### Distribution & fonts
+- **macOS Gatekeeper troubleshooting** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — Unsigned CI `.app` on macOS 15.x: docs at `docs/install/macos.md`, index + release checklist links; signing/notarization planned v0.3.1.
+- **Custom font picker stability (Intel macOS)** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred font load until explicit combo selection to avoid spurious error toast (`docs/technical/fonts/custom-font-picker-deferred-load.md`).
+
+### Fixed
+
+- **CRITICAL: Smart-paste of mixed-script text crashes Ferrite (`STATUS_STACK_BUFFER_OVERRUN` / `0xc0000409`)** — Pasting any text whose first colon is followed by a multi-byte UTF-8 codepoint (e.g. `Hebrew: שלום עולם`, `Bengali: আমি বাংলায়`, `Hindi: नमस्ते`, `note: 你好`, `emoji: 👨‍👩‍👧`) aborted the process in release builds (`panic = "abort"`). Root cause was `FerriteApp::is_url` in `src/app/input_handling.rs` doing `&s[colon_pos..colon_pos + 3]` to look for `://`, which panicked when `colon_pos + 3` landed on a non-char-boundary inside a 2-/3-/4-byte UTF-8 codepoint. The smart-paste pipeline (`consume_smart_paste`) calls `is_url` / `is_image_url` for *every* paste event to decide whether to wrap the URL in a markdown link or image, so any paste containing a mixed-script line tripped the panic. Fixed by replacing the direct slice with `s.get(colon_pos..colon_pos + 3) == Some("://")`, which returns `None` instead of panicking on a non-char-boundary range. Pinned by 5 regression tests (`is_url_does_not_panic_on_mixed_script_text`, `is_image_url_does_not_panic_on_mixed_script_text`, plus URL/image-URL positive coverage). Tracked as Issue **I-3** in the v0.3.0 regression matrix; release-gate-S1 → resolved.
+- **Split / rendered view: only the first of consecutive fenced code blocks visible** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Viewport/layout interaction hid later blocks until edits; fixed per `docs/technical/markdown/consecutive-fenced-blocks-fix.md` (Task 83).
+- **Empty markdown table cells hard to focus / edit** ([#131](https://github.com/OlaProeis/Ferrite/issues/131)) — Hit targets and Tab / Shift+Tab navigation for empty cells (Task 84); see `docs/technical/markdown/table-cell-focus-navigation.md`.
+
+### Known issues (v0.3.0 non-blockers)
+
+These were surfaced by the v0.3.0 regression matrix on Win10 (proxy for Win11) and do **not** gate the v0.3.0 release. Triage scheduled for v0.3.x.
+
+- **I-1 (S3, WIN-5):** The status-bar Help (`?`) button sits inside the bottom-right corner resize grab zone. Dragging from that corner to resize triggers the help action on release. Same class of bug as the previously-fixed top-right Close-button overlap; needs an analogous bottom-edge button-area exclusion in `src/ui/window.rs` resize hit-testing or a margin around the `?` button.
+- **I-2 (S3, TRM-3):** Typing CJK characters into the integrated terminal shows `????` on the prompt line, but the underlying shell receives the correct bytes (the `echo` *output* renders correctly). Almost certainly a Windows console active-code-page issue (PowerShell defaults to OEM; `chcp 65001` likely fixes it). Not a Ferrite render-path bug; documenting `chcp 65001` as a recommendation for CJK terminal users would resolve the user-visible symptom.
+
 ## [0.2.9] - 2026-04-23
 
 Hotfix release for four critical v0.2.8 regressions. No new features — upgrade

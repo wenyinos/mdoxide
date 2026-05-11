@@ -4,9 +4,11 @@
 //! - Application information and version
 //! - GitHub and documentation links
 //! - Complete keyboard shortcuts reference
+//! - Mermaid syntax help (snippets match **Insert → Mermaid…** templates)
 //! - Credits and license information
 
 use crate::app::modifier_symbol;
+use crate::markdown::mermaid::{mermaid_kind_menu_label, snippet_fenced_block, MermaidTemplateKind};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Ui};
 use rust_i18n::t;
 
@@ -144,6 +146,7 @@ pub enum AboutSection {
     #[default]
     About,
     Shortcuts,
+    Mermaid,
 }
 
 impl AboutSection {
@@ -152,6 +155,7 @@ impl AboutSection {
         match self {
             AboutSection::About => t!("about.tab.about"),
             AboutSection::Shortcuts => t!("about.tab.shortcuts"),
+            AboutSection::Mermaid => t!("about.tab.mermaid"),
         }
         .to_string()
     }
@@ -161,6 +165,7 @@ impl AboutSection {
         match self {
             AboutSection::About => "○",
             AboutSection::Shortcuts => "⌘",
+            AboutSection::Mermaid => "△",
         }
     }
 }
@@ -249,7 +254,11 @@ impl AboutPanel {
                     ui.vertical(|ui| {
                         ui.set_min_width(100.0);
 
-                        for section in [AboutSection::About, AboutSection::Shortcuts] {
+                        for section in [
+                            AboutSection::About,
+                            AboutSection::Shortcuts,
+                            AboutSection::Mermaid,
+                        ] {
                             let selected = self.active_section == section;
                             let text = format!("{} {}", section.icon(), section.label());
 
@@ -280,6 +289,9 @@ impl AboutPanel {
                             }
                             AboutSection::Shortcuts => {
                                 self.show_shortcuts_section(ui, is_dark);
+                            }
+                            AboutSection::Mermaid => {
+                                self.show_mermaid_section(ui, is_dark);
                             }
                         }
                     });
@@ -324,16 +336,17 @@ impl AboutPanel {
                 );
                 ui.add_space(12.0);
 
-                for section in [AboutSection::About, AboutSection::Shortcuts] {
+                for section in [
+                    AboutSection::About,
+                    AboutSection::Shortcuts,
+                    AboutSection::Mermaid,
+                ] {
                     let selected = self.active_section == section;
                     let text = format!("{} {}", section.icon(), section.label());
 
                     let btn = ui.add_sized(
                         [sidebar_width - 16.0, 32.0],
-                        egui::SelectableLabel::new(
-                            selected,
-                            RichText::new(text).size(14.0),
-                        ),
+                        egui::SelectableLabel::new(selected, RichText::new(text).size(14.0)),
                     );
 
                     if btn.clicked() {
@@ -356,6 +369,9 @@ impl AboutPanel {
                     }
                     AboutSection::Shortcuts => {
                         self.show_shortcuts_section(ui, is_dark);
+                    }
+                    AboutSection::Mermaid => {
+                        self.show_mermaid_section(ui, is_dark);
                     }
                 }
             });
@@ -384,7 +400,11 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Links section
-            ui.label(RichText::new(format!("🔗 {}", t!("about.links"))).strong().size(16.0));
+            ui.label(
+                RichText::new(format!("🔗 {}", t!("about.links")))
+                    .strong()
+                    .size(16.0),
+            );
             ui.add_space(8.0);
 
             const GITHUB_REPO: &str = "https://github.com/OlaProeis/Ferrite";
@@ -416,7 +436,11 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Built with section
-            ui.label(RichText::new(format!("⚙ {}", t!("about.built_with"))).strong().size(16.0));
+            ui.label(
+                RichText::new(format!("⚙ {}", t!("about.built_with")))
+                    .strong()
+                    .size(16.0),
+            );
             ui.add_space(8.0);
 
             let libraries = [
@@ -448,12 +472,85 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // License section
-            ui.label(RichText::new(format!("📜 {}", t!("about.license"))).strong().size(16.0));
+            ui.label(
+                RichText::new(format!("📜 {}", t!("about.license")))
+                    .strong()
+                    .size(16.0),
+            );
             ui.add_space(8.0);
             ui.label(t!("about.license_type"));
             ui.label(RichText::new(t!("about.copyright")).weak());
 
             ui.add_space(16.0);
+        });
+    }
+
+    /// Mermaid syntax help using the same fenced snippets as **Insert → Mermaid…**.
+    fn show_mermaid_section(&self, ui: &mut Ui, is_dark: bool) {
+        const MERMAID_DOC_URL: &str = "https://mermaid.js.org/";
+
+        ScrollArea::vertical().show(ui, |ui| {
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(t!("about.mermaid.title"))
+                    .size(16.0)
+                    .strong(),
+            );
+            ui.add_space(8.0);
+            ui.label(t!("about.mermaid.intro"));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(t!("about.mermaid.doc_site_label"));
+                if ui
+                    .link(t!("about.mermaid.doc_link"))
+                    .on_hover_text(t!("about.mermaid.doc_tooltip"))
+                    .clicked()
+                {
+                    let _ = open::that(MERMAID_DOC_URL);
+                }
+            });
+            ui.add_space(16.0);
+
+            let snippet_bg = if is_dark {
+                Color32::from_rgb(38, 40, 48)
+            } else {
+                Color32::from_rgb(245, 246, 250)
+            };
+            let snippet_text = if is_dark {
+                Color32::from_rgb(220, 225, 235)
+            } else {
+                Color32::from_rgb(40, 45, 55)
+            };
+
+            for &kind in MermaidTemplateKind::ALL {
+                ui.label(
+                    RichText::new(mermaid_kind_menu_label(kind))
+                        .size(15.0)
+                        .strong(),
+                );
+                ui.add_space(4.0);
+                let desc_key = kind.help_description_key();
+                ui.label(t!(desc_key));
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(t!("about.mermaid.snippet_label"))
+                        .small()
+                        .weak(),
+                );
+                egui::Frame::new()
+                    .fill(snippet_bg)
+                    .corner_radius(4.0)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(snippet_fenced_block(kind))
+                                .color(snippet_text)
+                                .family(egui::FontFamily::Monospace)
+                                .size(11.0),
+                        );
+                    });
+                ui.add_space(16.0);
+            }
         });
     }
 
@@ -463,11 +560,7 @@ impl AboutPanel {
             ui.add_space(4.0);
             ui.label(RichText::new(t!("shortcuts.title")).size(16.0).strong());
             ui.add_space(4.0);
-            ui.label(
-                RichText::new(t!("shortcuts.expand_hint"))
-                    .weak()
-                    .small(),
-            );
+            ui.label(RichText::new(t!("shortcuts.expand_hint")).weak().small());
             ui.add_space(12.0);
 
             for category in ShortcutCategory::all() {
@@ -519,10 +612,10 @@ impl AboutPanel {
                                     };
 
                                     ui.horizontal(|ui| {
-                                        egui::Frame::none()
+                                        egui::Frame::new()
                                             .fill(key_bg)
-                                            .rounding(3.0)
-                                            .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+                                            .corner_radius(3)
+                                            .inner_margin(egui::Margin::symmetric(6, 2))
                                             .show(ui, |ui| {
                                                 ui.label(
                                                     RichText::new(&shortcut.keys)

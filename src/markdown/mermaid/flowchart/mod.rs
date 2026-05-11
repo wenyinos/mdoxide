@@ -17,15 +17,15 @@
 //! - `render` - egui drawing of nodes, edges, and subgraphs
 //! - `utils` - Shared utility functions (bezier curves, arrow heads, etc.)
 
-pub(crate) mod types;
-pub(crate) mod parser;
 pub(crate) mod layout;
+pub(crate) mod parser;
 pub(crate) mod render;
+pub(crate) mod types;
 pub(crate) mod utils;
 
 // Re-export public API
-pub use types::*;
+pub use layout::layout_flowchart;
 pub use parser::parse_flowchart;
 pub(crate) use parser::{parse_direction, parse_edge_line_full, parse_node_from_text};
-pub use layout::layout_flowchart;
 pub use render::{render_flowchart, FlowchartColors};
+pub use types::*;

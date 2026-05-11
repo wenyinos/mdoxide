@@ -3,8 +3,8 @@
 //! This module contains markdown formatting commands, TOC insertion,
 //! and structured document (JSON/YAML/TOML) format/validate.
 
-use super::FerriteApp;
 use super::helpers::{char_index_to_line_col, line_col_to_char_index};
+use super::FerriteApp;
 use crate::config::ViewMode;
 use crate::markdown::{apply_raw_format, insert_or_update_toc, MarkdownFormatCommand, TocOptions};
 use crate::state::{FileType, PendingAction};
@@ -13,13 +13,16 @@ use log::{debug, info, warn};
 use rust_i18n::t;
 
 impl FerriteApp {
-
     /// Handle a markdown formatting command.
     ///
     /// Applies the formatting to the current selection in the active editor.
     /// Uses FerriteEditor when available for better undo/redo integration,
     /// falling back to TabState-based formatting for legacy code paths.
-    pub(crate) fn handle_format_command(&mut self, ctx: &egui::Context, cmd: MarkdownFormatCommand) {
+    pub(crate) fn handle_format_command(
+        &mut self,
+        ctx: &egui::Context,
+        cmd: MarkdownFormatCommand,
+    ) {
         use crate::editor::get_ferrite_editor_mut;
 
         // Get tab_id before borrowing state mutably
@@ -37,8 +40,10 @@ impl FerriteApp {
                         let sel = editor.selection();
                         let (start, end) = sel.ordered();
                         // Convert cursors to char indices (with bounds checking)
-                        let start_char = editor.buffer().try_line_to_char(start.line).unwrap_or(0) + start.column;
-                        let end_char = editor.buffer().try_line_to_char(end.line).unwrap_or(0) + end.column;
+                        let start_char = editor.buffer().try_line_to_char(start.line).unwrap_or(0)
+                            + start.column;
+                        let end_char =
+                            editor.buffer().try_line_to_char(end.line).unwrap_or(0) + end.column;
                         Some((start_char, end_char))
                     } else {
                         None
@@ -105,7 +110,6 @@ impl FerriteApp {
         }
     }
 
-
     /// Handle a markdown formatting command with a pre-captured selection.
     ///
     /// This variant is used when the selection was captured at button-click time
@@ -123,7 +127,10 @@ impl FerriteApp {
 
         if let Some(tab_id) = tab_id {
             if let Some(selection) = captured_selection {
-                debug!("Using captured selection {:?} for tab_id {}", selection, tab_id);
+                debug!(
+                    "Using captured selection {:?} for tab_id {}",
+                    selection, tab_id
+                );
                 // Use the pre-captured selection with FerriteEditor
                 let ferrite_result = get_ferrite_editor_mut(ctx, tab_id, |editor| {
                     let applied = editor.apply_markdown_format_with_selection(cmd, selection);
@@ -134,8 +141,11 @@ impl FerriteApp {
                             let sel = editor.selection();
                             let (start, end) = sel.ordered();
                             // Use try_line_to_char for bounds safety
-                            let start_char = editor.buffer().try_line_to_char(start.line).unwrap_or(0) + start.column;
-                            let end_char = editor.buffer().try_line_to_char(end.line).unwrap_or(0) + end.column;
+                            let start_char =
+                                editor.buffer().try_line_to_char(start.line).unwrap_or(0)
+                                    + start.column;
+                            let end_char = editor.buffer().try_line_to_char(end.line).unwrap_or(0)
+                                + end.column;
                             Some((start_char, end_char))
                         } else {
                             None
@@ -166,7 +176,6 @@ impl FerriteApp {
         debug!("Fallback: using handle_format_command for {:?}", cmd);
         self.handle_format_command(ctx, cmd);
     }
-
 
     /// Handle Table of Contents insertion/update.
     ///
@@ -225,11 +234,14 @@ impl FerriteApp {
 
         debug!(
             "TOC {}: {} headings",
-            if result.was_update { "updated" } else { "inserted" },
+            if result.was_update {
+                "updated"
+            } else {
+                "inserted"
+            },
             result.heading_count
         );
     }
-
 
     /// Handle formatting/pretty-printing a structured data document (JSON/YAML/TOML).
     pub(crate) fn handle_format_structured_document(&mut self) {
@@ -237,7 +249,8 @@ impl FerriteApp {
 
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast(t!("notification.no_document_format").to_string(), time, 2.0);
+            self.state
+                .show_toast(t!("notification.no_document_format").to_string(), time, 2.0);
             return;
         };
 
@@ -272,21 +285,31 @@ impl FerriteApp {
                             tab.record_edit(old_content, old_cursor);
                         }
                         let time = self.get_app_time();
-                        self.state.show_toast(t!("notification.document_formatted").to_string(), time, 2.0);
+                        self.state.show_toast(
+                            t!("notification.document_formatted").to_string(),
+                            time,
+                            2.0,
+                        );
                         info!("Formatted {} document", file_type.display_name());
                     }
                     Err(e) => {
                         let time = self.get_app_time();
-                        self.state
-                            .show_toast(t!("notification.format_failed", error = e.to_string()).to_string(), time, 3.0);
+                        self.state.show_toast(
+                            t!("notification.format_failed", error = e.to_string()).to_string(),
+                            time,
+                            3.0,
+                        );
                         warn!("Failed to serialize {}: {}", file_type.display_name(), e);
                     }
                 }
             }
             Err(e) => {
                 let time = self.get_app_time();
-                self.state
-                    .show_toast(t!("notification.parse_error", error = e.to_string()).to_string(), time, 3.0);
+                self.state.show_toast(
+                    t!("notification.parse_error", error = e.to_string()).to_string(),
+                    time,
+                    3.0,
+                );
                 warn!(
                     "Failed to parse {} for formatting: {}",
                     file_type.display_name(),
@@ -296,14 +319,17 @@ impl FerriteApp {
         }
     }
 
-
     /// Handle validating the syntax of a structured data document (JSON/YAML/TOML).
     pub(crate) fn handle_validate_structured_syntax(&mut self) {
         use crate::markdown::tree_viewer::parse_structured_content;
 
         let Some(tab) = self.state.active_tab() else {
             let time = self.get_app_time();
-            self.state.show_toast(t!("notification.no_document_validate").to_string(), time, 2.0);
+            self.state.show_toast(
+                t!("notification.no_document_validate").to_string(),
+                time,
+                2.0,
+            );
             return;
         };
 
@@ -330,7 +356,11 @@ impl FerriteApp {
             Ok(_) => {
                 let time = self.get_app_time();
                 self.state.show_toast(
-                    t!("notification.valid_syntax", file_type = file_type.display_name()).to_string(),
+                    t!(
+                        "notification.valid_syntax",
+                        file_type = file_type.display_name()
+                    )
+                    .to_string(),
                     time,
                     2.0,
                 );
@@ -338,7 +368,11 @@ impl FerriteApp {
             }
             Err(e) => {
                 let time = self.get_app_time();
-                self.state.show_toast(t!("notification.invalid_syntax", error = e.to_string()).to_string(), time, 4.0);
+                self.state.show_toast(
+                    t!("notification.invalid_syntax", error = e.to_string()).to_string(),
+                    time,
+                    4.0,
+                );
                 warn!("{} validation failed: {}", file_type.display_name(), e);
             }
         }

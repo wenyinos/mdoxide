@@ -58,7 +58,11 @@ pub fn render_flowchart(
                     // Measure and potentially truncate
                     let text_size = text_measurer.measure(label, label_font_size);
                     let display_text = if text_size.width > max_label_width {
-                        text_measurer.truncate_with_ellipsis(label, label_font_size, max_label_width)
+                        text_measurer.truncate_with_ellipsis(
+                            label,
+                            label_font_size,
+                            max_label_width,
+                        )
                     } else {
                         label.clone()
                     };
@@ -122,12 +126,22 @@ pub fn render_flowchart(
     // Draw nodes (on top)
     for node in &flowchart.nodes {
         if let Some(node_layout) = layout.nodes.get(&node.id) {
-            // Look up custom style for this node
-            let custom_style = flowchart
+            // ClassDef + per-node `style` (inline wins per field)
+            let class_style = flowchart
                 .node_classes
                 .get(&node.id)
                 .and_then(|class_name| flowchart.class_defs.get(class_name));
-            draw_node(&painter, node, node_layout, offset, colors, font_size, custom_style);
+            let inline_style = flowchart.node_styles.get(&node.id);
+            let merged = NodeStyle::merge_class_and_inline(class_style, inline_style);
+            draw_node(
+                &painter,
+                node,
+                node_layout,
+                offset,
+                colors,
+                font_size,
+                merged.as_ref(),
+            );
         }
     }
 }

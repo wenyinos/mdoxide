@@ -48,31 +48,33 @@ Ferrite does **NOT** access passwords, browser data, or make unsolicited network
 <details>
 <summary><strong>🍎 macOS Installation & Gatekeeper</strong></summary>
 
-Ferrite is **not notarized** by Apple (requires a $99/year Developer Program license). macOS Gatekeeper may show a warning on first launch. The app is safe — it's just not "blessed" by Apple's paid signing system.
+**GitHub Release** `.dmg` / `.tar.gz` builds through **v0.3.0** are packaged as `Ferrite.app` but are **not** signed with an Apple Developer ID and are **not** notarized (CI limitation). **Gatekeeper**, especially on **macOS 15.x (Sequoia / 15.6+)**, may block or warn on first launch—see [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130). **Developer ID signing + notarization is planned for v0.3.1** ([roadmap](ROADMAP.md)).
 
-### Option 1: Homebrew (Recommended — No Warnings)
+📖 **Full troubleshooting:** [docs/install/macos.md](docs/install/macos.md)
+
+### Option 1: Homebrew (often smoothest)
 
 ```bash
 brew tap olaproeis/ferrite
 brew install --cask ferrite
 ```
 
-Homebrew automatically strips the quarantine attribute, so Ferrite launches with zero Gatekeeper friction.
+Homebrew typically avoids quarantine friction compared to raw GitHub downloads.
 
-### Option 2: DMG Download + Manual Bypass
+### Option 2: DMG / tar.gz from GitHub Releases + workaround
 
-1. Download the DMG from [Releases](https://github.com/OlaProeis/Ferrite/releases):
-   - **Apple Silicon (M1/M2/M3/M4):** `ferrite-macos-arm64.dmg`
-   - **Intel:** `ferrite-macos-x64.dmg`
-2. Open the DMG and drag `Ferrite.app` to Applications
-3. **First launch — choose one:**
-   - **Right-click → Open** (may need to do this twice on macOS Sequoia)
-   - **System Settings → Privacy & Security → scroll down → "Open Anyway"** (appears after a blocked launch attempt)
-   - **Terminal:** `xattr -cr /Applications/Ferrite.app`
+1. Download from [Releases](https://github.com/OlaProeis/Ferrite/releases):
+   - **Apple Silicon:** `ferrite-macos-arm64.dmg` or `.tar.gz`
+   - **Intel:** `ferrite-macos-x64.dmg` or `.tar.gz`
+2. Copy `Ferrite.app` to **Applications** (or another folder you prefer).
+3. **First launch — pick one:**
+   - **Terminal (most reliable):** `xattr -dr com.apple.quarantine /Applications/Ferrite.app` — use the real path if the app is not under `/Applications`.
+   - **Finder:** Control-click `Ferrite.app` → **Open** → **Open** (may **not** work on every macOS 15.x configuration).
+   - **System Settings → Privacy & Security:** after a blocked launch, use **Open Anyway** if shown.
 
-### Why This Happens
+### Why this happens
 
-Apple requires developers to pay $99/year for a Developer ID certificate and submit apps for notarization. Without this, macOS treats the app as "unidentified." Ferrite is fully open source — you can [audit the code](https://github.com/OlaProeis/Ferrite) and [build from source](docs/building.md) yourself.
+Apple expects apps distributed outside the Mac App Store to be signed with a **Developer ID** certificate and **notarized**. Ferrite is open source—you can [audit the code](https://github.com/OlaProeis/Ferrite) and [build from source](docs/building.md)—but paid enrollment and CI wiring are still pending for GitHub-hosted macOS builds.
 
 </details>
 
@@ -120,6 +122,8 @@ This transparency is intentional — I want others to learn from (and improve up
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
 > ✨ **v0.2.8 (Latest):** **Command Palette** (Alt+Space). **HarfRust text shaping** for complex scripts. **Image & PDF viewer tabs**. Rendered view **performance overhaul** (AST caching, viewport culling). **Background file loading** for large files. **Strict line breaks**. **Middle-click close tabs**. 13 bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+
+> 🛠️ **Coming in v0.3.0:** **eframe / egui 0.31+** platform refresh (fixes Wayland keyboard, macOS Sonoma, Windows 11 borderless), **PDF + themed HTML export**, **executable code blocks** (`▶ Run` for shell + Python), and the **first wave of Mermaid improvements** (insertion toolbar, syntax hints, authoring validation, more flowchart shapes, state diagram fork/join). LSP, video embeds, GitHub HTML parity, and heavier Mermaid work (Git Graph rewrite, manual layout) follow in **v0.3.1**. See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 > 📦 **v0.2.6 Highlights:** Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
@@ -357,7 +361,7 @@ tar -xzf ferrite-macos-x64.tar.gz
 cp -R Ferrite.app /Applications/
 ```
 
-> **Gatekeeper Note:** If macOS shows "app can't be opened because it is from an unidentified developer", right-click `Ferrite.app` and select **Open**, then click **Open** in the dialog. This is only needed once — macOS remembers your choice.
+> **Gatekeeper (GitHub downloads, v0.3.0):** Unsigned / non-notarized CI builds may be blocked on **macOS 15.x**. See **[docs/install/macos.md](docs/install/macos.md)** — quickest fix: `xattr -dr com.apple.quarantine /Applications/Ferrite.app` (adjust path). Signing + notarization: **v0.3.1** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
 
 </details>
 

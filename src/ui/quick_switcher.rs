@@ -167,14 +167,14 @@ impl QuickSwitcher {
             .anchor(egui::Align2::CENTER_TOP, [0.0, 100.0])
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(bg_color)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(8.0)
+                    .corner_radius(8)
                     .shadow(egui::epaint::Shadow {
-                        offset: [0.0, 4.0].into(),
-                        blur: 12.0,
-                        spread: 0.0,
+                        offset: [0, 4],
+                        blur: 12,
+                        spread: 0,
                         color: Color32::from_black_alpha(60),
                     })
                     .show(ui, |ui| {
@@ -267,7 +267,9 @@ impl QuickSwitcher {
                                                             .color(secondary_color)
                                                             .size(12.0),
                                                     )
-                                                    .on_hover_text(t!("quick_switcher.recent_tooltip"));
+                                                    .on_hover_text(t!(
+                                                        "quick_switcher.recent_tooltip"
+                                                    ));
                                                 },
                                             );
                                         }

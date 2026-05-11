@@ -19,6 +19,7 @@ The `Settings` struct contains all user-configurable options:
 pub struct Settings {
     // Appearance
     pub theme: Theme,              // Light, Dark, System
+    pub accent_color: [u8; 3],     // Ferrite UI accent RGB; see theme-system.md
     pub view_mode: ViewMode,       // EditorOnly, PreviewOnly, SplitView
     pub show_line_numbers: bool,
     pub font_size: f32,
@@ -51,6 +52,7 @@ pub struct Settings {
 | Type | Purpose |
 |------|---------|
 | `Theme` | Color theme enum (Light, Dark, System) |
+| `accent_color` | RGB triplet for user **Ferrite accent** (headings, selection tint, primary chrome). Use `ferrite_accent_rgb()` for `Color32`. Markdown **links** are not tinted by this. See [Theme System](../ui/theme-system.md#ferrite-accent-color-user-configurable). |
 | `ViewMode` | Editor layout enum (EditorOnly, PreviewOnly, SplitView) |
 | `EditorFont` | Font selection enum (Inter, JetBrainsMono) - see [Font System](./font-system.md) |
 | `WindowSize` | Window dimensions and position |

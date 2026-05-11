@@ -15,8 +15,16 @@
 //! - `clipboard.rs` - Platform clipboard operations
 
 pub mod clipboard;
+pub mod flowchart_svg;
 pub mod html;
+pub mod html_options;
 pub mod options;
+pub mod pdf;
 
 pub use clipboard::copy_html_to_clipboard;
-pub use html::generate_html_document;
+pub use html::{
+    generate_html_document, generate_html_document_export, resolve_html_theme_for_export,
+    syntax_dark_mode_for_export, HtmlThemeResolution,
+};
+pub use html_options::{HtmlExportOptions, HtmlExportThemeChoice};
+pub use pdf::{render_markdown_to_pdf, PdfExportOptions, PdfMarginPreset, PdfPageSize, PdfTheme};

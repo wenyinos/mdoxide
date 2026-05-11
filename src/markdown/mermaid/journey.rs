@@ -1,6 +1,6 @@
 //! User journey diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Stroke, Ui, Vec2};
+use egui::{Color32, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 
 /// A task in a user journey.
 #[derive(Debug, Clone)]
@@ -63,10 +63,7 @@ pub fn parse_user_journey(source: &str) -> Result<UserJourney, String> {
                 let name = parts[0].trim().to_string();
                 let score = parts[1].trim().parse::<i32>().unwrap_or(3);
                 let actors: Vec<String> = if parts.len() > 2 {
-                    parts[2]
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .collect()
+                    parts[2].split(',').map(|s| s.trim().to_string()).collect()
                 } else {
                     Vec::new()
                 };
@@ -200,7 +197,7 @@ pub fn render_user_journey(ui: &mut Ui, journey: &UserJourney, dark_mode: bool, 
             let card_rect =
                 Rect::from_center_size(Pos2::new(x, task_y), Vec2::new(task_width - 10.0, 50.0));
             painter.rect_filled(card_rect, 6.0, color.gamma_multiply(0.3));
-            painter.rect_stroke(card_rect, 6.0, Stroke::new(2.0, color));
+            painter.rect_stroke(card_rect, 6.0, Stroke::new(2.0, color), StrokeKind::Inside);
 
             // Draw task name
             painter.text(

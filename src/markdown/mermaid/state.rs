@@ -1,9 +1,22 @@
 //! State diagram parsing and rendering.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
+
+/// Pseudostate kind for fork/join bars and shallow/deep history (Mermaid `<<fork>>`, `<<join>>`, `[H]`, `[H*]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatePseudostate {
+    #[default]
+    None,
+    Fork,
+    Join,
+    /// Shallow history (`[H]`)
+    HistoryShallow,
+    /// Deep history (`[H*]`)
+    HistoryDeep,
+}
 
 /// A state in a state diagram, supporting composite/nested states.
 #[derive(Debug, Clone)]
@@ -12,6 +25,7 @@ pub struct State {
     pub label: String,
     pub is_start: bool,
     pub is_end: bool,
+    pub pseudostate: StatePseudostate,
     /// Child states for composite states (empty for simple states)
     pub children: Vec<State>,
     /// Internal transitions within this composite state
@@ -27,6 +41,7 @@ impl Default for State {
             label: String::new(),
             is_start: false,
             is_end: false,
+            pseudostate: StatePseudostate::None,
             children: Vec::new(),
             internal_transitions: Vec::new(),
             parent: None,
@@ -206,10 +221,7 @@ fn normalize_internal_transitions(
     }
 }
 
-fn normalize_transition(
-    transition: &mut Transition,
-    ancestry_map: &HashMap<String, Vec<String>>,
-) {
+fn normalize_transition(transition: &mut Transition, ancestry_map: &HashMap<String, Vec<String>>) {
     let source_ancestry = ancestry_map
         .get(&transition.from)
         .cloned()
@@ -254,6 +266,26 @@ fn is_ancestor_of(ancestry: &[String], state_id: &str) -> bool {
     ancestry.iter().any(|a| a == state_id)
 }
 
+/// Strip trailing `<<fork>>` / `<<join>>` (Mermaid pseudostate stereotypes).
+fn strip_fork_join_suffix(rest: &str) -> (&str, StatePseudostate) {
+    let rest = rest.trim_end();
+    if let Some(head) = rest.strip_suffix("<<join>>") {
+        (head.trim_end(), StatePseudostate::Join)
+    } else if let Some(head) = rest.strip_suffix("<<fork>>") {
+        (head.trim_end(), StatePseudostate::Fork)
+    } else {
+        (rest, StatePseudostate::None)
+    }
+}
+
+fn pseudostate_for_history_id(id: &str) -> StatePseudostate {
+    match id {
+        "[H]" => StatePseudostate::HistoryShallow,
+        "[H*]" => StatePseudostate::HistoryDeep,
+        _ => StatePseudostate::None,
+    }
+}
+
 fn parse_state_diagram_block(
     lines: &[&str],
     idx: &mut usize,
@@ -281,7 +313,8 @@ fn parse_state_diagram_block(
 
         // Parse composite state
         if line.starts_with("state ") && line.ends_with('{') {
-            let rest = line[6..].trim_end_matches('{').trim();
+            let rest_raw = line[6..].trim_end_matches('{').trim();
+            let (rest, composite_stereo) = strip_fork_join_suffix(rest_raw);
 
             let (state_id, state_label) = if let Some(as_pos) = rest.find(" as ") {
                 let label = rest[..as_pos].trim().trim_matches('"').to_string();
@@ -295,6 +328,7 @@ fn parse_state_diagram_block(
             let mut composite = State {
                 id: state_id.clone(),
                 label: state_label,
+                pseudostate: composite_stereo,
                 parent: parent_id.map(|s| s.to_string()),
                 ..Default::default()
             };
@@ -348,10 +382,15 @@ fn parse_state_diagram_block(
                     (&to_id, false, to_part == "[*]"),
                 ] {
                     if !state_map.contains_key(id) {
+                        let pseudo = pseudostate_for_history_id(id);
                         let state_label = if is_start {
                             "●".to_string()
                         } else if is_end {
                             "◉".to_string()
+                        } else if pseudo == StatePseudostate::HistoryShallow {
+                            "H".to_string()
+                        } else if pseudo == StatePseudostate::HistoryDeep {
+                            "H*".to_string()
                         } else {
                             id.clone()
                         };
@@ -362,6 +401,7 @@ fn parse_state_diagram_block(
                             label: state_label,
                             is_start,
                             is_end,
+                            pseudostate: pseudo,
                             parent: parent_id.map(|s| s.to_string()),
                             ..Default::default()
                         });
@@ -375,28 +415,58 @@ fn parse_state_diagram_block(
 
         // Parse simple state definition
         if line.starts_with("state ") {
-            let rest = line[6..].trim();
-            if let Some(as_pos) = rest.find(" as ") {
-                let label = rest[..as_pos].trim().trim_matches('"').to_string();
-                let id = rest[as_pos + 4..].trim().to_string();
+            let rest_line = line[6..].trim();
+            let (rest_line, stereo) = strip_fork_join_suffix(rest_line);
+            if let Some(as_pos) = rest_line.find(" as ") {
+                let mut label = rest_line[..as_pos].trim().trim_matches('"').to_string();
+                let id = rest_line[as_pos + 4..].trim().to_string();
+                let pseudo = if matches!(
+                    stereo,
+                    StatePseudostate::Fork | StatePseudostate::Join
+                ) {
+                    stereo
+                } else {
+                    pseudostate_for_history_id(&id)
+                };
+                match pseudo {
+                    StatePseudostate::HistoryShallow => label = "H".to_string(),
+                    StatePseudostate::HistoryDeep => label = "H*".to_string(),
+                    _ => {}
+                }
                 if !state_map.contains_key(&id) {
                     let state_idx = states.len();
                     state_map.insert(id.clone(), state_idx);
                     states.push(State {
                         id: id.clone(),
                         label,
+                        pseudostate: pseudo,
                         parent: parent_id.map(|s| s.to_string()),
                         ..Default::default()
                     });
                 }
             } else {
-                let id = rest.trim_matches('"').to_string();
+                let id = rest_line.trim_matches('"').to_string();
+                let pseudo = if matches!(
+                    stereo,
+                    StatePseudostate::Fork | StatePseudostate::Join
+                ) {
+                    stereo
+                } else {
+                    pseudostate_for_history_id(&id)
+                };
                 if !state_map.contains_key(&id) {
                     let state_idx = states.len();
                     state_map.insert(id.clone(), state_idx);
+                    let label = match pseudo {
+                        StatePseudostate::HistoryShallow => "H".to_string(),
+                        StatePseudostate::HistoryDeep => "H*".to_string(),
+                        StatePseudostate::Fork | StatePseudostate::Join => String::new(),
+                        StatePseudostate::None => id.clone(),
+                    };
                     states.push(State {
                         id: id.clone(),
-                        label: id.clone(),
+                        label,
+                        pseudostate: pseudo,
                         parent: parent_id.map(|s| s.to_string()),
                         ..Default::default()
                     });
@@ -474,12 +544,7 @@ impl StateDiagramColors {
 }
 
 /// Render a state diagram to the UI.
-pub fn render_state_diagram(
-    ui: &mut Ui,
-    diagram: &StateDiagram,
-    dark_mode: bool,
-    font_size: f32,
-) {
+pub fn render_state_diagram(ui: &mut Ui, diagram: &StateDiagram, dark_mode: bool, font_size: f32) {
     if diagram.states.is_empty() {
         return;
     }
@@ -513,8 +578,16 @@ pub fn render_state_diagram(
             .iter()
             .filter(|s| !s.is_start && !s.is_end)
             .map(|state| {
-                let text_size = text_measurer.measure(&state.label, font_size);
-                let width = (text_size.width * 1.15 + state_padding.x).max(min_state_width);
+                let width =
+                    if matches!(
+                        state.pseudostate,
+                        StatePseudostate::Fork | StatePseudostate::Join
+                    ) {
+                        (min_state_width * 1.35).max(88.0)
+                    } else {
+                        let text_size = text_measurer.measure(&state.label, font_size);
+                        (text_size.width * 1.15 + state_padding.x).max(min_state_width)
+                    };
                 (state.id.clone(), width)
             })
             .collect()
@@ -549,7 +622,10 @@ pub fn render_state_diagram(
                         text_size.width * 1.15 + label_padding.x,
                         text_size.height + label_padding.y,
                     );
-                    ((trans.from.clone(), trans.to.clone()), (label.clone(), size))
+                    (
+                        (trans.from.clone(), trans.to.clone()),
+                        (label.clone(), size),
+                    )
                 })
             })
             .collect()
@@ -611,8 +687,7 @@ pub fn render_state_diagram(
         }
 
         for trans in transitions {
-            if states.iter().any(|s| s.id == trans.from)
-                && states.iter().any(|s| s.id == trans.to)
+            if states.iter().any(|s| s.id == trans.from) && states.iter().any(|s| s.id == trans.to)
             {
                 if let Some(out) = outgoing.get_mut(&trans.from) {
                     out.push(trans.to.clone());
@@ -673,8 +748,9 @@ pub fn render_state_diagram(
                 })
                 .fold(min_state_width, f32::max);
 
-            let x =
-                start_pos.x + layer_idx as f32 * (layer_max_width + spacing_x) + layer_max_width / 2.0;
+            let x = start_pos.x
+                + layer_idx as f32 * (layer_max_width + spacing_x)
+                + layer_max_width / 2.0;
 
             let mut current_y = start_pos.y;
 
@@ -684,6 +760,16 @@ pub fn render_state_diagram(
                     (comp_size.x, comp_size.y)
                 } else if state.is_start || state.is_end {
                     (24.0, 24.0)
+                } else if matches!(
+                    state.pseudostate,
+                    StatePseudostate::Fork | StatePseudostate::Join
+                ) {
+                    let w = state_widths
+                        .get(id)
+                        .copied()
+                        .unwrap_or(min_state_width)
+                        .max(72.0);
+                    (w, 16.0)
                 } else {
                     (
                         state_widths.get(id).copied().unwrap_or(min_state_width),
@@ -721,7 +807,11 @@ pub fn render_state_diagram(
         Vec2::new(max_x - start_pos.x, max_y - start_pos.y)
     }
 
-    fn reposition_children(children: &[State], offset: Vec2, layouts: &mut HashMap<String, StateLayout>) {
+    fn reposition_children(
+        children: &[State],
+        offset: Vec2,
+        layouts: &mut HashMap<String, StateLayout>,
+    ) {
         for child in children {
             if let Some(layout) = layouts.get_mut(&child.id) {
                 layout.center = layout.center + offset;
@@ -748,10 +838,8 @@ pub fn render_state_diagram(
     let total_width = (total_size.x + margin * 2.0).max(300.0);
     let total_height = (total_size.y + margin * 2.0).max(100.0);
 
-    let (response, painter) = ui.allocate_painter(
-        Vec2::new(total_width, total_height),
-        egui::Sense::hover(),
-    );
+    let (response, painter) =
+        ui.allocate_painter(Vec2::new(total_width, total_height), egui::Sense::hover());
     let offset = response.rect.min.to_vec2();
 
     fn draw_states(
@@ -794,9 +882,10 @@ pub fn render_state_diagram(
                 } else if state.is_composite() {
                     painter.rect(
                         bounds,
-                        Rounding::same(10.0),
+                        CornerRadius::same(10),
                         colors.composite_fill,
                         Stroke::new(2.0, colors.state_stroke),
+                        StrokeKind::Inside,
                     );
 
                     let title_rect = Rect::from_min_size(
@@ -805,14 +894,15 @@ pub fn render_state_diagram(
                     );
                     painter.rect(
                         title_rect,
-                        Rounding {
-                            nw: 10.0,
-                            ne: 10.0,
-                            sw: 0.0,
-                            se: 0.0,
+                        CornerRadius {
+                            nw: 10,
+                            ne: 10,
+                            sw: 0,
+                            se: 0,
                         },
                         colors.composite_title_bg,
                         Stroke::NONE,
+                        StrokeKind::Inside,
                     );
 
                     let title_center = Pos2::new(title_rect.center().x, title_rect.center().y);
@@ -842,12 +932,45 @@ pub fn render_state_diagram(
                         title_bar_height,
                         dark_mode,
                     );
+                } else if matches!(
+                    state.pseudostate,
+                    StatePseudostate::Fork | StatePseudostate::Join
+                ) {
+                    let thick = (bounds.height() * 0.45).clamp(5.0, 11.0);
+                    let inner = Rect::from_center_size(
+                        center,
+                        Vec2::new((bounds.width() - 6.0).max(12.0), thick),
+                    );
+                    painter.rect_filled(inner, CornerRadius::same(2), colors.state_stroke);
+                    if !state.label.is_empty() {
+                        painter.text(
+                            Pos2::new(center.x, bounds.max.y - font_size * 0.25),
+                            egui::Align2::CENTER_BOTTOM,
+                            &state.label,
+                            FontId::proportional(font_size - 2.0),
+                            colors.text_color,
+                        );
+                    }
+                } else if matches!(
+                    state.pseudostate,
+                    StatePseudostate::HistoryShallow | StatePseudostate::HistoryDeep
+                ) {
+                    let r = (bounds.width().min(bounds.height()) * 0.5 - 2.0).max(10.0);
+                    painter.circle_stroke(center, r, Stroke::new(2.0, colors.state_stroke));
+                    painter.text(
+                        center,
+                        egui::Align2::CENTER_CENTER,
+                        &state.label,
+                        FontId::proportional(font_size),
+                        colors.text_color,
+                    );
                 } else {
                     painter.rect(
                         bounds,
-                        Rounding::same(8.0),
+                        CornerRadius::same(8),
                         colors.state_fill,
                         Stroke::new(2.0, colors.state_stroke),
+                        StrokeKind::Inside,
                     );
                     painter.text(
                         center,
@@ -888,15 +1011,35 @@ pub fn render_state_diagram(
             if dx > 0.0 {
                 let y = center
                     .y
-                    .max(bounds.min.y + if is_composite { header_height + 5.0 } else { 0.0 })
+                    .max(
+                        bounds.min.y
+                            + if is_composite {
+                                header_height + 5.0
+                            } else {
+                                0.0
+                            },
+                    )
                     .min(bounds.max.y - 5.0);
-                Pos2::new(bounds.max.x, y.clamp(bounds.min.y + 5.0, bounds.max.y - 5.0))
+                Pos2::new(
+                    bounds.max.x,
+                    y.clamp(bounds.min.y + 5.0, bounds.max.y - 5.0),
+                )
             } else {
                 let y = center
                     .y
-                    .max(bounds.min.y + if is_composite { header_height + 5.0 } else { 0.0 })
+                    .max(
+                        bounds.min.y
+                            + if is_composite {
+                                header_height + 5.0
+                            } else {
+                                0.0
+                            },
+                    )
                     .min(bounds.max.y - 5.0);
-                Pos2::new(bounds.min.x, y.clamp(bounds.min.y + 5.0, bounds.max.y - 5.0))
+                Pos2::new(
+                    bounds.min.x,
+                    y.clamp(bounds.min.y + 5.0, bounds.max.y - 5.0),
+                )
             }
         } else if dy > 0.0 {
             Pos2::new(
@@ -1089,4 +1232,125 @@ pub fn render_state_diagram(
         label_font_size,
         config,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn find_state<'a>(diagram: &'a StateDiagram, id: &str) -> Option<&'a State> {
+        fn walk<'a>(states: &'a [State], id: &str) -> Option<&'a State> {
+            for s in states {
+                if s.id == id {
+                    return Some(s);
+                }
+                if let Some(f) = walk(&s.children, id) {
+                    return Some(f);
+                }
+            }
+            None
+        }
+        walk(&diagram.states, id)
+    }
+
+    #[test]
+    fn parse_fork_join_stereotypes() {
+        let src = "stateDiagram-v2\n\
+            [*] --> A\n\
+            state fork1 <<fork>>\n\
+            A --> fork1\n\
+            fork1 --> B\n\
+            fork1 --> C\n\
+            state join1 <<join>>\n\
+            B --> join1\n\
+            C --> join1\n\
+            join1 --> [*]\n";
+        let d = parse_state_diagram(src).expect("parse");
+        let f = find_state(&d, "fork1").expect("fork");
+        assert_eq!(f.pseudostate, StatePseudostate::Fork);
+        let j = find_state(&d, "join1").expect("join");
+        assert_eq!(j.pseudostate, StatePseudostate::Join);
+        assert!(
+            d.transitions
+                .iter()
+                .any(|t| t.from == "fork1" && t.to == "B")
+        );
+    }
+
+    #[test]
+    fn parse_history_shallow_and_deep_from_transitions() {
+        let src = "stateDiagram-v2\n\
+            [*] --> Active\n\
+            Active --> Inactive\n\
+            Inactive --> [H]\n\
+            [H] --> Active\n\
+            Active --> Deep\n\
+            Deep --> [H*]\n\
+            [H*] --> Active\n";
+        let d = parse_state_diagram(src).expect("parse");
+        let h = find_state(&d, "[H]").expect("[H]");
+        assert_eq!(h.pseudostate, StatePseudostate::HistoryShallow);
+        assert_eq!(h.label, "H");
+        let hd = find_state(&d, "[H*]").expect("[H*]");
+        assert_eq!(hd.pseudostate, StatePseudostate::HistoryDeep);
+        assert_eq!(hd.label, "H*");
+    }
+
+    #[test]
+    fn parse_fork_with_as_alias() {
+        let src = "stateDiagram-v2\n\
+            [*] --> A\n\
+            state \"Fork\" as F1 <<fork>>\n\
+            A --> F1\n\
+            F1 --> B\n";
+        let d = parse_state_diagram(src).expect("parse");
+        let f = find_state(&d, "F1").expect("F1");
+        assert_eq!(f.pseudostate, StatePseudostate::Fork);
+        assert_eq!(f.label, "Fork");
+    }
+
+    #[test]
+    fn explicit_state_line_sets_history_pseudostate() {
+        let src = "stateDiagram-v2\n\
+            state [H]\n\
+            state [H*]\n\
+            [*] --> A\n\
+            A --> [H]\n";
+        let d = parse_state_diagram(src).expect("parse");
+        assert_eq!(
+            find_state(&d, "[H]").unwrap().pseudostate,
+            StatePseudostate::HistoryShallow
+        );
+        assert_eq!(
+            find_state(&d, "[H*]").unwrap().pseudostate,
+            StatePseudostate::HistoryDeep
+        );
+    }
+
+    #[test]
+    fn validate_mermaid_accepts_fork_join_and_history() {
+        use crate::markdown::mermaid::validate_mermaid_source;
+        let src = "```mermaid\nstateDiagram-v2\n\
+            [*] --> A\n\
+            state F <<fork>>\n\
+            A --> F\n\
+            F --> B\n\
+            F --> C\n\
+            state J <<join>>\n\
+            B --> J\n\
+            C --> J\n\
+            J --> [*]\n\
+            D --> [H]\n\
+            [H] --> A\n\
+            E --> [H*]\n\
+            [H*] --> A\n\
+```";
+        // Extract inner diagram like fenced blocks do
+        let body = src
+            .trim_start_matches("```mermaid")
+            .trim_start_matches('\n')
+            .trim_end_matches("```")
+            .trim();
+        validate_mermaid_source(body).expect("validation should accept pseudostate syntax");
+    }
 }

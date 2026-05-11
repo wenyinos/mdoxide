@@ -46,6 +46,10 @@ dialog:
   confirm:
     cancel: "Avbryt"
     close: "Lukk"
+  rename_untitled_tab:
+    title: "Gi fanen navn"
+    hint: "Kun visningsnavn (ikke filbane). Bruk «Lagre som» for å skrive til disk."
+    apply: "Bruk"
   # File operation dialogs
   file:
     new_file: "Ny fil"
@@ -90,6 +94,12 @@ settings:
     theme_light: "Lys"
     theme_system: "System"
     restore_session: "Gjenopprett forrige økt ved oppstart"
+  files:
+    title: "Filer"
+    restore_session_tooltip: "Når aktivert, gjenopprettes åpne faner ved oppstart. Når deaktivert, startes med én tom fane. Øktdata lagres alltid."
+    quick_note_workflow: "Hurtignotat (midlertidige faner uten fil)"
+    quick_note_workflow_tooltip: "Faner uten fil stenges uten lagre-dialog; ulagrede nye faner blokkerer ikke avslutning. Tekst lagres fortsatt i øktgjenoppretting når gjenoppretting er på."
+    quick_note_workflow_hint: "Dobbeltklikk en uten-navn-fane for visningsnavn. Skru av for vanlig lagre-bekreftelse."
   editor:
     title: "Redigerer"
     font_family: "Skrifttype"
@@ -99,6 +109,7 @@ settings:
     custom_font: "Egendefinert systemskrift"
     custom_font_desc: "Velg blant installerte systemskrifter"
     select_system_font: "Velg skrift:"
+    custom_font_pick_placeholder: "Velg en skrift …"
     font_preview: "Forhåndsvis:"
     font_not_found: "⚠ Skrift ikke funnet på systemet"
     cjk_preference: "CJK regionalt valg"
@@ -153,6 +164,7 @@ about:
   tab:
     about: "Om"
     shortcuts: "Snarveier"
+    mermaid: "Mermaid"
   description: "En rask og enkel tekstredigerer for Markdown, JSON og mer."
   close_hint: "Trykk F1 eller Escape for å lukke"
   # Links section

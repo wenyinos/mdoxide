@@ -57,6 +57,10 @@ dialog:
   confirm:
     cancel: "取消"
     close: "关闭"
+  rename_untitled_tab:
+    title: "重命名标签"
+    hint: "仅为显示名称（不是文件路径）。使用“另存为”写入磁盘。"
+    apply: "应用"
   # File operation dialogs
   file:
     new_file: "新文件"
@@ -109,6 +113,7 @@ settings:
     custom_font: "自定义字体"
     custom_font_desc: "从已安装的系统字体中选择"
     select_system_font: "选中字体："
+    custom_font_pick_placeholder: "请选择字体…"
     font_preview: "预览："
     font_not_found: "⚠ 系统中未找到该字体"
     cjk_preference: "中日韩地区偏好"
@@ -183,6 +188,9 @@ settings:
   files:
     title: "文件"
     restore_session_tooltip: "启用时，启动时恢复之前打开的标签页。禁用时，以单个空白标签页启动。会话数据始终保存。"
+    quick_note_workflow: "速记工作流（无路径未命名标签）"
+    quick_note_workflow_tooltip: "无路径标签关闭时不提示保存；有改动的未命名标签不再阻止退出。开启“恢复会话”时，未保存文本仍会写入配置目录下的会话恢复数据。"
+    quick_note_workflow_hint: "双击未命名标签可设置显示名称。关闭此项可恢复对新标签的常规保存确认。"
     enable_auto_save: "默认启用自动保存"
     auto_save_tooltip: "新建文档将启用自动保存功能。使用临时文件以防止数据丢失。"
     auto_save_delay: "自动保存间隔："
@@ -361,6 +369,7 @@ about:
   tab:
     about: "关于"
     shortcuts: "快捷键"
+    mermaid: "Mermaid"
   description: "一款快速、轻量级的文本编辑器，支持 Markdown、JSON 等格式。"
   close_hint: "按 F1 或 Esc 键关闭"
   # Links section

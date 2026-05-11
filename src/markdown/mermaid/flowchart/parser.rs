@@ -79,8 +79,14 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
             continue;
         }
 
-        // Skip other styling directives (not yet implemented, but shouldn't create nodes)
-        if line_lower.starts_with("style ") || line_lower.starts_with("click ") {
+        // style nodeId … (per-node CSS-like properties)
+        if line_lower.starts_with("style ") {
+            parse_style_directive(line, &mut flowchart.node_styles);
+            continue;
+        }
+
+        // Interactive links — not rendered
+        if line_lower.starts_with("click ") {
             continue;
         }
 
@@ -138,7 +144,7 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
                     if label != id && existing.label == existing.id {
                         existing.label = label;
                         existing.shape = shape;
-                        
+
                         // Only associate with current subgraph when actually defining the node
                         if let Some(current) = subgraph_stack.last_mut() {
                             if !current.node_ids.contains(&id) {
@@ -174,7 +180,7 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
                     existing.label = node.label;
                     existing.shape = node.shape;
                 }
-                
+
                 // Associate with current subgraph if node appears inside it
                 if let Some(current) = subgraph_stack.last_mut() {
                     if !current.node_ids.contains(&node.id) {
@@ -297,6 +303,56 @@ pub(crate) fn parse_direction(header: &str) -> FlowDirection {
     }
 }
 
+/// Parse `fill:…,stroke:…` style fragments used by `classDef` and `style nodeId`.
+fn parse_node_style_properties(properties_str: &str) -> NodeStyle {
+    let mut style = NodeStyle::default();
+
+    for prop in properties_str.split(',') {
+        let prop = prop.trim();
+        if let Some(colon_pos) = prop.find(':') {
+            let key = prop[..colon_pos].trim().to_lowercase();
+            let value = prop[colon_pos + 1..].trim();
+
+            match key.as_str() {
+                "fill" => style.fill = parse_css_color(value),
+                "stroke" => style.stroke = parse_css_color(value),
+                "stroke-width" => style.stroke_width = parse_stroke_width(value),
+                "color" => style.color = parse_css_color(value),
+                _ => {}
+            }
+        }
+    }
+
+    style
+}
+
+/// `style nodeId fill:#fff,stroke:#000,stroke-width:2px,color:#333`
+fn parse_style_directive(line: &str, node_styles: &mut HashMap<String, NodeStyle>) {
+    let rest = if line.to_lowercase().starts_with("style ") {
+        line[6..].trim()
+    } else {
+        return;
+    };
+
+    if rest.is_empty() {
+        return;
+    }
+
+    let mut parts = rest.splitn(2, char::is_whitespace);
+    let node_id = parts.next().unwrap_or("").trim();
+    if node_id.is_empty() {
+        return;
+    }
+
+    let properties_str = parts.next().unwrap_or("").trim();
+    let patch = parse_node_style_properties(properties_str);
+
+    node_styles
+        .entry(node_id.to_string())
+        .and_modify(|existing| existing.apply_overlay(&patch))
+        .or_insert(patch);
+}
+
 /// Parse a classDef directive: `classDef className fill:#fff,stroke:#000,stroke-width:2px`
 /// Returns (class_name, NodeStyle) on success.
 fn parse_class_def(line: &str) -> Option<(String, NodeStyle)> {
@@ -321,33 +377,7 @@ fn parse_class_def(line: &str) -> Option<(String, NodeStyle)> {
         return None;
     }
 
-    let mut style = NodeStyle::default();
-
-    // Parse comma-separated properties
-    for prop in properties_str.split(',') {
-        let prop = prop.trim();
-        if let Some(colon_pos) = prop.find(':') {
-            let key = prop[..colon_pos].trim().to_lowercase();
-            let value = prop[colon_pos + 1..].trim();
-
-            match key.as_str() {
-                "fill" => {
-                    style.fill = parse_css_color(value);
-                }
-                "stroke" => {
-                    style.stroke = parse_css_color(value);
-                }
-                "stroke-width" => {
-                    style.stroke_width = parse_stroke_width(value);
-                }
-                _ => {
-                    // Ignore unknown properties (color, font-size, etc.)
-                }
-            }
-        }
-    }
-
-    Some((class_name, style))
+    Some((class_name, parse_node_style_properties(properties_str)))
 }
 
 /// Parse a class assignment directive: `class nodeId1,nodeId2 className`
@@ -372,10 +402,10 @@ fn parse_class_assignment(line: &str, node_classes: &mut HashMap<String, String>
     }
 
     let class_name = tokens.last().unwrap().trim().to_string();
-    
+
     // Everything before the class name is node IDs (comma-separated)
     let node_ids_str = tokens[..tokens.len() - 1].join(" ");
-    
+
     // Parse node IDs (can be comma-separated: "A,B,C" or "A, B, C")
     for node_id in node_ids_str.split(',') {
         let node_id = node_id.trim();
@@ -389,13 +419,13 @@ fn parse_class_assignment(line: &str, node_classes: &mut HashMap<String, String>
 /// Supports: #RGB, #RRGGBB, #RRGGBBAA
 fn parse_css_color(value: &str) -> Option<Color32> {
     let value = value.trim();
-    
+
     if !value.starts_with('#') {
         return None;
     }
 
     let hex = &value[1..];
-    
+
     match hex.len() {
         // #RGB -> #RRGGBB
         3 => {
@@ -474,7 +504,12 @@ fn parse_link_style(line: &str, flowchart: &mut Flowchart) {
 const ARROW_PATTERNS: &[(&str, EdgeStyle, ArrowHead, ArrowHead)] = &[
     // 4+ char patterns first
     ("<-->", EdgeStyle::Solid, ArrowHead::Arrow, ArrowHead::Arrow),
-    ("o--o", EdgeStyle::Solid, ArrowHead::Circle, ArrowHead::Circle),
+    (
+        "o--o",
+        EdgeStyle::Solid,
+        ArrowHead::Circle,
+        ArrowHead::Circle,
+    ),
     ("x--x", EdgeStyle::Solid, ArrowHead::Cross, ArrowHead::Cross),
     ("--->", EdgeStyle::Solid, ArrowHead::None, ArrowHead::Arrow),
     ("-.->", EdgeStyle::Dotted, ArrowHead::None, ArrowHead::Arrow),
@@ -531,10 +566,7 @@ fn extract_dash_label(node_text: &str) -> (&str, Option<String>) {
     let label_start_patterns = ["-- ", "-. ", "== "];
 
     let shape_closers = [']', ')', '}', '|'];
-    let last_closer_pos = shape_closers
-        .iter()
-        .filter_map(|&c| text.rfind(c))
-        .max();
+    let last_closer_pos = shape_closers.iter().filter_map(|&c| text.rfind(c)).max();
 
     if let Some(closer_pos) = last_closer_pos {
         let after_closer = &text[closer_pos + 1..];
@@ -579,10 +611,8 @@ fn strip_trailing_semicolon(s: &str) -> &str {
 
 /// Split node text by ampersand, handling the `A & B` syntax.
 fn split_by_ampersand(text: &str) -> Vec<&str> {
-    let has_shape_marker = text.contains('[')
-        || text.contains('(')
-        || text.contains('{')
-        || text.contains('>');
+    let has_shape_marker =
+        text.contains('[') || text.contains('(') || text.contains('{') || text.contains('>');
 
     if has_shape_marker {
         if let Some(amp_pos) = text.find('&') {
@@ -612,7 +642,10 @@ fn split_by_ampersand(text: &str) -> Vec<&str> {
     }
 
     if text.contains('&') {
-        text.split('&').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+        text.split('&')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect()
     } else {
         vec![text]
     }
@@ -737,6 +770,22 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         }
     }
 
+    // Double circle: (((text)))
+    if text.contains("(((") {
+        if let Some(start) = text.find("(((") {
+            let id = text[..start].trim();
+            if let Some(rel) = text[start..].find(")))") {
+                let end = start + rel;
+                let label = text[start + 3..end].trim();
+                return Some((
+                    extract_id(id, text),
+                    clean_label(label),
+                    NodeShape::DoubleCircle,
+                ));
+            }
+        }
+    }
+
     // Circle: ((text))
     if text.contains("((") && text.contains("))") {
         if let Some(start) = text.find("((") {
@@ -754,7 +803,11 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
             let id = text[..start].trim();
             if let Some(end) = text.find(")]") {
                 let label = text[start + 2..end].trim();
-                return Some((extract_id(id, text), clean_label(label), NodeShape::Cylinder));
+                return Some((
+                    extract_id(id, text),
+                    clean_label(label),
+                    NodeShape::Cylinder,
+                ));
             }
         }
     }
@@ -796,6 +849,42 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         }
     }
 
+    // Inverted trapezoid: [\text/]
+    if let Some(start) = text.find("[\\") {
+        let id = text[..start].trim();
+        let after_open = &text[start + 2..];
+        if let Some(rel) = after_open.find("/]") {
+            let label = after_open[..rel].trim();
+            return Some((
+                extract_id(id, text),
+                clean_label(label),
+                NodeShape::TrapezoidInv,
+            ));
+        }
+    }
+
+    // Trapezoid [/text\] or parallelogram [/text/]
+    if let Some(start) = text.find("[/") {
+        let id = text[..start].trim();
+        let after_open = &text[start + 2..];
+        if let Some(rel) = after_open.find("\\]") {
+            let label = after_open[..rel].trim();
+            return Some((
+                extract_id(id, text),
+                clean_label(label),
+                NodeShape::Trapezoid,
+            ));
+        }
+        if let Some(rel) = after_open.rfind("/]") {
+            let label = after_open[..rel].trim();
+            return Some((
+                extract_id(id, text),
+                clean_label(label),
+                NodeShape::Parallelogram,
+            ));
+        }
+    }
+
     // Round rect: (text)
     if text.contains('(')
         && text.contains(')')
@@ -822,6 +911,8 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         && !text.contains("[[")
         && !text.contains("[(")
         && !text.contains("([")
+        && !text.contains("[/")
+        && !text.contains("[\\")
     {
         if let Some(start) = text.find('[') {
             let id = text[..start].trim();

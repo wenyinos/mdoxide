@@ -27,7 +27,7 @@
 //! manager.apply(&ctx);
 //! ```
 
-use eframe::egui::{Context, Visuals};
+use eframe::egui::{self, Context, Visuals};
 use log::{debug, info};
 
 use super::{dark, light, ThemeColors};
@@ -54,6 +54,8 @@ pub struct ThemeManager {
     needs_apply: bool,
     /// Last detected system dark mode state (for System theme)
     last_system_dark_mode: Option<bool>,
+    /// Persisted Ferrite accent (selection, headings tint, widgets)
+    accent_rgb: [u8; 3],
 }
 
 impl ThemeManager {
@@ -71,6 +73,21 @@ impl ThemeManager {
             cached_visuals: None,
             needs_apply: true,
             last_system_dark_mode: None,
+            accent_rgb: super::accent::DEFAULT_ACCENT_RGB,
+        }
+    }
+
+    #[inline]
+    fn accent_color32(&self) -> egui::Color32 {
+        egui::Color32::from_rgb(self.accent_rgb[0], self.accent_rgb[1], self.accent_rgb[2])
+    }
+
+    /// Sync accent from settings; invalidates cached visuals when it changes.
+    pub fn sync_accent_rgb(&mut self, rgb: [u8; 3]) {
+        if self.accent_rgb != rgb {
+            self.accent_rgb = rgb;
+            self.cached_visuals = None;
+            self.needs_apply = true;
         }
     }
 
@@ -137,16 +154,52 @@ impl ThemeManager {
     /// For System theme, this checks the current system preference and updates
     /// accordingly.
     ///
+    /// # egui 0.31 behavior
+    ///
+    /// egui keeps separate `Visuals` slots per theme (Light/Dark) and
+    /// `Context::set_visuals` only writes into the *currently active* slot.
+    /// At startup, egui's `system_theme` is unknown, so the active slot
+    /// defaults to `Theme::Dark` (the fallback). Once eframe reports the
+    /// real system theme on frame 1, the active slot may switch — leaving
+    /// the other slot with the default light/dark visuals and producing a
+    /// half-themed UI on first paint.
+    ///
+    /// To avoid that, we:
+    /// 1. Explicitly set `theme_preference` to match our app theme so
+    ///    egui's resolution lines up with our intent.
+    /// 2. Write the visuals to *both* theme slots when the user picks the
+    ///    "System" option, so the UI is correct regardless of which one
+    ///    egui decides is active.
+    ///
     /// Note: Does not modify animation_time - this is set once at app startup
     /// to 0.0 for instant animations, which also helps reduce CPU usage.
     pub fn apply(&mut self, ctx: &Context) {
         let visuals = self.get_or_create_visuals(ctx);
-        ctx.set_visuals(visuals);
-        
+        let acc = self.accent_color32();
+
+        match self.current_theme {
+            Theme::Dark => {
+                ctx.set_theme(egui::ThemePreference::Dark);
+                ctx.set_visuals_of(egui::Theme::Dark, visuals);
+            }
+            Theme::Light => {
+                ctx.set_theme(egui::ThemePreference::Light);
+                ctx.set_visuals_of(egui::Theme::Light, visuals);
+            }
+            Theme::System => {
+                // Follow the OS preference but make sure both slots have
+                // valid visuals so we don't flash the wrong theme on the
+                // first frame before egui resolves `system_theme`.
+                ctx.set_theme(egui::ThemePreference::System);
+                ctx.set_visuals_of(egui::Theme::Dark, dark::create_dark_visuals(acc));
+                ctx.set_visuals_of(egui::Theme::Light, light::create_light_visuals(acc));
+            }
+        }
+
         // Note: We intentionally don't modify animation_time here.
         // Animation time is set to 0.0 at app startup for instant animations,
         // which also helps with CPU optimization (no animation repaints needed).
-        
+
         self.needs_apply = false;
         debug!("Applied theme: {:?}", self.current_theme);
     }
@@ -180,17 +233,19 @@ impl ThemeManager {
             return visuals.clone();
         }
 
+        let acc = self.accent_color32();
+
         let visuals = match self.current_theme {
-            Theme::Light => light::create_light_visuals(),
-            Theme::Dark => dark::create_dark_visuals(),
+            Theme::Light => light::create_light_visuals(acc),
+            Theme::Dark => dark::create_dark_visuals(acc),
             Theme::System => {
                 // Follow system preference
                 let system_dark = ctx.style().visuals.dark_mode;
                 self.last_system_dark_mode = Some(system_dark);
                 if system_dark {
-                    dark::create_dark_visuals()
+                    dark::create_dark_visuals(acc)
                 } else {
-                    light::create_light_visuals()
+                    light::create_light_visuals(acc)
                 }
             }
         };
@@ -204,7 +259,11 @@ impl ThemeManager {
     /// This returns the `ThemeColors` for the effective theme (resolving System
     /// to the actual light/dark variant).
     pub fn colors(&self, ctx: &Context) -> ThemeColors {
-        ThemeColors::from_theme(self.current_theme, &ctx.style().visuals)
+        ThemeColors::from_theme(
+            self.current_theme,
+            &ctx.style().visuals,
+            self.accent_color32(),
+        )
     }
 
     /// Check if the current effective theme is dark.
