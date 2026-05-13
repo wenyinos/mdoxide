@@ -17,6 +17,8 @@ menu:
     export: "エクスポート"
     export_html: "HTML形式でエクスポート..."
     export_clipboard: "HTML形式でコピー"
+    export_pdf: PDF へエクスポート...
+    print_preview: 印刷プレビュー...
   edit:
     label: "編集"
   format:
@@ -88,6 +90,41 @@ dialog:
     range: "範囲 : 1-%{max}"
 
 # Settings panel
+  code_execution_consent:
+    title: このドキュメントからコードを実行することを許可しますか？
+    body_intro: 
+      フェンス付きスニペットを実行すると、ユーザー権限を使用してコンピュータ上で実際のサブプロセスが開始されます。Ferriteはランナーをサンドボックス化したり、ネットワークアクセスをフィルタリングしたりしません。
+    body_settings_echo: 
+      「設定」→「エディタ」→「コードの実行」と同様の注意点があります。サンドボックス機能はありませんので、信頼できるドキュメントでのみ使用してください。
+    enable_and_run: 有効化して実行
+    enable_and_run_tooltip: コードの実行を有効にし、この設定を保存して、クリックしたスニペットを実行します。
+    just_enable: 有効にするだけ
+    just_enable_tooltip: 実行を有効にし、同意を確認してください。まだスニペットを実行しないでください。
+    cancel_tooltip: 設定を変更したりコードを実行したりせずに閉じる (Esc）。
+  pdf_export:
+    title: PDF へエクスポート
+    description: 現在のドキュメントを独立したPDFファイルとして出力します。
+    page_size: ページサイズ
+    margins: マージン
+    custom_margins_hint: 上 / 右 / 下 / 左 (PDFポイント単位)
+    page_break_h1: 各トップレベルの見出しは新しいページから始める
+    page_numbers: ページ番号を含める
+    use_theme_colors: アクティブなエディタテーマを使用する (それ以外の場合は白地に印刷)
+    open_after_export: エクスポート後にファイルを開く
+    export: エクスポート…
+  html_export:
+    title: HTML へエクスポート
+    description: アウトライン、コメント、アセットの埋め込み (オプション) を含む、テーマ別のHTMLファイルを生成します。
+    self_contained: スタンドアロン (ローカル画像を埋め込み、表示時にネットワーク接続を必要としない)
+    image_paths: リンクされた画像
+    include_outline: アウトライン (目次) を含める
+    include_comments: HTML コメント / ソースマーカーを含める
+    link_base: 相対リンクのベースフォルダー (ドキュメントフォルダを使用する場合は空欄のままにしてください)
+    theme: テーマ
+    include_title: ドキュメントタイトル見出しを含める
+    syntax_highlighting: コードフェンスの構文強調表示
+    open_after_export: エクスポート後にファイルを開く
+    export: エクスポート…
 settings:
   title: "設定"
   reset_all: "すべてリセット"
@@ -192,6 +229,24 @@ settings:
     default_language_auto: 自動 (なし)
     header_spacing: ヘッダの間隔
     header_spacing_hint: レンダリング表示でのヘッダ (H1-H6) 間の縦方向の間隔
+    code_execution_heading: コードの実行
+    code_execution_warning: 
+      有効にすると、レンダリングされたMarkdownがコンピュータ上でコマンドを実行する場合があります。デフォルトでは無効になっています。サンドボックス機能はありません。信頼できるドキュメントでのみ使用してください。
+    code_execution_enable: Markdownブロックからのコード実行を許可する
+    code_execution_enable_tooltip: プレビュー版でフェンス付きコードブロックを実行するためのマスター切り替え機能 
+      (今後のリリースで対応言語と実行エンジンが必要となる)
+    code_execution_allow_shell: シェルブロックを許可する (bash、sh、pwsh など)
+    code_execution_allow_shell_tooltip: 
+      オフの場合、シェルとしてタグ付けされたフェンス付きブロックは、実行が有効になっていてもブロックされます
+    code_execution_allow_python: Pythonブロックを許可する
+    code_execution_allow_python_tooltip: 
+      オフの場合、フェンスされたPythonブロックは、実行が有効になっていてもブロックされます
+    code_execution_timeout: 実行ごとのタイムアウト
+    code_execution_seconds_suffix: 秒
+    code_execution_timeout_tooltip: 指定した秒数後に自動的に停止 (5–300)
+    code_execution_show_inline_output: コードブロックの下に結果パネルを表示する
+    code_execution_show_inline_output_tooltip: stdout/stderr (ANSIカラー付き) 
+      をインラインで表示する。オフの場合、補完結果はトースト通知でのみ表示されます。
   preview:
     sync_scroll: "スクロールの同期"
     default_view: "既定の表示モード"
@@ -217,6 +272,10 @@ settings:
     syntax_theme: "構文テーマ"
     syntax_theme_hint: "コードの構文強調表示用のカラーテーマ"
     syntax_theme_auto: "自動 (アプリのテーマに合わせる)"
+    accent_color: Ferrite アクセント
+    accent_color_hint: 見出し 
+      (H1～H6）、選択時の色、タブ、およびハイライト表示されたコントロール。ハイパーリンクは標準の青色のままです。
+    accent_reset: 色をリセット
   keyboard:
     title: "キーボード"
     search_hint: "フィルター..."
@@ -330,11 +389,12 @@ outline:
   json_total_values: "合計値数"
   json_strings: "文字列"
   json_numbers: "数値"
-  json_booleans: "Booleans"
-  json_nulls: "Nulls"
+  json_booleans: "ブール値"
+  json_nulls: "Null"
   json_array_items: "配列項目"
 
 # Document statistics
+  detach: 切り離す
 stats:
   no_data: "統計情報がありません"
   text_stats: "テキスト"
@@ -405,6 +465,28 @@ about:
   version: "バージョン %{version}"
 
 # Keyboard shortcuts
+  mermaid:
+    title: Mermaid 図の構文
+    intro: 
+      図は、mermaid言語タグ付きの囲みコードブロック内に配置してください。RawビューまたはSplitビューでは、フォーマットツールバーの「挿入」→「Mermaid…」を選択すると、以下のような初期スニペットが挿入されます。
+    doc_site_label: '完全なリファレンス :'
+    doc_link: mermaid.js.org
+    doc_tooltip: ブラウザで https://mermaid.js.org/ を開く
+    snippet_label: スタータースニペット (挿入 → Mermaid… に一致)
+    types:
+      flowchart: フローチャートでは、ノードや矢印 (プロセス、決定、装飾された図形など) を描画します。色については、Top-Down 
+        (TD)、Left-Right (LR)、および `style` / `classDef` を試してみてください。
+      sequence: シーケンス図では、アクターはライフラインで表され、メッセージは時間の経過とともに (`->`、`->>`、`-->>`) 
+        で示されます。
+      state: 状態図は状態と遷移を表します。`stateDiagram-v2` は最新の構文です。
+      class: クラス図は、継承や関連といった型や関係をモデル化します。
+      er: ER 図はエンティティとカーディナリティ (`||--o{` など) を定義します。
+      pie: 円グラフは、ラベル付きの数値のスライスを使って、全体に占める割合を視覚化します。
+      gantt: ガントチャートは、タスクを時間軸上に配置し、区切りと所要時間を示します。
+      journey: ユーザージャーニーマップでは、ユーザーやアクターごとにセクション内の各ステップを評価します。
+      mindmap: マインドマップでは、トピックが中央のルートから放射状に枝分かれしています。
+      timeline: タイムラインでは、日付付きのタイトルが横軸に沿って表示されます。
+      gitgraph: Gitグラフは、コミットとブランチを時系列順に並べて表示します。
 shortcuts:
   title: "キーボードショートカット"
   expand_hint: "カテゴリをクリックして展開/折りたたみ"
@@ -478,6 +560,8 @@ shortcuts:
     export_html: "HTML をエクスポート"
     insert_toc: "目次を挿入"
   # File shortcuts (for help panel)
+    export_pdf: PDF へエクスポート
+    print_preview: 印刷プレビュー
   file:
     new: "新しいファイル"
     open: "ファイルを開く"
@@ -662,6 +746,35 @@ widgets:
     copy_tooltip: "クリップボードにコピー"
     finish_tooltip: "編集を終了"
     edit_tooltip: "コードの編集"
+    run_label: 実行
+    run_tooltip: このスニペットをサブプロセスとして実行します（[エディタ] → 
+      [コードの実行]）。[編集]や[コピー]と同様に、Tabキーでフォーカスを移動できます。
+    run_finished: |-
+      実行完了 :
+      {output}
+    run_failed: |-
+      実行失敗 :
+      {error}
+    run_output_heading: 出力
+    run_status_running: 実行中
+    run_status_success: 終了 0
+    run_status_failure: 終了 %{code}
+    run_status_failure_unknown: 終了しますか ?
+    run_status_timed_out: '%{secs} 秒後にタイムアウトしました'
+    run_status_cancelled: ユーザーによって停止されました
+    run_status_failed: 失敗
+    run_no_output: (標準出力または標準エラー出力なし)
+    run_no_output_hint: テキストの出力を期待している場合は、print や echo を追加するか、関数を呼び出してください。exit 
+      0 は単にプロセスが終了したことを意味するだけです。
+    run_dismiss: 閉じる
+    run_dismiss_tooltip: この出力パネルを非表示
+    run_stop: 停止
+    run_stop_tooltip: 実行中のコマンドを停止
+    run_copy_output: コピー
+    run_copy_output_tooltip: 出力をクリップボードにコピー
+    run_insert_output: ブロックとして挿入
+    run_insert_output_tooltip: キャプチャした出力を、ソース内のフェンス付き```出力ブロックとして挿入します
+    run_stderr_heading: 標準エラー
   table:
     add_row: "+ 行"
     add_column: "+ 列"
@@ -712,8 +825,8 @@ pipeline:
   close_tooltip: "パイプラインパネルを閉じる"
   cancel_tooltip: "実行をキャンセル"
   run_tooltip: "コマンドを実行 (Enter)"
-  stdout: "stdout"
-  stderr: "stderr"
+  stdout: "標準出力"
+  stderr: "標準エラー"
   hint: "上の欄にコマンドを入力して、ドキュメントをパイプ処理します。\n例 :\n• jq '.'           - JSON を整形\n• jq
     '.items[]'    - 配列項目を抽出\n• yq '.data'       - YAML フィールドを抽出\n• grep 'pattern'\
     \   - パターンを検索"
@@ -736,6 +849,7 @@ mermaid:
 # Formatting toolbar tooltips
 
 # Workspace
+  warning_line: '行 %{line} :'
 workspace:
   close_folder: "フォルダーを閉じる"
   new_file: "新しいファイル"
@@ -785,6 +899,7 @@ ribbon:
   heading_level: "見出し %{level}"
 
 # Welcome page (first launch)
+  print_preview: 🖨 印刷プレビュー...
 welcome:
   subtitle: "エディタを設定して利用を開始しましょう。"
   section:
@@ -792,9 +907,11 @@ welcome:
     editor: "エディタ"
     cjk: "CJKフォントの設定"
     files: "ファイル"
+    accent_hint: 見出しやUIの強調表示にはこのアクセントカラーが使用されます。リンクは従来の青色のままです。
   label:
     theme: "テーマ"
     language: "言語"
+    accent_color: Ferrite アクセントカラー
   line_width_hint: "テキスト行の幅を制限します。Zenモード (F11) でテキストを中央揃えにする場合の値を設定します。"
 
 # Terminal panel
@@ -875,6 +992,8 @@ productivity:
     move_up: "上へ移動"
     move_down: "下へ移動"
     empty: "まだタスクはありません"
+    delete: タスクを削除
+    add_first: 上に最初のタスクを追加
   pomodoro:
     title: "Pomodoro タイマー"
     work: "作業 : %{time}"
@@ -903,6 +1022,10 @@ productivity:
     duplicate_name: "その名前のメモは既に存在します"
 
 # Echo/AI placeholder (development)
+    close_hint: (× また、ドックも)
+  pomodoro_status:
+    work: 作業セッション
+    break_label: ブレーク
 echo:
   title: "エコーデモ (AIパネルプレースホルダー)"
   prompt: "これは非同期ワーカーのデモです。メッセージを入力してください :"
@@ -944,3 +1067,20 @@ file_dialog:
     csv_tsv: "CSV/TSV ファイル"
     all: "すべてのファイル"
     html: "HTML ファイル"
+print_preview:
+  tab_title: '%{file} — 印刷プレビュー'
+  untitled: 無題 — 印刷プレビュー
+format_toolbar:
+  mermaid_menu: Mermaid…
+  mermaid_entry_tooltip: カーソル位置に Mermaid 図を挿入
+  mermaid_flowchart: フローチャート
+  mermaid_sequence: シーケンス
+  mermaid_state: 状態
+  mermaid_class: クラス図
+  mermaid_er: ER 図
+  mermaid_pie: 円グラフ
+  mermaid_gantt: ガントチャート
+  mermaid_journey: ユーザージャーニー
+  mermaid_mindmap: マインドマップ
+  mermaid_timeline: タイムライン
+  mermaid_gitgraph: Git グラフ
