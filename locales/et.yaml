@@ -116,3 +116,208 @@ app:
 # Error dialogs
 
 # File dialog titles and filters
+print_preview:
+  tab_title: '%{file} - Printimise eelvaade'
+  untitled: Nimeta fail - Printimise eelvaade
+menu:
+  file:
+    label: Fail
+    open: Ava…
+    save: Salvesta
+    save_as: Salvesta kui...
+    recent: Hiljutised failid
+    export: Ekspordi
+    export_html: Ekspordi HTML-failina…
+    export_clipboard: Kopeeri HTML-ina
+    export_pdf: Ekspordi PDF-failina…
+    print_preview: Printimise eelvaade…
+  edit:
+    label: Muuda
+  format:
+    label: Vorming
+  tools:
+    label: Tarvikud
+status:
+  no_file: Ühtegi faili pole avatud
+  vim_mode: Vimi-laadne muutmisvade (Esc = tavaline, i = sisestus)
+  delimiter_tooltip: |-
+    Eraldaja: %{delimiter}
+    %{info}Muutmiseks klõpsa
+  cursor_position: Rd %{line}, Vrg %{col}
+  header_tooltip: |-
+    Esimene rida on päiserida: %{status}
+    %{info}Muutmiseks klõpsa
+  recent_files_heading: 📄 Hiljutised failid
+  recent_folders_heading: 📁 Hiljutised kaustad
+dialog:
+  unsaved_changes:
+    title: Salvestamata muudatused
+    save: Salvesta
+    dont_save: Ära salvesta
+  confirm:
+    cancel: Katkesta
+    close: Sulge
+  rename_untitled_tab:
+    title: Muuda vahekaardi nime
+    hint: Näita vaid nime (mitte asukohta). Salvestamaks kettale vali Salvesta 
+      kui.
+    apply: Rakenda
+  file:
+    new_file: Uus fail
+    new_folder: Uus kaust
+    enter_file_name: 'Sisesta failinimi:'
+    enter_folder_name: 'Sisesta kaustanimi:'
+    hint_file: failinimi.md
+    hint_folder: kausta-nimi
+    create: Loo
+    rename: Muuda nime
+    enter_new_name: 'Sisesta uus nimi:'
+    exists_error: Sellise nimega fail või kaust on juba olemas
+    confirm_delete: Kinnita kustutamine
+    delete_folder_warning: ⚠ Järgnevaga kustutad selle kausta koos kogu tema 
+      sisuga!
+    delete: Kustuta
+    file: fail
+    folder: kaust
+    location: 'Asukoht: %{path}'
+  html_export:
+    export: Ekspordi…
+  go_to_line:
+    go: Mine
+settings:
+  title: Seadistused
+  reset_all: Lähtesta kõik
+  reset_tooltip: Muuda kõik seadistused vaikimisi seadistusteks
+  auto_save_hint: Seadistused salvestuvad automaatselt
+  font_size:
+    small: Väike
+    medium: Keskmine
+    large: Suur
+  general:
+    theme: Kujundus
+    theme_dark: Tume kujundus
+    theme_light: Hele kujundus
+    theme_system: Süsteemi kujundus
+  editor:
+    title: Muutmisvaade
+    font_family: Kirjatüüp
+    font_preview: 'Eelvaade:'
+    spaces: tühikud
+    minimap_mode_auto: Automaatne
+    minimap_mode_semantic: Semantiline
+    minimap_mode_pixel: Pikslites
+    fold_headings: Pealkirjad
+    fold_lists: Loendid
+    snippets: Lõigendid
+    paragraph_indent_custom: Sinu seadistatud
+  files:
+    title: Failid
+  appearance:
+    title: Välimus
+    language: Keel
+  keyboard:
+    title: Klahvistik
+    cancel: Katkesta
+    apply: Rakenda
+find:
+  placeholder: Otsi...
+  match_case_short: Aa
+  replace: Asenda
+  replace_all: Asenda kõik
+  no_results: Vasteid pole
+  title: Otsi ja asenda
+  title_replace: Otsi ja asenda
+  title_find: Otsi
+  close_tooltip: Sulge (Escape)
+  hide_replace: Peida asendamine (Ctrl+H)
+  show_replace: Näita asendamist (Ctrl+H)
+  prev_tooltip: Eelmine (Shift+F3)
+  next_tooltip: Järgmine (F3 või sisestusklahv)
+  replace_tooltip: Asenda see vaste
+  replace_all_tooltip: Asenda kõik vasted
+  keyboard_hints: 'Sisestusklahv/F3: järgm • Shift+F3: eelm • Esc: sulge'
+outline:
+  panel_title: Dokument
+  statistics: Statistika
+  tab_outline: Kokkuvõte
+  tab_statistics: Statistika
+stats:
+  text_stats: Tekst
+title_bar:
+  restore: Taasta
+  maximize: Täisvaatesse
+error:
+  save_failed: |-
+    Faili salvestamine ei õnnestunud:
+    %{error}
+  open_workspace_failed: |-
+    Tööala avamine ei õnnestunud:
+    %{error}
+  open_file_failed: |-
+    Faili avamine ei õnnestunud:
+    %{error}
+  create_file_failed: |-
+    Faili loomine ei õnnestunud:
+    %{error}
+  create_folder_failed: |-
+    Kausta loomine ei õnnestunud:
+    %{error}
+  rename_failed: |-
+    Kausta nime muutmine ei õnnestunud:
+    %{error}
+  delete_failed: |-
+    Kausta kustutamine ei õnnestunud:
+    %{error}
+  image_failed: |-
+    Pildi lisamine ei õnnestunud:
+    %{error}
+  explorer_failed: |-
+    Failihalduri avamine ei õnnestunud:
+    %{error}
+  write_failed: |-
+    Faili kirjutamine ei õnnestunud:
+    %{error}
+  encoding_failed: 'Kodeeringu muutmine ei õnnestunud: %{error}'
+file_dialog:
+  open_workspace: Ava tööala kaust
+  open_files: Ava failid
+  save_file: Salvesta fail
+  filter:
+    supported: Toetatud failid
+    markdown: Markdowni failid
+    text: Tekstifailid
+    json: JSON-failid
+    yaml: YAML-failid
+    toml: TOML-failid
+    csv_tsv: CSV/TSV-failid
+    all: Kõik failid
+    html: HTML-failid
+shortcuts:
+  category:
+    workspace: Tööala
+  workspace:
+    quick_switcher: Failide kiirvahetus
+    search_files: Otsi failidest
+workspace:
+  close_folder: Sulge kaust
+  new_file: Uus fail
+  new_folder: Uus kaust
+  rename: Muuda nime
+  delete: Kustuta
+  refresh: Laadi uuesti
+  recent_folders: 📁 Hiljutised kaustad
+terminal:
+  watch_workspace_root: Jälgi tööala juurkausta
+  no_workspace_root: (Tööala juurkaust on määratlemata)
+  layout:
+    save_workspace_layout: Salvesta tööala paigutusena
+  workspace:
+    save: Salvesta tööala…
+    load: Laadi tööala…
+    default_name: Tööala
+  menu:
+    workspaces: Tööalad
+  filter:
+    ferrite_workspace: Ferrite'i tööala
+productivity:
+  workspace_hint: Ava tööala ning ülesanded ja märked säilivad
