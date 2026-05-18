@@ -13,6 +13,7 @@ use crate::markdown::{
 use crate::state::FileType;
 use crate::theme::accent;
 use crate::theme::ThemeColors;
+use crate::ui::STATUS_BAR_RESIZE_RIGHT_MARGIN;
 use eframe::egui;
 use log::{debug, warn};
 use rust_i18n::t;
@@ -470,12 +471,19 @@ impl FerriteApp {
                 let cached_stats = self.state.active_tab_mut().map(|tab| tab.text_stats());
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Help button (rightmost in right-to-left layout)
-                    if ui
-                        .button("?")
-                        .on_hover_text(t!("tooltip.about_help").to_string())
-                        .clicked()
-                    {
+                    // Keep Help left of the SE corner / east-edge resize grab zone.
+                    ui.add_space(STATUS_BAR_RESIZE_RIGHT_MARGIN);
+
+                    let resize_blocks_help = self.window_resize_state.resize_cursor_active();
+                    let help_sense = if resize_blocks_help {
+                        egui::Sense::hover()
+                    } else {
+                        egui::Sense::click()
+                    };
+                    let help_response = ui
+                        .add(egui::Button::new("?").sense(help_sense))
+                        .on_hover_text(t!("tooltip.about_help").to_string());
+                    if help_response.clicked() && !resize_blocks_help {
                         self.state.toggle_about();
                     }
 

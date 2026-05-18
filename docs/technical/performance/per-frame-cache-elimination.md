@@ -60,7 +60,9 @@ Both must match for the cache to be valid.
 
 ### Frontmatter Panel
 
-Replaced `DefaultHasher` content hashing with `content_version` comparison. The content clone only happens when content actually changes (not every frame).
+Replaced `DefaultHasher` content hashing with a `(tab_id, content_version)` cache key. The content clone only happens when the active tab or its content actually changes (not every frame).
+
+> **Note (v0.3.x):** The first cut of this change keyed on `content_version` alone, which is unsafe because the counter is per-tab and starts at `0` for every new tab — two unedited tabs share key `0` and the panel never re-parses on tab switch. Pairing with the stable `Tab.id` is required; see [`docs/technical/ui/frontmatter-panel.md`](../ui/frontmatter-panel.md) (*Caching*).
 
 ## Files Changed
 
@@ -69,5 +71,5 @@ Replaced `DefaultHasher` content hashing with `content_version` comparison. The 
 | `src/state.rs` | Added 12 cache fields to `Tab`, `is_modified_cached()`, `text_stats()`, `needs_cjk_cached()`, `needs_complex_script_cached()`, `warm_tab_caches()` |
 | `src/app/mod.rs` | Call `warm_tab_caches()` at frame start; use cached font detection |
 | `src/app/status_bar.rs` | Use `tab.text_stats()` instead of `TextStats::from_text()` |
-| `src/ui/frontmatter_panel.rs` | `update_from_content_versioned()` with version guard |
+| `src/ui/frontmatter_panel.rs` | `update_from_content_versioned(content, tab_id, content_version)` with `(tab_id, content_version)` cache key (initial version used `content_version` alone — see note above) |
 | `src/markdown/editor.rs` | Eliminate content clones in both editor modes |

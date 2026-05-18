@@ -187,15 +187,17 @@ state.force_close_tab(index); // Ignores modifications
 
 ### Undo/Redo System
 
-Each tab maintains independent undo/redo stacks (100 levels):
+Each tab maintains an independent `EditHistory` (500 undo groups by default, 200 for files ≥ 1 MB):
 
 ```rust
 if let Some(tab) = state.active_tab_mut() {
-    tab.set_content("new text".to_string()); // Pushes to undo
+    tab.set_content("new text".to_string()); // Records diff as one undo group
     tab.undo();  // Restores previous
     tab.redo();  // Re-applies change
 }
 ```
+
+See [Undo/Redo System](./editor/undo-redo.md).
 
 ### Event Handling
 

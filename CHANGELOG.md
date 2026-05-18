@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flowchart shapes & style** (Task 72) — Extra shapes and `style` / classDef plumbing (`docs/technical/mermaid/flowchart-shapes-and-style.md`).
 - **State diagrams: fork/join & history** (Task 73) — `<<fork>>` / `<<join>>` bars and `[H]` / `[H*]` glyphs (`docs/technical/mermaid/state-pseudostates-fork-join-history.md`).
 
+#### Mermaid — flowchart edge routing & layout polish ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a)
+The native flowchart renderer (no mmdr / SVG fallback) gained several rendering passes that close the bulk of the FC-83a regression versus Mermaid Live. See `docs/technical/mermaid/flowchart-edge-obstacle-routing.md` and `docs/technical/mermaid/flowchart-layout-algorithm.md`.
+- **Edge–node obstacle avoidance** — Forward edges that would otherwise pass through an unrelated node now detour around the obstacle. New `flowchart/utils.rs` helpers (`segment_intersects_rect`, `path_intersects_any`, `bezier_intersects_any`, `collect_node_obstacles`, `union_rect_bounds`) feed a multi-strategy router in `flowchart/render/edges.rs` (`route_forward_edge` → `try_orthogonal_route` → `route_via_side_corridor`). Unit-tested in `obstacle_tests`.
+- **Painter sizing from actual content** — `render_flowchart` now allocates from real node/subgraph bounds via `layout_content_size` and adds horizontal padding when back-edges exist (`BACK_EDGE_LOOP_MARGIN + NODE_OBSTACLE_PADDING + (lanes-1)·BACK_EDGE_LANE_SPACING`), so feedback loops are never clipped by the egui painter rect.
+- **Back-edge side channels** — Replaced the fixed ±40 px cubic-bezier loops with stable orthogonal routes that hug the graph bounding box at `BACK_EDGE_LOOP_MARGIN = 24 px`. Loop side is picked from source position; horizontal exits detour above/below same-row nodes when needed.
+- **Parallel back-edge lanes** — `compute_back_edge_lanes` assigns distinct `BackEdgeLane { side_sign, lane_index }` slots so multiple loops targeting the same node on the same side stay visually separate (FC-83a: `E → B` and `F → B` no longer merge onto one bus). Lane spacing `BACK_EDGE_LANE_SPACING = 36 px`.
+- **Inner back-edge direct path** — Lane-0 back-edges (`try_inner_back_edge_direct_path` + `inner_back_edge_path_candidates` + `try_inner_back_edge_tight_loop`) exit the source at the top-outer corner, rise vertically along the source's outer edge, and enter the target at its side-centre — instead of going horizontal-first across the trunk. Stepped-outward variants clear sibling branches; tight-loop fallback stays just outside the source. Pinned by `fc_83a_inner_e_to_b_goes_up_first`.
+- **Branch parent snap (alone-on-layer)** — `align_branch_nodes_to_children` in `flowchart/layout/sugiyama.rs` shifts decision nodes with 2+ forward children onto the cross-axis barycenter of those children, matching dagre/Mermaid.js behaviour. The shift is gated to nodes that are alone on their layer so it cannot pull a branch parent onto a sibling (regression-tested via FC-83a `decide`).
+- **Same-layer sibling spacing safety net** — New `resolve_layer_overlaps` pass walks every layer in cross-axis order and enforces `node_spacing.x` (or `.y` for LR/RL) between adjacent siblings via iterative half-and-half push. Fixes the coffee-machine repro in `test_md/test_flowcharts.md` (previously `C` overlapped `H` by ~68 px and `D` overlapped `G` by ~79 px at 800 px width) and protects against future regressions from subgraph clustering or custom node sizing. Pinned by `test_layout_coffee_machine_all_nodes` (per-layer no-overlap assertion).
+
 #### Appearance & hub
 - **User-configurable Ferrite accent** — Color picker in **Settings → Appearance** and **Welcome**; drives headings, selection, tabs, view mode segment, productivity hub chrome, status bar (LSP line, git branch); markdown links keep the standard link color. See `docs/technical/ui/theme-system.md`.
 - **Productivity Hub polish** — Card layout, Pomodoro emphasis, floating **×** re-docks to sidebar (does not hide the hub), stable docked widths via clipped child UI, floating window size cap, scrollbar margin vs resize handle (`docs/technical/productivity/productivity-panel.md`).
@@ -38,11 +48,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS Gatekeeper troubleshooting** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — Unsigned CI `.app` on macOS 15.x: docs at `docs/install/macos.md`, index + release checklist links; signing/notarization planned v0.3.1.
 - **Custom font picker stability (Intel macOS)** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred font load until explicit combo selection to avoid spurious error toast (`docs/technical/fonts/custom-font-picker-deferred-load.md`).
 
+#### Files & session
+- **Quick note workflow** (opt-in, **Settings → Files**) — Pathless “scratch” tabs can close without a save prompt and no longer block quit when modified; double-click an untitled tab to set a display name. Unsaved text still persists via session recovery when **Restore previous session on startup** is enabled. Clean exit now keeps `recovery/` content (only the crash snapshot file is cleared) so pathless buffers restore reliably. See `docs/technical/config/quick-note-workflow.md`.
+
+#### Localization
+- **Spanish UI language** — **Español** added to the Settings / Welcome language selector (`locales/es.yaml`); system locale `es` / `es-*` detection wired through `Language::Spanish`.
+
+### Changed
+
+- **Undo granularity in raw mode** — Removed 500 ms time-based merging in `EditHistory`. Each `record_operations` call (typically one per dirty editor frame while typing) is now its own undo step, so Ctrl+Z steps back incrementally instead of reverting an entire fast-typing burst in one action. Replace edits (delete + insert from the same diff) still undo atomically. Rendered mode is unchanged at the block level (e.g. headings still commit on focus loss). See `docs/technical/editor/undo-redo.md` and `docs/technical/editor/edit-history.md`.
+- **Main ribbon toolbar always icon-only** — Removed the left collapse/expand control and section labels ("File", "Edit", "Tools", structured-data type name, Export text). The toolbar is now a fixed compact icon bar (28px tall); Save and Export dropdowns still show full labels inside their menus. Tooltips and keyboard shortcuts are unchanged.
+
 ### Fixed
 
 - **CRITICAL: Smart-paste of mixed-script text crashes Ferrite (`STATUS_STACK_BUFFER_OVERRUN` / `0xc0000409`)** — Pasting any text whose first colon is followed by a multi-byte UTF-8 codepoint (e.g. `Hebrew: שלום עולם`, `Bengali: আমি বাংলায়`, `Hindi: नमस्ते`, `note: 你好`, `emoji: 👨‍👩‍👧`) aborted the process in release builds (`panic = "abort"`). Root cause was `FerriteApp::is_url` in `src/app/input_handling.rs` doing `&s[colon_pos..colon_pos + 3]` to look for `://`, which panicked when `colon_pos + 3` landed on a non-char-boundary inside a 2-/3-/4-byte UTF-8 codepoint. The smart-paste pipeline (`consume_smart_paste`) calls `is_url` / `is_image_url` for *every* paste event to decide whether to wrap the URL in a markdown link or image, so any paste containing a mixed-script line tripped the panic. Fixed by replacing the direct slice with `s.get(colon_pos..colon_pos + 3) == Some("://")`, which returns `None` instead of panicking on a non-char-boundary range. Pinned by 5 regression tests (`is_url_does_not_panic_on_mixed_script_text`, `is_image_url_does_not_panic_on_mixed_script_text`, plus URL/image-URL positive coverage). Tracked as Issue **I-3** in the v0.3.0 regression matrix; release-gate-S1 → resolved.
 - **Split / rendered view: only the first of consecutive fenced code blocks visible** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Viewport/layout interaction hid later blocks until edits; fixed per `docs/technical/markdown/consecutive-fenced-blocks-fix.md` (Task 83).
 - **Empty markdown table cells hard to focus / edit** ([#131](https://github.com/OlaProeis/Ferrite/issues/131)) — Hit targets and Tab / Shift+Tab navigation for empty cells (Task 84); see `docs/technical/markdown/table-cell-focus-navigation.md`.
+- **Rendered / split tables: two clicks to edit another cell after typing** — After editing a cell, the first click on another cell (same table or a different table in the file) often did nothing; a second click was required. Causes: egui using the first click only to defocus the active `TextEdit`; deferred table commits firing on mouse *release* while `any_pressed()` was already false; and tables higher in the document committing before lower tables could record the cross-table target. Fixed with shared `TableGlobalFocus`, pointer-down activation on display cells, and a two-frame deferred commit so layout order does not drop the pending cell. See `docs/technical/markdown/table-cell-focus-navigation.md` and `docs/technical/markdown/table-editing-focus.md`.
+- **Quick file switcher (Ctrl+P) search quality** — Workspace quick open now tokenizes paths on `-`, `_`, `.`, and path separators so queries like `tables` match `test_tables.md` and `box` matches `test_box_drawing.md`. Search includes both indexed tree files and recent files (so unexpanded folders still match files you have opened recently). Replaced loose full-path fuzzy matching and the +100 recent-file score boost that ranked unrelated recent files above real matches. See `src/ui/quick_switcher.rs`.
+- **Frontmatter panel stale after tab switch** — The FM tab could show the previous file’s fields, report “No frontmatter detected” on files that had YAML, or splice the wrong body when **Add frontmatter** was clicked. Caused by caching on `content_version` alone (each tab’s counter starts at `0`). Fixed by keying the cache on `(tab_id, content_version)` with regression tests. See `docs/technical/ui/frontmatter-panel.md` (*Caching*).
 
 ### Known issues (v0.3.0 non-blockers)
 
@@ -94,7 +118,7 @@ strongly recommended.
 #### Viewer Performance
 - **CSV raw view per-frame allocation fix** - `show_raw_view()` called `self.content.to_string()` every frame. Fixed with blake3 hash-guarded `raw_view_text` cache.
 - **TreeViewer parse and raw view caching** - Two blake3-guarded caches: raw view text cache (skip per-frame `to_string()`), parsed tree cache (skip per-frame `parse_structured_content()`). Supports JSON/YAML/TOML.
-- **Central panel undo content clone elimination** - Removed per-frame `tab.content.clone()` for undo recording across all modes. Raw mode leverages FerriteEditor's native EditHistory; other modes use blake3 hash-based change detection.
+- **Central panel undo content clone elimination** - Removed per-frame `tab.content.clone()` for undo recording; all modes use `Tab::edit_history` with blake3 hash-based snapshot elision (`prepare_undo_snapshot_hashed`). *(v0.3.0: time-based undo grouping removed — see [Unreleased].)*
 
 #### Unicode & Complex Script Support (Phase 2: Text Shaping Engine)
 *Depends on: Phase 1 font loading from v0.2.7*
@@ -341,7 +365,7 @@ Complete ground-up reimplementation of the text editor:
 - **Search highlights** - Find/replace integration with capped highlight count (1000 max visible)
 - **Bracket matching** - Windowed O(window) algorithm (~200 lines around cursor), works at any file size
 - **Word wrap** - Dynamic line heights with proper visual cursor navigation
-- **Undo/redo** - Operation-based EditHistory with 500ms grouping, Ctrl+Z/Ctrl+Y
+- **Undo/redo** - Operation-based EditHistory on each tab, Ctrl+Z/Ctrl+Y *(v0.3.0+: per-record grouping; v0.2.x used 500 ms merge)*
 - **IME support** - Chinese Pinyin, Japanese Romaji, Korean Hangul input
 - **Code folding** - Fold regions with gutter indicators, navigation skips folds
 - **Multi-cursor** - Ctrl+Click to add cursors, simultaneous editing

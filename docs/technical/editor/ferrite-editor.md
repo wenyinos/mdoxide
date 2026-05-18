@@ -13,7 +13,7 @@ The Ferrite editor is organized in a modular subfolder structure at `src/editor/
 | `src/editor/ferrite/mod.rs` | Module exports and re-exports |
 | `src/editor/ferrite/editor.rs` | Main FerriteEditor widget |
 | `src/editor/ferrite/buffer.rs` | TextBuffer - rope-based text storage |
-| `src/editor/ferrite/history.rs` | EditHistory - operation-based undo/redo |
+| `src/editor/ferrite/history.rs` | EditHistory types + diff (`Tab` owns the stack) |
 | `src/editor/ferrite/view.rs` | ViewState - viewport tracking |
 | `src/editor/ferrite/line_cache.rs` | LineCache - galley caching |
 | `src/editor/ferrite/cursor.rs` | Cursor - position tracking |
@@ -32,7 +32,7 @@ src/editor/ferrite/
 ├── mod.rs                    # Re-exports: FerriteEditor, TextBuffer, etc.
 ├── editor.rs                 # FerriteEditor struct + ui() coordinator
 ├── buffer.rs                 # TextBuffer - rope-based content (ropey)
-├── history.rs                # EditHistory - undo/redo with grouping
+├── history.rs                # EditHistory module (owned by Tab, not FerriteEditor)
 ├── view.rs                   # ViewState - viewport tracking
 ├── line_cache.rs             # LineCache - LRU galley cache (200 entries)
 ├── cursor.rs                 # Cursor - line/column position
@@ -51,7 +51,7 @@ src/editor/ferrite/
 ```
 FerriteEditor
 ├── TextBuffer      - Rope-based content storage (ropey)
-├── EditHistory     - Undo/redo with operation grouping
+├── (undo via Tab)  - Rope edits synced to tab.content → tab.edit_history
 ├── ViewState       - Viewport tracking, visible line range
 ├── LineCache       - LRU galley cache (200 entries)
 ├── Cursor          - Simple line/column position
@@ -64,8 +64,7 @@ FerriteEditor
 
 ```rust
 pub struct FerriteEditor {
-    buffer: TextBuffer,           // Text content
-    history: EditHistory,         // Undo/redo
+    buffer: TextBuffer,           // Text content (undo recorded on Tab after sync)
     view: ViewState,              // Viewport state
     line_cache: LineCache,        // Galley cache
     selection: Selection,         // Current selection (anchor + head)

@@ -147,27 +147,25 @@ Rendered mode (MarkdownEditor) and TreeViewer edits were **NOT being recorded to
 
 ### Root Cause
 
-- `EditorWidget` (raw mode) takes `&mut Tab` and calls `tab.record_edit()` internally
-- `MarkdownEditor` and `TreeViewer` only take `&mut String` content reference, cannot access Tab's undo methods
+`MarkdownEditor` and `TreeViewer` only take `&mut String`; they cannot call `Tab` undo APIs directly. Raw mode records via `EditorWidget` → `prepare_undo_snapshot_hashed` + `record_edit_from_snapshot`.
 
 ### Solution
 
-Capture content before editing in `app.rs`, call `tab.record_edit()` after if changed:
+`central_panel.rs` wraps rendered/tree editors with the hashed snapshot pattern:
 
 ```rust
-// In app.rs, for MarkdownEditor
-let content_before = tab.content.clone();
+tab.prepare_undo_snapshot_hashed();
 let editor_output = MarkdownEditor::new(&mut tab.content)
     // ... configuration ...
     .show(ui);
 
 if editor_output.changed {
-    tab.record_edit(content_before);  // Now recorded for undo!
-    debug!("Content modified in rendered editor, recorded for undo");
+    tab.record_edit_from_snapshot();
+    tab.mark_content_edited();
 }
-
-// Same pattern for TreeViewer
 ```
+
+Same pattern for `TreeViewer` and the split-view rendered pane.
 
 ### Impact
 

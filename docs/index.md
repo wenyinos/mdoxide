@@ -38,7 +38,7 @@
 | Document | Description |
 |----------|-------------|
 | **[Architecture](./technical/editor/architecture.md)** | **REQUIRED READING: Core principles, complexity tiers, memory budget, anti-patterns** |
-| **[FerriteEditor](./technical/editor/ferrite-editor.md)** | **Custom editor widget integrating TextBuffer, EditHistory, ViewState, LineCache** |
+| **[FerriteEditor](./technical/editor/ferrite-editor.md)** | **Custom editor widget: TextBuffer, ViewState, LineCache; undo via Tab::edit_history** |
 | **[TextBuffer](./technical/editor/text-buffer.md)** | **Rope-based text buffer for O(log n) editing operations on large files** |
 | **[EditHistory](./technical/editor/edit-history.md)** | **Operation-based undo/redo for memory-efficient large file editing** |
 | **[ViewState](./technical/editor/view-state.md)** | **Viewport tracking and visible line range calculation for virtual scrolling** |
@@ -256,7 +256,7 @@
 | [Mermaid classDef Styling](./technical/mermaid/mermaid-classdef-styling.md) | Node styling with classDef/class directives, hex color parsing |
 | [Mermaid YAML Frontmatter](./technical/mermaid/mermaid-frontmatter.md) | YAML frontmatter support for diagram titles, config parsing |
 | [Mermaid Caching](./technical/mermaid/mermaid-caching.md) | AST and layout caching for flowcharts, blake3 hashing, LRU eviction |
-| [Flowchart Layout Algorithm](./technical/mermaid/flowchart-layout-algorithm.md) | Sugiyama-style layered graph layout, cycle detection, crossing reduction |
+| [Flowchart Layout Algorithm](./technical/mermaid/flowchart-layout-algorithm.md) | Sugiyama-style layered graph layout: cycle detection, crossing reduction, alone-on-layer branch-parent snap, `resolve_layer_overlaps` sibling-spacing safety net (v0.3.0) |
 | [Flowchart Subgraphs](./technical/mermaid/flowchart-subgraphs.md) | Flowchart subgraph support, nested parsing, bounding box computation |
 | [Flowchart Direction](./technical/mermaid/flowchart-direction.md) | Flow direction layout (LR/RL/TD/BT), axis transformation, edge anchoring |
 | [Flowchart Branch Ordering](./technical/mermaid/flowchart-branch-ordering.md) | Decision node branch positioning, edge declaration order, barycenter algorithm |
@@ -269,6 +269,7 @@
 | [Subgraph Layer Clustering](./technical/mermaid/subgraph-layer-clustering.md) | Subgraph-aware layer assignment, consecutive layer clustering |
 | [Subgraph Internal Layout](./technical/mermaid/subgraph-internal-layout.md) | Subgraph internal positioning, SubgraphLayoutEngine, bounding box computation |
 | [Subgraph Edge Routing](./technical/mermaid/subgraph-edge-routing.md) | Edge routing through subgraph boundaries, orthogonal waypoints |
+| [Flowchart edge obstacle routing](./technical/mermaid/flowchart-edge-obstacle-routing.md) | v0.3.0 FC-83a: forward-edge obstacle avoidance, painter sized from real node bounds, fixed-margin back-edge side channels, parallel back-edge lanes (`E→B` / `F→B`), inner back-edge top-corner up-first direct path |
 | [Nested Subgraph Layout](./technical/mermaid/nested-subgraph-layout.md) | Nested subgraph margins, depth calculation, direction overrides |
 | [Sequence Control Blocks](./technical/mermaid/sequence-control-blocks.md) | Sequence diagram loop/alt/opt/par blocks, nested parsing, block rendering |
 | [Sequence Activations & Notes](./technical/mermaid/sequence-activations-notes.md) | Activation boxes, notes, +/- shorthand, state tracking |
@@ -277,6 +278,7 @@
 | **[Flowchart Modular Refactor](./technical/mermaid/flowchart-modular-refactor.md)** | **Flowchart.rs split into 12 focused modules (types, parser, layout/, render/, utils)** |
 | [Flowchart Refactor Plan](./technical/mermaid/flowchart-refactor-plan.md) | Original analysis and refactoring plan for flowchart.rs modularization |
 | **[Mermaid Inline Validation](./technical/mermaid/mermaid-inline-validation.md)** | **Parse-time validation: warning header (line + hint), last-good fallback, raw-editor squiggles for broken `mermaid` blocks** |
+| **[Mermaid Parity Matrix](./technical/mermaid/mermaid-parity-matrix.md)** | **Feature/status map vs Mermaid.js, GitHub issue cross-ref, repro catalog, pre-0.3.0 rendering backlog** |
 
 ### LSP Integration *(deferred to v0.2.9 — feature-gated behind `lsp` Cargo feature)*
 

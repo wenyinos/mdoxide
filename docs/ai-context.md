@@ -62,7 +62,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 - **i18n:** `t!("key.path")`, keys in `locales/en.yaml`
 - **State:** `Tab` for per-tab, `AppState` for global
 - **Errors:** User-facing via `show_toast()`, technical via `log::error!`
-- **Large files (>1MB):** Hash-based `is_modified()`, reduced undo stack (10 vs 100), no `original_bytes`
+- **Large files (>1MB):** Hash-based `is_modified()`, reduced undo groups (200 vs 500), no `original_bytes`
 - **Background file loading (≥5MB):** `open_file_smart()` on `FerriteApp` spawns background thread; `Tab.tab_content` (`TabContent::Loading`/`Ready`/`Error`) tracks state; `FileLoadMsg` channel polled in `update()`
 - **Per-frame caching:** `Tab.content_version` (u64) gates cached `is_modified()`, `text_stats()`, `needs_cjk_cached()`, `needs_complex_script_cached()` — never scan full content per frame
 

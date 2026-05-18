@@ -43,6 +43,7 @@ pub use terminal_panel::{FloatingWindow, TerminalPanel, TerminalPanelState};
 pub use view_segment::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
 pub use welcome::WelcomePanel;
 pub use window::{
-    center_panel_in_viewport, constrain_rect_to_viewport, handle_window_resize,
-    search_panel_constraints, PanelConstraints, WindowResizeState,
+    center_panel_in_viewport, constrain_rect_to_viewport, consume_clicks_in_resize_zones,
+    handle_window_resize, is_in_resize_zone, search_panel_constraints, PanelConstraints,
+    WindowResizeState, STATUS_BAR_RESIZE_RIGHT_MARGIN,
 };

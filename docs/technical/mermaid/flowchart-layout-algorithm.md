@@ -97,12 +97,36 @@ Algorithm: Coordinate assignment
    b. Position nodes sequentially with spacing
    c. Advance main-axis position
 4. Handle reversed directions (BT, RL) by flipping coordinates
+5. Snap branch parents toward children (alone-on-layer only)
+6. Resolve any residual same-layer overlaps (safety net)
 ```
 
 Key considerations:
 - **Main axis**: Direction of flow (vertical for TD/BT, horizontal for LR/RL)
 - **Cross axis**: Perpendicular to flow (horizontal for TD/BT, vertical for LR/RL)
 - **Centering**: Layers are centered relative to the widest layer
+
+#### Step 5 – Branch parent snap (`align_branch_nodes_to_children`)
+
+After the initial layer packing, nodes that have **2+ forward children** are
+shifted on the cross axis to sit at the barycenter of those children. This
+mirrors dagre/Mermaid.js behaviour and is what makes the FC-83a `decide`
+node move left so the `Edit Definition → Preview` back-edge has a clear lane.
+
+The shift is **only applied when the branch parent is alone on its layer**. If
+the parent shares its layer with siblings (e.g. coffee-machine `C` sharing a
+layer with `H`), moving it to the children's barycenter would push it onto a
+sibling. In that case we leave the parent at the layer-packed position and let
+the regular crossing-minimisation step keep things tidy.
+
+#### Step 6 – Layer overlap safety net (`resolve_layer_overlaps`)
+
+A final pass walks every layer in cross-axis order and enforces
+`node_spacing.x` (or `.y` for LR/RL) between adjacent siblings. Any pair whose
+gap is too small is split apart — half the violation is applied to each side
+— and the process iterates until convergence. This guarantees that no future
+adjustment (branch alignment, subgraph clustering, custom node sizing, …) can
+ever produce overlapping bounding boxes inside a layer.
 
 ## Configuration
 

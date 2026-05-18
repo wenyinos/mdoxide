@@ -625,6 +625,48 @@ impl SugiyamaLayout {
             }
         }
 
+        // Branch nodes (2+ forward children) sit at the barycenter of their branches,
+        // matching dagre/Mermaid.js rather than layer-wide centering (FC-83a: shifts
+        // `decide` left so the E → Preview return has a clear vertical corridor).
+        //
+        // We only apply the shift when the branch parent is alone on its layer.
+        // Shifting a node that shares a layer with siblings would otherwise pull it
+        // onto its left neighbor (e.g. coffee-machine: `C` collided with `H`).
+        let back_edge_set: std::collections::HashSet<(usize, usize)> =
+            self.graph.back_edges.iter().cloned().collect();
+        Self::align_branch_nodes_to_children(
+            &mut layout,
+            &self.graph,
+            self.direction,
+            &back_edge_set,
+            &self.layers,
+            &self.node_layers,
+        );
+
+        // Safety net: enforce minimum sibling spacing per layer so no future
+        // adjustment (branch alignment, subgraph clustering, etc.) can produce
+        // overlapping bounding boxes within a layer.
+        let cross_spacing = if is_horizontal {
+            self.config.node_spacing.y
+        } else {
+            self.config.node_spacing.x
+        };
+        Self::resolve_layer_overlaps(
+            &mut layout,
+            &self.graph,
+            &self.layers,
+            self.direction,
+            cross_spacing,
+        );
+
+        // Recompute bounds after branch alignment and overlap resolution.
+        max_x = 0.0;
+        max_y = 0.0;
+        for node_layout in layout.nodes.values() {
+            max_x = max_x.max(node_layout.pos.x + node_layout.size.x);
+            max_y = max_y.max(node_layout.pos.y + node_layout.size.y);
+        }
+
         // Convert back-edge indices to node IDs
         for &(from_idx, to_idx) in &self.graph.back_edges {
             let from_id = self.graph.node_ids[from_idx].clone();
@@ -634,5 +676,175 @@ impl SugiyamaLayout {
 
         layout.total_size = Vec2::new(max_x + margin, max_y + margin);
         layout
+    }
+
+    /// Shift branch nodes (2+ forward children) to the cross-axis barycenter of
+    /// their children. Only nodes that are *alone on their layer* are shifted;
+    /// otherwise the shift would push the branch parent onto a sibling. Mermaid's
+    /// dagre engine resolves the same conflict via a separate compaction pass —
+    /// here we keep the bigger-picture layer packing intact and only "snap" the
+    /// branch parent toward its children when there is room to do so.
+    fn align_branch_nodes_to_children(
+        layout: &mut FlowchartLayout,
+        graph: &FlowGraph,
+        direction: FlowDirection,
+        back_edge_set: &std::collections::HashSet<(usize, usize)>,
+        layers: &[Vec<usize>],
+        node_layers: &[usize],
+    ) {
+        let is_horizontal = matches!(
+            direction,
+            FlowDirection::LeftRight | FlowDirection::RightLeft
+        );
+
+        let mut shifts: Vec<(String, f32)> = Vec::new();
+
+        for node_idx in 0..graph.node_count() {
+            let forward_children: Vec<usize> = graph.outgoing[node_idx]
+                .iter()
+                .copied()
+                .filter(|&target| !back_edge_set.contains(&(node_idx, target)))
+                .collect();
+
+            if forward_children.len() < 2 {
+                continue;
+            }
+
+            // Skip if this node shares its layer with siblings; the post-pass is
+            // only safe to apply when the branch parent owns its layer outright
+            // (e.g. FC-83a `decide`). Otherwise shifting it would intrude into a
+            // sibling's bounding box (e.g. coffee-machine `C` colliding with `H`).
+            let layer_idx = node_layers.get(node_idx).copied().unwrap_or(0);
+            let layer_len = layers.get(layer_idx).map(|l| l.len()).unwrap_or(0);
+            if layer_len > 1 {
+                continue;
+            }
+
+            let mut sum = 0.0_f32;
+            let mut count = 0_u32;
+            for &child_idx in &forward_children {
+                let child_id = &graph.node_ids[child_idx];
+                if let Some(child) = layout.nodes.get(child_id) {
+                    sum += if is_horizontal {
+                        child.pos.y + child.size.y / 2.0
+                    } else {
+                        child.pos.x + child.size.x / 2.0
+                    };
+                    count += 1;
+                }
+            }
+
+            if count == 0 {
+                continue;
+            }
+
+            let node_id = graph.node_ids[node_idx].clone();
+            let Some(node_layout) = layout.nodes.get(&node_id) else {
+                continue;
+            };
+
+            let target_center = sum / count as f32;
+            let new_pos = if is_horizontal {
+                target_center - node_layout.size.y / 2.0
+            } else {
+                target_center - node_layout.size.x / 2.0
+            };
+            shifts.push((node_id, new_pos));
+        }
+
+        for (node_id, new_pos) in shifts {
+            if let Some(node_layout) = layout.nodes.get_mut(&node_id) {
+                if is_horizontal {
+                    node_layout.pos.y = new_pos;
+                } else {
+                    node_layout.pos.x = new_pos;
+                }
+            }
+        }
+    }
+
+    /// Enforce a minimum gap between siblings on every layer.
+    ///
+    /// Walks each layer in current cross-axis order and, when adjacent nodes
+    /// overlap (or are closer than `min_spacing`), splits the violation equally
+    /// between them — the leftmost is pushed left, the rightmost is pushed right.
+    /// Iterating until convergence handles chains of three or more nodes.
+    ///
+    /// This is a safety net that protects against future regressions where a
+    /// barycenter / subgraph clustering shift would otherwise produce overlapping
+    /// bounding boxes within a layer.
+    fn resolve_layer_overlaps(
+        layout: &mut FlowchartLayout,
+        graph: &FlowGraph,
+        layers: &[Vec<usize>],
+        direction: FlowDirection,
+        min_spacing: f32,
+    ) {
+        let is_horizontal = matches!(
+            direction,
+            FlowDirection::LeftRight | FlowDirection::RightLeft
+        );
+
+        for layer in layers {
+            if layer.len() < 2 {
+                continue;
+            }
+
+            // Collect (node_id, cross-axis pos, cross-axis size) for nodes
+            // present in the layout (skip anything that was filtered out).
+            let mut entries: Vec<(String, f32, f32)> = layer
+                .iter()
+                .filter_map(|&idx| {
+                    let id = graph.node_ids.get(idx)?.clone();
+                    let nl = layout.nodes.get(&id)?;
+                    let (pos, size) = if is_horizontal {
+                        (nl.pos.y, nl.size.y)
+                    } else {
+                        (nl.pos.x, nl.size.x)
+                    };
+                    Some((id, pos, size))
+                })
+                .collect();
+
+            if entries.len() < 2 {
+                continue;
+            }
+
+            entries.sort_by(|a, b| {
+                a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            // Iterative relaxation. Each pass resolves the largest local
+            // violation; converges in O(layer.len()) passes in practice.
+            const MAX_PASSES: usize = 16;
+            const EPS: f32 = 0.01;
+            for _ in 0..MAX_PASSES {
+                let mut max_violation = 0.0_f32;
+                for i in 1..entries.len() {
+                    let prev_end = entries[i - 1].1 + entries[i - 1].2;
+                    let gap = entries[i].1 - prev_end;
+                    let violation = min_spacing - gap;
+                    if violation > EPS {
+                        let half = violation / 2.0;
+                        entries[i - 1].1 -= half;
+                        entries[i].1 += half;
+                        max_violation = max_violation.max(violation);
+                    }
+                }
+                if max_violation <= EPS {
+                    break;
+                }
+            }
+
+            for (id, new_pos, _) in entries {
+                if let Some(nl) = layout.nodes.get_mut(&id) {
+                    if is_horizontal {
+                        nl.pos.y = new_pos;
+                    } else {
+                        nl.pos.x = new_pos;
+                    }
+                }
+            }
+        }
     }
 }

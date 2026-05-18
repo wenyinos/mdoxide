@@ -527,6 +527,8 @@ shortcuts:
     toggle_outline: "Toggle Outline"
     toggle_file_tree: "Toggle File Tree"
     toggle_pipeline: "Toggle Pipeline"
+    toggle_terminal: "Toggle Terminal"
+    toggle_productivity_hub: "Toggle Productivity Hub"
     # Edit
     undo: "Undo"
     redo: "Redo"

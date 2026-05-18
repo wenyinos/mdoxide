@@ -53,7 +53,8 @@ use crate::preview::SyncScrollState;
 use crate::state::{AppState, FileType, PendingAction, Selection};
 use crate::theme::{ThemeColors, ThemeManager};
 use crate::ui::{
-    handle_window_resize, load_app_logo_texture, AboutPanel, BacklinksPanel, CommandPalette,
+    consume_clicks_in_resize_zones, handle_window_resize, load_app_logo_texture, AboutPanel,
+    BacklinksPanel, CommandPalette,
     FileOperationDialog, FileOperationResult, FileTreeContextAction, FileTreePanel,
     FrontmatterPanel, GoToLineResult, OutlinePanel, ProductivityPanel, QuickSwitcher, Ribbon,
     RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TerminalPanel,
@@ -225,6 +226,7 @@ impl FerriteApp {
         use crate::config::{create_lock_file, load_session_state, SessionSaveThrottle};
 
         info!("Initializing Ferrite");
+        crate::diag::event_once("app_new", "FerriteApp::new started");
         crate::log_memory("App::new() start");
 
         // Set up custom fonts with lazy CJK loading for faster startup
@@ -257,7 +259,9 @@ impl FerriteApp {
         // Load session state BEFORE creating lock file so that
         // check_and_clear_lock_file() detects the previous run's lock file,
         // not the one we're about to create for this session.
+        crate::diag::trace("loading session state");
         let recovery_result = load_session_state();
+        crate::diag::trace("session state loaded");
 
         // Now create lock file for this session - if we crash, the next
         // startup will find it and know recovery is needed.
@@ -279,9 +283,11 @@ impl FerriteApp {
             && recovery_result.session.is_some()
             && state.settings.restore_session
         {
+            crate::diag::trace("restoring session tabs");
             if state.restore_from_session_result(&recovery_result) {
                 info!("Session restored successfully");
             }
+            crate::diag::trace("session restore done");
             crate::log_memory("After session restore");
         }
 
@@ -1717,10 +1723,11 @@ impl FerriteApp {
                 .unwrap_or(false);
             if is_markdown {
                 if let Some(tab) = self.state.active_tab() {
+                    let tab_id = tab.id;
                     let ver = tab.content_version();
                     let content_ref: &str = &tab.content;
                     self.frontmatter_panel
-                        .update_from_content_versioned(content_ref, ver);
+                        .update_from_content_versioned(content_ref, tab_id, ver);
                 }
             }
 
@@ -2301,12 +2308,6 @@ impl FerriteApp {
                 self.state.toggle_settings();
             }
 
-            // Ribbon control
-            RibbonAction::ToggleCollapse => {
-                debug!("Ribbon: Toggle collapse");
-                self.ribbon.toggle_collapsed();
-            }
-
             // Zen Mode
             RibbonAction::ToggleZenMode => {
                 debug!("Ribbon: Toggle Zen Mode");
@@ -2403,6 +2404,8 @@ impl FerriteApp {
 impl eframe::App for FerriteApp {
     /// Called each time the UI needs repainting.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        crate::diag::next_frame();
+
         // Handle window resize for borderless window (must be early, before UI)
         // This detects mouse near edges, changes cursor, and initiates resize
         handle_window_resize(ctx, &mut self.window_resize_state);
@@ -2645,6 +2648,9 @@ impl eframe::App for FerriteApp {
             self.try_expand_snippet(tab_index);
         }
 
+        // Block widgets under resize grab zones while the resize cursor is active.
+        consume_clicks_in_resize_zones(ctx, &self.window_resize_state);
+
         // Apply resize cursor at end of frame (to override any UI cursor settings)
         self.window_resize_state.apply_cursor(ctx);
 
@@ -2740,6 +2746,8 @@ impl eframe::App for FerriteApp {
             let interval = self.get_idle_repaint_interval();
             ctx.request_repaint_after(interval);
         }
+
+        crate::diag::frame_end(100);
     }
 
     /// Called when the application is about to close.

@@ -13,11 +13,8 @@ use crate::theme::ThemeColors;
 use eframe::egui::{self, Color32, Response, RichText, Ui, Vec2};
 use rust_i18n::t;
 
-/// Height of the ribbon in expanded state.
-const RIBBON_HEIGHT_EXPANDED: f32 = 40.0;
-
-/// Height of the ribbon in collapsed state.
-const RIBBON_HEIGHT_COLLAPSED: f32 = 28.0;
+/// Height of the ribbon toolbar.
+const RIBBON_HEIGHT: f32 = 28.0;
 
 /// Size of icon buttons.
 const ICON_BUTTON_SIZE: Vec2 = Vec2::new(32.0, 28.0);
@@ -107,10 +104,6 @@ pub enum RibbonAction {
     /// Toggle Zen Mode (distraction-free writing)
     ToggleZenMode,
 
-    // Ribbon control
-    /// Toggle ribbon collapsed state
-    ToggleCollapse,
-
     // Terminal
     /// Toggle terminal panel visibility
     ToggleTerminal,
@@ -124,43 +117,19 @@ pub enum RibbonAction {
     ToggleFrontmatter,
 }
 
-/// Ribbon UI state and rendering.
-#[derive(Debug, Clone)]
-pub struct Ribbon {
-    /// Whether the ribbon is in collapsed mode (icon-only).
-    collapsed: bool,
-}
-
-impl Default for Ribbon {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// Ribbon UI (icon-only toolbar).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Ribbon;
 
 impl Ribbon {
     /// Create a new ribbon instance.
     pub fn new() -> Self {
-        Self { collapsed: false }
+        Self
     }
 
-    /// Check if the ribbon is collapsed.
-    #[allow(dead_code)]
-    pub fn is_collapsed(&self) -> bool {
-        self.collapsed
-    }
-
-    /// Toggle the collapsed state.
-    pub fn toggle_collapsed(&mut self) {
-        self.collapsed = !self.collapsed;
-    }
-
-    /// Get the current ribbon height.
+    /// Get the ribbon height.
     pub fn height(&self) -> f32 {
-        if self.collapsed {
-            RIBBON_HEIGHT_COLLAPSED
-        } else {
-            RIBBON_HEIGHT_EXPANDED
-        }
+        RIBBON_HEIGHT
     }
 
     /// Render the ribbon and return any triggered action.
@@ -189,7 +158,7 @@ impl Ribbon {
     /// Optional action triggered by user interaction
     #[allow(clippy::too_many_arguments)]
     pub fn show(
-        &mut self,
+        &self,
         ui: &mut Ui,
         theme_colors: &ThemeColors,
         _view_mode: ViewMode,
@@ -232,32 +201,9 @@ impl Ribbon {
             ui.set_height(self.height());
             ui.spacing_mut().item_spacing.x = 2.0;
 
-            // Collapse/Expand toggle
-            let collapse_icon = if self.collapsed { "▶" } else { "◀" };
-            let collapse_tooltip = if self.collapsed {
-                "Expand ribbon"
-            } else {
-                "Collapse ribbon"
-            };
-            if icon_button(ui, collapse_icon, collapse_tooltip, true, is_dark).clicked() {
-                action = Some(RibbonAction::ToggleCollapse);
-            }
-
-            ui.add_space(4.0);
-            vertical_separator(ui, separator_color, self.height() - 8.0);
-            ui.add_space(4.0);
-
             // ═══════════════════════════════════════════════════════════════════
             // File Group (Streamlined with Save Dropdown)
             // ═══════════════════════════════════════════════════════════════════
-            if !self.collapsed {
-                ui.label(
-                    RichText::new(t!("menu.file.label").to_string())
-                        .size(10.0)
-                        .color(theme_colors.text.muted),
-                );
-            }
-
             // New file button
             if icon_button(
                 ui,
@@ -357,14 +303,6 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             // Edit Group
             // ═══════════════════════════════════════════════════════════════════
-            if !self.collapsed {
-                ui.label(
-                    RichText::new(t!("menu.edit.label").to_string())
-                        .size(10.0)
-                        .color(theme_colors.text.muted),
-                );
-            }
-
             if icon_button(
                 ui,
                 "↩",
@@ -398,15 +336,6 @@ impl Ribbon {
             // bottom toolbar in the editor area)
             // ═══════════════════════════════════════════════════════════════════
             if file_type.is_structured() {
-                // Structured data buttons (JSON/YAML/TOML)
-                if !self.collapsed {
-                    ui.label(
-                        RichText::new(file_type.display_name())
-                            .size(10.0)
-                            .color(theme_colors.text.muted),
-                    );
-                }
-
                 // Format/Pretty-print button
                 if icon_button(
                     ui,
@@ -457,14 +386,6 @@ impl Ribbon {
             // ═══════════════════════════════════════════════════════════════════
             // Tools Group
             // ═══════════════════════════════════════════════════════════════════
-            if !self.collapsed {
-                ui.label(
-                    RichText::new(t!("menu.tools.label").to_string())
-                        .size(10.0)
-                        .color(theme_colors.text.muted),
-                );
-            }
-
             // Find/Replace (universal)
             if icon_button(
                 ui,
@@ -488,15 +409,9 @@ impl Ribbon {
             // Export Dropdown (Markdown only)
             // ═══════════════════════════════════════════════════════════════════
             if file_type.is_markdown() {
-                // Note: ComboBox adds its own dropdown arrow, so we don't add ▾ manually
-                let export_label = if self.collapsed {
-                    "🌐".to_string()
-                } else {
-                    t!("menu.file.export").to_string()
-                };
                 egui::ComboBox::from_id_source("export_dropdown")
-                    .selected_text(RichText::new(export_label).size(12.0))
-                    .width(if self.collapsed { 40.0 } else { 65.0 })
+                    .selected_text(RichText::new("🌐").size(12.0))
+                    .width(40.0)
                     .show_ui(ui, |ui| {
                         if ui
                             .selectable_label(false, format!("🌐 {}", t!("menu.file.export_html")))
@@ -643,38 +558,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ribbon_new() {
-        let ribbon = Ribbon::new();
-        assert!(!ribbon.is_collapsed());
-    }
-
-    #[test]
-    fn test_ribbon_toggle_collapsed() {
-        let mut ribbon = Ribbon::new();
-        assert!(!ribbon.is_collapsed());
-
-        ribbon.toggle_collapsed();
-        assert!(ribbon.is_collapsed());
-
-        ribbon.toggle_collapsed();
-        assert!(!ribbon.is_collapsed());
-    }
-
-    #[test]
     fn test_ribbon_height() {
-        let mut ribbon = Ribbon::new();
-
-        assert_eq!(ribbon.height(), RIBBON_HEIGHT_EXPANDED);
-
-        ribbon.toggle_collapsed();
-
-        assert_eq!(ribbon.height(), RIBBON_HEIGHT_COLLAPSED);
-    }
-
-    #[test]
-    fn test_ribbon_default() {
-        let ribbon = Ribbon::default();
-        assert!(!ribbon.is_collapsed());
+        let ribbon = Ribbon::new();
+        assert_eq!(ribbon.height(), RIBBON_HEIGHT);
     }
 
     #[test]

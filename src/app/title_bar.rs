@@ -12,6 +12,11 @@ use eframe::egui;
 use log::debug;
 use rust_i18n::t;
 
+/// Hit area for minimize / maximize / close (≈20% smaller than the original 36×22).
+const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 18.0);
+/// Scale factor for chrome icon geometry (matches button shrink).
+const WINDOW_CHROME_ICON_SCALE: f32 = 0.8;
+
 impl FerriteApp {
     /// Render the custom title bar panel.
     pub(crate) fn render_title_bar(
@@ -184,7 +189,7 @@ impl FerriteApp {
                         let close_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(36.0, 22.0)),
+                                .min_size(WINDOW_CHROME_BTN_SIZE),
                         );
                         // Rounded hover background; white icon on hover, normal otherwise
                         let close_icon_color = if close_btn.hovered() {
@@ -200,7 +205,7 @@ impl FerriteApp {
                         // Draw × as two crisp diagonal line segments
                         {
                             let c = close_btn.rect.center();
-                            let d = 5.5_f32;
+                            let d = 5.5_f32 * WINDOW_CHROME_ICON_SCALE;
                             let stroke = egui::Stroke::new(1.5, close_icon_color);
                             ui.painter().line_segment(
                                 [egui::pos2(c.x - d, c.y - d), egui::pos2(c.x + d, c.y + d)],
@@ -220,7 +225,7 @@ impl FerriteApp {
                         let max_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(36.0, 22.0)),
+                                .min_size(WINDOW_CHROME_BTN_SIZE),
                         );
                         if max_btn.hovered() {
                             ui.painter().rect_filled(
@@ -234,8 +239,8 @@ impl FerriteApp {
                         let stroke = egui::Stroke::new(1.5, text_color);
                         if is_maximized {
                             // Restore icon: two overlapping rectangles
-                            let size = 4.5;
-                            let offset = 2.0;
+                            let size = 4.5 * WINDOW_CHROME_ICON_SCALE;
+                            let offset = 2.0 * WINDOW_CHROME_ICON_SCALE;
                             // Back rectangle (offset up-right) - show top and right edges only
                             let back_min = egui::pos2(
                                 max_center.x - size + offset,
@@ -272,12 +277,13 @@ impl FerriteApp {
                             );
                         } else {
                             // Maximize icon: rectangle with thicker top edge (suggests a window title bar)
-                            let size = 5.5;
+                            let size = 5.5 * WINDOW_CHROME_ICON_SCALE;
                             let rect = egui::Rect::from_center_size(
                                 max_center,
                                 egui::vec2(size * 2.0, size * 2.0),
                             );
-                            let top_stroke = egui::Stroke::new(2.0, text_color);
+                            let top_stroke =
+                                egui::Stroke::new(2.0 * WINDOW_CHROME_ICON_SCALE, text_color);
                             ui.painter().line_segment(
                                 [
                                     egui::pos2(rect.min.x, rect.min.y),
@@ -317,7 +323,7 @@ impl FerriteApp {
                         let min_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
                                 .frame(false)
-                                .min_size(egui::vec2(36.0, 22.0)),
+                                .min_size(WINDOW_CHROME_BTN_SIZE),
                         );
                         if min_btn.hovered() {
                             ui.painter().rect_filled(
@@ -327,10 +333,11 @@ impl FerriteApp {
                             );
                         }
                         let center = min_btn.rect.center();
+                        let min_half = 6.0 * WINDOW_CHROME_ICON_SCALE;
                         ui.painter().line_segment(
                             [
-                                egui::pos2(center.x - 6.0, center.y),
-                                egui::pos2(center.x + 6.0, center.y),
+                                egui::pos2(center.x - min_half, center.y),
+                                egui::pos2(center.x + min_half, center.y),
                             ],
                             egui::Stroke::new(1.5, text_color),
                         );

@@ -221,8 +221,14 @@ pub struct FrontmatterPanelOutput {
 /// Cached state for the frontmatter panel to avoid re-parsing every frame.
 pub struct FrontmatterPanel {
     fields: Vec<FrontmatterField>,
-    /// content_version from Tab — avoids O(N) hashing per frame
-    cached_content_version: u64,
+    /// `(tab_id, content_version)` of the last parse.
+    ///
+    /// `content_version` alone is **not** a safe cache key: it's a per-tab
+    /// counter that starts at 0 for every new tab, so two different tabs
+    /// frequently collide on the same version (e.g. both unedited). Pairing
+    /// it with the stable `Tab.id` ensures cache invalidation on tab switch
+    /// while keeping per-frame cost O(1).
+    cached_key: Option<(usize, u64)>,
     new_key_buf: String,
     new_tag_bufs: Vec<String>,
     has_frontmatter: bool,
@@ -235,7 +241,7 @@ impl FrontmatterPanel {
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
-            cached_content_version: u64::MAX,
+            cached_key: None,
             new_key_buf: String::new(),
             new_tag_bufs: Vec::new(),
             has_frontmatter: false,
@@ -244,13 +250,23 @@ impl FrontmatterPanel {
         }
     }
 
-    /// Re-parse frontmatter from content if it changed (gated by content_version).
-    pub fn update_from_content_versioned(&mut self, content: &str, content_version: u64) {
-        if content_version == self.cached_content_version {
+    /// Re-parse frontmatter from content if the active tab or its content
+    /// changed. Gated by `(tab_id, content_version)` — see [`cached_key`].
+    ///
+    /// [`cached_key`]: FrontmatterPanel::cached_key
+    pub fn update_from_content_versioned(
+        &mut self,
+        content: &str,
+        tab_id: usize,
+        content_version: u64,
+    ) {
+        let key = (tab_id, content_version);
+        if self.cached_key == Some(key) {
             return;
         }
-        self.cached_content_version = content_version;
-        self.current_content.clone_from(&content.to_string());
+        self.cached_key = Some(key);
+        self.current_content.clear();
+        self.current_content.push_str(content);
 
         match extract_frontmatter(content) {
             Some((yaml, _end)) => {
@@ -357,7 +373,7 @@ impl FrontmatterPanel {
             ];
             let new_content = replace_frontmatter_in_content(content, &default_fields);
             output.new_content = Some(new_content);
-            self.cached_content_version = u64::MAX; // force re-parse next frame
+            self.cached_key = None; // force re-parse next frame
         }
     }
 
@@ -499,7 +515,7 @@ impl FrontmatterPanel {
         if changed {
             let new_content = replace_frontmatter_in_content(content, &self.fields);
             output.new_content = Some(new_content);
-            self.cached_content_version = u64::MAX; // force re-parse to keep in sync
+            self.cached_key = None; // force re-parse to keep in sync
         }
     }
 
@@ -677,5 +693,59 @@ mod tests {
         let result = replace_frontmatter_in_content(content, &fields);
         assert!(result.starts_with("---\ntitle: Added\n---\n"));
         assert!(result.contains("# No frontmatter"));
+    }
+
+    /// Regression: switching between two tabs that share the same
+    /// `content_version` (very common — every freshly-opened tab starts
+    /// at version 0) must still re-parse. Pre-fix this caused the panel
+    /// to stay stuck on the previous tab's frontmatter / stale content
+    /// and could splice the previous tab's body into the active tab if
+    /// the user clicked "Add frontmatter".
+    #[test]
+    fn cache_invalidates_on_tab_switch_with_matching_version() {
+        let mut panel = FrontmatterPanel::new();
+
+        // Tab A (id=0, version=0): no frontmatter.
+        let tab_a = "# Plain README\n\nNo frontmatter here.\n";
+        panel.update_from_content_versioned(tab_a, 0, 0);
+        assert!(!panel.has_frontmatter);
+        assert_eq!(panel.current_content, tab_a);
+
+        // Tab B (id=1, version=0): has frontmatter. Same version as Tab A.
+        let tab_b = "---\ntitle: Hello\n---\n\n# Body\n";
+        panel.update_from_content_versioned(tab_b, 1, 0);
+        assert!(
+            panel.has_frontmatter,
+            "tab switch with matching version must invalidate the cache"
+        );
+        assert_eq!(panel.fields.len(), 1);
+        assert_eq!(panel.fields[0].key, "title");
+        assert_eq!(panel.current_content, tab_b);
+
+        // Switching back to Tab A also re-parses.
+        panel.update_from_content_versioned(tab_a, 0, 0);
+        assert!(!panel.has_frontmatter);
+        assert_eq!(panel.current_content, tab_a);
+    }
+
+    /// Edits on the same tab still hit the cache: only version bumps
+    /// (or tab switches) trigger a re-parse.
+    #[test]
+    fn cache_skips_reparse_when_key_unchanged() {
+        let mut panel = FrontmatterPanel::new();
+        let content = "---\ntitle: A\n---\n\n# Body\n";
+
+        panel.update_from_content_versioned(content, 7, 3);
+        assert!(panel.has_frontmatter);
+        assert_eq!(panel.fields[0].key, "title");
+
+        // Simulate a stale view of the same content (same key) — should
+        // be a no-op even if we pass garbage as content.
+        panel.update_from_content_versioned("garbage", 7, 3);
+        assert_eq!(
+            panel.current_content, content,
+            "matching (tab_id, version) must skip re-parse and keep state"
+        );
+        assert_eq!(panel.fields[0].key, "title");
     }
 }

@@ -19,11 +19,11 @@ Visual editor for YAML frontmatter in markdown files. Displayed as the **"FM" ta
 
 The frontmatter panel follows the same pattern as `BacklinksPanel` — a content widget rendered inside the outline panel's tab system:
 
-- `FrontmatterPanel` struct holds cached state (parsed fields, content hash, input buffers)
+- `FrontmatterPanel` struct holds cached state (parsed fields, `(tab_id, content_version)` cache key, input buffers)
 - `show_content(ui, is_dark)` renders inside a parent `Ui` (the outline panel tab area)
 - `FrontmatterPanelOutput` carries edit results (`new_content`) back to the caller
 - `OutlinePanelOutput.frontmatter_new_content` propagates edits to `app/mod.rs`, which applies them to the active tab's content
-- `update_from_content(content)` is called before rendering to re-parse if the raw content changed
+- `update_from_content_versioned(content, tab_id, content_version)` is called before rendering to re-parse if either the active tab or its content changed (see **Caching** below)
 
 The FM tab is always visible in the outline panel tab bar. When the active file is not markdown, the tab shows a "not available" message. The `Ctrl+Shift+M` shortcut opens the outline panel (if closed) and switches to the FM tab.
 
@@ -50,12 +50,18 @@ Uses a custom `extract_frontmatter()` function (not the full markdown parser) fo
 
 ### Bidirectional Sync
 
-- **Raw → Panel**: Content hash comparison each frame; re-parses only when hash changes
+- **Raw → Panel**: `(tab_id, content_version)` comparison each frame; re-parses only when the active tab or its content changes (see **Caching** below)
 - **Panel → Raw**: On any field edit, serializes all fields back to YAML and replaces the frontmatter block in the document content via `replace_frontmatter_in_content()`
 
 ### Caching
 
-Content hash (`DefaultHasher`) prevents re-parsing on every frame. The hash is reset to 0 after panel edits to force a re-parse on the next frame (keeps hash in sync with the new content).
+`update_from_content_versioned(content, tab_id, content_version)` gates re-parse on a `(tab_id, content_version)` cache key (`cached_key: Option<(usize, u64)>`).
+
+`content_version` alone is **not** safe — it's a per-tab counter that starts at `0` for every new tab, so two different tabs frequently collide on the same version (e.g. both unedited). Pairing it with the stable `Tab.id` ensures cache invalidation on tab switch while keeping per-frame cost O(1). Regression covered by `cache_invalidates_on_tab_switch_with_matching_version` and `cache_skips_reparse_when_key_unchanged`.
+
+`cached_key` is reset to `None` after panel-driven edits (Add frontmatter, field edit, tag add/remove, field delete) so the next frame re-parses from the new content.
+
+> **History:** v0.2.8 used a `DefaultHasher` over the full content (O(N) per frame). v0.3.0's [per-frame cache elimination](../performance/per-frame-cache-elimination.md) replaced that with the version counter — but the initial version dropped the tab-id component, which caused stale-content bugs on tab switch (panel stuck on previous tab, "No frontmatter detected" on files with frontmatter, and "Add frontmatter" splicing the previous tab's body into the active tab). Fixed by re-introducing tab id into the cache key.
 
 ## Dependencies Used
 

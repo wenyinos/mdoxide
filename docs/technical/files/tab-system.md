@@ -24,9 +24,8 @@ pub struct Tab {
     original_content: String,           // For dirty state detection
     pub cursor_position: (usize, usize), // Line, column (0-indexed)
     pub scroll_offset: f32,             // Scroll position
-    undo_stack: Vec<String>,            // Undo history
-    redo_stack: Vec<String>,            // Redo history
-    max_undo_size: usize,               // Max undo entries (100)
+    edit_history: EditHistory,          // Operation-based undo/redo (see undo-redo.md)
+    // ... view_mode, content_version, pending_undo_snapshot, etc.
 }
 ```
 

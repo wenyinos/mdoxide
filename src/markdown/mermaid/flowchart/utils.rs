@@ -195,3 +195,158 @@ pub(crate) fn line_rect_intersection(from: Pos2, to: Pos2, rect: Rect) -> Option
 
     best_t.map(|t| from + dir * t)
 }
+
+/// Padding around node rects when testing edge–obstacle collisions.
+pub(crate) const NODE_OBSTACLE_PADDING: f32 = 8.0;
+
+/// Margin outside the graph bounding box for back-edge loop routing.
+pub(crate) const BACK_EDGE_LOOP_MARGIN: f32 = 24.0;
+
+/// Extra horizontal spacing between parallel back-edge loops on the same side.
+pub(crate) const BACK_EDGE_LANE_SPACING: f32 = 36.0;
+
+/// Expand a rectangle by uniform padding on all sides.
+pub(crate) fn expand_rect(rect: Rect, padding: f32) -> Rect {
+    rect.expand(padding)
+}
+
+/// Returns true if the open segment `(from, to)` crosses `rect` interior (not merely touching at endpoints).
+pub(crate) fn segment_intersects_rect(from: Pos2, to: Pos2, rect: Rect) -> bool {
+    let inner = rect.shrink(1.0);
+    let Some(hit) = line_rect_intersection(from, to, inner) else {
+        return false;
+    };
+    // Ignore grazing hits at endpoints (adjacent node padding overlap).
+    let dir = to - from;
+    if dir.length_sq() < 0.001 {
+        return false;
+    }
+    let t = ((hit.x - from.x) * dir.x + (hit.y - from.y) * dir.y) / dir.length_sq();
+    t > 0.02 && t < 0.98
+}
+
+/// Returns true if any segment in `path` hits an obstacle rect.
+pub(crate) fn path_intersects_any(path: &[(Pos2, Pos2)], obstacles: &[Rect]) -> bool {
+    path.iter().any(|&(a, b)| {
+        obstacles
+            .iter()
+            .any(|&rect| segment_intersects_rect(a, b, rect))
+    })
+}
+
+/// Sample a cubic bezier and test sub-segments against obstacle rects.
+pub(crate) fn bezier_intersects_any(
+    p0: Pos2,
+    p1: Pos2,
+    p2: Pos2,
+    p3: Pos2,
+    obstacles: &[Rect],
+    samples: usize,
+) -> bool {
+    if obstacles.is_empty() {
+        return false;
+    }
+    let samples = samples.max(4);
+    let mut prev = p0;
+    for i in 1..=samples {
+        let t = i as f32 / samples as f32;
+        let curr = bezier_point(p0, p1, p2, p3, t);
+        if obstacles
+            .iter()
+            .any(|&rect| segment_intersects_rect(prev, curr, rect))
+        {
+            return true;
+        }
+        prev = curr;
+    }
+    false
+}
+
+/// Bounding box enclosing all rects, or zero if empty.
+pub(crate) fn union_rect_bounds(rects: &[Rect]) -> Rect {
+    let mut iter = rects.iter();
+    let Some(first) = iter.next() else {
+        return Rect::NOTHING;
+    };
+    let mut bounds = *first;
+    for rect in iter {
+        bounds = bounds.union(*rect);
+    }
+    bounds
+}
+
+/// Build padded obstacle rects for every node except the edge endpoints.
+pub(crate) fn collect_node_obstacles(
+    nodes: &std::collections::HashMap<String, super::types::NodeLayout>,
+    offset: Vec2,
+    exclude_from: &str,
+    exclude_to: &str,
+) -> Vec<Rect> {
+    nodes
+        .iter()
+        .filter(|(id, _)| id.as_str() != exclude_from && id.as_str() != exclude_to)
+        .map(|(_, layout)| {
+            expand_rect(
+                Rect::from_min_size(layout.pos + offset, layout.size),
+                NODE_OBSTACLE_PADDING,
+            )
+        })
+        .collect()
+}
+
+/// Content bounding size from positioned nodes and subgraphs.
+pub(crate) fn layout_content_size(layout: &super::types::FlowchartLayout, margin: f32) -> Vec2 {
+    let mut max_x = 0.0_f32;
+    let mut max_y = 0.0_f32;
+    for node in layout.nodes.values() {
+        max_x = max_x.max(node.pos.x + node.size.x);
+        max_y = max_y.max(node.pos.y + node.size.y);
+    }
+    for sg in layout.subgraphs.values() {
+        max_x = max_x.max(sg.pos.x + sg.size.x);
+        max_y = max_y.max(sg.pos.y + sg.size.y);
+    }
+    Vec2::new(max_x + margin, max_y + margin)
+}
+
+#[cfg(test)]
+mod obstacle_tests {
+    use super::*;
+
+    #[test]
+    fn segment_through_rect_center_is_intersection() {
+        let rect = Rect::from_min_size(Pos2::new(10.0, 10.0), Vec2::new(20.0, 20.0));
+        assert!(segment_intersects_rect(
+            Pos2::new(0.0, 20.0),
+            Pos2::new(40.0, 20.0),
+            rect
+        ));
+    }
+
+    #[test]
+    fn segment_bypassing_rect_is_clear() {
+        let rect = Rect::from_min_size(Pos2::new(10.0, 10.0), Vec2::new(20.0, 20.0));
+        assert!(!segment_intersects_rect(
+            Pos2::new(0.0, 0.0),
+            Pos2::new(40.0, 0.0),
+            rect
+        ));
+    }
+
+    #[test]
+    fn orthogonal_detour_avoids_obstacle() {
+        let obstacle = expand_rect(
+            Rect::from_min_size(Pos2::new(40.0, 40.0), Vec2::new(30.0, 30.0)),
+            NODE_OBSTACLE_PADDING,
+        );
+        let start = Pos2::new(55.0, 20.0);
+        let end = Pos2::new(55.0, 90.0);
+        // Route via left corridor — never crosses the obstacle column
+        let path = [
+            (start, Pos2::new(10.0, start.y)),
+            (Pos2::new(10.0, start.y), Pos2::new(10.0, end.y)),
+            (Pos2::new(10.0, end.y), end),
+        ];
+        assert!(!path_intersects_any(&path, &[obstacle]));
+    }
+}

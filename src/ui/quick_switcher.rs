@@ -18,6 +18,158 @@ use std::path::PathBuf;
 /// Maximum number of results to show in the quick switcher.
 const MAX_RESULTS: usize = 15;
 
+/// Treat common filename/path separators as spaces so `tables` matches `test-tables.md`.
+fn normalize_for_search(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut prev_was_space = true;
+
+    for c in s.chars() {
+        let is_separator = matches!(c, '-' | '_' | '.' | ' ' | '/' | '\\');
+        if is_separator {
+            if !prev_was_space {
+                result.push(' ');
+            }
+            prev_was_space = true;
+        } else {
+            result.push(c.to_ascii_lowercase());
+            prev_was_space = false;
+        }
+    }
+
+    result
+}
+
+/// Whether two path tokens are close enough to treat as a match (minor typos).
+fn tokens_similar(word: &str, query: &str) -> bool {
+    if word.eq_ignore_ascii_case(query) {
+        return true;
+    }
+    if word.len() < 3 || query.len() < 3 {
+        return false;
+    }
+    if word.len().abs_diff(query.len()) > 2 {
+        return false;
+    }
+    damerau_levenshtein_at_most(word, query, 2)
+}
+
+/// Damerau-Levenshtein distance with early exit when above `max`.
+fn damerau_levenshtein_at_most(a: &str, b: &str, max: usize) -> bool {
+    let a: Vec<char> = a.to_lowercase().chars().collect();
+    let b: Vec<char> = b.to_lowercase().chars().collect();
+    let la = a.len();
+    let lb = b.len();
+
+    if la.abs_diff(lb) > max {
+        return false;
+    }
+    if la == 0 {
+        return lb <= max;
+    }
+    if lb == 0 {
+        return la <= max;
+    }
+
+    let mut prev_prev = vec![0usize; lb + 1];
+    let mut prev = (0..=lb).collect::<Vec<_>>();
+    let mut curr = vec![0usize; lb + 1];
+
+    for i in 1..=la {
+        curr[0] = i;
+        let mut row_min = curr[0];
+
+        for j in 1..=lb {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            let mut dist = (prev[j] + 1)
+                .min(curr[j - 1] + 1)
+                .min(prev[j - 1] + cost);
+
+            if i > 1
+                && j > 1
+                && a[i - 1] == b[j - 2]
+                && a[i - 2] == b[j - 1]
+            {
+                dist = dist.min(prev_prev[j - 2] + 1);
+            }
+
+            curr[j] = dist;
+            row_min = row_min.min(dist);
+        }
+
+        if row_min > max {
+            return false;
+        }
+
+        std::mem::swap(&mut prev_prev, &mut prev);
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    prev[lb] <= max
+}
+
+/// Score how well a single path token matches the query. Higher is better.
+fn score_token_match(word: &str, query: &str, matcher: &SkimMatcherV2) -> Option<i64> {
+    if word.is_empty() || query.is_empty() {
+        return None;
+    }
+
+    if word == query {
+        return Some(1000);
+    }
+    if word.starts_with(query) {
+        let length_bonus = 50_i64.saturating_sub((word.len() - query.len()) as i64);
+        return Some(800 + length_bonus);
+    }
+    if query.len() >= 3 && word.contains(query) {
+        return Some(600);
+    }
+    if query.len() >= 4 && tokens_similar(word, query) {
+        return Some(400);
+    }
+
+    matcher.fuzzy_match(word, query).map(|score| score + 50)
+}
+
+/// Score a workspace-relative path for the quick switcher. `None` means no match.
+fn score_path_match(path_display: &str, query: &str, matcher: &SkimMatcherV2) -> Option<i64> {
+    let query = query.trim();
+    if query.is_empty() {
+        return None;
+    }
+
+    let norm_path = normalize_for_search(path_display);
+    let norm_query = normalize_for_search(query);
+    if norm_query.is_empty() {
+        return None;
+    }
+
+    let query_words: Vec<&str> = norm_query.split_whitespace().collect();
+    let path_tokens: Vec<&str> = norm_path.split_whitespace().collect();
+
+    if query_words.is_empty() || path_tokens.is_empty() {
+        return None;
+    }
+
+    // Multi-word query: every word must match some token.
+    if query_words.len() > 1 {
+        let mut total = 0_i64;
+        for qw in &query_words {
+            let best = path_tokens
+                .iter()
+                .filter_map(|token| score_token_match(token, qw, matcher))
+                .max()?;
+            total += best;
+        }
+        return Some(total);
+    }
+
+    let qw = query_words[0];
+    path_tokens
+        .iter()
+        .filter_map(|token| score_token_match(token, qw, matcher))
+        .max()
+}
+
 /// Output from the quick switcher.
 #[derive(Debug, Default)]
 pub struct QuickSwitcherOutput {
@@ -337,6 +489,24 @@ impl QuickSwitcher {
         output
     }
 
+    /// Paths to search: indexed tree files plus recent files (may include unexpanded folders).
+    fn search_paths(all_files: &[PathBuf], recent_files: &[PathBuf]) -> Vec<PathBuf> {
+        use std::collections::HashSet;
+        let mut seen: HashSet<&PathBuf> = HashSet::with_capacity(all_files.len() + recent_files.len());
+        let mut paths: Vec<PathBuf> = Vec::with_capacity(all_files.len() + recent_files.len());
+        for path in all_files {
+            if seen.insert(path) {
+                paths.push(path.clone());
+            }
+        }
+        for path in recent_files {
+            if seen.insert(path) {
+                paths.push(path.clone());
+            }
+        }
+        paths
+    }
+
     /// Filter and score files based on the current query.
     fn filter_files(
         &self,
@@ -344,6 +514,7 @@ impl QuickSwitcher {
         recent_files: &[PathBuf],
         workspace_root: &PathBuf,
     ) -> Vec<QuickSwitcherResult> {
+        let _diag = crate::diag::SlowScope::new("quick_switcher::filter_files", 16);
         let mut results: Vec<QuickSwitcherResult> = Vec::new();
 
         // If query is empty, show recent files first, then other files
@@ -379,20 +550,38 @@ impl QuickSwitcher {
             return results;
         }
 
-        // Score all files
+        // Score indexed + recent files (recent may include paths not yet loaded in the tree).
         let mut scored: Vec<(PathBuf, i64, bool)> = Vec::new();
+        let search_paths = Self::search_paths(all_files, recent_files);
+        if crate::diag::enabled() && search_paths.len() > 500 {
+            crate::diag::event(
+                "quick_switcher_large_scan",
+                format!(
+                    "scoring {} paths (query {:?})",
+                    search_paths.len(),
+                    self.query
+                ),
+            );
+        }
 
-        for path in all_files {
-            let display = path
+        for path in search_paths {
+            let relative = path
                 .strip_prefix(workspace_root)
-                .unwrap_or(path)
+                .unwrap_or(&path)
                 .to_string_lossy();
 
-            if let Some(score) = self.matcher.fuzzy_match(&display, &self.query) {
-                let is_recent = recent_files.contains(path);
-                // Boost recent files
-                let boosted_score = if is_recent { score + 100 } else { score };
-                scored.push((path.clone(), boosted_score, is_recent));
+            let mut score = score_path_match(&relative, &self.query, &self.matcher);
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if let Some(name_score) = score_path_match(name, &self.query, &self.matcher) {
+                    score = Some(score.map_or(name_score, |s| s.max(name_score)));
+                }
+            }
+
+            if let Some(score) = score {
+                let is_recent = recent_files.contains(&path);
+                // Small recent tiebreaker only — must not swamp match quality.
+                let boosted_score = if is_recent { score + 5 } else { score };
+                scored.push((path, boosted_score, is_recent));
             }
         }
 
@@ -517,5 +706,73 @@ mod tests {
         assert_eq!(result.display_name, "main.rs");
         assert_eq!(result.relative_path, "src/main.rs");
         assert!(result.is_recent);
+    }
+
+    #[test]
+    fn test_normalize_for_search_replaces_separators() {
+        assert_eq!(normalize_for_search("test-tabels.md"), "test tabels md");
+        assert_eq!(normalize_for_search("my_cool_file"), "my cool file");
+        assert_eq!(normalize_for_search("a--b___c"), "a b c");
+        assert_eq!(
+            normalize_for_search("test_md\\test_box_drawing.md"),
+            "test md test box drawing md"
+        );
+    }
+
+    #[test]
+    fn test_tokens_similar_allows_minor_typos() {
+        assert!(tokens_similar("tabels", "tables"));
+        assert!(tokens_similar("tables", "tabels"));
+        assert!(!tokens_similar("totally", "tables"));
+    }
+
+    #[test]
+    fn test_score_path_match_finds_dash_separated_names() {
+        let matcher = SkimMatcherV2::default();
+        assert!(score_path_match("docs/test-tables.md", "tables", &matcher).is_some());
+        assert!(score_path_match("docs/test-tabels.md", "tables", &matcher).is_some());
+        assert!(score_path_match("src/my_module/foo.rs", "my module", &matcher).is_some());
+        assert!(score_path_match("notes/quick_start.md", "quick start", &matcher).is_some());
+    }
+
+    #[test]
+    fn test_score_path_match_still_matches_literal_paths() {
+        let matcher = SkimMatcherV2::default();
+        assert!(score_path_match("src/main.rs", "main.rs", &matcher).is_some());
+    }
+
+    #[test]
+    fn test_box_query_prefers_box_drawing() {
+        let matcher = SkimMatcherV2::default();
+        let box_drawing = score_path_match("test_md\\test_box_drawing.md", "box", &matcher);
+        let tables = score_path_match("test_md\\test_tables.md", "box", &matcher);
+        let code_blocks = score_path_match("test_md\\test_consecutive_code_blocks.md", "box", &matcher);
+        let readme = score_path_match("README.md", "box", &matcher);
+
+        assert!(box_drawing.is_some());
+        assert!(box_drawing.unwrap() > tables.unwrap_or(0));
+        assert!(code_blocks.is_none());
+        assert!(readme.is_none());
+    }
+
+    #[test]
+    fn test_filter_files_searches_recent_when_not_in_tree() {
+        let mut switcher = QuickSwitcher::new();
+        switcher.query = "box".to_string();
+
+        let box_path = PathBuf::from("test_md/test_box_drawing.md");
+        let root = PathBuf::from(".");
+        let results = switcher.filter_files(&[], &[box_path.clone()], &root);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, box_path);
+    }
+
+    #[test]
+    fn test_search_paths_merges_without_duplicates() {
+        let a = PathBuf::from("a.md");
+        let b = PathBuf::from("b.md");
+        let paths = QuickSwitcher::search_paths(&[a.clone(), b.clone()], &[a.clone()]);
+        assert_eq!(paths.len(), 2);
     }
 }
