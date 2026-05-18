@@ -1311,6 +1311,60 @@ fn find_closing_single_star(text: &str) -> Option<usize> {
 // Editable Table Widget
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Shared across all [`EditableTable`] instances in one frame / document view.
+#[derive(Debug, Clone, Default)]
+struct TableGlobalFocus {
+    /// Table that had a focused cell on the previous frame.
+    active_table: Option<egui::Id>,
+    active_cell: Option<(usize, usize)>,
+    /// Cell the user clicked (may belong to a different table; set during layout).
+    pending_cell: Option<(egui::Id, usize, usize)>,
+}
+
+fn table_global_focus_id() -> egui::Id {
+    egui::Id::new("ferrite_table_global_focus")
+}
+
+fn load_table_global_focus(ui: &Ui) -> TableGlobalFocus {
+    ui.memory(|mem| {
+        mem.data
+            .get_temp::<TableGlobalFocus>(table_global_focus_id())
+            .unwrap_or_default()
+    })
+}
+
+fn save_table_global_focus(ui: &mut Ui, global: TableGlobalFocus) {
+    ui.memory_mut(|mem| {
+        mem.data.insert_temp(table_global_focus_id(), global);
+    });
+}
+
+fn request_table_cell_focus(
+    edit_state: &mut TableEditState,
+    global: &mut TableGlobalFocus,
+    ui: &mut Ui,
+    table_id: egui::Id,
+    row: usize,
+    col: usize,
+) {
+    if let Some((fr, fc)) = edit_state.focused_cell {
+        if fr != row || fc != col {
+            let prev_cell_id = table_id.with("cell").with(fr).with(fc);
+            ui.memory_mut(|m| m.surrender_focus(prev_cell_id));
+        }
+    }
+    if let Some(active_table) = global.active_table {
+        if active_table != table_id {
+            if let Some((fr, fc)) = global.active_cell {
+                let prev_cell_id = active_table.with("cell").with(fr).with(fc);
+                ui.memory_mut(|m| m.surrender_focus(prev_cell_id));
+            }
+        }
+    }
+    edit_state.pending_focus = Some((row, col));
+    global.pending_cell = Some((table_id, row, col));
+}
+
 /// State for tracking table cell editing and navigation.
 #[derive(Debug, Clone, Default)]
 pub struct TableEditState {
@@ -1324,6 +1378,11 @@ pub struct TableEditState {
     /// Whether any cell content was modified while editing.
     /// Reset when focus leaves the table.
     pub content_modified: bool,
+    /// Buffer edits until focus has fully left (see `defer_commit_age`).
+    defer_commit: bool,
+    /// Frames since `defer_commit` began; commit only after >= 2 so tables lower in
+    /// the document can record `TableGlobalFocus::pending_cell` first.
+    defer_commit_age: u8,
     /// User-resized column widths. None = use auto-calculated widths.
     /// Stored as absolute pixels; normalized to table_width on each frame.
     pub custom_col_widths: Option<Vec<f32>>,
@@ -1781,8 +1840,18 @@ impl<'a> EditableTable<'a> {
                 .clone()
         });
 
+        let mut global = load_table_global_focus(ui);
+
         // Track if we should signal a change to the source
         let mut changed = false;
+
+        // Cross-table pending focus from a table rendered earlier this frame.
+        if let Some((tid, row, col)) = global.pending_cell {
+            if tid == table_id && edit_state.pending_focus.is_none() {
+                edit_state.pending_focus = Some((row, col));
+                global.pending_cell = None;
+            }
+        }
 
         // Track if any cell has focus this frame
         let mut any_cell_has_focus = false;
@@ -1965,6 +2034,9 @@ impl<'a> EditableTable<'a> {
         } else {
             egui::Color32::from_rgb(245, 247, 250)
         };
+
+        // Display-cell hit targets (filled during layout; used after for focus switching).
+        let mut cell_click_targets: Vec<((usize, usize), egui::Rect)> = Vec::new();
 
         // Main table frame
         egui::Frame::new()
@@ -2172,17 +2244,42 @@ impl<'a> EditableTable<'a> {
                                                         egui::vec2(inner_w, inner_h),
                                                         egui::Sense::click(),
                                                     );
+                                                    cell_click_targets
+                                                        .push(((row_idx, col_idx), response.rect));
                                                     ui.painter().galley(
                                                         response.rect.min,
                                                         galley,
                                                         text_color,
                                                     );
 
-                                                    if response.clicked()
+                                                    // When a TextEdit already has focus, egui often
+                                                    // uses the first click only to defocus it;
+                                                    // `clicked()` may not fire on the target cell.
+                                                    // `primary_pressed()` on hover catches that case.
+                                                    let switching_from_other = edit_state
+                                                        .focused_cell
+                                                        .is_some_and(|(fr, fc)| {
+                                                            fr != row_idx || fc != col_idx
+                                                        })
+                                                        || global.active_table.is_some_and(
+                                                            |t| t != table_id,
+                                                        );
+                                                    let activate_cell = response.clicked()
                                                         || response.double_clicked()
-                                                    {
-                                                        edit_state.pending_focus =
-                                                            Some((row_idx, col_idx));
+                                                        || (switching_from_other
+                                                            && response.hovered()
+                                                            && ui.input(|i| {
+                                                                i.pointer.primary_pressed()
+                                                            }));
+                                                    if activate_cell {
+                                                        request_table_cell_focus(
+                                                            &mut edit_state,
+                                                            &mut global,
+                                                            ui,
+                                                            table_id,
+                                                            row_idx,
+                                                            col_idx,
+                                                        );
                                                     }
                                                     if response.hovered() {
                                                         ui.ctx()
@@ -2241,6 +2338,40 @@ impl<'a> EditableTable<'a> {
                             row_y_max,
                             egui::Stroke::new(1.5, border_color),
                         );
+                    }
+                }
+
+                // Fallback when defocus-only click did not set pending_focus above.
+                let cross_table_edit = global.active_table.is_some_and(|t| t != table_id);
+                if edit_state.pending_focus.is_none()
+                    && (edit_state.had_focus_last_frame || cross_table_edit)
+                {
+                    let (pointer_down, pointer_pos) = ui.input(|i| {
+                        (
+                            i.pointer.primary_pressed() || i.pointer.primary_clicked(),
+                            i.pointer.interact_pos(),
+                        )
+                    });
+                    if pointer_down {
+                        if let Some(pos) = pointer_pos {
+                            if let Some((row, col)) = cell_click_targets
+                                .iter()
+                                .rev()
+                                .find(|(_, rect)| rect.contains(pos))
+                                .map(|((r, c), _)| (*r, *c))
+                            {
+                                if edit_state.focused_cell != Some((row, col)) {
+                                    request_table_cell_focus(
+                                        &mut edit_state,
+                                        &mut global,
+                                        ui,
+                                        table_id,
+                                        row,
+                                        col,
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2478,21 +2609,80 @@ impl<'a> EditableTable<'a> {
             edit_state.content_modified = false;
         }
 
-        // Detect focus loss: had focus last frame but not this frame
-        // This is when we commit cell edits to the source
-        let focus_lost = edit_state.had_focus_last_frame && !any_cell_has_focus;
+        // Detect focus loss: had focus last frame but not this frame.
+        // A click on another cell defocuses the TextEdit first; treat pointer-over-cell
+        // as in-table navigation (do not commit) even if pending_focus was not set yet.
+        let pointer_on_cell = ui.ctx().input(|i| {
+            i.pointer.interact_pos().is_some_and(|pos| {
+                i.pointer.any_pressed()
+                    && cell_click_targets
+                        .iter()
+                        .any(|(_, rect)| rect.contains(pos))
+            })
+        });
+        let focus_lost = edit_state.had_focus_last_frame
+            && !any_cell_has_focus
+            && edit_state.pending_focus.is_none()
+            && !pointer_on_cell;
 
-        if focus_lost && edit_state.content_modified {
-            // Focus left the table and content was modified - signal change
-            changed = true;
-            edit_state.content_modified = false;
+        if focus_lost && edit_state.content_modified && edit_state.pending_focus.is_none() {
+            // Always defer: egui reports focus loss on mouse *release* (any_pressed is false),
+            // and tables below us in the document have not run yet to set pending_cell.
+            edit_state.defer_commit = true;
+            edit_state.defer_commit_age = 0;
         }
 
         // Update focus tracking for next frame
         edit_state.had_focus_last_frame = any_cell_has_focus;
 
+        if edit_state.defer_commit {
+            edit_state.defer_commit_age = edit_state.defer_commit_age.saturating_add(1);
+            if edit_state.defer_commit_age >= 2 {
+                let commit_now = match global.pending_cell {
+                    None => true,
+                    Some((tid, _, _)) if tid != table_id => global.active_table == Some(tid),
+                    Some((tid, _, _)) if tid == table_id => false,
+                    _ => false,
+                };
+                if commit_now {
+                    changed = true;
+                    edit_state.content_modified = false;
+                    edit_state.defer_commit = false;
+                    edit_state.defer_commit_age = 0;
+                    if global.active_table == Some(table_id) {
+                        global.active_table = None;
+                        global.active_cell = None;
+                    }
+                } else if edit_state.defer_commit_age >= 8 {
+                    // Safety valve: pending_cell never resolved (e.g. focus race).
+                    edit_state.defer_commit = false;
+                    edit_state.defer_commit_age = 0;
+                    edit_state.content_modified = false;
+                    crate::diag::event(
+                        "table_defer_aborted",
+                        format!("table {:?} gave up waiting for pending_cell", table_id),
+                    );
+                }
+            }
+        }
+
+        if any_cell_has_focus {
+            global.active_table = Some(table_id);
+            global.active_cell = edit_state.focused_cell;
+        } else if edit_state.pending_focus.is_some() {
+            global.active_table = Some(table_id);
+            global.active_cell = edit_state.pending_focus;
+        }
+
         // Check if any cell has focus (for output)
         let has_focus = any_cell_has_focus;
+
+        let pending_focus_dbg = edit_state.pending_focus;
+        let pending_cell_dbg = global.pending_cell;
+        let defer_commit_dbg = edit_state.defer_commit;
+        let defer_commit_age_dbg = edit_state.defer_commit_age;
+
+        save_table_global_focus(ui, global);
 
         // Save the edit state back to memory
         ui.memory_mut(|mem| {
@@ -2505,6 +2695,29 @@ impl<'a> EditableTable<'a> {
 
         // Only report as modified when explicitly set (focus lost with edits, or action performed)
         // Don't use markdown comparison - edits are buffered until focus leaves the table
+        if changed {
+            crate::diag::event(
+                "table_commit",
+                format!(
+                    "table {:?} rows={} defer={} pending_focus={:?}",
+                    table_id,
+                    self.data.rows.len(),
+                    defer_commit_dbg,
+                    pending_focus_dbg
+                ),
+            );
+        } else if defer_commit_dbg {
+            crate::diag::event(
+                "table_defer_commit",
+                format!(
+                    "table {:?} age={} pending_cell={:?}",
+                    table_id,
+                    defer_commit_age_dbg,
+                    pending_cell_dbg
+                ),
+            );
+        }
+
         if changed {
             WidgetOutput::modified(markdown).with_focus(has_focus)
         } else {

@@ -45,6 +45,11 @@ const TITLE_BAR_BUTTON_AREA_WIDTH: f32 = 280.0;
 /// `ui.add_space(12.0)` call in `title_bar.rs`.
 const TITLE_BAR_BUTTON_RIGHT_MARGIN: f32 = 12.0;
 
+/// Right margin reserved at the bottom of the window so status-bar controls
+/// (Help `?`) do not overlap the SE corner / east-edge resize grab zone.
+/// Kept in sync with `ui.add_space` before the Help button in `status_bar.rs`.
+pub const STATUS_BAR_RESIZE_RIGHT_MARGIN: f32 = 14.0;
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -54,6 +59,9 @@ pub struct WindowResizeState {
     is_resizing: bool,
     /// Cursor to apply at end of frame (to override UI element cursors).
     pending_cursor: Option<CursorIcon>,
+    /// Suppress errant widget clicks for one frame after resize ends (release
+    /// over a grab zone would otherwise hit e.g. the Help button).
+    block_clicks_in_resize_zone: bool,
 }
 
 impl WindowResizeState {
@@ -79,6 +87,20 @@ impl WindowResizeState {
         if let Some(cursor) = self.pending_cursor.take() {
             ctx.set_cursor_icon(cursor);
         }
+        self.block_clicks_in_resize_zone = false;
+    }
+
+    /// True when foreground click guards should eat pointer events (active resize
+    /// or one frame after release over a grab zone). Does **not** include mere
+    /// hover over an edge — that ran `consume_clicks_in_resize_zones` every frame
+    /// and could wedge the UI on startup when the cursor sits on a window corner.
+    pub fn ui_interaction_blocked(&self, _ctx: &egui::Context) -> bool {
+        self.is_resizing || self.block_clicks_in_resize_zone
+    }
+
+    /// Whether the resize cursor is showing (hover over a grab zone or dragging).
+    pub fn resize_cursor_active(&self) -> bool {
+        self.is_resizing || self.current_direction.is_some()
     }
 }
 
@@ -135,6 +157,8 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
             state.is_resizing = false;
             state.current_direction = None;
             state.pending_cursor = None;
+            // Eat the release click so it does not activate widgets in the grab zone.
+            state.block_clicks_in_resize_zone = is_in_resize_zone(window_rect, pointer_pos);
         }
         return true;
     }
@@ -293,6 +317,19 @@ fn detect_resize_direction_with_exclusion(
     None
 }
 
+fn resize_dir_tag(direction: ResizeDirection) -> u8 {
+    match direction {
+        ResizeDirection::North => 0,
+        ResizeDirection::South => 1,
+        ResizeDirection::East => 2,
+        ResizeDirection::West => 3,
+        ResizeDirection::NorthEast => 4,
+        ResizeDirection::NorthWest => 5,
+        ResizeDirection::SouthEast => 6,
+        ResizeDirection::SouthWest => 7,
+    }
+}
+
 /// Convert a resize direction to the appropriate cursor icon.
 fn direction_to_cursor(direction: ResizeDirection) -> CursorIcon {
     match direction {
@@ -311,9 +348,47 @@ fn direction_to_cursor(direction: ResizeDirection) -> CursorIcon {
 ///
 /// This can be used by other UI elements (like the title bar) to determine
 /// if they should defer to resize handling.
-#[allow(dead_code)]
 pub fn is_in_resize_zone(window_rect: Rect, pointer_pos: Pos2) -> bool {
     detect_resize_direction(window_rect, pointer_pos).is_some()
+}
+
+/// Paint invisible click targets over resize grab zones so widgets underneath
+/// (e.g. status-bar Help) cannot steal the release click after a resize.
+///
+/// Call near the end of each frame, before [`WindowResizeState::apply_cursor`].
+pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeState) {
+    if !state.ui_interaction_blocked(ctx) {
+        return;
+    }
+
+    let window_rect = ctx.screen_rect();
+    let pointer = ctx.input(|i| i.pointer.hover_pos());
+
+    let mut directions = Vec::new();
+    if let Some(dir) = state.current_direction {
+        directions.push(dir);
+    } else if let Some(pos) = pointer {
+        if let Some(dir) = detect_resize_direction(window_rect, pos) {
+            directions.push(dir);
+        }
+    }
+
+    if directions.is_empty() {
+        return;
+    }
+
+    for (idx, dir) in directions.into_iter().enumerate() {
+        let zone = get_resize_zone_rect(window_rect, dir);
+        let id = egui::Id::new(("resize_click_guard", idx as u32, resize_dir_tag(dir)));
+        egui::Area::new(id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(zone.min)
+            .interactable(true)
+            .show(ctx, |ui| {
+                ui.set_min_size(zone.size());
+                ui.allocate_response(zone.size(), egui::Sense::click());
+            });
+    }
 }
 
 /// Get the resize zone rectangle for a given edge.

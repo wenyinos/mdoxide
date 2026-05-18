@@ -3,9 +3,9 @@
 ## Next Up (Immediate Focus)
 
 ### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
-**Status:** Feature scope for v0.3.0 is **implemented on `main`** (egui 0.31 stack, export, code run, Mermaid wave, accent, hub polish, and listed bugfixes). **Remaining before tag:** final QA (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping ([#112](https://github.com/OlaProeis/Ferrite/issues/112) / [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111)), release artifacts, and `CHANGELOG` / version bump. Optional follow-ups (e.g. Quick Note workflow #128) stay tracked as tasks and do not block the tag.
+**Status:** Feature scope for v0.3.0 is **implemented on `main`** (egui 0.31 stack, export, code run, Mermaid wave, accent, hub polish, quick-note workflow, and listed bugfixes). **Remaining before tag:** final QA (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping ([#112](https://github.com/OlaProeis/Ferrite/issues/112) / [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111)), release artifacts, and `CHANGELOG` / version bump. Mermaid FC-83a edge/layout parity ([#83](https://github.com/OlaProeis/Ferrite/issues/83)) is in progress and does not block the tag unless you choose to hold for it.
 
-**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), and **user-configurable Ferrite accent**. See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below (checkboxes updated to match reality).
+**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), optional **quick note workflow** for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), and **user-configurable Ferrite accent**. See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below (checkboxes updated to match reality).
 
 > **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). The original v0.2.9 plan (platform upgrade, export, code execution, embeds) was rolled into v0.3.0; remaining work that didn't fit was split into v0.3.1 / v0.3.2.
 
@@ -42,6 +42,7 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 
 ### Rendered View Limitations
 - [x] **Slow rendering on large documents** ([#105](https://github.com/OlaProeis/Ferrite/issues/105)) - Fixed in v0.2.8. AST caching, viewport culling, block height cache, and lazy estimation bring large-file rendered view to usable performance.
+- [x] **Mermaid flowchart edges cross node boxes** ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a) — **Landed for v0.3.0.** Obstacle-aware forward routing, orthogonal back-edge side channels at `BACK_EDGE_LOOP_MARGIN = 24 px`, painter sizing from actual node/subgraph bounds (no clipped loops), parallel back-edge lanes (`E → B` and `F → B` no longer merge), inner `E → B` exits top-outer corner and rises vertically along the source edge before entering Preview at side-centre, and `{decide}` snaps under Preview via alone-on-layer barycenter shift. Same-layer sibling overlap (coffee-machine `C/H`, `D/G`) fixed via `resolve_layer_overlaps` safety net. Docs: [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md), [`flowchart-layout-algorithm.md`](docs/technical/mermaid/flowchart-layout-algorithm.md). **FC-83b** (`fa:…` Font Awesome labels) and `linkStyle interpolate basis` curves remain open — see parity matrix.
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
 
 ---
@@ -85,12 +86,31 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 - [x] **Inline validation** — Warning header + editor squiggles; see [`docs/technical/mermaid/mermaid-inline-validation.md`](docs/technical/mermaid/mermaid-inline-validation.md).
 - [x] **Flowchart enhancements** — Shapes + `style` / classDef; see [`docs/technical/mermaid/flowchart-shapes-and-style.md`](docs/technical/mermaid/flowchart-shapes-and-style.md).
 - [x] **State diagram enhancements** — Fork/join + history pseudostates; see [`docs/technical/mermaid/state-pseudostates-fork-join-history.md`](docs/technical/mermaid/state-pseudostates-fork-join-history.md).
+- [x] **Flowchart edge routing parity** ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a) — Pre-tag rendering polish on native egui flowcharts (not mmdr/SVG). Repro: [`test_md/test_mermaid_issue_83.md`](test_md/test_mermaid_issue_83.md).
+  - [x] Forward edges detour around node obstacles via `route_forward_edge` → `try_orthogonal_route` → `route_via_side_corridor`; helpers in [`flowchart/utils.rs`](src/markdown/mermaid/flowchart/utils.rs). Back-edges use fixed-margin side channels (not ±40 px beziers).
+  - [x] Painter allocation from actual node bounds (`layout_content_size`) + horizontal padding so feedback loops are not clipped.
+  - [x] Parallel back-edge lanes (`BACK_EDGE_LANE_SPACING = 36 px`) — separate loops for `E → B` vs `F → B` via `compute_back_edge_lanes`.
+  - [x] Inner `E → B` routing: top-outer-corner exit + vertical-first along the source's outer edge into Preview side-centre (`try_inner_back_edge_direct_path`). Pinned by `fc_83a_inner_e_to_b_goes_up_first`.
+  - [x] Layout: snap `{decide}` to the children's barycenter when it is alone on its layer (`sugiyama::align_branch_nodes_to_children`); same-layer sibling overlap (e.g. coffee-machine `C/H`, `D/G`) cleared by the `resolve_layer_overlaps` safety net. Pinned by `test_layout_coffee_machine_all_nodes`.
+  - [x] Manual matrix: FC-83a vs Mermaid Live; regression spot-check on `test_md/test_flowcharts.md`.
+  - *Out of scope here:* `linkStyle interpolate basis` parsing (P2), Font Awesome labels (FC-83b). See [`docs/technical/mermaid/mermaid-parity-matrix.md`](docs/technical/mermaid/mermaid-parity-matrix.md).
+
+#### Files & session
+- [x] **Quick note workflow** (opt-in, **Settings → Files**) — Pathless tabs close without save prompts; modified untitled tabs no longer block quit; double-click tab to rename; session recovery keeps scratch buffers (clean exit preserves `recovery/` content). See [`docs/technical/config/quick-note-workflow.md`](docs/technical/config/quick-note-workflow.md).
+
+#### Localization
+- [x] **Spanish UI language** — **Español** in Settings / Welcome selector; `locales/es.yaml`; `Language::Spanish` + `es` / `es-*` system locale detection.
 
 #### Bugfixes & polish (v0.3.0 bucket)
 - [x] **Consecutive fenced code blocks** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Split/rendered view visibility; see [`docs/technical/markdown/consecutive-fenced-blocks-fix.md`](docs/technical/markdown/consecutive-fenced-blocks-fix.md).
 - [x] **Empty table cells: click-to-edit & tab focus** ([#131](https://github.com/OlaProeis/Ferrite/issues/131)) — Hit targets and focus; see [`docs/technical/markdown/table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md).
+- [x] **Table cell focus after editing (same table & cross-table)** — One-click move to another cell in rendered/split view after typing; shared `TableGlobalFocus` + deferred commit for egui defocus and top-to-bottom table layout. See [`table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md), [`table-editing-focus.md`](docs/technical/markdown/table-editing-focus.md).
 - [x] **macOS Gatekeeper / unsigned .app** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — User-facing workaround docs: [`docs/install/macos.md`](docs/install/macos.md), release checklist notes.
 - [x] **Custom font picker error on Intel macOS** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred load / toast fix; see [`docs/technical/fonts/custom-font-picker-deferred-load.md`](docs/technical/fonts/custom-font-picker-deferred-load.md).
+- [x] **Frontmatter panel stale on tab switch** — Per-frame cache regression introduced during v0.3.0 perf pass. `update_from_content_versioned` keyed on `content_version` alone, which collides across tabs (each tab's counter starts at `0`); the panel showed "No frontmatter detected" on files that had it, kept the previous tab's fields visible after switching, and could splice the previous tab's body into the active file when **Add frontmatter** was clicked. Fixed by keying the cache on `(tab_id, content_version)`; regression tests added. See [`docs/technical/ui/frontmatter-panel.md`](docs/technical/ui/frontmatter-panel.md) (*Caching*).
+- [x] **Ribbon toolbar icon-only** — Removed collapse/expand toggle and section labels; fixed 28px icon bar. Save/Export menus unchanged. See [`src/ui/ribbon.rs`](src/ui/ribbon.rs).
+- [x] **Undo granularity (raw typing)** — Removed 500 ms time-merge in `EditHistory`; each recorded diff is its own undo step so Ctrl+Z no longer reverts an entire fast-typing burst. See [`docs/technical/editor/undo-redo.md`](docs/technical/editor/undo-redo.md), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
+- [x] **Quick file switcher (Ctrl+P) search** — Token-based matching on `-` / `_` / path separators; search pool = indexed tree + recent files; match quality no longer drowned by recent-file boost or full-path subsequence noise. See [`src/ui/quick_switcher.rs`](src/ui/quick_switcher.rs), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
 
 #### Appearance — Ferrite accent color
 - [x] **User-configurable accent** — Color picker in **Settings → Appearance** and on the **Welcome** screen; persisted as `Settings.accent_color`. Replaces the default blue for rendered **H1–H6**, editor **selection** tint, **tabs/active controls**, **view mode segment** (R/S/V), **outline/productivity** highlights, **Productivity Hub** (Add / Start work / notes ➕ / dock-detach), and **status bar** (LSP line, git branch). **Hyperlinks** in rendered markdown stay classic blue (`theme::accent::standard_link_color`). Documented in [`docs/technical/ui/theme-system.md`](docs/technical/ui/theme-system.md) (section *Ferrite accent color*).
@@ -291,14 +311,18 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 ## Recently Completed ✅
 
 ### v0.3.0 (target: May 2026) — platform, export, run, diagrams *(pending version tag)*
-Work listed here is **implemented on `main`**; see **[Unreleased] — v0.3.0** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list. Highlights:
+Work listed here is **implemented on `main`**; see **[Unreleased] — v0.3.0** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list (excluding in-progress Mermaid FC-83a layout polish). Highlights:
 - **eframe / egui 0.31.1** platform bump (Tasks 57–58; regression matrix doc; Windows proxy pass complete).
 - **PDF export** (krilla + krilla-svg) and **print preview** (temp PDF → viewer tab).
 - **Themed HTML export** with options dialog and Mermaid as SVG.
 - **Executable fenced code blocks** — Run, shell/Python, ANSI output, timeout + Stop, first-run consent, Settings (opt-in).
+- **Quick note workflow** (opt-in) and **Spanish** UI language.
 - **Mermaid first wave** — insert templates, F1 syntax help, inline validation, flowchart shapes/style, state fork/join + history.
+- **Mermaid FC-83a (partial, [#83](https://github.com/OlaProeis/Ferrite/issues/83))** — flowchart obstacle routing, back-edge side channels, parallel lanes for feedback loops; doc [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md). Branch spacing / E→B path shape and `{decide}` centering still open.
 - **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar).
-- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
+- **Ribbon toolbar** — always icon-only (collapse toggle and section labels removed).
+- **Undo granularity (raw mode)** — per-keystroke Ctrl+Z steps (500 ms merge removed).
+- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), table cell focus after typing (same/cross-table), frontmatter panel stale on tab switch, quick file switcher (Ctrl+P) token/recent-file search, Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
 
 ### v0.2.9 (Apr 2026) - Hotfix Release
 Hotfix for four critical v0.2.8 regressions. No new features.

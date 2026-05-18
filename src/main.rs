@@ -31,6 +31,7 @@ rust_i18n::i18n!("locales", fallback = "en");
 
 mod app;
 mod config;
+mod diag;
 mod editor;
 mod error;
 mod export;
@@ -193,6 +194,15 @@ fn parse_log_level(s: &str) -> Result<LogLevel, String> {
 const APP_NAME: &str = "Ferrite";
 
 fn main() -> eframe::Result<()> {
+    // Trace file works in release (no console on Windows). Check %TEMP%\ferrite_startup_trace.log
+    if std::env::var("FERRITE_DIAG")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+    {
+        diag::trace_reset();
+        diag::trace("main() entered");
+    }
+
     // Initialize macOS app delegate FIRST, before anything else
     // This must happen very early to catch Apple Events for "Open With" functionality
     #[cfg(target_os = "macos")]
@@ -211,14 +221,17 @@ fn main() -> eframe::Result<()> {
     // Single-instance check EARLY — before heavy initialization (config, icons, logging).
     // When the user double-clicks a file while Ferrite is already running, the secondary
     // process should forward paths and exit as fast as possible (<100ms).
+    diag::trace("after CLI parse");
     let instance_listener = match single_instance::try_acquire_instance(&initial_paths) {
         Some(listener) => listener,
         None => {
+            diag::trace("secondary instance — forwarded paths, exiting");
             // Paths were forwarded to the existing instance — exit cleanly.
             // No logging here since logger isn't initialized yet.
             return Ok(());
         }
     };
+    diag::trace("primary instance acquired");
 
     // Set up Ctrl+C handler to prevent the app from closing when running from console.
     // We handle Ctrl+C internally in the integrated terminal.
@@ -241,6 +254,12 @@ fn main() -> eframe::Result<()> {
         .init();
 
     info!("Starting {}", APP_NAME);
+    if diag::enabled() {
+        diag::trace(&format!(
+            "logging init — trace file: {}",
+            diag::trace_path().display()
+        ));
+    }
     log_memory("After logging init");
     info!(
         "Language: {} ({})",
@@ -317,13 +336,14 @@ fn main() -> eframe::Result<()> {
     log_memory("Before eframe::run_native");
 
     // Run the application
+    diag::trace("calling eframe::run_native");
     eframe::run_native(
         APP_NAME,
         native_options,
         Box::new(move |cc| {
-            // Configure egui visuals based on theme (basic setup)
-            // Full theme support will be implemented in a later task
+            diag::trace("eframe CreationContext — FerriteApp::new");
             let mut app = FerriteApp::new(cc);
+            diag::trace("FerriteApp::new finished");
 
             // Store the single-instance listener for polling in the update loop
             app.set_instance_listener(instance_listener);

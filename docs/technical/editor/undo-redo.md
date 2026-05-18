@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite uses a **unified, operation-based** undo/redo system. A single `EditHistory` instance per tab records minimal diffs (insert/delete operations) rather than full content snapshots. This handles both raw (FerriteEditor) and rendered (MarkdownEditor) modes identically.
+Ferrite uses a **unified, operation-based** undo/redo system. A single `EditHistory` instance per tab records minimal diffs (insert/delete operations) rather than full content snapshots. Raw mode (`EditorWidget` / FerriteEditor), rendered mode (`MarkdownEditor`), tree viewer, and legacy toolbar paths all record into the same `tab.edit_history`.
 
 ## Architecture
 
@@ -14,8 +14,9 @@ Each `Tab` owns one `EditHistory`:
 struct Tab {
     edit_history: EditHistory,       // Operation-based undo/redo
     content_version: u64,            // Bumped on undo/redo for widget sync
-    pending_undo_snapshot: Option<String>,  // Lazy pre-edit content clone
-    pending_cursor_restore: Option<usize>,  // Cursor char index to restore
+    pending_undo_snapshot: Option<String>,  // Baseline for diff-based recording
+    undo_content_hash: [u8; 32],   // Blake3 digest for snapshot elision
+    pending_cursor_restore: Option<usize>,  // Cursor char index (set on undo; see limitations)
 }
 ```
 
@@ -30,23 +31,25 @@ Operations store only the changed text, not full document copies:
 
 ### Maximum History
 
-Default: 500 operation groups. Large files (>1 MB): 200 groups. Each group is tiny (a few bytes to a few KB of changed text), so even 500 groups use negligible memory.
+Default: **500** undo groups. Large files (≥ 1 MB): **200** groups. Each group is tiny (a few bytes to a few KB of changed text), so even 500 groups use negligible memory.
 
 ## Recording Flow
 
-All editor modes follow the same pattern:
+### Diff-based path (raw + rendered + tree)
 
 ```rust
 // Before editor.show():
-tab.prepare_undo_snapshot();  // Clones content ONLY if no pending snapshot
+tab.prepare_undo_snapshot_hashed();  // Clone only when content hash changed
 
-// After editor.show():
-if editor_output.changed {
-    tab.record_edit_from_snapshot();  // Diffs snapshot vs current, records ops
-}
+// After editor.show() if content changed:
+tab.record_edit_from_snapshot();  // Diff snapshot vs current → record_operations
 ```
 
-`prepare_undo_snapshot()` avoids cloning every frame — it only clones once after each edit is recorded.
+`prepare_undo_snapshot_hashed()` avoids cloning every frame — see [Undo Hash Change Detection](./undo-hash-change-detection.md).
+
+**Raw mode:** `EditorWidget::show` calls the same snapshot + diff path when FerriteEditor reports `is_content_dirty()` and syncs the rope into `tab.content`.
+
+**Rendered / split preview / tree viewer:** `central_panel.rs` calls the same APIs when `MarkdownEditor` or `TreeViewer` reports `changed`.
 
 ### Diff Algorithm
 
@@ -60,7 +63,7 @@ This is O(n) worst case but near-instant for typical single-point edits.
 
 ### Legacy Recording
 
-Some code paths (formatting, line operations, file operations) still use the legacy API:
+Some code paths (formatting, line operations, paste helpers) still use:
 
 ```rust
 let old_content = tab.content.clone();
@@ -68,7 +71,7 @@ tab.content = new_content;
 tab.record_edit(old_content, cursor_pos);
 ```
 
-This works the same way — `record_edit` computes the diff internally.
+This computes the same diff internally via `record_operations`.
 
 ## Undo/Redo Operations
 
@@ -76,21 +79,20 @@ This works the same way — `record_edit` computes the diff internally.
 impl Tab {
     pub fn undo(&mut self) -> Option<usize> {
         // Applies inverse ops to self.content via edit_history.undo_string()
-        // Bumps content_version
-        // Returns cursor char position from the operation
+        // Bumps content_version, refreshes undo snapshot/hash
+        // Returns cursor char position from the first op in the group
     }
 
     pub fn redo(&mut self) -> Option<usize> {
-        // Reapplies ops to self.content via edit_history.redo_string()
-        // Bumps content_version
-        // Returns cursor char position
+        // Reapplies ops via edit_history.redo_string()
+        // Returns cursor char position after the last op in the group
     }
 }
 ```
 
 ### Content Version
 
-`content_version` is bumped on every undo/redo. The `EditorWidget` (raw mode) includes this in the egui widget ID, forcing FerriteEditor to re-read content via `set_content()`.
+`content_version` is bumped on every undo/redo and on each recorded edit. `EditorWidget` detects external changes (including undo) via content length/hash and calls `FerriteEditor::set_content()` to re-sync the rope buffer.
 
 ## Keyboard Shortcuts
 
@@ -102,19 +104,32 @@ impl Tab {
 
 ### Event Consumption
 
-Keys are consumed in `consume_undo_redo_keys()` **before** UI rendering. This prevents both egui's built-in TextEdit undo and FerriteEditor's internal handling from triggering.
+Keys are consumed in `consume_undo_redo_keys()` **before** UI rendering. This prevents egui `TextEdit` built-in undo (rendered blocks) from conflicting with the tab-level stack.
 
-## Operation Grouping
+## Operation Grouping (v0.3.0+)
 
-Edits within 500 ms are grouped into a single undo unit. `break_undo_group()` forces a new group (used after formatting operations).
+Each call to `EditHistory::record_operations` (or `record_operation`) pushes **one** undo group:
+
+| Source | Typical undo step |
+|--------|-------------------|
+| Raw typing (per dirty frame) | One group per frame — usually one character, sometimes more if input batches in one frame |
+| Replace in diff | Delete + insert in **one** group (atomic) |
+| Rendered plain paragraph | Per frame while `TextEdit` reports `changed` |
+| Rendered heading / list item | On **focus loss** (or Enter) — whole block edit session |
+| Formatting / move line | One group per `record_edit` call |
+
+**Removed in v0.3.0:** Time-based merging (formerly 500 ms). Rapid typing no longer collapses an entire session into a single undo step.
+
+`break_undo_group()` on `Tab` / `EditHistory::break_group()` is retained for API compatibility; each `record_operations` call already creates its own group.
 
 ## Behavior Notes
 
 - **Redo stack clearing**: New edits clear the redo stack (standard behavior).
 - **Tab independence**: Each tab has its own `EditHistory`. Closing a tab discards it.
 - **Save interaction**: Saving does not clear undo history.
-- **Cursor restoration**: Undo returns the char position of the first operation in the group. Redo returns the position after the last operation. Both are clamped to content length.
-- **Scroll preservation**: `handle_undo`/`handle_redo` in `navigation.rs` preserve scroll offset across operations.
+- **Cursor restoration**: Undo/redo set `pending_cursor_restore` (char index). FerriteEditor cursor sync from this field is not fully wired yet — scroll position is preserved via `pending_scroll_offset`.
+- **Scroll preservation**: `handle_undo` / `handle_redo` in `navigation.rs` preserve scroll offset across operations.
+- **Rendered undo UI**: After undo, egui edit buffers for in-flight blocks may be stale until focus changes; see rendered commit rules above.
 
 ## Testing
 
@@ -125,8 +140,9 @@ cargo test undo
 cargo test history
 ```
 
-Tests cover: basic undo/redo, operation grouping, max group cap, unicode/emoji, roundtrip diff-undo, cursor restoration, redo clearing, extensive operation sequences.
+Tests cover: basic undo/redo, per-call grouping (no time merge), atomic replace batches, max group cap, unicode/emoji, roundtrip diff-undo, redo clearing, extensive operation sequences.
 
 ## Related Documentation
 
 - [EditHistory Module](./edit-history.md) — API reference and implementation details
+- [Undo Hash Change Detection](./undo-hash-change-detection.md) — Snapshot elision for large files

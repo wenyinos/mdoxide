@@ -20,16 +20,10 @@
 //! # Features
 //! - Operation-based undo/redo (not state snapshots)
 //! - Memory-efficient: stores only changed text, not full content
-//! - Time-based grouping: rapid edits within 500ms = single undo unit
+//! - Atomic batches: each `record_operations` call is one undo step (replace = delete+insert together)
 //! - Works on both `TextBuffer` (rope) and plain `String`
 
-use std::time::{Duration, Instant};
-
 use super::buffer::TextBuffer;
-
-/// The time threshold for grouping consecutive operations into a single undo unit.
-/// Operations within this duration are grouped together.
-const GROUP_THRESHOLD: Duration = Duration::from_millis(500);
 
 /// Represents a single edit operation that can be undone or redone.
 ///
@@ -165,7 +159,7 @@ pub fn compute_edit_ops(old: &str, new: &str) -> Vec<EditOperation> {
 
 /// A group of operations that should be undone/redone together.
 ///
-/// Operations are grouped when they occur within `GROUP_THRESHOLD` of each other.
+/// All operations in a group are undone/redone together (one user-visible edit step).
 #[derive(Debug, Clone)]
 struct OperationGroup {
     /// The operations in this group, in order of execution.
@@ -173,16 +167,8 @@ struct OperationGroup {
 }
 
 impl OperationGroup {
-    /// Creates a new group with a single operation.
-    fn new(op: EditOperation) -> Self {
-        Self {
-            operations: vec![op],
-        }
-    }
-
-    /// Adds an operation to this group.
-    fn push(&mut self, op: EditOperation) {
-        self.operations.push(op);
+    fn from_operations(operations: Vec<EditOperation>) -> Self {
+        Self { operations }
     }
 
     /// Applies the inverse of all operations in reverse order (for undo).
@@ -224,8 +210,9 @@ impl OperationGroup {
 ///
 /// # Operation Grouping
 ///
-/// Consecutive operations within 500ms are grouped into a single undo unit.
-/// This means rapid typing is undone as a single action rather than character-by-character.
+/// Each call to [`EditHistory::record_operations`] (or [`EditHistory::record_operation`])
+/// pushes one undo group. A diff that deletes and inserts at the same position stays in
+/// that single group. Separate frames or edit commits produce separate undo steps.
 ///
 /// # Memory Efficiency
 ///
@@ -237,8 +224,6 @@ pub struct EditHistory {
     undo_stack: Vec<OperationGroup>,
     /// Stack of operation groups that can be redone.
     redo_stack: Vec<OperationGroup>,
-    /// Timestamp of the last recorded operation (for grouping).
-    last_edit_time: Option<Instant>,
     /// Maximum number of undo groups to keep. Operations are tiny so this can be large.
     max_groups: usize,
 }
@@ -266,7 +251,6 @@ impl EditHistory {
         Self {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            last_edit_time: None,
             max_groups: DEFAULT_MAX_GROUPS,
         }
     }
@@ -277,15 +261,14 @@ impl EditHistory {
         Self {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            last_edit_time: None,
             max_groups,
         }
     }
 
-    /// Records an edit operation.
+    /// Records a single edit operation as its own undo group.
     ///
-    /// Operations within 500ms of the previous operation are grouped together
-    /// into a single undo unit. Recording a new operation clears the redo stack.
+    /// Prefer [`Self::record_operations`] when a change produces multiple ops (e.g. replace).
+    /// Recording clears the redo stack.
     ///
     /// # Arguments
     /// * `op` - The operation to record
@@ -303,49 +286,25 @@ impl EditHistory {
     /// assert!(history.can_undo());
     /// ```
     pub fn record_operation(&mut self, op: EditOperation) {
-        let now = Instant::now();
-
-        // Check if we should group with the previous operation
-        let should_group = self.last_edit_time.map_or(false, |last_time| {
-            now.duration_since(last_time) < GROUP_THRESHOLD
-        });
-
-        if should_group {
-            // Add to the existing group
-            if let Some(group) = self.undo_stack.last_mut() {
-                group.push(op);
-            } else {
-                self.undo_stack.push(OperationGroup::new(op));
-            }
-        } else {
-            // Start a new group
-            self.undo_stack.push(OperationGroup::new(op));
-        }
-
-        // Enforce max groups cap
-        while self.undo_stack.len() > self.max_groups {
-            self.undo_stack.remove(0);
-        }
-
-        // Clear redo stack when new operation is recorded
-        self.redo_stack.clear();
-
-        self.last_edit_time = Some(now);
+        self.record_operations(vec![op]);
     }
 
-    /// Records a batch of edit operations as a single group or merged into
-    /// the current group if within the time threshold.
+    /// Records a batch of edit operations as a single undo group.
     ///
-    /// This is used by the diff-based recording path: a single edit frame
-    /// produces 0-2 operations (a delete and/or insert) that should be
-    /// treated as one atomic change.
+    /// Used by the diff-based recording path: one edit frame produces 0–2 operations
+    /// (delete and/or insert) that must undo together. Each call is a separate undo step;
+    /// rapid typing creates one step per dirty frame, not one step per typing session.
     pub fn record_operations(&mut self, ops: Vec<EditOperation>) {
         if ops.is_empty() {
             return;
         }
-        for op in ops {
-            self.record_operation(op);
+        self.undo_stack.push(OperationGroup::from_operations(ops));
+
+        while self.undo_stack.len() > self.max_groups {
+            self.undo_stack.remove(0);
         }
+
+        self.redo_stack.clear();
     }
 
     /// Undoes the last operation group.
@@ -387,7 +346,6 @@ impl EditHistory {
 
             group.undo(buffer);
             self.redo_stack.push(group);
-            self.last_edit_time = None;
             cursor_pos
         } else {
             None
@@ -437,7 +395,6 @@ impl EditHistory {
 
             group.redo(buffer);
             self.undo_stack.push(group);
-            self.last_edit_time = None;
             cursor_pos
         } else {
             None
@@ -457,7 +414,6 @@ impl EditHistory {
 
             group.undo_string(s);
             self.redo_stack.push(group);
-            self.last_edit_time = None;
             cursor_pos
         } else {
             None
@@ -477,7 +433,6 @@ impl EditHistory {
 
             group.redo_string(s);
             self.undo_stack.push(group);
-            self.last_edit_time = None;
             cursor_pos
         } else {
             None
@@ -513,7 +468,6 @@ impl EditHistory {
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
-        self.last_edit_time = None;
     }
 
     /// Returns the number of operation groups in the undo stack.
@@ -532,19 +486,15 @@ impl EditHistory {
         self.redo_stack.len()
     }
 
-    /// Forces the end of the current operation group.
+    /// No-op retained for API compatibility.
     ///
-    /// Call this when you want subsequent operations to be in a new undo group,
-    /// regardless of timing. For example, after a save operation.
-    pub fn break_group(&mut self) {
-        self.last_edit_time = None;
-    }
+    /// Each [`record_operations`] call already creates its own undo group.
+    pub fn break_group(&mut self) {}
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread::sleep;
 
     #[test]
     fn test_new_history() {
@@ -788,10 +738,9 @@ mod tests {
     }
 
     #[test]
-    fn test_operation_grouping_within_threshold() {
+    fn test_separate_record_operation_calls_are_separate_groups() {
         let mut history = EditHistory::new();
 
-        // Record multiple operations quickly (should group)
         history.record_operation(EditOperation::Insert {
             pos: 0,
             text: "A".to_string(),
@@ -805,8 +754,7 @@ mod tests {
             text: "C".to_string(),
         });
 
-        // All should be in one group
-        assert_eq!(history.undo_count(), 1);
+        assert_eq!(history.undo_count(), 3);
     }
 
     #[test]
@@ -829,35 +777,34 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Uses sleep, which slows down tests
-    fn test_operation_grouping_across_threshold() {
+    fn test_record_operations_atomic_batch() {
         let mut history = EditHistory::new();
 
-        // Record an operation
+        history.record_operations(vec![
+            EditOperation::Delete {
+                pos: 6,
+                text: "World".to_string(),
+            },
+            EditOperation::Insert {
+                pos: 6,
+                text: "Rust!".to_string(),
+            },
+        ]);
+
+        assert_eq!(history.undo_count(), 1);
+
         history.record_operation(EditOperation::Insert {
             pos: 0,
-            text: "A".to_string(),
+            text: "X".to_string(),
         });
-
-        // Wait longer than the threshold
-        sleep(Duration::from_millis(550));
-
-        // Record another operation (should be separate group)
-        history.record_operation(EditOperation::Insert {
-            pos: 1,
-            text: "B".to_string(),
-        });
-
-        // Should be in separate groups
         assert_eq!(history.undo_count(), 2);
     }
 
     #[test]
-    fn test_grouped_undo() {
+    fn test_incremental_undo_steps() {
         let mut buffer = TextBuffer::new();
         let mut history = EditHistory::new();
 
-        // Record grouped operations
         buffer.insert(0, "H");
         history.record_operation(EditOperation::Insert {
             pos: 0,
@@ -870,9 +817,11 @@ mod tests {
         });
 
         assert_eq!(buffer.to_string(), "Hi");
-        assert_eq!(history.undo_count(), 1);
+        assert_eq!(history.undo_count(), 2);
 
-        // Single undo should revert all grouped operations
+        history.undo(&mut buffer);
+        assert_eq!(buffer.to_string(), "H");
+
         history.undo(&mut buffer);
         assert_eq!(buffer.to_string(), "");
     }

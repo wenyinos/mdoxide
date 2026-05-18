@@ -4,6 +4,8 @@
 
 `EditHistory` (`src/editor/ferrite/history.rs`) is the **sole undo/redo engine** for the entire application. Each `Tab` in `state.rs` owns one instance. It stores discrete edit operations (insert/delete) rather than full content snapshots, making memory usage proportional to edit size, not file size.
 
+FerriteEditor does **not** embed its own `EditHistory`; the rope buffer is edited in place and changes are diffed into `tab.edit_history` via `EditorWidget`.
+
 ## Architecture
 
 ### Key Types
@@ -17,7 +19,6 @@ pub enum EditOperation {
 pub struct EditHistory {
     undo_stack: Vec<OperationGroup>,
     redo_stack: Vec<OperationGroup>,
-    last_edit_time: Option<Instant>,
     max_groups: usize,  // Default 500, large files 200
 }
 ```
@@ -25,19 +26,18 @@ pub struct EditHistory {
 ### Data Flow
 
 ```
-Editor widget modifies tab.content
-    → central_panel detects change
+Editor modifies tab.content (raw sync or rendered commit)
+    → prepare_undo_snapshot_hashed() (baseline)
     → tab.record_edit_from_snapshot()
     → compute_edit_ops(old, new) → Vec<EditOperation>
-    → edit_history.record_operations(ops)
+    → edit_history.record_operations(ops)  // one undo group per call
 
 Ctrl+Z
-    → input_handling consumes key
+    → input_handling::consume_undo_redo_keys()
     → navigation::handle_undo()
-    → tab.undo()
-    → edit_history.undo_string(&mut tab.content)
+    → tab.undo() → edit_history.undo_string(&mut tab.content)
     → content_version bumped
-    → FerriteEditor re-syncs via set_content()
+    → EditorWidget re-syncs FerriteEditor via set_content()
 ```
 
 ## Edit Operations
@@ -52,7 +52,7 @@ Records text deletion, storing the removed text. Undo: re-insert the text. Redo:
 
 ### apply_to_string
 
-Operations can be applied to both `TextBuffer` (rope) and plain `String`:
+Operations can be applied to both `TextBuffer` (rope, tests) and plain `String`:
 
 ```rust
 op.apply_to_string(&mut s);  // Used by Tab for undo/redo on tab.content
@@ -73,13 +73,15 @@ pub fn compute_edit_ops(old: &str, new: &str) -> Vec<EditOperation> {
 }
 ```
 
-Returns 0 ops (no change), 1 op (pure insert or delete), or 2 ops (replace = delete + insert).
+Returns 0 ops (no change), 1 op (pure insert or delete), or 2 ops (replace = delete + insert in one `record_operations` call).
 
 ## Operation Grouping
 
-Consecutive operations within 500 ms (`GROUP_THRESHOLD`) are merged into a single `OperationGroup`. A single undo/redo reverses the entire group.
+**v0.3.0+:** Each `record_operations` / `record_operation` call appends **one** `OperationGroup`. Operations inside that call (e.g. delete + insert for a replace) undo together.
 
-`break_group()` forces the next operation into a new group.
+There is **no** time-based merging. Previously, operations within 500 ms were merged; that caused fast typing for several seconds to undo in a single Ctrl+Z.
+
+`break_group()` is a no-op kept for API compatibility.
 
 ## API Reference
 
@@ -88,14 +90,14 @@ Consecutive operations within 500 ms (`GROUP_THRESHOLD`) are merged into a singl
 | Method | Description |
 |--------|-------------|
 | `new()` | Create with default 500-group cap |
-| `with_max_groups(n)` | Create with custom group cap |
-| `record_operation(op)` | Record single op (auto-groups by time) |
-| `record_operations(ops)` | Record batch of ops (from diff) |
+| `with_max_groups(n)` | Create with custom group cap (200 for large files) |
+| `record_operation(op)` | Record one op as its own group (delegates to `record_operations`) |
+| `record_operations(ops)` | Record all ops as **one** atomic undo group |
 | `undo_string(s)` → `Option<usize>` | Undo on `&mut String`, returns cursor pos |
 | `redo_string(s)` → `Option<usize>` | Redo on `&mut String`, returns cursor pos |
 | `can_undo()` / `can_redo()` → `bool` | Check availability |
 | `undo_count()` / `redo_count()` → `usize` | Stack sizes |
-| `break_group()` | Force new group boundary |
+| `break_group()` | No-op (compatibility) |
 | `clear()` | Clear all history |
 
 ### EditOperation
@@ -126,8 +128,9 @@ cargo test history     # EditHistory unit tests
 cargo test undo        # Tab-level undo integration tests
 ```
 
-Tests cover: basic undo/redo, String-based undo/redo, diff algorithm (insert, delete, replace, unicode, no-change), operation grouping, max group cap, roundtrip diff-undo, extensive sequences (100 ops), large buffer performance (1 MB).
+Tests cover: basic undo/redo, separate groups per `record_operation`, atomic `record_operations` batches, max group cap, roundtrip diff-undo, extensive sequences (100 ops), large buffer performance (1 MB).
 
 ## Related
 
 - [Undo/Redo System](./undo-redo.md) — User-facing behavior and integration
+- [Undo Hash Change Detection](./undo-hash-change-detection.md) — Snapshot elision

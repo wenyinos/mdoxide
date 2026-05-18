@@ -190,10 +190,30 @@ impl FerriteApp {
             .resizable(false)
             .default_width(360.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .order(egui::Order::Foreground)
             .show(ctx, |ui| {
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    cancel_clicked = true;
+                    ui.ctx().input_mut(|i| {
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+                    });
+                }
+
                 ui.label(t!("dialog.rename_untitled_tab.hint"));
                 ui.add_space(6.0);
-                ui.text_edit_singleline(&mut buffer);
+
+                let text_response = ui.add(
+                    egui::TextEdit::singleline(&mut buffer).desired_width(f32::INFINITY),
+                );
+                text_response.request_focus();
+
+                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    apply_clicked = true;
+                    ui.ctx().input_mut(|i| {
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+                    });
+                }
+
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     if ui.button(t!("dialog.rename_untitled_tab.apply")).clicked() {

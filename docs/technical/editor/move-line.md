@@ -58,13 +58,12 @@ The move operation uses a simple swap approach:
 
 ### Cursor Following
 
-To ensure the cursor follows the moved line, the implementation uses `pending_cursor_restore`:
+To ensure the cursor follows the moved line, the implementation sets `tab.pending_cursor_restore`:
 
 1. Calculate new cursor position (new line start + original column)
 2. Set `tab.pending_cursor_restore = Some(new_cursor_char)`
-3. On next frame, EditorWidget applies this position to egui's TextEdit state
 
-This is necessary because setting cursor position directly would be overwritten by TextEdit's internal state restoration.
+**Note:** `EditorWidget` should apply this char index to FerriteEditor on the next frame; wiring is incomplete as of v0.3.0 — cursor may lag until a future fix. Line/column on `Tab` is still updated for outline sync.
 
 ## Behavior
 

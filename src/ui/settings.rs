@@ -104,10 +104,8 @@ fn shortcut_command_name(cmd: &ShortcutCommand) -> String {
         ShortcutCommand::ExportPdf => t!("shortcuts.commands.export_pdf").to_string(),
         ShortcutCommand::PrintPreview => t!("shortcuts.commands.print_preview").to_string(),
         ShortcutCommand::InsertToc => t!("shortcuts.commands.insert_toc").to_string(),
-        ShortcutCommand::ToggleTerminal => t!("shortcuts.commands.toggle_terminal").to_string(),
-        ShortcutCommand::ToggleProductivityHub => {
-            t!("shortcuts.commands.toggle_productivity_hub").to_string()
-        }
+        ShortcutCommand::ToggleTerminal => cmd.display_name().to_string(),
+        ShortcutCommand::ToggleProductivityHub => cmd.display_name().to_string(),
         ShortcutCommand::ToggleFrontmatter => "Toggle Frontmatter Panel".to_string(),
         ShortcutCommand::ZoomIn => "Zoom In".to_string(),
         ShortcutCommand::ZoomOut => "Zoom Out".to_string(),

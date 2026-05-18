@@ -177,6 +177,7 @@ pub fn render_mermaid_diagram(
     dark_mode: bool,
     font_size: f32,
 ) -> RenderResult {
+    let _diag = crate::diag::SlowScope::new("mermaid::render_mermaid_diagram", 32);
     let source = source.trim();
     if source.is_empty() {
         return RenderResult::ParseError("Empty diagram source".to_string());
@@ -240,6 +241,14 @@ pub fn render_mermaid_diagram(
         }
 
         // Cache miss - parse, layout, cache, and render
+        crate::diag::event(
+            "mermaid_cache_miss",
+            format!(
+                "flowchart layout {:.0}px wide, {} chars",
+                available_width,
+                diagram_source.len()
+            ),
+        );
         let parse_result = parse_flowchart(diagram_source);
 
         match parse_result {
@@ -814,6 +823,37 @@ mod tests {
             h_pos.x,
             c_pos.x
         );
+
+        // Regression guard: siblings on the same layer (matched by y position)
+        // must not overlap horizontally. Previously the barycenter post-pass
+        // pulled C onto H and D onto G; the layer-overlap safety net now
+        // guarantees a minimum gap between every adjacent sibling pair.
+        let mut by_layer: std::collections::BTreeMap<i32, Vec<(&str, f32, f32)>> =
+            std::collections::BTreeMap::new();
+        for id in expected_nodes {
+            let n = layout.nodes.get(id).unwrap();
+            let key = n.pos.y.round() as i32;
+            by_layer
+                .entry(key)
+                .or_default()
+                .push((id, n.pos.x, n.pos.x + n.size.x));
+        }
+        for (y, mut row) in by_layer {
+            if row.len() < 2 {
+                continue;
+            }
+            row.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            for window in row.windows(2) {
+                let (left_id, _, left_right) = window[0];
+                let (right_id, right_left, _) = window[1];
+                let gap = right_left - left_right;
+                assert!(
+                    gap >= 0.0,
+                    "siblings {left_id} (right={left_right}) and {right_id} \
+                     (left={right_left}) overlap at y={y} (gap={gap})"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1751,6 +1791,72 @@ mod tests {
             "With short title, content width should dominate (subgraph: {}, title min: {})",
             sg_layout.size.x,
             min_width_for_title
+        );
+    }
+
+    #[test]
+    fn test_fc_83a_layout_has_all_nodes() {
+        let source = r#"graph TD
+    linkStyle default interpolate basis
+    A[Enter Chart Definition] --> B(Preview)
+    B --> C{decide}
+    C --> D[Keep]
+    C --> E[Edit Definition]
+    E --> B
+    D --> F[Save Image and Code]
+    F --> B"#;
+
+        let flowchart = parse_flowchart(source).unwrap();
+        assert_eq!(flowchart.nodes.len(), 6, "should parse 6 nodes");
+
+        let text_measurer = EstimatedTextMeasurer::new();
+        let layout = layout_flowchart(&flowchart, 800.0, 14.0, &text_measurer);
+
+        for id in ["A", "B", "C", "D", "E", "F"] {
+            assert!(
+                layout.nodes.contains_key(id),
+                "node {id} missing from layout"
+            );
+        }
+
+        let d = layout.nodes.get("D").unwrap();
+        let e = layout.nodes.get("E").unwrap();
+        let f = layout.nodes.get("F").unwrap();
+        let c = layout.nodes.get("C").unwrap();
+
+        let center_x = |id: &str| {
+            let n = layout.nodes.get(id).unwrap();
+            n.pos.x + n.size.x / 2.0
+        };
+
+        assert!(
+            (center_x("A") - center_x("B")).abs() < 1.0,
+            "B should align with A on the main axis"
+        );
+        assert!(
+            center_x("C") < center_x("B") - 5.0,
+            "decide should sit at branch barycenter (left of Preview), got C={} B={}",
+            center_x("C"),
+            center_x("B")
+        );
+        assert!(
+            (center_x("C") - center_x("F")).abs() > 5.0,
+            "F stays on the main axis; decide shifts toward branches"
+        );
+        assert!(
+            (center_x("A") - center_x("F")).abs() < 1.0,
+            "F should align with the main axis"
+        );
+        assert!(center_x("D") < center_x("C"), "D should be left of C");
+        assert!(center_x("E") > center_x("C"), "E should be right of C");
+
+        assert!(d.pos.y > c.pos.y, "D should be below C");
+        assert!(f.pos.y > d.pos.y, "F should be below D");
+        assert!(
+            f.pos.y + f.size.y <= layout.total_size.y,
+            "F should fit within total_size height (f_bottom={}, total_h={})",
+            f.pos.y + f.size.y,
+            layout.total_size.y
         );
     }
 }

@@ -559,18 +559,26 @@ impl<'a> EditorWidget<'a> {
 
         // Sync content from Tab to FerriteEditor if external changes detected
         if needs_content_sync {
-            // DIAGNOSTIC: Check if content actually differs to identify spurious syncs
-            let editor_content = editor.buffer().to_string();
-            let content_actually_differs = editor_content != self.tab.content;
+            // Hash can desync from the stored cache while the rope still matches `tab.content`
+            // (e.g. after session restore). Avoid `buffer().to_string()` on large files every frame.
+            let editor_hash = compute_content_hash(&editor.buffer().to_string());
+            let content_actually_differs = editor_hash != content_hash;
 
             if !content_actually_differs {
-                // Hash mismatch but content is the same - this is a spurious sync!
-                // Skip the expensive recreation to prevent visual jitter
-                log::warn!(
-                    "EditorWidget: Spurious sync detected for tab {} - hash mismatch but content identical (len={})",
-                    tab_id, self.tab.content.len()
+                crate::diag::event(
+                    "editor_spurious_sync",
+                    format!(
+                        "tab {} hash cache stale but buffer matches tab (len={})",
+                        tab_id,
+                        self.tab.content.len()
+                    ),
                 );
-                // Don't recreate the editor - just update the stored hash (happens at end of frame)
+            } else if editor.buffer().to_string() == self.tab.content {
+                // Hash collision (extremely rare) — strings match, skip sync.
+                crate::diag::event(
+                    "editor_hash_collision",
+                    format!("tab {} DefaultHasher collision at len {}", tab_id, self.tab.content.len()),
+                );
             } else {
                 // Content actually differs - perform sync
                 // Use set_content() to update buffer in-place, preserving view state,
@@ -864,9 +872,12 @@ impl<'a> EditorWidget<'a> {
             self.tab.fold_state = editor.fold_state().clone();
         }
 
-        // Update content hash to reflect the new content
+        // Update content hash to reflect the new content (always persist `content_hash`
+        // after a mismatch check — fixes spurious per-frame re-sync).
         let new_content_hash = if changed {
             compute_content_hash(&self.tab.content)
+        } else if needs_content_sync {
+            content_hash
         } else {
             content_hash
         };
