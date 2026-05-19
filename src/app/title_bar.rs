@@ -8,6 +8,7 @@ use super::FerriteApp;
 use crate::config::ViewMode;
 use crate::state::FileType;
 use crate::ui::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
+use crate::ui::phosphor_icons::{phosphor_font, ARROWS_IN, GEAR, NOTE_PENCIL};
 use eframe::egui;
 use log::debug;
 use rust_i18n::t;
@@ -90,7 +91,7 @@ impl FerriteApp {
                                 .fit_to_exact_size(egui::vec2(logo_size, logo_size)),
                         );
                     } else {
-                        ui.label(egui::RichText::new("📝").size(14.0));
+                        ui.label(egui::RichText::new(NOTE_PENCIL).font(phosphor_font(14.0)));
                     }
 
                     ui.add_space(4.0); // Reduced spacing between icon and title
@@ -181,10 +182,6 @@ impl FerriteApp {
 
                     // Window control buttons (right-to-left)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // 12px right margin ensures the top-right corner zone (10px wide)
-                        // stays button-free, allowing NE corner resize to work correctly.
-                        ui.add_space(12.0);
-
                         // ── Close button (×) ──────────────────────────────────────────────
                         let close_btn = ui.add(
                             egui::Button::new(egui::RichText::new(" ").size(14.0))
@@ -491,7 +488,7 @@ impl FerriteApp {
                         // Settings button
                         if TitleBarButton::show(
                             ui,
-                            "⚙",
+                            GEAR,
                             &t!("tooltip.settings").to_string(),
                             false,
                             is_dark,
@@ -503,8 +500,7 @@ impl FerriteApp {
 
                         ui.add_space(4.0);
 
-                        // Zen Mode toggle - use simple "Z" icon for cross-platform compatibility
-                        let zen_icon = if zen_mode_active { "Z" } else { "Z" };
+                        // Zen Mode toggle (ARROWS_IN — matches command palette)
                         let zen_tooltip = if zen_mode_active {
                             t!("zen.exit")
                         } else {
@@ -512,7 +508,7 @@ impl FerriteApp {
                         };
                         if TitleBarButton::show(
                             ui,
-                            zen_icon,
+                            ARROWS_IN,
                             &format!("{} (F11)", zen_tooltip),
                             zen_mode_active,
                             is_dark,

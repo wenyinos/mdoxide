@@ -6,6 +6,10 @@
 use crate::terminal::{
     MoveDirection, SoundNotifier, TerminalLayout, TerminalManager, TerminalWidget,
 };
+use crate::ui::phosphor_icons::{
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_LEFT, CARET_RIGHT, CARET_UP, FLASK,
+    GEAR, HOURGLASS, PLAY, PLUS, WARNING, X,
+};
 use eframe::egui::{self, Color32, Id, StrokeKind, Ui};
 use rust_i18n::t;
 
@@ -1059,8 +1063,8 @@ impl TerminalPanel {
         painter.text(
             left_center,
             egui::Align2::CENTER_CENTER,
-            "◀",
-            egui::FontId::proportional(20.0),
+            CARET_LEFT,
+            phosphor_font(20.0),
             Color32::WHITE,
         );
 
@@ -1083,8 +1087,8 @@ impl TerminalPanel {
         painter.text(
             right_center,
             egui::Align2::CENTER_CENTER,
-            "▶",
-            egui::FontId::proportional(20.0),
+            CARET_RIGHT,
+            phosphor_font(20.0),
             Color32::WHITE,
         );
 
@@ -1107,8 +1111,8 @@ impl TerminalPanel {
         painter.text(
             top_center,
             egui::Align2::CENTER_CENTER,
-            "▲",
-            egui::FontId::proportional(20.0),
+            CARET_UP,
+            phosphor_font(20.0),
             Color32::WHITE,
         );
 
@@ -1131,8 +1135,8 @@ impl TerminalPanel {
         painter.text(
             bottom_center,
             egui::Align2::CENTER_CENTER,
-            "▼",
-            egui::FontId::proportional(20.0),
+            CARET_DOWN,
+            phosphor_font(20.0),
             Color32::WHITE,
         );
 
@@ -1155,8 +1159,8 @@ impl TerminalPanel {
         painter.text(
             center_center,
             egui::Align2::CENTER_CENTER,
-            "+",
-            egui::FontId::proportional(24.0),
+            PLUS,
+            phosphor_font(24.0),
             Color32::WHITE,
         );
 
@@ -1335,26 +1339,18 @@ impl TerminalPanel {
                         } else {
                             // Tab button with manual drag support (preserves clicks)
                             let inner_response = ui.horizontal(|ui| {
-                                let status_icon = match status {
+                                let status_glyph = match status {
                                     crate::terminal::TerminalStatus::Idle => "",
-                                    crate::terminal::TerminalStatus::Running => "▶ ",
-                                    crate::terminal::TerminalStatus::Building => "⚙ ",
-                                    crate::terminal::TerminalStatus::Testing => "🧪 ",
-                                    crate::terminal::TerminalStatus::Error => "⚠ ",
+                                    crate::terminal::TerminalStatus::Running => PLAY,
+                                    crate::terminal::TerminalStatus::Building => GEAR,
+                                    crate::terminal::TerminalStatus::Testing => FLASK,
+                                    crate::terminal::TerminalStatus::Error => WARNING,
                                 };
-                                let badge = if *long_running { " ⏳" } else { "" };
 
                                 let btn_text = if let Some(branch) = git_branch {
-                                    format!(
-                                        "{}{}{}  {}{}",
-                                        status_icon,
-                                        title,
-                                        if status_icon.is_empty() { "" } else { " " },
-                                        branch,
-                                        badge
-                                    )
+                                    format!("{} {}", title, branch)
                                 } else {
-                                    format!("{}{}{}", status_icon, title, badge)
+                                    title.to_string()
                                 };
 
                                 // Number badge
@@ -1419,6 +1415,12 @@ impl TerminalPanel {
                                     ui.ctx().request_repaint();
                                 }
 
+                                if !status_glyph.is_empty() {
+                                    ui.label(
+                                        phosphor_rich_text(status_glyph, 12.0).color(title_color),
+                                    );
+                                }
+
                                 let btn = egui::Button::new(
                                     egui::RichText::new(btn_text).size(12.0).color(title_color),
                                 )
@@ -1427,7 +1429,15 @@ impl TerminalPanel {
                                 .stroke(egui::Stroke::new(1.0, border_color))
                                 .corner_radius(egui::CornerRadius::same(4));
 
-                                ui.add(btn)
+                                let tab_btn_response = ui.add(btn);
+
+                                if *long_running {
+                                    ui.label(
+                                        phosphor_rich_text(HOURGLASS, 11.0).color(title_color),
+                                    );
+                                }
+
+                                tab_btn_response
                             });
                             let tab_response = inner_response.inner;
 
@@ -1689,9 +1699,7 @@ impl TerminalPanel {
 
                             if *is_active || tab_response.hovered() {
                                 let close_response = ui.add(
-                                    egui::Button::new(
-                                        egui::RichText::new("×").size(14.0).color(text_color),
-                                    )
+                                    egui::Button::new(phosphor_rich_text(X, 14.0).color(text_color))
                                     .frame(false)
                                     .min_size(egui::vec2(16.0, 16.0)),
                                 );
@@ -2171,7 +2179,7 @@ impl TerminalPanel {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Close panel button
                     let close_btn = ui.add(
-                        egui::Button::new(egui::RichText::new("×").size(16.0).color(text_color))
+                        egui::Button::new(phosphor_rich_text(X, 16.0).color(text_color))
                             .frame(false)
                             .min_size(egui::vec2(24.0, 24.0)),
                     );

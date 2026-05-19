@@ -13,6 +13,9 @@
 #![allow(clippy::needless_late_init)]
 #![allow(clippy::collapsible_else_if)]
 
+use crate::ui::phosphor_icons::{
+    file_icon_for_path, phosphor_rich_text, FILE_TEXT, FOLDER, TRASH,
+};
 use eframe::egui::{self, Color32, Key, RichText};
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -123,7 +126,7 @@ impl FileOperationDialog {
                 result = show_create_dialog(
                     ctx,
                     &t!("dialog.file.new_file"),
-                    "📄",
+                    FILE_TEXT,
                     &t!("dialog.file.enter_file_name"),
                     parent_dir,
                     name_input,
@@ -142,7 +145,7 @@ impl FileOperationDialog {
                 result = show_create_dialog(
                     ctx,
                     &t!("dialog.file.new_folder"),
-                    "📁",
+                    FOLDER,
                     &t!("dialog.file.enter_folder_name"),
                     parent_dir,
                     name_input,
@@ -197,7 +200,7 @@ fn show_create_dialog(
         return FileOperationResult::Cancelled;
     }
 
-    egui::Window::new(format!("{} {}", icon, title))
+    egui::Window::new(title.to_string())
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -212,7 +215,10 @@ fn show_create_dialog(
             ui.set_min_width(350.0);
 
             ui.add_space(8.0);
-            ui.label(label);
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(icon, 16.0));
+                ui.label(label);
+            });
             ui.add_space(4.0);
 
             // Text input
@@ -310,9 +316,9 @@ fn show_rename_dialog(
     }
 
     let is_dir = target_path.is_dir();
-    let icon = if is_dir { "📁" } else { "📄" };
+    let icon = if is_dir { FOLDER } else { file_icon_for_path(target_path) };
 
-    egui::Window::new(format!("{} {}", icon, t!("dialog.file.rename")))
+    egui::Window::new(t!("dialog.file.rename").to_string())
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -327,7 +333,10 @@ fn show_rename_dialog(
             ui.set_min_width(350.0);
 
             ui.add_space(8.0);
-            ui.label(t!("dialog.file.enter_new_name"));
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(icon, 16.0));
+                ui.label(t!("dialog.file.enter_new_name"));
+            });
             ui.add_space(4.0);
 
             // Text input
@@ -408,7 +417,11 @@ fn show_delete_dialog(
     }
 
     let is_dir = target_path.is_dir();
-    let icon = if is_dir { "📁" } else { "📄" };
+    let icon = if is_dir {
+        FOLDER
+    } else {
+        file_icon_for_path(target_path)
+    };
     let item_type = if is_dir {
         t!("dialog.file.folder")
     } else {
@@ -419,7 +432,7 @@ fn show_delete_dialog(
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
-    egui::Window::new(format!("🗑️ {}", t!("dialog.file.confirm_delete")))
+    egui::Window::new(t!("dialog.file.confirm_delete").to_string())
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -435,16 +448,21 @@ fn show_delete_dialog(
 
             ui.add_space(8.0);
 
-            ui.label(t!(
-                "dialog.file.delete_confirm",
-                item_type = item_type.to_string()
-            ));
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(TRASH, 16.0).color(Color32::from_rgb(200, 60, 60)));
+                ui.label(
+                    t!(
+                        "dialog.file.delete_confirm",
+                        item_type = item_type.to_string()
+                    ),
+                );
+            });
 
             ui.add_space(8.0);
 
             // Show file/folder name
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon).size(16.0));
+                ui.label(phosphor_rich_text(icon, 16.0));
                 ui.label(RichText::new(name).strong());
             });
 

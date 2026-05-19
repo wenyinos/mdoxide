@@ -9,8 +9,13 @@ use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, St
 use crate::theme::accent;
 use crate::ui::backlinks_panel::BacklinksPanel;
 use crate::ui::frontmatter_panel::FrontmatterPanel;
+use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
+use crate::ui::phosphor_icons::{
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, LINK, LIST,
+    LIST_CHECKS, NOTE_PENCIL, TEXT_T, TIMER, X,
+};
 use crate::ui::productivity_panel::ProductivityPanel;
-use eframe::egui::{self, Color32, Response, RichText, ScrollArea, Sense, Ui, Vec2};
+use eframe::egui::{self, Color32, FontId, Response, RichText, ScrollArea, Sense, Ui, Vec2};
 use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,15 +240,16 @@ impl OutlinePanel {
             OutlinePanelSide::Right => egui::SidePanel::right("outline_panel"),
         };
 
+        let sidebar_edge = match self.side {
+            OutlinePanelSide::Left => DockedSidebarEdge::Left,
+            OutlinePanelSide::Right => DockedSidebarEdge::Right,
+        };
+
         panel
             .resizable(true)
             .default_width(self.width)
             .width_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
-            .frame(
-                egui::Frame::none()
-                    .fill(panel_bg)
-                    .stroke(egui::Stroke::new(1.0, border_color)),
-            )
+            .frame(docked_sidebar::frame(panel_bg))
             .show(ctx, |ui| {
                 // Update width if resized
                 let current_width = ui.available_width();
@@ -276,7 +282,7 @@ impl OutlinePanel {
                         ui.add_space(4.0);
                         if ui
                             .add(
-                                egui::Button::new(RichText::new("×").size(14.0).color(muted_color))
+                                egui::Button::new(phosphor_rich_text(X, 14.0).color(muted_color))
                                     .frame(false)
                                     .min_size(Vec2::new(20.0, 20.0)),
                             )
@@ -566,6 +572,8 @@ impl OutlinePanel {
                         }
                     }
                 }
+
+                docked_sidebar::paint_vertical_divider(ui, border_color, sidebar_edge);
             });
 
         output
@@ -670,6 +678,7 @@ impl OutlinePanel {
         // Values section
         ui.horizontal(|ui| {
             ui.add_space(8.0);
+            ui.label(phosphor_rich_text(CHART_BAR, 11.0).strong().color(text_color));
             ui.label(
                 RichText::new(t!("outline.json_values").to_string())
                     .size(11.0)
@@ -787,23 +796,23 @@ impl OutlinePanel {
         let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
             (
                 OutlinePanelTab::Outline,
-                "📑",
+                LIST,
                 t!("outline.tab_outline").to_string(),
             ),
             (
                 OutlinePanelTab::Statistics,
-                "📊",
+                CHART_BAR,
                 t!("outline.tab_statistics").to_string(),
             ),
             (
                 OutlinePanelTab::Backlinks,
-                "🔗",
+                LINK,
                 t!("outline.tab_links").to_string(),
             ),
-            (OutlinePanelTab::Frontmatter, "📝", "FM".to_string()),
+            (OutlinePanelTab::Frontmatter, TEXT_T, "FM".to_string()),
             (
                 OutlinePanelTab::Productivity,
-                "📋",
+                LIST_CHECKS,
                 t!("outline.tab_hub").to_string(),
             ),
         ];
@@ -841,13 +850,7 @@ impl OutlinePanel {
                 );
 
                 let tab_text_color = if is_active { text_color } else { muted_color };
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {}", icon, label),
-                    egui::FontId::proportional(10.0),
-                    tab_text_color,
-                );
+                paint_tab_label(ui, rect, icon, label.as_str(), tab_text_color);
 
                 if response.clicked() {
                     self.active_tab = *tab;
@@ -913,12 +916,15 @@ impl OutlinePanel {
         // ─────────────────────────────────────────────────────────────────────
         ui.vertical_centered(|ui| {
             ui.add_space(4.0);
-            ui.label(
-                RichText::new(format!("⏱ {}", stats.format_reading_time()))
-                    .size(14.0)
-                    .strong()
-                    .color(text_color),
-            );
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(TIMER, 14.0).strong().color(text_color));
+                ui.label(
+                    RichText::new(stats.format_reading_time())
+                        .size(14.0)
+                        .strong()
+                        .color(text_color),
+                );
+            });
             ui.add_space(4.0);
         });
 
@@ -929,8 +935,9 @@ impl OutlinePanel {
         // ─────────────────────────────────────────────────────────────────────
         ui.horizontal(|ui| {
             ui.add_space(8.0);
+            ui.label(phosphor_rich_text(NOTE_PENCIL, 11.0).strong().color(text_color));
             ui.label(
-                RichText::new(format!("📝 {}", t!("stats.text_stats")))
+                RichText::new(t!("stats.text_stats").to_string())
                     .size(11.0)
                     .strong()
                     .color(text_color),
@@ -981,8 +988,9 @@ impl OutlinePanel {
         // ─────────────────────────────────────────────────────────────────────
         ui.horizontal(|ui| {
             ui.add_space(8.0);
+            ui.label(phosphor_rich_text(LIST, 11.0).strong().color(text_color));
             ui.label(
-                RichText::new(format!("📑 {}", t!("stats.structure")))
+                RichText::new(t!("stats.structure").to_string())
                     .size(11.0)
                     .strong()
                     .color(text_color),
@@ -1040,8 +1048,9 @@ impl OutlinePanel {
         // ─────────────────────────────────────────────────────────────────────
         ui.horizontal(|ui| {
             ui.add_space(8.0);
+            ui.label(phosphor_rich_text(LINK, 11.0).strong().color(text_color));
             ui.label(
-                RichText::new(format!("🔗 {}", t!("stats.media_links")))
+                RichText::new(t!("stats.media_links").to_string())
                     .size(11.0)
                     .strong()
                     .color(text_color),
@@ -1159,13 +1168,17 @@ impl OutlinePanel {
         // Draw collapse/expand indicator if has children
         let text_start_x = rect.min.x + 8.0 + indent;
         if has_children {
-            let indicator = if item.collapsed { "▶" } else { "▼" };
+            let indicator = if item.collapsed {
+                CARET_RIGHT
+            } else {
+                CARET_DOWN
+            };
             let indicator_pos = egui::pos2(rect.min.x + 4.0 + indent, rect.center().y);
             ui.painter().text(
                 indicator_pos,
                 egui::Align2::LEFT_CENTER,
                 indicator,
-                egui::FontId::proportional(8.0),
+                phosphor_font(8.0),
                 muted_color,
             );
         }
@@ -1251,6 +1264,38 @@ fn heading_level_color(level: u8, is_dark: bool, accent: Color32) -> Color32 {
             _ => Color32::from_rgb(120, 120, 120), // Dark gray
         }
     }
+}
+
+/// Paint a tab label with a Phosphor icon and proportional text, centered in `rect`.
+fn paint_tab_label(ui: &Ui, rect: egui::Rect, icon: &str, label: &str, color: Color32) {
+    const ICON_SIZE: f32 = 10.0;
+    const GAP: f32 = 3.0;
+
+    let text_font = FontId::proportional(ICON_SIZE);
+    let label_width = ui.fonts(|fonts| {
+        fonts
+            .layout_no_wrap(label.to_string(), text_font.clone(), color)
+            .size()
+            .x
+    });
+    let total_width = ICON_SIZE + GAP + label_width;
+    let start_x = rect.center().x - total_width * 0.5;
+    let center_y = rect.center().y;
+
+    ui.painter().text(
+        egui::pos2(start_x + ICON_SIZE * 0.5, center_y),
+        egui::Align2::CENTER_CENTER,
+        icon,
+        phosphor_font(ICON_SIZE),
+        color,
+    );
+    ui.painter().text(
+        egui::pos2(start_x + ICON_SIZE + GAP + label_width * 0.5, center_y),
+        egui::Align2::CENTER_CENTER,
+        label,
+        text_font,
+        color,
+    );
 }
 
 /// Truncate text to fit within a given width.

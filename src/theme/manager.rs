@@ -288,10 +288,11 @@ impl ThemeManager {
 
     /// Get an icon for the current theme.
     pub fn icon(&self) -> &'static str {
+        use crate::ui::phosphor_icons::{DESKTOP, MOON, SUN};
         match self.current_theme {
-            Theme::Light => "☀",
-            Theme::Dark => "🌙",
-            Theme::System => "💻",
+            Theme::Light => SUN,
+            Theme::Dark => MOON,
+            Theme::System => DESKTOP,
         }
     }
 
@@ -406,15 +407,15 @@ mod tests {
     fn test_theme_manager_labels() {
         let mut manager = ThemeManager::new(Theme::Light);
         assert_eq!(manager.label(), "Light");
-        assert_eq!(manager.icon(), "☀");
+        assert_eq!(manager.icon(), crate::ui::phosphor_icons::SUN);
 
         manager.set_theme(Theme::Dark);
         assert_eq!(manager.label(), "Dark");
-        assert_eq!(manager.icon(), "🌙");
+        assert_eq!(manager.icon(), crate::ui::phosphor_icons::MOON);
 
         manager.set_theme(Theme::System);
         assert_eq!(manager.label(), "System");
-        assert_eq!(manager.icon(), "💻");
+        assert_eq!(manager.icon(), crate::ui::phosphor_icons::DESKTOP);
     }
 
     #[test]

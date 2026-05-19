@@ -13,6 +13,7 @@ use crate::config::ViewMode;
 use crate::markdown::{spawn_run, take_pending_code_execution_consent};
 use crate::state::{FileType, PendingAction};
 use crate::ui::{FileOperationResult, GoToLineResult};
+use crate::ui::phosphor_icons::{PACKAGE, phosphor_rich_text, WARNING};
 use eframe::egui;
 use log::{debug, warn};
 use rust_i18n::t;
@@ -134,7 +135,7 @@ impl FerriteApp {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
-                    ui.label(egui::RichText::new("⚠").size(24.0));
+                    ui.label(phosphor_rich_text(WARNING, 24.0));
                     ui.label(&self.state.ui.error_message);
                     ui.separator();
                     if ui.button(t!("common.ok").to_string()).clicked() {
@@ -152,7 +153,7 @@ impl FerriteApp {
                 .order(egui::Order::Foreground)
                 .min_width(450.0)
                 .show(ctx, |ui| {
-                    ui.label(egui::RichText::new("📦").size(24.0));
+                    ui.label(phosphor_rich_text(PACKAGE, 24.0));
                     ui.add_space(8.0);
 
                     // Show the main error message

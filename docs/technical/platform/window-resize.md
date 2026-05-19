@@ -97,6 +97,10 @@ fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     handle_window_resize(ctx, &mut self.window_resize_state);
     
     // ... rest of UI rendering
+    
+    // Block edge widgets from stealing resize clicks (end of frame, Foreground order)
+    consume_clicks_in_resize_zones(ctx, &self.window_resize_state);
+    self.window_resize_state.apply_cursor(ctx);
 }
 ```
 
@@ -104,6 +108,14 @@ This ensures:
 1. Resize state is updated before UI checks it
 2. Cursor icon changes are applied immediately
 3. Resize commands are sent before any UI interaction
+4. Foreground click guards (wider than the 5px cursor zone) win hit-testing over edge UI such as the side-panel toggle strip and Help button
+
+### Click blocking vs. moving buttons
+
+Do **not** fix resize/click conflicts by moving buttons away from edges. Use:
+
+- `WindowResizeState::blocks_widget_clicks()` — true while the resize cursor is shown, during resize, or for one frame after release over a grab zone
+- `consume_clicks_in_resize_zones()` — paints invisible Foreground hit targets using `get_click_block_zone_rect()` (24px on east/west vs. 5px detection)
 
 ## Platform Considerations
 

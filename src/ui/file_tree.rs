@@ -8,6 +8,9 @@
 // configurable panel width and drag-to-resize functionality
 #![allow(dead_code)]
 
+use crate::ui::icons::{phosphor_font, phosphor_rich_text};
+use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
+use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FOLDER, X};
 use crate::vcs::GitFileStatus;
 use crate::workspaces::{FileTreeNode, FileTreeNodeKind};
 use eframe::egui::{self, Color32, RichText, Sense, Ui, Vec2};
@@ -149,11 +152,7 @@ impl FileTreePanel {
             .resizable(true)
             .default_width(self.width)
             .width_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
-            .frame(
-                egui::Frame::none()
-                    .fill(panel_bg)
-                    .stroke(egui::Stroke::new(1.0, border_color)),
-            )
+            .frame(docked_sidebar::frame(panel_bg))
             .show(ctx, |ui| {
                 // Update width from panel
                 let panel_width = ui.available_width();
@@ -167,7 +166,7 @@ impl FileTreePanel {
                     ui.add_space(4.0);
 
                     // Folder icon
-                    ui.label(RichText::new("📁").size(14.0));
+                    ui.label(phosphor_rich_text(FOLDER, 14.0));
 
                     // Workspace name (truncated if needed)
                     let _name_width = ui.available_width() - 30.0;
@@ -181,7 +180,7 @@ impl FileTreePanel {
                         // Add spacing to move button away from panel edge/resize handle
                         ui.add_space(8.0);
                         if ui
-                            .add(egui::Button::new("×").frame(false))
+                            .add(egui::Button::new(phosphor_rich_text(X, 12.0)).frame(false))
                             .on_hover_text(t!("workspace.close_folder").to_string())
                             .clicked()
                         {
@@ -201,6 +200,8 @@ impl FileTreePanel {
                         self.render_tree_node(ui, file_tree, 0, is_dark, &mut output, git_statuses);
                         ui.add_space(4.0);
                     });
+
+                docked_sidebar::paint_vertical_divider(ui, border_color, DockedSidebarEdge::Left);
             });
 
         output
@@ -277,12 +278,16 @@ impl FileTreePanel {
 
         // Expand/collapse arrow for directories
         if is_dir {
-            let arrow = if node.is_expanded { "▼" } else { "▶" };
+            let arrow = if node.is_expanded {
+                CARET_DOWN
+            } else {
+                CARET_RIGHT
+            };
             ui.painter().text(
                 content_pos + Vec2::new(0.0, 0.0),
                 egui::Align2::LEFT_TOP,
                 arrow,
-                egui::FontId::proportional(10.0),
+                phosphor_font(10.0),
                 text_color,
             );
         }
@@ -294,7 +299,7 @@ impl FileTreePanel {
             content_pos,
             egui::Align2::LEFT_TOP,
             icon,
-            egui::FontId::proportional(14.0),
+            phosphor_font(14.0),
             text_color,
         );
         content_pos.x += 18.0; // Space for icon
@@ -596,7 +601,10 @@ impl FileTreePanel {
         }
 
         // ✕ (multiplication x) for delete action - in COMMON_SYMBOLS
-        if ui.button(format!("✕ {}", t!("workspace.delete"))).clicked() {
+        if ui
+            .button(format!("{} {}", X, t!("workspace.delete")))
+            .clicked()
+        {
             output.context_action = Some(FileTreeContextAction::Delete(node.path.clone()));
             ui.close_menu();
         }

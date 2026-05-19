@@ -9,7 +9,11 @@
 
 use crate::app::modifier_symbol;
 use crate::markdown::mermaid::{mermaid_kind_menu_label, snippet_fenced_block, MermaidTemplateKind};
-use eframe::egui::{self, Color32, RichText, ScrollArea, Ui};
+use crate::ui::phosphor_icons::{
+    phosphor_rich_text, ARROWS_LEFT_RIGHT, CARET_DOWN, CARET_RIGHT, CHART_LINE, EYE, FILE, FOLDER,
+    GEAR, INFO, KEYBOARD, LINK, PENCIL, TEXT_T, TREE_STRUCTURE,
+};
+use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui};
 use rust_i18n::t;
 
 /// Keyboard shortcut category for organized display.
@@ -52,12 +56,12 @@ impl ShortcutCategory {
     /// Get the icon for the category.
     pub fn icon(&self) -> &'static str {
         match self {
-            ShortcutCategory::File => "📄",
-            ShortcutCategory::Edit => "/",
-            ShortcutCategory::View => "👁",
-            ShortcutCategory::Formatting => "Aa",
-            ShortcutCategory::Workspace => "📁",
-            ShortcutCategory::Navigation => "↔",
+            ShortcutCategory::File => FILE,
+            ShortcutCategory::Edit => PENCIL,
+            ShortcutCategory::View => EYE,
+            ShortcutCategory::Formatting => TEXT_T,
+            ShortcutCategory::Workspace => FOLDER,
+            ShortcutCategory::Navigation => ARROWS_LEFT_RIGHT,
         }
     }
 }
@@ -163,9 +167,9 @@ impl AboutSection {
     /// Get the icon for the section.
     pub fn icon(&self) -> &'static str {
         match self {
-            AboutSection::About => "○",
-            AboutSection::Shortcuts => "⌘",
-            AboutSection::Mermaid => "△",
+            AboutSection::About => INFO,
+            AboutSection::Shortcuts => KEYBOARD,
+            AboutSection::Mermaid => CHART_LINE,
         }
     }
 }
@@ -400,11 +404,14 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Links section
-            ui.label(
-                RichText::new(format!("🔗 {}", t!("about.links")))
-                    .strong()
-                    .size(16.0),
-            );
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(LINK, 16.0).strong());
+                ui.label(
+                    RichText::new(t!("about.links").to_string())
+                        .strong()
+                        .size(16.0),
+                );
+            });
             ui.add_space(8.0);
 
             const GITHUB_REPO: &str = "https://github.com/OlaProeis/Ferrite";
@@ -436,11 +443,14 @@ impl AboutPanel {
             ui.add_space(12.0);
 
             // Built with section
-            ui.label(
-                RichText::new(format!("⚙ {}", t!("about.built_with")))
-                    .strong()
-                    .size(16.0),
-            );
+            ui.horizontal(|ui| {
+                ui.label(phosphor_rich_text(GEAR, 16.0).strong());
+                ui.label(
+                    RichText::new(t!("about.built_with").to_string())
+                        .strong()
+                        .size(16.0),
+                );
+            });
             ui.add_space(8.0);
 
             let libraries = [
@@ -567,18 +577,20 @@ impl AboutPanel {
                 let is_collapsed = self.collapsed_categories.contains(category);
 
                 // Category header (clickable)
-                let header_text = format!(
-                    "{} {} {}",
-                    if is_collapsed { "▶" } else { "▼" },
-                    category.icon(),
-                    category.label()
-                );
-
-                let header_response = ui.add(
-                    egui::Button::new(RichText::new(header_text).strong().size(14.0))
-                        .frame(false)
-                        .min_size(egui::vec2(ui.available_width(), 24.0)),
-                );
+                let header_response = ui
+                    .horizontal(|ui| {
+                        ui.label(
+                            phosphor_rich_text(
+                                if is_collapsed { CARET_RIGHT } else { CARET_DOWN },
+                                12.0,
+                            )
+                            .strong(),
+                        );
+                        ui.label(phosphor_rich_text(category.icon(), 14.0).strong());
+                        ui.label(RichText::new(category.label()).strong().size(14.0));
+                    })
+                    .response
+                    .interact(Sense::click());
 
                 if header_response.clicked() {
                     if is_collapsed {

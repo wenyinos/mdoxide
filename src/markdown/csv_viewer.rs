@@ -11,6 +11,7 @@
 //! - Cell tooltips for truncated content
 //! - Large file handling with row limiting
 
+use crate::ui::phosphor_icons::{phosphor_rich_text, INFO};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 use log::warn;
 use palette::{IntoColor, Oklch, Srgb};
@@ -1155,9 +1156,10 @@ fn show_table_view_lazy(
     if data_row_count > 1000 {
         ui.horizontal(|ui| {
             ui.add_space(TABLE_LEFT_PADDING);
+            ui.label(phosphor_rich_text(INFO, 12.0).color(colors.truncated_indicator));
             ui.colored_label(
                 colors.truncated_indicator,
-                format!("ℹ {} rows total (lazy-parsed)", index.row_count),
+                format!("{} rows total (lazy-parsed)", index.row_count),
             );
         });
         ui.add_space(4.0);
@@ -1563,9 +1565,10 @@ impl<'a> CsvViewer<'a> {
         if data_row_count > 1000 {
             ui.horizontal(|ui| {
                 ui.add_space(TABLE_LEFT_PADDING);
+                ui.label(phosphor_rich_text(INFO, 12.0).color(colors.truncated_indicator));
                 ui.colored_label(
                     colors.truncated_indicator,
-                    format!("ℹ {} rows total", data.row_count),
+                    format!("{} rows total", data.row_count),
                 );
             });
             ui.add_space(4.0);

@@ -45,8 +45,8 @@ status:
   rainbow_tooltip: "虹色列の色付け : %{status}\nクリックして切り替え"
   encoding_tooltip: "ファイルのエンコーディング : %{encoding}\n%{info}クリックして変更"
   encoding_heading: "ファイルのエンコーディング"
-  recent_files_heading: "📄 最近使ったファイル"
-  recent_folders_heading: "📁 最近使ったフォルダー"
+  recent_files_heading: "最近使ったファイル"
+  recent_folders_heading: "最近使ったフォルダー"
   file_tooltip: "%{path}\n\nクリック : 開く\nShift+クリック : バックグラウンドで開く"
   folder_tooltip: "%{path}\n\nクリック : ワークスペースとして開く"
 
@@ -381,7 +381,7 @@ outline:
   tab_links: "リンク"
   tab_hub: "ハブ"
   json_structure: "📁 構造体"
-  json_values: "📊 値"
+  json_values: "値"
   json_objects: "オブジェクト"
   json_arrays: "配列"
   json_total_keys: "合計キー数"
@@ -692,9 +692,9 @@ notification:
   file_loaded: ファイルの読み込みに成功しました (%{size} MB)
   file_load_failed: 'ファイルの読み込みに失敗しました : %{error}'
 tree_viewer:
-  collapse_all: "▶ すべて折りたたむ"
-  expand_all: "▼ すべて展開"
-  copy_path: "📋 パスをコピー"
+  collapse_all: "すべて折りたたむ"
+  expand_all: "すべて展開"
+  copy_path: "パスをコピー"
   show_raw: "Raw を表示"
   parse_error: "⚠ 解析エラー :"
   large_file_warning: "ファイルが大きすぎます (%{size} MB)。Raw コンテンツを表示しています。"
@@ -810,8 +810,8 @@ csv:
   error: "CSV の解析に失敗しました"
   select_delimiter: "区切り文字の選択"
   header_row: "ヘッダ行"
-  has_headers_yes: "✓ 先頭行はヘッダ"
-  has_headers_no: "✗ ヘッダ行なし"
+  has_headers_yes: "先頭行はヘッダ"
+  has_headers_no: "ヘッダ行なし"
   show_raw: "Raw の表示"
   large_file_warning: "ファイルが大きすぎます (%{size} MB)。Raw コンテンツを表示しています。"
 
@@ -859,7 +859,7 @@ workspace:
   rename: "名前の変更"
   delete: "削除"
   refresh: "更新"
-  recent_folders: "📁 最近使ったフォルダー"
+  recent_folders: "最近使ったフォルダー"
 
 # Zen mode
 zen:
@@ -896,12 +896,12 @@ ribbon:
   show_info_panel: "情報パネルを表示"
   toggle_outline: "アウトラインの切り替え"
   copy_html_tooltip: "レンダリングされた HTML をクリップボードにコピー"
-  export_pdf: "📄 PDF としてエクスポート"
+  export_pdf: "PDF としてエクスポート"
   coming_soon: "近日公開"
   heading_level: "見出し %{level}"
 
 # Welcome page (first launch)
-  print_preview: 🖨 印刷プレビュー...
+  print_preview: "印刷プレビュー..."
 welcome:
   subtitle: "エディタを設定して利用を開始しましょう。"
   section:

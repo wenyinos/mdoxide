@@ -24,6 +24,12 @@ use crate::markdown::parser::{
     CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
 use crate::terminal::TerminalTheme;
+use crate::ui::phosphor_icons::{
+    phosphor_rich_text, ARROWS_CLOCKWISE, ARROWS_LEFT_RIGHT, BUILDINGS, CALENDAR, CARET_DOWN,
+    CARET_RIGHT, CHART_BAR, CHART_LINE_UP, CHART_PIE, CHECK, DIAMOND, FLOW_ARROW, GIT_BRANCH,
+    HOURGLASS, LINK, LIST_CHECKS, PACKAGE, PLAY, SQUARES_FOUR, STOP, TEXT_ALIGN_CENTER,
+    TEXT_ALIGN_LEFT, TEXT_ALIGN_RIGHT, TREE_STRUCTURE, USER, WARNING, X,
+};
 use eframe::egui::{self, Color32, FontFamily, FontId, Key, RichText, TextEdit, Ui};
 use rust_i18n::t;
 use std::time::Duration;
@@ -607,7 +613,7 @@ impl<'a> EditableList<'a> {
                 // Remove button (if controls enabled)
                 if self.show_controls
                     && ui
-                        .small_button("×")
+                        .small_button(phosphor_rich_text(X, 12.0))
                         .on_hover_text(t!("widgets.list.remove_item").to_string())
                         .clicked()
                 {
@@ -2554,28 +2560,40 @@ impl<'a> EditableTable<'a> {
                                             .copied()
                                             .unwrap_or(TableAlignment::None);
 
-                                        let (align_icon, tooltip) = match align {
-                                            TableAlignment::Left => {
-                                                ("⬅", t!("widgets.table.align_left").to_string())
-                                            }
-                                            TableAlignment::Center => {
-                                                ("⬌", t!("widgets.table.align_center").to_string())
-                                            }
-                                            TableAlignment::Right => {
-                                                ("➡", t!("widgets.table.align_right").to_string())
-                                            }
-                                            TableAlignment::None => {
-                                                ("—", t!("widgets.table.align_none").to_string())
-                                            }
+                                        let (align_icon, tooltip, use_phosphor) = match align {
+                                            TableAlignment::Left => (
+                                                TEXT_ALIGN_LEFT,
+                                                t!("widgets.table.align_left").to_string(),
+                                                true,
+                                            ),
+                                            TableAlignment::Center => (
+                                                TEXT_ALIGN_CENTER,
+                                                t!("widgets.table.align_center").to_string(),
+                                                true,
+                                            ),
+                                            TableAlignment::Right => (
+                                                TEXT_ALIGN_RIGHT,
+                                                t!("widgets.table.align_right").to_string(),
+                                                true,
+                                            ),
+                                            TableAlignment::None => (
+                                                "—",
+                                                t!("widgets.table.align_none").to_string(),
+                                                false,
+                                            ),
+                                        };
+
+                                        let align_label = if use_phosphor {
+                                            phosphor_rich_text(align_icon, self.font_size * 0.8)
+                                                .color(control_color)
+                                        } else {
+                                            RichText::new(align_icon)
+                                                .size(self.font_size * 0.8)
+                                                .color(control_color)
                                         };
 
                                         let align_btn = ui.add(
-                                            egui::Button::new(
-                                                RichText::new(align_icon)
-                                                    .size(self.font_size * 0.8)
-                                                    .color(control_color),
-                                            )
-                                            .frame(false),
+                                            egui::Button::new(align_label).frame(false),
                                         );
                                         if align_btn
                                             .on_hover_text(format!("{} (click to cycle)", tooltip))
@@ -3310,16 +3328,26 @@ impl<'a> EditableCodeBlock<'a> {
                         if code_exec_mod::run_button_visible(&exec_ctx, &self.data.language) {
                             let is_running =
                                 run_snapshot.as_ref().is_some_and(|s| s.status.is_running());
-                            let run = egui::Button::new(
-                                RichText::new(format!("▶ {}", t!("widgets.code_block.run_label")))
-                                    .small(),
-                            )
-                            .small();
-                            let run_resp = ui.add_enabled(!is_running, run).on_hover_text(format!(
-                                "{} — {}",
-                                t!("widgets.code_block.run_label"),
-                                t!("widgets.code_block.run_tooltip")
-                            ));
+                            let run_resp = ui
+                                .horizontal(|ui| {
+                                    ui.label(phosphor_rich_text(PLAY, 11.0));
+                                    ui.add_enabled(
+                                        !is_running,
+                                        egui::Button::new(
+                                            RichText::new(
+                                                t!("widgets.code_block.run_label").to_string(),
+                                            )
+                                            .small(),
+                                        )
+                                        .small(),
+                                    )
+                                })
+                                .inner
+                                .on_hover_text(format!(
+                                    "{} — {}",
+                                    t!("widgets.code_block.run_label"),
+                                    t!("widgets.code_block.run_tooltip")
+                                ));
                             if run_resp.clicked() {
                                 let timeout = Duration::from_secs(exec_ctx.timeout_secs as u64);
                                 let ready = exec_ctx.consent_acknowledged && exec_ctx.enable;
@@ -3536,15 +3564,25 @@ fn render_run_output_panel(
     let is_running = snap.status.is_running();
     // Subtle spinner rotation tied to elapsed time gives a visible cue that
     // the UI thread is still ticking even when the child produces no output.
-    let display_glyph = if is_running {
-        running_spinner_frame(snap.elapsed)
-    } else {
-        status_glyph
-    };
 
     ui.horizontal(|ui| {
+        if is_running {
+            ui.label(
+                RichText::new(running_spinner_frame(snap.elapsed))
+                    .color(status_color)
+                    .strong()
+                    .small(),
+            );
+        } else {
+            ui.label(
+                phosphor_rich_text(status_glyph, 12.0)
+                    .color(status_color)
+                    .strong()
+                    .small(),
+            );
+        }
         ui.label(
-            RichText::new(format!("{} {}", display_glyph, status_text))
+            RichText::new(status_text)
                 .color(status_color)
                 .strong()
                 .small(),
@@ -3570,15 +3608,21 @@ fn render_run_output_panel(
             // button for the current state.
             if is_running {
                 let stop_enabled = !snap.cancel_requested;
-                let stop_btn = egui::Button::new(
-                    RichText::new(format!("⏹ {}", t!("widgets.code_block.run_stop"))).small(),
-                )
-                .small();
-                if ui
-                    .add_enabled(stop_enabled, stop_btn)
-                    .on_hover_text(t!("widgets.code_block.run_stop_tooltip").to_string())
-                    .clicked()
-                {
+                let stop_resp = ui
+                    .horizontal(|ui| {
+                        ui.label(phosphor_rich_text(STOP, 11.0));
+                        ui.add_enabled(
+                            stop_enabled,
+                            egui::Button::new(
+                                RichText::new(t!("widgets.code_block.run_stop").to_string())
+                                    .small(),
+                            )
+                            .small(),
+                        )
+                    })
+                    .inner
+                    .on_hover_text(t!("widgets.code_block.run_stop_tooltip").to_string());
+                if stop_resp.clicked() {
                     response.stop = true;
                 }
             } else if ui
@@ -3697,19 +3741,19 @@ fn render_run_output_panel(
 fn run_status_label(snap: &RunSnapshot) -> (&'static str, String, egui::Color32) {
     match &snap.status {
         RunStatus::Running => (
-            "⟳",
+            ARROWS_CLOCKWISE,
             t!("widgets.code_block.run_status_running").to_string(),
             egui::Color32::from_rgb(120, 170, 255),
         ),
         RunStatus::Completed { exit_code: Some(0) } => (
-            "✓",
+            CHECK,
             t!("widgets.code_block.run_status_success").to_string(),
             egui::Color32::from_rgb(120, 200, 130),
         ),
         RunStatus::Completed {
             exit_code: Some(code),
         } => (
-            "✗",
+            X,
             t!(
                 "widgets.code_block.run_status_failure",
                 code = code.to_string()
@@ -3718,12 +3762,12 @@ fn run_status_label(snap: &RunSnapshot) -> (&'static str, String, egui::Color32)
             egui::Color32::from_rgb(230, 100, 100),
         ),
         RunStatus::Completed { exit_code: None } => (
-            "✗",
+            X,
             t!("widgets.code_block.run_status_failure_unknown").to_string(),
             egui::Color32::from_rgb(230, 100, 100),
         ),
         RunStatus::TimedOut => (
-            "✗",
+            X,
             t!(
                 "widgets.code_block.run_status_timed_out",
                 secs = snap.timeout_secs.to_string()
@@ -3732,12 +3776,12 @@ fn run_status_label(snap: &RunSnapshot) -> (&'static str, String, egui::Color32)
             egui::Color32::from_rgb(230, 150, 70),
         ),
         RunStatus::Cancelled => (
-            "✗",
+            X,
             t!("widgets.code_block.run_status_cancelled").to_string(),
             egui::Color32::from_rgb(190, 190, 190),
         ),
         RunStatus::Failed { .. } => (
-            "✗",
+            X,
             t!("widgets.code_block.run_status_failed").to_string(),
             egui::Color32::from_rgb(230, 100, 100),
         ),
@@ -4367,29 +4411,28 @@ impl MermaidDiagramType {
         }
     }
 
-    /// Get an icon/emoji representing the diagram type.
-    /// Uses simple single-codepoint characters to avoid rendering issues.
+    /// Phosphor icon glyph for the diagram type.
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Flowchart => "📊",
-            Self::Sequence => "⇆", // Simple bidirectional arrow (no variation selector)
-            Self::Class => "◇",    // Diamond shape for class diagrams
-            Self::State => "⟳",    // Circular arrow for state
-            Self::EntityRelationship => "🔗",
-            Self::UserJourney => "👤", // Person silhouette
-            Self::Gantt => "📅",
-            Self::Pie => "◔", // Circle with quarter fill for pie charts
-            Self::Quadrant => "📐",
-            Self::Requirement => "📋",
-            Self::GitGraph => "🌳",
-            Self::C4 => "🏢",
-            Self::Mindmap => "💭", // Thought bubble for mindmap
-            Self::Timeline => "⏳",
-            Self::ZenUML => "📦",
-            Self::Sankey => "≋", // Triple tilde for flow/sankey
-            Self::XYChart => "📈",
-            Self::Block => "▦", // Grid pattern for blocks
-            Self::Unknown => "📊",
+            Self::Flowchart => CHART_BAR,
+            Self::Sequence => ARROWS_LEFT_RIGHT,
+            Self::Class => DIAMOND,
+            Self::State => ARROWS_CLOCKWISE,
+            Self::EntityRelationship => LINK,
+            Self::UserJourney => USER,
+            Self::Gantt => CALENDAR,
+            Self::Pie => CHART_PIE,
+            Self::Quadrant => SQUARES_FOUR,
+            Self::Requirement => LIST_CHECKS,
+            Self::GitGraph => GIT_BRANCH,
+            Self::C4 => BUILDINGS,
+            Self::Mindmap => TREE_STRUCTURE,
+            Self::Timeline => HOURGLASS,
+            Self::ZenUML => PACKAGE,
+            Self::Sankey => FLOW_ARROW,
+            Self::XYChart => CHART_LINE_UP,
+            Self::Block => SQUARES_FOUR,
+            Self::Unknown => CHART_BAR,
         }
     }
 }
@@ -4700,8 +4743,7 @@ impl<'a> MermaidBlock<'a> {
                     ui.horizontal(|ui| {
                         // Diagram type icon and name
                         ui.label(
-                            RichText::new(self.data.diagram_type.icon())
-                                .size(self.font_size + 2.0),
+                            phosphor_rich_text(self.data.diagram_type.icon(), self.font_size + 2.0),
                         );
                         ui.label(
                             RichText::new(self.data.diagram_type.display_name())
@@ -4720,22 +4762,28 @@ impl<'a> MermaidBlock<'a> {
                             );
 
                             // Toggle source view button
-                            let toggle_text = if self.data.show_source {
-                                "▼ Source"
-                            } else {
-                                "▶ Source"
-                            };
-                            if ui
-                                .add(
+                            let source_toggle = ui.horizontal(|ui| {
+                                ui.label(
+                                    phosphor_rich_text(
+                                        if self.data.show_source {
+                                            CARET_DOWN
+                                        } else {
+                                            CARET_RIGHT
+                                        },
+                                        self.font_size - 2.0,
+                                    )
+                                    .color(text_color),
+                                );
+                                ui.add(
                                     egui::Button::new(
-                                        RichText::new(toggle_text)
+                                        RichText::new("Source")
                                             .color(text_color)
                                             .size(self.font_size - 2.0),
                                     )
                                     .frame(false),
                                 )
-                                .clicked()
-                            {
+                            });
+                            if source_toggle.inner.clicked() {
                                 self.data.show_source = !self.data.show_source;
                             }
                         });
@@ -4888,7 +4936,10 @@ impl<'a> MermaidBlock<'a> {
 
                     error_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("⚠").color(egui::Color32::from_rgb(220, 80, 80)));
+                            ui.label(
+                                phosphor_rich_text(WARNING, 14.0)
+                                    .color(egui::Color32::from_rgb(220, 80, 80)),
+                            );
                             ui.label(
                                 RichText::new(error)
                                     .color(if self.dark_mode {
@@ -4989,7 +5040,7 @@ fn show_validation_warning(
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("⚠").color(text).size(font_size + 1.0));
+                    ui.label(phosphor_rich_text(WARNING, font_size + 1.0).color(text));
                     ui.label(
                         RichText::new(t!("mermaid.warning_line", line = error.line).to_string())
                             .color(text)
@@ -5044,7 +5095,7 @@ fn show_render_error(
         .inner_margin(egui::Margin::symmetric(8, 4))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("⚠").color(error_text));
+                ui.label(phosphor_rich_text(WARNING, 14.0).color(error_text));
                 ui.label(
                     RichText::new(t!("mermaid.rendering_error", error = error).to_string())
                         .color(error_text)

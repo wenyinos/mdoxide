@@ -603,6 +603,10 @@ impl ProductivityPanel {
         ctx: &eframe::egui::Context,
         ferrite_accent: eframe::egui::Color32,
     ) -> bool {
+        use crate::ui::phosphor_icons::{
+            phosphor_rich_text, CARET_DOWN, CARET_UP, CHECK, COFFEE, LIST_CHECKS, NOTE_PENCIL,
+            PENCIL, PLAY, PLUS, STOP, TIMER, TRASH, X,
+        };
         use eframe::egui::{
             Align, Button, Color32, ComboBox, CornerRadius, Frame, Key, Label, Layout, Margin,
             RichText, ScrollArea, Stroke, TextEdit, Vec2,
@@ -641,11 +645,15 @@ impl ProductivityPanel {
         } else {
             Color32::from_rgb(220, 53, 69)
         };
+        // Alternate row fill: use theme surfaces so striping matches the rest of the app.
+        // Dark mode: darken alternate rows (card already lifts with a light overlay).
+        // Light mode: faint_bg matches settings panels and other subtle stripes.
         let row_alt_bg = if is_dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 6)
+            visuals.panel_fill
         } else {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 4)
+            visuals.faint_bg_color
         };
+        let completed_task_color = visuals.widgets.inactive.fg_stroke.color;
 
         // Workspace hint banner: only shown when persistence is unavailable
         if self.workspace_root.is_none() {
@@ -690,7 +698,12 @@ impl ProductivityPanel {
                 // Section header
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("✓ {}", t!("productivity.tasks.title")))
+                        phosphor_rich_text(LIST_CHECKS, 13.0)
+                            .strong()
+                            .color(header_color),
+                    );
+                    ui.label(
+                        RichText::new(t!("productivity.tasks.title").to_string())
                             .size(13.0)
                             .strong()
                             .color(header_color),
@@ -793,8 +806,7 @@ impl ProductivityPanel {
                                                 if ui
                                                     .add(
                                                         Button::new(
-                                                            RichText::new("▲")
-                                                                .size(9.0)
+                                                            phosphor_rich_text(CARET_UP, 9.0)
                                                                 .color(muted_color),
                                                         )
                                                         .frame(false)
@@ -813,8 +825,7 @@ impl ProductivityPanel {
                                                 if ui
                                                     .add(
                                                         Button::new(
-                                                            RichText::new("▼")
-                                                                .size(9.0)
+                                                            phosphor_rich_text(CARET_DOWN, 9.0)
                                                                 .color(muted_color),
                                                         )
                                                         .frame(false)
@@ -854,7 +865,7 @@ impl ProductivityPanel {
                                                 RichText::new(&task.text)
                                                     .size(12.0)
                                                     .strikethrough()
-                                                    .color(muted_color)
+                                                    .color(completed_task_color)
                                             } else {
                                                 RichText::new(&task.text)
                                                     .size(12.0)
@@ -875,8 +886,7 @@ impl ProductivityPanel {
                                                     if ui
                                                         .add(
                                                             Button::new(
-                                                                RichText::new("✕")
-                                                                    .size(10.0)
+                                                                phosphor_rich_text(X, 10.0)
                                                                     .color(muted_color),
                                                             )
                                                             .frame(false)
@@ -927,7 +937,12 @@ impl ProductivityPanel {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("⏱ {}", t!("productivity.pomodoro.title")))
+                        phosphor_rich_text(TIMER, 13.0)
+                            .strong()
+                            .color(header_color),
+                    );
+                    ui.label(
+                        RichText::new(t!("productivity.pomodoro.title").to_string())
                             .size(13.0)
                             .strong()
                             .color(header_color),
@@ -990,17 +1005,22 @@ impl ProductivityPanel {
                 ui.horizontal(|ui| {
                     if self.timer.is_active() {
                         if ui
-                            .add_sized(
-                                [ui.available_width(), 26.0],
-                                Button::new(
-                                    RichText::new(format!(
-                                        "⏹ {}",
-                                        t!("productivity.pomodoro.stop")
-                                    ))
-                                    .size(11.0)
-                                    .color(danger_color),
-                                ),
-                            )
+                            .horizontal(|ui| {
+                                ui.label(
+                                    phosphor_rich_text(STOP, 11.0).color(danger_color),
+                                );
+                                ui.add_sized(
+                                    [ui.available_width() - 20.0, 26.0],
+                                    Button::new(
+                                        RichText::new(
+                                            t!("productivity.pomodoro.stop").to_string(),
+                                        )
+                                        .size(11.0)
+                                        .color(danger_color),
+                                    ),
+                                )
+                            })
+                            .inner
                             .clicked()
                         {
                             self.timer.stop();
@@ -1021,33 +1041,39 @@ impl ProductivityPanel {
                     } else {
                         let half_w = (ui.available_width() - 6.0) / 2.0;
                         if ui
-                            .add_sized(
-                                [half_w, 26.0],
-                                Button::new(
-                                    RichText::new(format!(
-                                        "▶ {}",
-                                        t!("productivity.pomodoro.start_work")
-                                    ))
-                                    .size(11.0)
-                                    .color(accent_color),
-                                ),
-                            )
+                            .horizontal(|ui| {
+                                ui.label(phosphor_rich_text(PLAY, 11.0).color(accent_color));
+                                ui.add_sized(
+                                    [half_w - 20.0, 26.0],
+                                    Button::new(
+                                        RichText::new(
+                                            t!("productivity.pomodoro.start_work").to_string(),
+                                        )
+                                        .size(11.0)
+                                        .color(accent_color),
+                                    ),
+                                )
+                            })
+                            .inner
                             .clicked()
                         {
                             self.timer.start_work();
                         }
                         if ui
-                            .add_sized(
-                                [half_w, 26.0],
-                                Button::new(
-                                    RichText::new(format!(
-                                        "☕ {}",
-                                        t!("productivity.pomodoro.start_break")
-                                    ))
-                                    .size(11.0)
-                                    .color(success_color),
-                                ),
-                            )
+                            .horizontal(|ui| {
+                                ui.label(phosphor_rich_text(COFFEE, 11.0).color(success_color));
+                                ui.add_sized(
+                                    [half_w - 20.0, 26.0],
+                                    Button::new(
+                                        RichText::new(
+                                            t!("productivity.pomodoro.start_break").to_string(),
+                                        )
+                                        .size(11.0)
+                                        .color(success_color),
+                                    ),
+                                )
+                            })
+                            .inner
                             .clicked()
                         {
                             self.timer.start_break();
@@ -1067,7 +1093,12 @@ impl ProductivityPanel {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("📝 {}", t!("productivity.notes.title")))
+                        phosphor_rich_text(NOTE_PENCIL, 13.0)
+                            .strong()
+                            .color(header_color),
+                    );
+                    ui.label(
+                        RichText::new(t!("productivity.notes.title").to_string())
                             .size(13.0)
                             .strong()
                             .color(header_color),
@@ -1090,7 +1121,7 @@ impl ProductivityPanel {
                             );
 
                             if ui
-                                .small_button(RichText::new("✓").color(success_color))
+                                .small_button(phosphor_rich_text(CHECK, 12.0).color(success_color))
                                 .on_hover_text(t!("productivity.notes.confirm_rename").to_string())
                                 .clicked()
                                 || (response.lost_focus()
@@ -1124,7 +1155,7 @@ impl ProductivityPanel {
                             }
 
                             if ui
-                                .small_button(RichText::new("✕").color(muted_color))
+                                .small_button(phosphor_rich_text(X, 12.0).color(muted_color))
                                 .on_hover_text(t!("productivity.notes.cancel_rename").to_string())
                                 .clicked()
                             {
@@ -1166,7 +1197,7 @@ impl ProductivityPanel {
                             // Inline icon actions
                             if ui
                                 .add(
-                                    Button::new(RichText::new("➕").size(11.0).color(accent_color))
+                                    Button::new(phosphor_rich_text(PLUS, 11.0).color(accent_color))
                                         .frame(false)
                                         .min_size(Vec2::new(20.0, 20.0)),
                                 )
@@ -1187,7 +1218,7 @@ impl ProductivityPanel {
 
                             if ui
                                 .add(
-                                    Button::new(RichText::new("✏").size(11.0).color(muted_color))
+                                    Button::new(phosphor_rich_text(PENCIL, 11.0).color(muted_color))
                                         .frame(false)
                                         .min_size(Vec2::new(20.0, 20.0)),
                                 )
@@ -1204,7 +1235,7 @@ impl ProductivityPanel {
                                     if ui
                                         .add(
                                             Button::new(
-                                                RichText::new("✓").size(11.0).color(danger_color),
+                                                phosphor_rich_text(CHECK, 11.0).color(danger_color),
                                             )
                                             .min_size(Vec2::new(20.0, 20.0)),
                                         )
@@ -1230,7 +1261,7 @@ impl ProductivityPanel {
                                 } else if ui
                                     .add(
                                         Button::new(
-                                            RichText::new("🗑").size(11.0).color(muted_color),
+                                            phosphor_rich_text(TRASH, 11.0).color(muted_color),
                                         )
                                         .frame(false)
                                         .min_size(Vec2::new(20.0, 20.0)),

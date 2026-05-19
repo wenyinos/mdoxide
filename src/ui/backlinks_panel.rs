@@ -5,6 +5,7 @@
 //! graph index for efficient lookup in large workspaces.
 
 use crate::state::BacklinkEntry;
+use crate::ui::phosphor_icons::{file_icon_for_path, phosphor_font};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Vec2};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,8 +151,8 @@ impl BacklinksPanel {
                         ui.painter().text(
                             icon_pos,
                             egui::Align2::LEFT_CENTER,
-                            "📄",
-                            egui::FontId::proportional(11.0),
+                            file_icon_for_path(&entry.source_path),
+                            phosphor_font(11.0),
                             text_color,
                         );
 

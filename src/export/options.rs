@@ -7,6 +7,7 @@
 // and format options that may be used for future export features (PDF, etc.)
 #![allow(dead_code)]
 
+use crate::ui::phosphor_icons::{CLIPBOARD, FILE_PDF, GLOBE};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -49,9 +50,9 @@ impl ExportFormat {
     /// Get an icon for this format.
     pub fn icon(&self) -> &'static str {
         match self {
-            ExportFormat::HtmlFile => "🌐",
-            ExportFormat::ClipboardHtml => "📋",
-            ExportFormat::PdfFile => "📄",
+            ExportFormat::HtmlFile => GLOBE,
+            ExportFormat::ClipboardHtml => CLIPBOARD,
+            ExportFormat::PdfFile => FILE_PDF,
         }
     }
 

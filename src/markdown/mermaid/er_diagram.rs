@@ -1,6 +1,8 @@
 //! Entity-Relationship diagram parsing and rendering.
 
 use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2};
+
+use crate::ui::phosphor_icons::{phosphor_font, KEY, LINK};
 use std::collections::HashMap;
 
 use super::text::{EguiTextMeasurer, TextMeasurer};
@@ -568,17 +570,32 @@ pub fn render_er_diagram(ui: &mut Ui, diagram: &ERDiagram, dark_mode: bool, font
             let mut y = sep_y + 4.0;
             for attr in &entity.attributes {
                 let color = if attr.is_pk { pk_color } else { text_color };
-                let prefix = if attr.is_pk {
-                    "🔑 "
-                } else if attr.is_fk {
-                    "🔗 "
-                } else {
-                    ""
-                };
-                let text = format!("{}{} {}", prefix, attr.attr_type, attr.name);
+                let mut x = rect.min.x + 8.0;
+                let y_center = y + attr_height * 0.4;
 
+                if attr.is_pk {
+                    painter.text(
+                        Pos2::new(x, y_center),
+                        egui::Align2::LEFT_CENTER,
+                        KEY,
+                        phosphor_font(font_size - 2.0),
+                        pk_color,
+                    );
+                    x += 14.0;
+                } else if attr.is_fk {
+                    painter.text(
+                        Pos2::new(x, y_center),
+                        egui::Align2::LEFT_CENTER,
+                        LINK,
+                        phosphor_font(font_size - 2.0),
+                        text_color,
+                    );
+                    x += 14.0;
+                }
+
+                let text = format!("{} {}", attr.attr_type, attr.name);
                 painter.text(
-                    Pos2::new(rect.min.x + 8.0, y + attr_height * 0.4),
+                    Pos2::new(x, y_center),
                     egui::Align2::LEFT_CENTER,
                     text,
                     FontId::proportional(font_size - 2.0),

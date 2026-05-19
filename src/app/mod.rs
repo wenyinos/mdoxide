@@ -1245,7 +1245,7 @@ impl FerriteApp {
         let mut should_restore = false;
         let mut should_discard = false;
 
-        egui::Window::new(format!("🔄 {}", t!("recovery.auto_save.title")))
+        egui::Window::new(t!("recovery.auto_save.title").to_string())
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -1283,13 +1283,17 @@ impl FerriteApp {
 
                 ui.horizontal(|ui| {
                     if ui
-                        .button(format!("✅ {}", t!("recovery.auto_save.restore")))
+                        .button(
+                            egui::RichText::new(t!("recovery.auto_save.restore").to_string()),
+                        )
                         .clicked()
                     {
                         should_restore = true;
                     }
                     if ui
-                        .button(format!("🗑 {}", t!("recovery.auto_save.discard")))
+                        .button(
+                            egui::RichText::new(t!("recovery.auto_save.discard").to_string()),
+                        )
                         .clicked()
                     {
                         should_discard = true;
@@ -1357,7 +1361,7 @@ impl FerriteApp {
         let mut restore = false;
         let mut discard = false;
 
-        egui::Window::new(format!("🔄 {}?", t!("recovery.session.title")))
+        egui::Window::new(format!("{}?", t!("recovery.session.title")))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -1385,7 +1389,7 @@ impl FerriteApp {
 
                     ui.horizontal(|ui| {
                         if ui
-                            .button(format!("✔ {}", t!("recovery.session.restore")))
+                            .button(t!("recovery.session.restore").to_string())
                             .on_hover_text(t!("recovery.session.restore_tooltip").to_string())
                             .clicked()
                         {
@@ -1395,7 +1399,7 @@ impl FerriteApp {
                         ui.add_space(8.0);
 
                         if ui
-                            .button(format!("✗ {}", t!("recovery.session.start_fresh")))
+                            .button(t!("recovery.session.start_fresh").to_string())
                             .on_hover_text(t!("recovery.session.start_fresh_tooltip").to_string())
                             .clicked()
                         {
@@ -1483,16 +1487,6 @@ impl FerriteApp {
                 .map(|t| t.view_mode)
                 .unwrap_or(ViewMode::Raw);
             let show_line_numbers = self.state.settings.show_line_numbers;
-            let can_undo = self
-                .state
-                .active_tab()
-                .map(|t| t.can_undo())
-                .unwrap_or(false);
-            let can_redo = self
-                .state
-                .active_tab()
-                .map(|t| t.can_redo())
-                .unwrap_or(false);
             let can_save = self
                 .state
                 .active_tab()
@@ -1549,8 +1543,6 @@ impl FerriteApp {
                         &theme_colors,
                         view_mode,
                         show_line_numbers,
-                        can_undo,
-                        can_redo,
                         can_save,
                         self.state.active_tab().is_some(),
                         formatting_state.as_ref(),
@@ -1683,8 +1675,9 @@ impl FerriteApp {
         let mut backlink_navigate_to: Option<std::path::PathBuf> = None;
 
         // Side panel toggle strip (shown when outline panel is closed, hidden in Zen Mode)
+        let blocks_resize_clicks = self.window_resize_state.blocks_widget_clicks();
         if !self.state.settings.outline_enabled && !zen_mode {
-            if crate::ui::side_panel_toggle_strip(ctx, is_dark) {
+            if crate::ui::side_panel_toggle_strip(ctx, is_dark, blocks_resize_clicks) {
                 self.state.settings.outline_enabled = true;
                 self.state.mark_settings_dirty();
             }

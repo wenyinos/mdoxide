@@ -5,7 +5,7 @@
 ### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
 **Status:** Feature scope for v0.3.0 is **implemented on `main`** (egui 0.31 stack, export, code run, Mermaid wave, accent, hub polish, quick-note workflow, and listed bugfixes). **Remaining before tag:** final QA (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping ([#112](https://github.com/OlaProeis/Ferrite/issues/112) / [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111)), release artifacts, and `CHANGELOG` / version bump. Mermaid FC-83a edge/layout parity ([#83](https://github.com/OlaProeis/Ferrite/issues/83)) is in progress and does not block the tag unless you choose to hold for it.
 
-**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), optional **quick note workflow** for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), and **user-configurable Ferrite accent**. See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below (checkboxes updated to match reality).
+**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), optional **quick note workflow** for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), **user-configurable Ferrite accent**, and a **unified Phosphor icon set** across app chrome. See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below (checkboxes updated to match reality).
 
 > **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). The original v0.2.9 plan (platform upgrade, export, code execution, embeds) was rolled into v0.3.0; remaining work that didn't fit was split into v0.3.1 / v0.3.2.
 
@@ -56,7 +56,7 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 **Four legs:**
 1. **eframe / egui 0.31+ migration** (Task 38) — closes [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111), [#112](https://github.com/OlaProeis/Ferrite/issues/112).
 2. **PDF + HTML export** — markdown becomes shareable, complementing the v0.2.8 PDF *viewer*.
-3. **Executable code blocks** — `▶ Run` for shell and Python, opt-in with security dialog.
+3. **Executable code blocks** — **Run** for shell and Python, opt-in with security dialog.
 4. **Mermaid improvements (first wave)** — diagram insertion toolbar, syntax hints, authoring validation, flowchart shapes, state diagram fork/join + history states.
 
 *Scope discipline:* LSP, YouTube/video embeds, GitHub HTML parity, and the heavier Mermaid items (Git Graph rewrite, mmdr integration, manual layout) are scheduled for **v0.3.1**. The Mermaid crate extraction and additional file-format viewers are **v0.3.2**. RTL/BiDi and LaTeX math are **v0.4.0**. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until v0.3.0 ships.
@@ -111,6 +111,13 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 - [x] **Ribbon toolbar icon-only** — Removed collapse/expand toggle and section labels; fixed 28px icon bar. Save/Export menus unchanged. See [`src/ui/ribbon.rs`](src/ui/ribbon.rs).
 - [x] **Undo granularity (raw typing)** — Removed 500 ms time-merge in `EditHistory`; each recorded diff is its own undo step so Ctrl+Z no longer reverts an entire fast-typing burst. See [`docs/technical/editor/undo-redo.md`](docs/technical/editor/undo-redo.md), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
 - [x] **Quick file switcher (Ctrl+P) search** — Token-based matching on `-` / `_` / path separators; search pool = indexed tree + recent files; match quality no longer drowned by recent-file boost or full-path subsequence noise. See [`src/ui/quick_switcher.rs`](src/ui/quick_switcher.rs), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
+
+#### UI iconography — Phosphor Icons
+- [x] **Phosphor icon font integration** — Added `egui-phosphor = "0.9.0"` (pinned for egui 0.31); font registration in [`src/fonts.rs`](src/fonts.rs); helpers in [`src/ui/icons.rs`](src/ui/icons.rs) and re-exports in [`src/ui/phosphor_icons.rs`](src/ui/phosphor_icons.rs).
+- [x] **App chrome migration** — Replaced emoji / ad-hoc Unicode glyphs with Phosphor across ribbon, format toolbar, outline & productivity panels, terminal, settings, about, command palette, quick switcher, file tree, status bar, dialogs, nav buttons, title bar, and tab close controls.
+- [x] **Preview & data viewers** — Markdown widgets (tables, code **Run** / **Stop**, mermaid headers & warnings), tree viewer (expand/collapse, copy path), CSV row-count info, Gantt done markers, ER diagram PK/FK markers, editor gutter fold carets.
+- [x] **Locale deduplication** — Removed emoji prefixes from strings where the UI now renders icons separately (`en`, `de`, `es`, `ja`, `zh_Hans` for tree viewer, outline stats, CSV headers).
+- *Intentionally unchanged:* Git status badges in the file tree, markdown **callout** content emojis (document body, not chrome), view-mode **R/S/V** segment letters.
 
 #### Appearance — Ferrite accent color
 - [x] **User-configurable accent** — Color picker in **Settings → Appearance** and on the **Welcome** screen; persisted as `Settings.accent_color`. Replaces the default blue for rendered **H1–H6**, editor **selection** tint, **tabs/active controls**, **view mode segment** (R/S/V), **outline/productivity** highlights, **Productivity Hub** (Add / Start work / notes ➕ / dock-detach), and **status bar** (LSP line, git branch). **Hyperlinks** in rendered markdown stay classic blue (`theme::accent::standard_link_color`). Documented in [`docs/technical/ui/theme-system.md`](docs/technical/ui/theme-system.md) (section *Ferrite accent color*).
@@ -320,6 +327,7 @@ Work listed here is **implemented on `main`**; see **[Unreleased] — v0.3.0** i
 - **Mermaid first wave** — insert templates, F1 syntax help, inline validation, flowchart shapes/style, state fork/join + history.
 - **Mermaid FC-83a (partial, [#83](https://github.com/OlaProeis/Ferrite/issues/83))** — flowchart obstacle routing, back-edge side channels, parallel lanes for feedback loops; doc [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md). Branch spacing / E→B path shape and `{decide}` centering still open.
 - **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar).
+- **Phosphor Icons** — unified icon font across app chrome, preview widgets, and data viewers; locale strings deduplicated where icons are rendered in code.
 - **Ribbon toolbar** — always icon-only (collapse toggle and section labels removed).
 - **Undo granularity (raw mode)** — per-keystroke Ctrl+Z steps (500 ms merge removed).
 - **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), table cell focus after typing (same/cross-table), frontmatter panel stale on tab switch, quick file switcher (Ctrl+P) token/recent-file search, Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).

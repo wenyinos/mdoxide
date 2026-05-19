@@ -31,6 +31,7 @@
 use crate::markdown::mermaid::{snippet_fenced_block, MermaidTemplateKind};
 use crate::markdown::parser::HeadingLevel;
 use crate::string_utils::{ceil_char_boundary, floor_char_boundary};
+use crate::ui::phosphor_icons::{IMAGE, LINK};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Command Enum
@@ -97,8 +98,8 @@ impl MarkdownFormatCommand {
             Self::Italic => "𝐼",
             Self::InlineCode => "</>",
             Self::Strikethrough => "S̶",
-            Self::Link => "🔗",
-            Self::Image => "🖼",
+            Self::Link => LINK,
+            Self::Image => IMAGE,
             Self::CodeBlock => "{ }",
             Self::Heading(1) => "H1",
             Self::Heading(2) => "H2",

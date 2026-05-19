@@ -65,8 +65,8 @@ status:
   rainbow_tooltip: "Rainbow column coloring: %{status}\nClick to toggle"
   encoding_tooltip: "File encoding: %{encoding}\n%{info}Click to change"
   encoding_heading: "File Encoding"
-  recent_files_heading: "📄 Recent Files"
-  recent_folders_heading: "📁 Recent Folders"
+  recent_files_heading: "Recent Files"
+  recent_folders_heading: "Recent Folders"
   file_tooltip: "%{path}\n\nClick: Open\nShift+Click: Open in background"
   folder_tooltip: "%{path}\n\nClick: Open as workspace"
 
@@ -392,7 +392,7 @@ outline:
   tab_links: "Links"
   tab_hub: "Hub"
   json_structure: "📁 Structure"
-  json_values: "📊 Values"
+  json_values: "Values"
   json_objects: "Objects"
   json_arrays: "Arrays"
   json_total_keys: "Total keys"
@@ -699,9 +699,9 @@ notification:
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
-  collapse_all: "▶ Collapse All"
-  expand_all: "▼ Expand All"
-  copy_path: "📋 Copy Path"
+  collapse_all: "Collapse All"
+  expand_all: "Expand All"
+  copy_path: "Copy Path"
   show_raw: "Show Raw"
   parse_error: "⚠ Parse Error:"
   large_file_warning: "File is large (%{size} MB). Showing raw content."
@@ -811,8 +811,8 @@ csv:
   error: "Failed to parse CSV"
   select_delimiter: "Select Delimiter"
   header_row: "Header Row"
-  has_headers_yes: "✓ First row is header"
-  has_headers_no: "✗ No header row"
+  has_headers_yes: "First row is header"
+  has_headers_no: "No header row"
   show_raw: "Show Raw"
   large_file_warning: "File is large (%{size} MB). Showing raw content."
 
@@ -858,7 +858,7 @@ workspace:
   rename: "Rename"
   delete: "Delete"
   refresh: "Refresh"
-  recent_folders: "📁 Recent Folders"
+  recent_folders: "Recent Folders"
 
 # Zen mode
 zen:
@@ -895,8 +895,8 @@ ribbon:
   show_info_panel: "Show Info Panel"
   toggle_outline: "Toggle Outline"
   copy_html_tooltip: "Copy rendered HTML to clipboard"
-  export_pdf: "📄 Export as PDF"
-  print_preview: "🖨 Print preview..."
+  export_pdf: "Export as PDF"
+  print_preview: "Print preview..."
   coming_soon: "Coming soon"
   heading_level: "Heading %{level}"
 

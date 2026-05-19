@@ -220,38 +220,10 @@ impl FileTreeNode {
     pub fn icon(&self) -> &'static str {
         match &self.kind {
             FileTreeNodeKind::Directory { .. } | FileTreeNodeKind::DirectoryNotLoaded => {
-                if self.is_expanded {
-                    "📂" // Open folder
-                } else {
-                    "📁" // Closed folder
-                }
+                crate::ui::phosphor_icons::folder_icon(self.is_expanded)
             }
             FileTreeNodeKind::File => {
-                match self.extension().as_deref() {
-                    // Markdown/Text
-                    Some("md" | "markdown" | "txt" | "text") => "📄",
-                    // Code files
-                    Some("rs") => "🦀",
-                    Some("js" | "jsx" | "ts" | "tsx") => "📜",
-                    Some("py") => "🐍",
-                    Some("html" | "htm") => "🌐",
-                    Some("css" | "scss" | "sass") => "🎨",
-                    Some("json") => "📋",
-                    Some("yaml" | "yml") => "📋",
-                    Some("toml") => "🔧", // Use wrench instead of gear+variation selector
-                    Some("xml") => "📰",
-                    // Config files
-                    Some("gitignore" | "env") => "🔧", // Use wrench instead of gear+variation selector
-                    // Images - use camera instead of picture+variation selector
-                    Some("png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico") => "📷",
-                    // Documents
-                    Some("pdf") => "📕",
-                    Some("doc" | "docx") => "📘",
-                    // Archives
-                    Some("zip" | "tar" | "gz" | "rar" | "7z") => "📦",
-                    // Default
-                    _ => "📄",
-                }
+                crate::ui::phosphor_icons::file_icon_for_extension(self.extension().as_deref())
             }
         }
     }
@@ -473,13 +445,13 @@ mod tests {
     #[test]
     fn test_file_tree_node_icons() {
         let md = FileTreeNode::file("test.md".to_string(), PathBuf::from("/test.md"));
-        assert_eq!(md.icon(), "📄");
+        assert_eq!(md.icon(), crate::ui::phosphor_icons::FILE_MD);
 
         let rs = FileTreeNode::file("main.rs".to_string(), PathBuf::from("/main.rs"));
-        assert_eq!(rs.icon(), "🦀");
+        assert_eq!(rs.icon(), crate::ui::phosphor_icons::FILE_RS);
 
         let dir = FileTreeNode::directory("src".to_string(), PathBuf::from("/src"), vec![]);
-        assert_eq!(dir.icon(), "📁");
+        assert_eq!(dir.icon(), crate::ui::phosphor_icons::FOLDER);
     }
 
     #[test]
