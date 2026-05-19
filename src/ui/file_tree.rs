@@ -315,7 +315,7 @@ impl FileTreePanel {
         );
 
         // Calculate name width for badge positioning
-        let name_galley = ui.fonts(|f| {
+        let name_galley = ui.fonts_mut(|f| {
             f.layout_no_wrap(
                 node.name.clone(),
                 egui::FontId::proportional(12.0),

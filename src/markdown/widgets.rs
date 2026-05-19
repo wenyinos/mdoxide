@@ -257,7 +257,7 @@ impl<'a> EditableHeading<'a> {
                 TextEdit::singleline(self.text)
                     .font(FontId::proportional(heading_font_size))
                     .text_color(colors.heading)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .desired_width(f32::INFINITY),
             );
 
@@ -393,7 +393,7 @@ impl<'a> EditableParagraph<'a> {
                 TextEdit::multiline(self.text)
                     .font(FontId::proportional(self.font_size))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .desired_width(f32::INFINITY),
             );
         });
@@ -602,7 +602,7 @@ impl<'a> EditableList<'a> {
                     TextEdit::singleline(&mut item.text)
                         .font(FontId::proportional(self.font_size))
                         .text_color(colors.text)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .desired_width(f32::INFINITY),
                 );
 
@@ -1937,7 +1937,7 @@ impl<'a> EditableTable<'a> {
                         .iter()
                         .filter_map(|r| r.get(ci))
                         .map(|c| {
-                            let galley = ui.fonts(|f| {
+                            let galley = ui.fonts_mut(|f| {
                                 f.layout_no_wrap(
                                     c.text.clone(),
                                     FontId::proportional(self.font_size),
@@ -2019,7 +2019,7 @@ impl<'a> EditableTable<'a> {
                         if let Some(cell) = row.get(ci) {
                             let cw = col_widths.get(ci).copied().unwrap_or(100.0);
                             let wrap_w = (cw - cell_h_pad * 2.0).max(20.0);
-                            let galley = ui.fonts(|f| {
+                            let galley = ui.fonts_mut(|f| {
                                 f.layout(
                                     cell.text.clone(),
                                     FontId::proportional(self.font_size),
@@ -2152,26 +2152,27 @@ impl<'a> EditableTable<'a> {
                                                     let wrap_font = font.clone();
                                                     let wrap_color = text_color;
                                                     let mut layouter =
-                                                    move |ui_inner: &egui::Ui,
-                                                          text: &str,
-                                                          _wrap_width: f32| {
-                                                        let job =
-                                                            egui::text::LayoutJob::simple(
-                                                                text.to_string(),
-                                                                wrap_font.clone(),
-                                                                wrap_color,
-                                                                inner_w,
-                                                            );
-                                                        ui_inner
-                                                            .fonts(|f| f.layout_job(job))
-                                                    };
+                                                        move |ui_inner: &egui::Ui,
+                                                              buf: &dyn egui::TextBuffer,
+                                                              _wrap_width: f32| {
+                                                            let text = buf.as_str();
+                                                            let job =
+                                                                egui::text::LayoutJob::simple(
+                                                                    text.to_string(),
+                                                                    wrap_font.clone(),
+                                                                    wrap_color,
+                                                                    inner_w,
+                                                                );
+                                                            ui_inner
+                                                                .fonts_mut(|f| f.layout_job(job))
+                                                        };
 
                                                     let output =
                                                         TextEdit::multiline(&mut cell.text)
                                                             .id(cell_id)
                                                             .font(font)
                                                             .text_color(text_color)
-                                                            .frame(false)
+                                                            .frame(egui::Frame::NONE)
                                                             .desired_width(inner_w)
                                                             .desired_rows(1)
                                                             // Default TextEdit steals Tab focus to egui tab order;
@@ -2241,7 +2242,7 @@ impl<'a> EditableTable<'a> {
                                                         )
                                                     };
                                                     let galley =
-                                                        ui.fonts(|f| f.layout_job(job));
+                                                        ui.fonts_mut(|f| f.layout_job(job));
                                                     // Full inner rect: empty cells need a non-zero hit
                                                     // target (Label + empty galley was zero-sized).
                                                     let inner_h = (row_h - cell_v_pad * 2.0)
@@ -3407,7 +3408,7 @@ impl<'a> EditableCodeBlock<'a> {
                                     .code_editor()
                                     .font(FontId::monospace(self.font_size))
                                     .text_color(code_text_color)
-                                    .frame(false)
+                                    .frame(egui::Frame::NONE)
                                     .desired_width(f32::INFINITY),
                             );
                             // No auto-exit - user must click "Done" button

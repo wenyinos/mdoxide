@@ -1272,7 +1272,7 @@ fn paint_tab_label(ui: &Ui, rect: egui::Rect, icon: &str, label: &str, color: Co
     const GAP: f32 = 3.0;
 
     let text_font = FontId::proportional(ICON_SIZE);
-    let label_width = ui.fonts(|fonts| {
+    let label_width = ui.fonts_mut(|fonts| {
         fonts
             .layout_no_wrap(label.to_string(), text_font.clone(), color)
             .size()

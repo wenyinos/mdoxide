@@ -115,7 +115,7 @@ impl<'a> TerminalWidget<'a> {
     /// Calculate character dimensions for the monospace font.
     fn char_size(&self, ui: &Ui) -> Vec2 {
         let font_id = FontId::monospace(self.font_size);
-        let char_width = ui.fonts(|f| f.glyph_width(&font_id, 'M'));
+        let char_width = ui.fonts_mut(|f| f.glyph_width(&font_id, 'M'));
         let line_height = self.font_size * 1.2;
         Vec2::new(char_width, line_height)
     }
@@ -248,13 +248,7 @@ impl<'a> TerminalWidget<'a> {
         }
 
         // Handle scroll events on terminal rect
-        let scroll_delta = ui.input(|i| {
-            if i.smooth_scroll_delta.y.abs() > 0.0 {
-                i.smooth_scroll_delta.y
-            } else {
-                i.raw_scroll_delta.y
-            }
-        });
+        let scroll_delta = ui.input(|i| i.smooth_scroll_delta().y);
         if scroll_delta.abs() > 0.1 && response.hovered() {
             // Scroll terminal (positive delta = scroll up, negative = scroll down)
             let mut lines = (scroll_delta / char_size.y).round() as isize;

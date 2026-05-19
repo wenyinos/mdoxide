@@ -663,7 +663,7 @@ impl SearchPanel {
                                 }
 
                                 // Draw the text
-                                let galley = ui.fonts(|f| f.layout_job(job));
+                                let galley = ui.fonts_mut(|f| f.layout_job(job));
                                 ui.painter().galley(
                                     rect.left_top() + egui::vec2(8.0, 2.0),
                                     galley,

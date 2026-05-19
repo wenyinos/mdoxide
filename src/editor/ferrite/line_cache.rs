@@ -993,18 +993,33 @@ mod tests {
         assert!(cache.is_empty());
     }
 
+    fn dummy_galley() -> Arc<egui::Galley> {
+        use std::sync::OnceLock;
+
+        static GALLEY: OnceLock<Arc<egui::Galley>> = OnceLock::new();
+        GALLEY
+            .get_or_init(|| {
+                let ctx = egui::Context::default();
+                ctx.set_fonts(egui::FontDefinitions::default());
+                let mut galley = None;
+                ctx.run_ui(egui::RawInput::default(), |ui| {
+                    galley = Some(ui.ctx().fonts_mut(|fonts| {
+                        fonts.layout_job(LayoutJob::simple(
+                            " ".to_owned(),
+                            egui::FontId::default(),
+                            Color32::WHITE,
+                            100.0,
+                        ))
+                    }));
+                });
+                galley.expect("test galley layout")
+            })
+            .clone()
+    }
+
     fn dummy_entry(access: u64) -> CacheEntry {
         CacheEntry {
-            galley: Arc::new(egui::Galley {
-                job: Arc::new(LayoutJob::default()),
-                rows: vec![],
-                rect: egui::Rect::NOTHING,
-                mesh_bounds: egui::Rect::NOTHING,
-                num_vertices: 0,
-                num_indices: 0,
-                pixels_per_point: 1.0,
-                elided: false,
-            }),
+            galley: dummy_galley(),
             last_access: access,
         }
     }

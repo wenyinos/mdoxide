@@ -168,7 +168,7 @@ impl FerriteApp {
                         if ui.button("Copy Install Command").clicked() {
                             let cmd = self.state.ui.portal_error_command.clone();
                             // Set clipboard via egui's output
-                            ui.output_mut(|o| o.copied_text = cmd.clone());
+                            ui.copy_text(cmd.clone());
                             log::info!("Copied portal install command to clipboard: {}", cmd);
                         }
 

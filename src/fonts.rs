@@ -2229,7 +2229,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
     let font_id = FontId::new(14.0, FontFamily::Proportional);
 
     // Pre-warm by querying glyph widths - this forces rasterization
-    ctx.fonts(|fonts| {
+    ctx.fonts_mut(|fonts| {
         for c in BOX_DRAWING_CHARS.chars() {
             let _ = fonts.glyph_width(&font_id, c);
         }
@@ -2240,7 +2240,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
 
     // Also pre-warm monospace font for code blocks
     let mono_font_id = FontId::new(14.0, FontFamily::Monospace);
-    ctx.fonts(|fonts| {
+    ctx.fonts_mut(|fonts| {
         for c in BOX_DRAWING_CHARS.chars() {
             let _ = fonts.glyph_width(&mono_font_id, c);
         }

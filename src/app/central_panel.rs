@@ -54,6 +54,7 @@ fn load_viewer_image(ctx: &egui::Context, path: &Path) -> Result<ImageViewerText
 
     let color_image = egui::ColorImage {
         size: [width as usize, height as usize],
+        source_size: egui::vec2(width as f32, height as f32),
         pixels,
     };
 
@@ -161,6 +162,7 @@ fn render_pdf_page(
 
     let color_image = egui::ColorImage {
         size: [width as usize, height as usize],
+        source_size: egui::vec2(width as f32, height as f32),
         pixels,
     };
 
@@ -279,7 +281,7 @@ impl FerriteApp {
                 let tab_widths: Vec<f32> = tab_titles
                     .iter()
                     .map(|(_, title, _)| {
-                        let text_galley = ui.fonts(|f| {
+                        let text_galley = ui.fonts_mut(|f| {
                             f.layout_no_wrap(
                                 title.clone(),
                                 egui::FontId::default(),

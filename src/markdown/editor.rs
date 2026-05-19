@@ -892,7 +892,8 @@ impl<'a> MarkdownEditor<'a> {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let font_family_clone = font_family.clone();
-                let mut layouter = move |ui: &Ui, text: &str, wrap_width: f32| {
+                let mut layouter = move |ui: &Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                    let text = buf.as_str();
                     let font_id = FontId::new(font_size, font_family_clone.clone());
                     let layout_job = if word_wrap {
                         egui::text::LayoutJob::simple(
@@ -908,12 +909,12 @@ impl<'a> MarkdownEditor<'a> {
                             ui.visuals().text_color(),
                         )
                     };
-                    ui.fonts(|f| f.layout_job(layout_job))
+                    ui.fonts_mut(|f| f.layout_job(layout_job))
                 };
 
                 TextEdit::multiline(self.content)
                     .id(id)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .font(FontId::new(font_size, font_family.clone()))
                     .desired_width(f32::INFINITY)
                     .layouter(&mut layouter)
@@ -925,7 +926,7 @@ impl<'a> MarkdownEditor<'a> {
 
         let cursor_position = if let Some(cursor_range) = text_output.cursor_range {
             let cursor = cursor_range.primary;
-            char_index_to_line_col(self.content, cursor.ccursor.index)
+            char_index_to_line_col(self.content, cursor.index)
         } else {
             (0, 0)
         };
@@ -935,7 +936,7 @@ impl<'a> MarkdownEditor<'a> {
         }
 
         MarkdownEditorOutput {
-            response: text_output.response,
+            response: text_output.response.response,
             changed,
             cursor_position,
             mode: EditorMode::Raw,
@@ -1012,7 +1013,7 @@ impl<'a> MarkdownEditor<'a> {
                 self.font_size,
                 fonts::get_styled_font_family(false, false, &self.font_family),
             );
-            let line_height = ui.fonts(|f| f.row_height(&font_id));
+            let line_height = ui.fonts_mut(|f| f.row_height(&font_id));
             let viewport_height = ui.available_height();
             // Convert 1-indexed to 0-indexed for calculation
             let line_index = target_line.saturating_sub(1);
@@ -2122,7 +2123,7 @@ fn render_heading(
                     .id(heading_widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.heading)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width());
 
@@ -2131,8 +2132,8 @@ fn render_heading(
                 let has_focus = output.response.has_focus();
                 let selection = if has_focus {
                     output.cursor_range.map(|range| {
-                        let primary = range.primary.ccursor.index;
-                        let secondary = range.secondary.ccursor.index;
+                        let primary = range.primary.index;
+                        let secondary = range.secondary.index;
                         if primary < secondary {
                             (primary, secondary)
                         } else {
@@ -2248,7 +2249,7 @@ fn render_heading_with_structural_keys(
                     .id(heading_widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.heading)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width()),
             );
@@ -2346,7 +2347,8 @@ fn render_paragraph_with_structural_keys(
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
                 let mut layouter =
-                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let text = buf.as_str();
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap_width;
                         job.append(
@@ -2358,13 +2360,13 @@ fn render_paragraph_with_structural_keys(
                                 ..Default::default()
                             },
                         );
-                        ui.fonts(|f| f.layout_job(job))
+                        ui.fonts_mut(|f| f.layout_job(job))
                     };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
                     .desired_rows(1)
@@ -2544,7 +2546,8 @@ fn render_paragraph_with_structural_keys(
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
-                let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                    let text = buf.as_str();
                     let mut job = egui::text::LayoutJob::default();
                     job.wrap.max_width = wrap_width;
                     job.append(
@@ -2556,7 +2559,7 @@ fn render_paragraph_with_structural_keys(
                             ..Default::default()
                         },
                     );
-                    ui.fonts(|f| f.layout_job(job))
+                    ui.fonts_mut(|f| f.layout_job(job))
                 };
 
                 let widget_id = ui.id().with("para_text").with(node.start_line);
@@ -2564,7 +2567,7 @@ fn render_paragraph_with_structural_keys(
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
                     .desired_rows(1)
@@ -3101,7 +3104,8 @@ fn render_list_item_with_structural_keys(
                     let font_family_for_layout = font_family.clone();
                     let text_color = colors.text;
                     let mut layouter =
-                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                            let text = buf.as_str();
                             let mut job = egui::text::LayoutJob::default();
                             job.wrap.max_width = wrap_width;
                             job.append(
@@ -3113,13 +3117,13 @@ fn render_list_item_with_structural_keys(
                                     ..Default::default()
                                 },
                             );
-                            ui.fonts(|f| f.layout_job(job))
+                            ui.fonts_mut(|f| f.layout_job(job))
                         };
                     let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .desired_width(ui.available_width())
                         .desired_rows(1)
                         .margin(egui::vec2(0.0, 2.0))
@@ -3298,7 +3302,8 @@ fn render_list_item_with_structural_keys(
                 let font_family_for_layout = font_family.clone();
                 let text_color = colors.text;
                 let mut layouter =
-                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let text = buf.as_str();
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap_width;
                         job.append(
@@ -3310,13 +3315,13 @@ fn render_list_item_with_structural_keys(
                                 ..Default::default()
                             },
                         );
-                        ui.fonts(|f| f.layout_job(job))
+                        ui.fonts_mut(|f| f.layout_job(job))
                     };
                 let text_edit = TextEdit::multiline(&mut editable.text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .desired_width(ui.available_width())
                     .desired_rows(1)
                     .layouter(&mut layouter);
@@ -3422,7 +3427,8 @@ fn render_paragraph(
                 let font_family_clone = font_family.clone();
                 let text_color = colors.text;
                 let cjk_leading = cjk_indent;
-                let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                    let text = buf.as_str();
                     let mut job = egui::text::LayoutJob::default();
                     job.wrap.max_width = wrap_width;
                     job.append(
@@ -3434,13 +3440,13 @@ fn render_paragraph(
                             ..Default::default()
                         },
                     );
-                    ui.fonts(|f| f.layout_job(job))
+                    ui.fonts_mut(|f| f.layout_job(job))
                 };
                 let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family.clone()))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
                     .desired_width(ui.available_width())
                     .desired_rows(1)
@@ -3623,7 +3629,8 @@ fn render_paragraph(
                     let font_family_clone = font_family.clone();
                     let text_color = colors.text;
                     let cjk_leading = cjk_indent;
-                    let mut layouter = move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let text = buf.as_str();
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap_width;
                         job.append(
@@ -3635,12 +3642,12 @@ fn render_paragraph(
                                 ..Default::default()
                             },
                         );
-                        ui.fonts(|f| f.layout_job(job))
+                        ui.fonts_mut(|f| f.layout_job(job))
                     };
                     let text_edit = TextEdit::multiline(&mut editable.text)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .margin(egui::vec2(0.0, 0.0))
                         .desired_width(ui.available_width())
                         .desired_rows(1)
@@ -3652,8 +3659,8 @@ fn render_paragraph(
                     let has_focus = output.response.has_focus();
                     let selection = if has_focus {
                         output.cursor_range.map(|range| {
-                            let primary = range.primary.ccursor.index;
-                            let secondary = range.secondary.ccursor.index;
+                            let primary = range.primary.index;
+                            let secondary = range.secondary.index;
                             if primary < secondary {
                                 (primary, secondary)
                             } else {
@@ -3786,7 +3793,7 @@ fn compute_displayed_cursor_index(
     // Create a Galley for measuring the displayed text
     // IMPORTANT: Use layout() with wrap_width to handle text wrapping correctly
     // If we use layout_no_wrap(), clicks on wrapped lines will map to wrong positions
-    let galley = ui.fonts(|f| {
+    let galley = ui.fonts_mut(|f| {
         f.layout(
             displayed_text.to_owned(),
             font_id,
@@ -3800,7 +3807,7 @@ fn compute_displayed_cursor_index(
 
     // Use cursor_from_pos to get the exact character index
     let cursor = galley.cursor_from_pos(local_pos);
-    let displayed_idx = cursor.ccursor.index;
+    let displayed_idx = cursor.index;
 
     // Clamp to valid range (cursor_from_pos should already do this, but be safe)
     displayed_idx.min(displayed_text.chars().count())
@@ -4811,7 +4818,8 @@ fn render_list_item(
                     let font_family_for_layout = font_family.clone();
                     let text_color = colors.text;
                     let mut layouter =
-                        move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                            let text = buf.as_str();
                             let mut job = egui::text::LayoutJob::default();
                             job.wrap.max_width = wrap_width;
                             job.append(
@@ -4823,13 +4831,13 @@ fn render_list_item(
                                     ..Default::default()
                                 },
                             );
-                            ui.fonts(|f| f.layout_job(job))
+                            ui.fonts_mut(|f| f.layout_job(job))
                         };
                     let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
                         .id(widget_id)
                         .font(FontId::new(font_size, font_family.clone()))
                         .text_color(colors.text)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .desired_width(ui.available_width())
                         .desired_rows(1)
                         .margin(egui::vec2(0.0, 2.0))
@@ -4993,7 +5001,8 @@ fn render_list_item(
                 let font_family_for_layout = font_family.clone();
                 let text_color = colors.text;
                 let mut layouter =
-                    move |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let text = buf.as_str();
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap_width;
                         job.append(
@@ -5005,13 +5014,13 @@ fn render_list_item(
                                 ..Default::default()
                             },
                         );
-                        ui.fonts(|f| f.layout_job(job))
+                        ui.fonts_mut(|f| f.layout_job(job))
                     };
                 let text_edit = TextEdit::multiline(&mut edit_buffer)
                     .id(widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.text)
-                    .frame(false)
+                    .frame(egui::Frame::NONE)
                     .desired_width(ui.available_width())
                     .desired_rows(1)
                     .layouter(&mut layouter);
@@ -5026,8 +5035,8 @@ fn render_list_item(
                 let has_focus = output.response.has_focus();
                 let selection = if has_focus {
                     output.cursor_range.map(|range| {
-                        let primary = range.primary.ccursor.index;
-                        let secondary = range.secondary.ccursor.index;
+                        let primary = range.primary.index;
+                        let secondary = range.secondary.index;
                         if primary < secondary {
                             (primary, secondary)
                         } else {
@@ -5258,7 +5267,7 @@ fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, conte
                         .code_editor()
                         .font(FontId::monospace(font_size * 0.9))
                         .text_color(colors.code_text)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .desired_width(ui.available_width())
                         .interactive(false),
                 );
@@ -5571,6 +5580,7 @@ fn load_image_texture(ctx: &egui::Context, path: &Path) -> Result<CachedImageTex
 
     let color_image = ColorImage {
         size: [width as usize, height as usize],
+        source_size: egui::vec2(width as f32, height as f32),
         pixels,
     };
 

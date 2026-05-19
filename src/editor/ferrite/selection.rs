@@ -238,13 +238,13 @@ impl FerriteEditor {
             let start_ccursor = egui::text::CCursor::new(sel_start.min(line_len));
             let end_ccursor = egui::text::CCursor::new(sel_end.min(line_len));
 
-            let start_cursor = galley.from_ccursor(start_ccursor);
-            let end_cursor = galley.from_ccursor(end_ccursor);
+            let start_layout = galley.layout_from_cursor(start_ccursor);
+            let end_layout = galley.layout_from_cursor(end_ccursor);
 
             // If on the same row, draw a single rectangle
-            if start_cursor.rcursor.row == end_cursor.rcursor.row {
-                let start_rect = galley.pos_from_cursor(&start_cursor);
-                let end_rect = galley.pos_from_cursor(&end_cursor);
+            if start_layout.row == end_layout.row {
+                let start_rect = galley.pos_from_cursor(start_ccursor);
+                let end_rect = galley.pos_from_cursor(end_ccursor);
 
                 let sel_rect = Rect::from_min_max(
                     Pos2::new(text_start_x + start_rect.min.x, line_y + start_rect.min.y),
@@ -253,27 +253,27 @@ impl FerriteEditor {
                 painter.rect_filled(sel_rect, 0.0, selection_color);
             } else {
                 // Selection spans multiple visual rows - draw each row
-                for row_idx in start_cursor.rcursor.row..=end_cursor.rcursor.row {
+                for row_idx in start_layout.row..=end_layout.row {
                     if row_idx >= galley.rows.len() {
                         break;
                     }
 
                     let row = &galley.rows[row_idx];
-                    let row_y = line_y + row.rect.min.y;
-                    let row_height = row.rect.height();
+                    let row_y = line_y + row.rect().min.y;
+                    let row_height = row.rect().height();
 
-                    let row_start_x = if row_idx == start_cursor.rcursor.row {
-                        let pos = galley.pos_from_cursor(&start_cursor);
+                    let row_start_x = if row_idx == start_layout.row {
+                        let pos = galley.pos_from_cursor(start_ccursor);
                         text_start_x + pos.min.x
                     } else {
                         text_start_x
                     };
 
-                    let row_end_x = if row_idx == end_cursor.rcursor.row {
-                        let pos = galley.pos_from_cursor(&end_cursor);
+                    let row_end_x = if row_idx == end_layout.row {
+                        let pos = galley.pos_from_cursor(end_ccursor);
                         text_start_x + pos.min.x
                     } else {
-                        text_start_x + row.rect.width()
+                        text_start_x + row.rect().width()
                     };
 
                     let sel_rect = Rect::from_min_max(
@@ -286,8 +286,8 @@ impl FerriteEditor {
 
             // If selecting past end of line, add a small indicator
             if sel_end > line_len {
-                let end_cursor = galley.from_ccursor(egui::text::CCursor::new(line_len));
-                let end_rect = galley.pos_from_cursor(&end_cursor);
+                let end_ccursor = egui::text::CCursor::new(line_len);
+                let end_rect = galley.pos_from_cursor(end_ccursor);
                 let newline_rect = Rect::from_min_size(
                     Pos2::new(text_start_x + end_rect.min.x, line_y + end_rect.min.y),
                     Vec2::new(8.0, end_rect.height()), // Small rectangle for newline

@@ -26,7 +26,7 @@ impl FerriteEditor {
 
             if self.wrap_enabled && wrap_width > 0.0 {
                 // For wrapped text, create a wrapped galley and use cursor_from_pos
-                let galley = ui.fonts(|f| {
+                let galley = ui.fonts_mut(|f| {
                     f.layout(
                         line_content.to_string(),
                         font_id.clone(),
@@ -38,7 +38,7 @@ impl FerriteEditor {
                 // cursor_from_pos takes a Vec2 position relative to the galley
                 let pos = egui::vec2(x.max(0.0), y_in_line.max(0.0));
                 let cursor = galley.cursor_from_pos(pos);
-                cursor.ccursor.index
+                cursor.index
             } else {
                 // For non-wrapped text, use x-based calculation
                 if x <= 0.0 {
@@ -65,7 +65,7 @@ impl FerriteEditor {
                 for (i, _) in chars.iter().enumerate() {
                     let prefix: String = chars[..=i].iter().collect();
                     let galley =
-                        ui.fonts(|f| f.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE));
+                        ui.fonts_mut(|f| f.layout_no_wrap(prefix, font_id.clone(), Color32::WHITE));
                     let width = galley.size().x;
 
                     let mid_point = (prev_width + width) / 2.0;
@@ -159,7 +159,7 @@ impl FerriteEditor {
                     // For wrapped text, calculate actual line height from galley
                     if let Some(line_content) = self.buffer.get_line(line_idx) {
                         let display_content = line_content.trim_end_matches(['\r', '\n']);
-                        let galley = ui.fonts(|f| {
+                        let galley = ui.fonts_mut(|f| {
                             f.layout(
                                 display_content.to_string(),
                                 font_id.clone(),

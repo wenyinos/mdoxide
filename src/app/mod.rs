@@ -1130,7 +1130,7 @@ impl FerriteApp {
                 return true;
             }
             // Check for scroll
-            if i.raw_scroll_delta != egui::Vec2::ZERO {
+            if i.smooth_scroll_delta() != egui::Vec2::ZERO {
                 return true;
             }
             // Check for any events (key, mouse, paste, etc.)
@@ -2395,7 +2395,13 @@ impl FerriteApp {
 }
 
 impl eframe::App for FerriteApp {
-    /// Called each time the UI needs repainting.
+    /// Root viewport UI hook (egui 0.34+). Ferrite still builds panels via [`Self::update`].
+    ///
+    /// TODO(egui-0.34): migrate panel layout from `App::update` to `App::ui` in a follow-up task.
+    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {}
+
+    /// Called each time the UI needs repainting (deprecated in egui 0.34; retained intentionally).
+    #[allow(deprecated)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         crate::diag::next_frame();
 

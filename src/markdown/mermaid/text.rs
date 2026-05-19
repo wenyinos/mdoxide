@@ -98,13 +98,13 @@ impl TextMeasurer for EguiTextMeasurer<'_> {
         let font_id = FontId::proportional(font_size);
         let galley = self
             .ui
-            .fonts(|fonts| fonts.layout_no_wrap(text.to_string(), font_id, Color32::PLACEHOLDER));
+            .fonts_mut(|fonts| fonts.layout_no_wrap(text.to_string(), font_id, Color32::PLACEHOLDER));
         TextSize::new(galley.rect.width(), galley.rect.height())
     }
 
     fn row_height(&self, font_size: f32) -> f32 {
         let font_id = FontId::proportional(font_size);
-        self.ui.fonts(|fonts| fonts.row_height(&font_id))
+        self.ui.fonts_mut(|fonts| fonts.row_height(&font_id))
     }
 
     fn measure_wrapped(&self, text: &str, font_size: f32, max_width: f32) -> TextSize {
@@ -113,7 +113,7 @@ impl TextMeasurer for EguiTextMeasurer<'_> {
         }
 
         let font_id = FontId::proportional(font_size);
-        let galley = self.ui.fonts(|fonts| {
+        let galley = self.ui.fonts_mut(|fonts| {
             let layout_job = egui::text::LayoutJob::simple(
                 text.to_string(),
                 font_id,

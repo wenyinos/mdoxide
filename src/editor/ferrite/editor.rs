@@ -2299,7 +2299,7 @@ impl FerriteEditor {
                     egui::Event::Copy => {
                         if self.has_selection() {
                             let text = self.selected_text();
-                            ui.output_mut(|o| o.copied_text = text);
+                            ui.copy_text(text);
                         }
                         continue;
                     }
@@ -2309,7 +2309,7 @@ impl FerriteEditor {
                             let start_line = sel.anchor.line.min(sel.head.line);
                             let end_line = sel.anchor.line.max(sel.head.line);
                             let text = self.selected_text();
-                            ui.output_mut(|o| o.copied_text = text);
+                            ui.copy_text(text);
                             self.delete_selection();
                             self.mark_lines_dirty(start_line, end_line);
                             self.reset_cursor_blink();
@@ -2352,7 +2352,7 @@ impl FerriteEditor {
                                 // Copy - fallback if Event::Copy wasn't received
                                 if self.has_selection() {
                                     let text = self.selected_text();
-                                    ui.output_mut(|o| o.copied_text = text);
+                                    ui.copy_text(text);
                                 }
                                 continue;
                             }
@@ -2363,7 +2363,7 @@ impl FerriteEditor {
                                     let start_line = sel.anchor.line.min(sel.head.line);
                                     let end_line = sel.anchor.line.max(sel.head.line);
                                     let text = self.selected_text();
-                                    ui.output_mut(|o| o.copied_text = text);
+                                    ui.copy_text(text);
                                     self.delete_selection();
                                     self.mark_lines_dirty(start_line, end_line);
                                     self.reset_cursor_blink();
@@ -3062,8 +3062,7 @@ impl FerriteEditor {
                 let char_count = display_content.chars().count();
                 let cursor_col = cursor.column.min(char_count);
                 let ccursor = egui::text::CCursor::new(cursor_col);
-                let galley_cursor = galley.from_ccursor(ccursor);
-                let cursor_rect = galley.pos_from_cursor(&galley_cursor);
+                let cursor_rect = galley.pos_from_cursor(ccursor);
                 text_start_x + cursor_rect.min.x
             } else if crate::fonts::needs_complex_script_fonts(display_content) {
                 let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(font_id);

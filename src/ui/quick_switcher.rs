@@ -345,7 +345,7 @@ impl QuickSwitcher {
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.query)
                                     .hint_text(t!("quick_switcher.placeholder"))
-                                    .frame(false)
+                                    .frame(egui::Frame::NONE)
                                     .desired_width(450.0)
                                     .font(egui::TextStyle::Body),
                             );

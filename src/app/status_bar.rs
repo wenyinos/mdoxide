@@ -640,7 +640,7 @@ impl FerriteApp {
                                             {
                                                 state.clear_delimiter_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
+                                            ui.memory_mut(|mem| mem.close_popup(popup_id));
                                         }
 
                                         ui.separator();
@@ -660,7 +660,7 @@ impl FerriteApp {
                                                 {
                                                     state.set_delimiter(delim);
                                                 }
-                                                ui.memory_mut(|mem| mem.close_popup());
+                                                ui.memory_mut(|mem| mem.close_popup(popup_id));
                                             }
                                         }
                                     },
@@ -724,7 +724,7 @@ impl FerriteApp {
                                             {
                                                 state.clear_header_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
+                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
 
                                         ui.separator();
@@ -742,7 +742,7 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(true);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
+                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
 
                                         if ui
@@ -757,7 +757,7 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(false);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
+                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
                                     },
                                 );
@@ -832,7 +832,7 @@ impl FerriteApp {
                                     let label = enc.to_uppercase();
                                     if ui.selectable_label(selected, label).clicked() {
                                         pending_encoding_change = Some(enc);
-                                        ui.memory_mut(|mem| mem.close_popup());
+                                        ui.memory_mut(|mem| mem.close_popup(encoding_popup_id));
                                     }
                                 }
                             },
