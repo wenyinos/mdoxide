@@ -39,7 +39,7 @@ status:
 
 # File dialogs
   encoding_heading: Codificación del archivo
-  recent_files_heading: 📄 Archivos recientes
+  recent_files_heading: Archivos recientes
   vim_mode: Modo de edición Vim (Esc = Normal, i = Insertar)
   cursor_position: Ln %{line}, Col %{col}
   delimiter_tooltip: |-
@@ -54,7 +54,7 @@ status:
   encoding_tooltip: |-
     Codificación de archivo: %{encoding}
     %{info}Pulse para cambiar
-  recent_folders_heading: 📁 Carpetas recentes
+  recent_folders_heading: Carpetas recientes
   file_tooltip: |-
     %{path}
 
@@ -435,7 +435,7 @@ outline:
   no_headings: Sin cabeceras encontradas
   tab_links: Enlaces
   json_structure: 📁 Estructura
-  json_values: 📊 Valores
+  json_values: "Valores"
   json_objects: Objetos
   json_nulls: Nulos
   json_numbers: Números
@@ -723,7 +723,7 @@ ribbon:
   pipeline: Conducto en vivo…
   toggle_outline: Conmutar línea saliente
   copy_html_tooltip: Copiar HTML interpretado al portapapeles
-  export_pdf: 📄 Exportar como PDF
+  export_pdf: Exportar como PDF
   coming_soon: Vendrá pronto
   heading_level: Cabecera %{level}
 recovery:
@@ -803,9 +803,9 @@ stats:
   tables: Tablas
   blockquotes: Comillas de bloque
 tree_viewer:
-  collapse_all: ▶ Colapsar todo
-  expand_all: ▼ Expandir todo
-  copy_path: 📋 Copiar ruta
+  collapse_all: Colapsar todo
+  expand_all: Expandir todo
+  copy_path: Copiar ruta
   show_raw: Mostrar en bruto
   parse_error: '⚠ Error de intérprete:'
   large_file_warning: El archivo es grande (%{size} Mb). Mostrando contenido en 
@@ -864,8 +864,8 @@ csv:
   error: Incorrecto al interpretar CSV
   select_delimiter: Seleccionar Delimitador
   header_row: Fila de Cabecera
-  has_headers_yes: ✓ Primera fila es cabecera
-  has_headers_no: ✗ Ninguna fila cabecera
+  has_headers_yes: Primera fila es cabecera
+  has_headers_no: Ninguna fila cabecera
   show_raw: Mostrar en bruto
   large_file_warning: El archivo es grande (%{size} Mb). Se muestra el contenido
     en bruto.
@@ -880,7 +880,7 @@ workspace:
   rename: Renombrar
   delete: Eliminar
   refresh: Refrescar
-  recent_folders: 📁 Carpetas Recientes
+  recent_folders: Carpetas Recientes
 zen:
   enter: Introducir Modo Zen
   exit: Salir de Modo Zen

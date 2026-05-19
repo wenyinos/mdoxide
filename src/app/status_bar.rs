@@ -13,7 +13,7 @@ use crate::markdown::{
 use crate::state::FileType;
 use crate::theme::accent;
 use crate::theme::ThemeColors;
-use crate::ui::STATUS_BAR_RESIZE_RIGHT_MARGIN;
+use crate::ui::phosphor_icons::{phosphor_rich_text, CHECK, FILE_TEXT, FOLDER};
 use eframe::egui;
 use log::{debug, warn};
 use rust_i18n::t;
@@ -189,12 +189,15 @@ impl FerriteApp {
                                     ui.add_space(8.0);
 
                                     // Recent Folders section
-                                    ui.label(
-                                        egui::RichText::new(
-                                            t!("workspace.recent_folders").to_string(),
-                                        )
-                                        .strong(),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.label(phosphor_rich_text(FOLDER, 12.0).strong());
+                                        ui.label(
+                                            egui::RichText::new(
+                                                t!("workspace.recent_folders").to_string(),
+                                            )
+                                            .strong(),
+                                        );
+                                    });
                                     ui.separator();
 
                                     for path in &recent_folders {
@@ -205,15 +208,23 @@ impl FerriteApp {
                                         let parent_dir =
                                             path.parent().and_then(|p| p.to_str()).unwrap_or("");
 
-                                        let item_response = ui.add(
-                                            egui::Button::new(
-                                                egui::RichText::new(format!("📁 {}", folder_name))
-                                                    .strong()
-                                                    .color(folder_icon_color),
-                                            )
-                                            .frame(false)
-                                            .min_size(egui::vec2(280.0, 0.0)),
-                                        );
+                                        let item_response = ui
+                                            .horizontal(|ui| {
+                                                ui.label(
+                                                    phosphor_rich_text(FOLDER, 12.0)
+                                                        .color(folder_icon_color),
+                                                );
+                                                ui.add(
+                                                    egui::Button::new(
+                                                        egui::RichText::new(folder_name)
+                                                            .strong()
+                                                            .color(folder_icon_color),
+                                                    )
+                                                    .frame(false)
+                                                    .min_size(egui::vec2(250.0, 0.0)),
+                                                )
+                                            })
+                                            .inner;
                                         item_response.clone().on_hover_text(
                                             t!(
                                                 "status.folder_tooltip",
@@ -238,12 +249,15 @@ impl FerriteApp {
                                 } else if !recent_files.is_empty() {
                                     // Only files
                                     ui.set_min_width(300.0);
-                                    ui.label(
-                                        egui::RichText::new(
-                                            t!("status.recent_files_heading").to_string(),
-                                        )
-                                        .strong(),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.label(phosphor_rich_text(FILE_TEXT, 12.0).strong());
+                                        ui.label(
+                                            egui::RichText::new(
+                                                t!("status.recent_files_heading").to_string(),
+                                            )
+                                            .strong(),
+                                        );
+                                    });
                                     ui.separator();
 
                                     for path in &recent_files {
@@ -288,12 +302,15 @@ impl FerriteApp {
                                 } else {
                                     // Only folders
                                     ui.set_min_width(300.0);
-                                    ui.label(
-                                        egui::RichText::new(
-                                            t!("status.recent_folders_heading").to_string(),
-                                        )
-                                        .strong(),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.label(phosphor_rich_text(FOLDER, 12.0).strong());
+                                        ui.label(
+                                            egui::RichText::new(
+                                                t!("status.recent_folders_heading").to_string(),
+                                            )
+                                            .strong(),
+                                        );
+                                    });
                                     ui.separator();
 
                                     for path in &recent_folders {
@@ -304,15 +321,23 @@ impl FerriteApp {
                                         let parent_dir =
                                             path.parent().and_then(|p| p.to_str()).unwrap_or("");
 
-                                        let item_response = ui.add(
-                                            egui::Button::new(
-                                                egui::RichText::new(format!("📁 {}", folder_name))
-                                                    .strong()
-                                                    .color(folder_icon_color),
-                                            )
-                                            .frame(false)
-                                            .min_size(egui::vec2(ui.available_width(), 0.0)),
-                                        );
+                                        let item_response = ui
+                                            .horizontal(|ui| {
+                                                ui.label(
+                                                    phosphor_rich_text(FOLDER, 12.0)
+                                                        .color(folder_icon_color),
+                                                );
+                                                ui.add(
+                                                    egui::Button::new(
+                                                        egui::RichText::new(folder_name)
+                                                            .strong()
+                                                            .color(folder_icon_color),
+                                                    )
+                                                    .frame(false)
+                                                    .min_size(egui::vec2(250.0, 0.0)),
+                                                )
+                                            })
+                                            .inner;
                                         item_response.clone().on_hover_text(
                                             t!(
                                                 "status.folder_tooltip",
@@ -457,13 +482,20 @@ impl FerriteApp {
 
                 // Center: Toast message (temporary notifications) - shown inline, not expanding
                 if let Some(toast) = &self.state.ui.toast_message {
-                    ui.label(egui::RichText::new(format!("✔ {}", toast)).italics().color(
-                        if is_dark {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            phosphor_rich_text(CHECK, 12.0).italics().color(if is_dark {
+                                egui::Color32::from_rgb(120, 200, 120)
+                            } else {
+                                egui::Color32::from_rgb(40, 140, 40)
+                            }),
+                        );
+                        ui.label(egui::RichText::new(toast).italics().color(if is_dark {
                             egui::Color32::from_rgb(120, 200, 120)
                         } else {
                             egui::Color32::from_rgb(40, 140, 40)
-                        },
-                    ));
+                        }));
+                    });
                     ui.separator();
                 }
 
@@ -471,19 +503,10 @@ impl FerriteApp {
                 let cached_stats = self.state.active_tab_mut().map(|tab| tab.text_stats());
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Keep Help left of the SE corner / east-edge resize grab zone.
-                    ui.add_space(STATUS_BAR_RESIZE_RIGHT_MARGIN);
-
-                    let resize_blocks_help = self.window_resize_state.resize_cursor_active();
-                    let help_sense = if resize_blocks_help {
-                        egui::Sense::hover()
-                    } else {
-                        egui::Sense::click()
-                    };
                     let help_response = ui
-                        .add(egui::Button::new("?").sense(help_sense))
+                        .add(egui::Button::new("?"))
                         .on_hover_text(t!("tooltip.about_help").to_string());
-                    if help_response.clicked() && !resize_blocks_help {
+                    if help_response.clicked() {
                         self.state.toggle_about();
                     }
 
@@ -563,7 +586,7 @@ impl FerriteApp {
                                 let delimiter_label = format!(
                                     "Delim: {}{}",
                                     delimiter_symbol(current_delimiter),
-                                    if is_overridden { " ✔" } else { "" }
+                                    if is_overridden { " *" } else { "" }
                                 );
 
                                 let popup_id = ui.make_persistent_id("delimiter_picker_popup");
@@ -648,8 +671,8 @@ impl FerriteApp {
                                 // Header row toggle
                                 let header_label = format!(
                                     "Headers: {}{}",
-                                    if has_headers { "✔" } else { "✗" },
-                                    if header_overridden { " ✔" } else { "" }
+                                    if has_headers { "Yes" } else { "No" },
+                                    if header_overridden { " *" } else { "" }
                                 );
 
                                 let header_popup_id = ui.make_persistent_id("header_picker_popup");

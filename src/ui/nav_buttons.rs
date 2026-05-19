@@ -16,6 +16,7 @@
 //! }
 //! ```
 
+use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_UP};
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, StrokeKind, Ui, Vec2};
 
 /// Action requested by navigation button click.
@@ -93,7 +94,8 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
         let button_positions = [
             (
                 container_pos,
-                "▲",
+                CARET_UP,
+                true,
                 "Jump to top (Ctrl+Home)",
                 NavAction::Top,
             ),
@@ -103,6 +105,7 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
                     container_pos.y + BUTTON_SIZE + BUTTON_SPACING,
                 ),
                 "●",
+                false,
                 "Jump to middle",
                 NavAction::Middle,
             ),
@@ -111,13 +114,14 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
                     container_pos.x,
                     container_pos.y + (BUTTON_SIZE + BUTTON_SPACING) * 2.0,
                 ),
-                "▼",
+                CARET_DOWN,
+                true,
                 "Jump to bottom (Ctrl+End)",
                 NavAction::Bottom,
             ),
         ];
 
-        for (pos, icon, tooltip, button_action) in button_positions {
+        for (pos, icon, use_phosphor, tooltip, button_action) in button_positions {
             let button_rect = Rect::from_min_size(pos, Vec2::splat(BUTTON_SIZE));
 
             // Check if this specific button is hovered
@@ -145,10 +149,14 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
             }
 
             // Draw icon
-            let text = RichText::new(icon).size(14.0).color(text_color);
+            let font_id = if use_phosphor {
+                phosphor_font(14.0)
+            } else {
+                egui::FontId::proportional(14.0)
+            };
             let galley = ui.painter().layout_no_wrap(
-                text.text().to_string(),
-                egui::FontId::proportional(14.0),
+                icon.to_string(),
+                font_id,
                 text_color,
             );
             let text_pos = Pos2::new(

@@ -6,12 +6,14 @@ mod about;
 mod backlinks_panel;
 mod command_palette;
 mod dialogs;
+mod docked_sidebar;
 mod file_tree;
 pub mod format_toolbar;
 mod frontmatter_panel;
 mod icons;
 mod nav_buttons;
 mod outline_panel;
+pub mod phosphor_icons;
 mod pipeline;
 mod productivity_panel;
 mod quick_switcher;
@@ -45,5 +47,5 @@ pub use welcome::WelcomePanel;
 pub use window::{
     center_panel_in_viewport, constrain_rect_to_viewport, consume_clicks_in_resize_zones,
     handle_window_resize, is_in_resize_zone, search_panel_constraints, PanelConstraints,
-    WindowResizeState, STATUS_BAR_RESIZE_RIGHT_MARGIN,
+    WindowResizeState,
 };

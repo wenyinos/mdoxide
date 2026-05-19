@@ -1,5 +1,6 @@
 //! Gutter (line numbers) rendering for FerriteEditor.
 
+use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_RIGHT};
 use egui::{Color32, FontId, Pos2, Rect, Stroke, Vec2};
 
 /// Minimum width of the line number gutter in characters.
@@ -116,8 +117,12 @@ pub fn render_fold_indicator(
     is_collapsed: bool,
     color: Color32,
 ) {
-    let indicator = if is_collapsed { "▶" } else { "▼" };
-    let font_id = FontId::proportional(line_height * 0.7);
+    let indicator = if is_collapsed {
+        CARET_RIGHT
+    } else {
+        CARET_DOWN
+    };
+    let font_id = phosphor_font(line_height * 0.7);
     let galley = painter.layout_no_wrap(indicator.to_string(), font_id, color);
 
     // Center the indicator vertically

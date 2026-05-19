@@ -3,6 +3,11 @@
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
 
+use crate::ui::icons::phosphor_rich_text;
+use crate::ui::phosphor_icons::{
+    ARROWS_COUNTER_CLOCKWISE, CHECK, CONFETTI, DESKTOP, GEAR, GLOBE, MAGNIFYING_GLASS, MOON,
+    PACKAGE, SUN, WARNING, X,
+};
 use crate::config::{
     CjkFontPreference, EditorFont, HeaderSpacing, KeyBinding, KeyCode, KeyModifiers,
     KeyboardShortcuts, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme,
@@ -144,13 +149,14 @@ impl SettingsSection {
 
     /// Get the icon for the section.
     pub fn icon(&self) -> &'static str {
+        use crate::ui::phosphor_icons::{FILES, INFO, KEYBOARD, NOTE_PENCIL, PALETTE, TERMINAL_WINDOW};
         match self {
-            SettingsSection::Appearance => "🎨",
-            SettingsSection::Editor => "📝",
-            SettingsSection::Files => "📁",
-            SettingsSection::Keyboard => "⌨",
-            SettingsSection::Terminal => ">_",
-            SettingsSection::About => "ℹ",
+            SettingsSection::Appearance => PALETTE,
+            SettingsSection::Editor => NOTE_PENCIL,
+            SettingsSection::Files => FILES,
+            SettingsSection::Keyboard => KEYBOARD,
+            SettingsSection::Terminal => TERMINAL_WINDOW,
+            SettingsSection::About => INFO,
         }
     }
 }
@@ -262,7 +268,7 @@ impl SettingsPanel {
         const CONTENT_WIDTH: f32 = 420.0;
         const SIDEBAR_WIDTH: f32 = 120.0;
 
-        egui::Window::new(format!("⚙ {}", t!("settings.title")))
+        egui::Window::new(t!("settings.title").to_string())
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -409,11 +415,14 @@ impl SettingsPanel {
                 ui.set_min_height(available.y - 50.0);
 
                 ui.add_space(8.0);
-                ui.label(
-                    RichText::new(format!("⚙ {}", t!("settings.title")))
-                        .size(18.0)
-                        .strong(),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(phosphor_rich_text(GEAR, 16.0));
+                    ui.label(
+                        RichText::new(t!("settings.title"))
+                            .size(18.0)
+                            .strong(),
+                    );
+                });
                 ui.add_space(12.0);
 
                 for section in [
@@ -448,7 +457,11 @@ impl SettingsPanel {
                 if ui
                     .add_sized(
                         [sidebar_width - 16.0, 28.0],
-                        egui::Button::new(format!("↺ {}", t!("settings.reset_all"))),
+                        egui::Button::new(format!(
+                            "{} {}",
+                            ARROWS_COUNTER_CLOCKWISE,
+                            t!("settings.reset_all")
+                        )),
                     )
                     .on_hover_text(t!("settings.reset_tooltip"))
                     .clicked()
@@ -893,7 +906,7 @@ impl SettingsPanel {
         match &self.update_state {
             UpdateState::Idle => {
                 if ui
-                    .button(format!("🔄 {}", t!("settings.about.check_for_updates")))
+                    .button(t!("settings.about.check_for_updates").to_string())
                     .clicked()
                 {
                     self.update_state = UpdateState::Checking;
@@ -914,7 +927,10 @@ impl SettingsPanel {
                 };
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("✓ {}", t!("settings.about.up_to_date")))
+                        phosphor_rich_text(CHECK, 14.0).color(success_color),
+                    );
+                    ui.label(
+                        RichText::new(t!("settings.about.up_to_date").to_string())
                             .color(success_color),
                     );
                 });
@@ -936,11 +952,14 @@ impl SettingsPanel {
                     .rounding(6.0)
                     .inner_margin(12.0)
                     .show(ui, |ui| {
-                        ui.label(
-                            RichText::new(format!("🎉 {}", t!("settings.about.update_available")))
-                                .strong()
-                                .size(14.0),
-                        );
+                        ui.horizontal(|ui| {
+                            ui.label(phosphor_rich_text(CONFETTI, 14.0).strong());
+                            ui.label(
+                                RichText::new(t!("settings.about.update_available").to_string())
+                                    .strong()
+                                    .size(14.0),
+                            );
+                        });
                         ui.add_space(4.0);
                         ui.label(format!(
                             "{}: v{} → v{}",
@@ -950,7 +969,7 @@ impl SettingsPanel {
                         ));
                         ui.add_space(8.0);
                         if ui
-                            .button(format!("🌐 {}", t!("settings.about.view_release")))
+                            .button(t!("settings.about.view_release").to_string())
                             .clicked()
                         {
                             let _ = open::that(&url);
@@ -965,14 +984,18 @@ impl SettingsPanel {
             UpdateState::Error(msg) => {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("⚠ {}", t!("settings.about.check_failed")))
+                        phosphor_rich_text(WARNING, 14.0)
+                            .color(ui.visuals().error_fg_color),
+                    );
+                    ui.label(
+                        RichText::new(t!("settings.about.check_failed").to_string())
                             .color(ui.visuals().error_fg_color),
                     );
                 });
                 ui.label(RichText::new(msg).small().weak());
                 ui.add_space(8.0);
                 if ui
-                    .button(format!("🔄 {}", t!("settings.about.try_again")))
+                    .button(t!("settings.about.try_again").to_string())
                     .clicked()
                 {
                     self.update_state = UpdateState::Checking;
@@ -990,7 +1013,7 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         if ui
-            .link(format!("📦 {}", t!("settings.about.all_releases")))
+            .link(t!("settings.about.all_releases").to_string())
             .clicked()
         {
             let _ = open::that("https://github.com/OlaProeis/Ferrite/releases");
@@ -1037,9 +1060,9 @@ impl SettingsPanel {
         ui.horizontal(|ui| {
             for theme in [Theme::Light, Theme::Dark, Theme::System] {
                 let label = match theme {
-                    Theme::Light => format!("☀ {}", t!("settings.general.theme_light")),
-                    Theme::Dark => format!("🌙 {}", t!("settings.general.theme_dark")),
-                    Theme::System => format!("💻 {}", t!("settings.general.theme_system")),
+                    Theme::Light => format!("{} {}", SUN, t!("settings.general.theme_light")),
+                    Theme::Dark => format!("{} {}", MOON, t!("settings.general.theme_dark")),
+                    Theme::System => format!("{} {}", DESKTOP, t!("settings.general.theme_system")),
                 };
                 if ui
                     .selectable_value(&mut settings.theme, theme, label)
@@ -1155,7 +1178,7 @@ impl SettingsPanel {
 
         let current_lang = settings.language;
         egui::ComboBox::from_id_source("language_combo")
-            .selected_text(format!("🌐 {}", current_lang.selector_display_name()))
+            .selected_text(format!("{} {}", GLOBE, current_lang.selector_display_name()))
             .show_ui(ui, |ui| {
                 for lang in Language::all() {
                     if ui
@@ -2320,14 +2343,17 @@ impl SettingsPanel {
 
         // Search/filter box
         ui.horizontal(|ui| {
-            ui.label("🔍");
+            ui.label(phosphor_rich_text(MAGNIFYING_GLASS, 14.0));
             ui.add(
                 egui::TextEdit::singleline(&mut self.keyboard_filter)
                     .hint_text(t!("settings.keyboard.search_hint"))
                     .desired_width(200.0),
             );
             if !self.keyboard_filter.is_empty() {
-                if ui.small_button("✕").clicked() {
+                if ui
+                    .small_button(phosphor_rich_text(X, 12.0))
+                    .clicked()
+                {
                     self.keyboard_filter.clear();
                 }
             }
@@ -2338,7 +2364,7 @@ impl SettingsPanel {
         // Reset all button
         ui.horizontal(|ui| {
             if ui
-                .button(format!("↺ {}", t!("settings.keyboard.reset_all")))
+                .button(t!("settings.keyboard.reset_all").to_string())
                 .on_hover_text(t!("settings.keyboard.reset_all_tooltip"))
                 .clicked()
             {
@@ -2356,7 +2382,7 @@ impl SettingsPanel {
         if let Some((cmd, msg)) = &self.conflict_warning {
             let warn_color = ui.visuals().warn_fg_color;
             ui.horizontal(|ui| {
-                ui.label(RichText::new("⚠").color(warn_color));
+                ui.label(phosphor_rich_text(WARNING, 14.0).color(warn_color));
                 ui.label(
                     RichText::new(format!("{}: {}", shortcut_command_name(cmd), msg))
                         .color(warn_color),
@@ -2623,11 +2649,14 @@ mod tests {
 
     #[test]
     fn test_settings_section_icon() {
-        assert_eq!(SettingsSection::Appearance.icon(), "🎨");
-        assert_eq!(SettingsSection::Editor.icon(), "📝");
-        assert_eq!(SettingsSection::Files.icon(), "📁");
-        assert_eq!(SettingsSection::Terminal.icon(), ">_");
-        assert_eq!(SettingsSection::About.icon(), "ℹ");
+        assert_eq!(SettingsSection::Appearance.icon(), crate::ui::phosphor_icons::PALETTE);
+        assert_eq!(SettingsSection::Editor.icon(), crate::ui::phosphor_icons::NOTE_PENCIL);
+        assert_eq!(SettingsSection::Files.icon(), crate::ui::phosphor_icons::FILES);
+        assert_eq!(
+            SettingsSection::Terminal.icon(),
+            crate::ui::phosphor_icons::TERMINAL_WINDOW
+        );
+        assert_eq!(SettingsSection::About.icon(), crate::ui::phosphor_icons::INFO);
     }
 
     #[test]

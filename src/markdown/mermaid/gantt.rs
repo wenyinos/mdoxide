@@ -1,5 +1,6 @@
 //! Gantt chart diagram parsing and rendering.
 
+use crate::ui::phosphor_icons::{phosphor_font, CHECK};
 use egui::{Color32, FontId, Pos2, Rect, Stroke, Ui, Vec2};
 use std::collections::HashMap;
 
@@ -351,8 +352,8 @@ pub fn render_gantt_chart(ui: &mut Ui, chart: &GanttChart, dark_mode: bool, font
                 painter.text(
                     bar_rect.center(),
                     egui::Align2::CENTER_CENTER,
-                    "✓",
-                    FontId::proportional(font_size - 3.0),
+                    CHECK,
+                    phosphor_font(font_size - 3.0),
                     Color32::WHITE,
                 );
             }

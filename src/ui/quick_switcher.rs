@@ -9,6 +9,8 @@
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::ptr_arg)]
 
+use crate::ui::icons::phosphor_rich_text;
+use crate::ui::phosphor_icons::{self, MAGNIFYING_GLASS, TIMER};
 use eframe::egui::{self, Color32, Key, LayerId, Order, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -337,7 +339,7 @@ impl QuickSwitcher {
                         // Search input
                         ui.horizontal(|ui| {
                             ui.add_space(12.0);
-                            ui.label(RichText::new("🔍").size(16.0));
+                            ui.label(phosphor_rich_text(MAGNIFYING_GLASS, 16.0));
                             ui.add_space(4.0);
 
                             let response = ui.add(
@@ -385,7 +387,7 @@ impl QuickSwitcher {
 
                                         // File icon
                                         let icon = self.file_icon(&result.path);
-                                        ui.label(RichText::new(icon).size(14.0));
+                                        ui.label(phosphor_rich_text(icon, 14.0));
 
                                         ui.add_space(8.0);
 
@@ -415,9 +417,8 @@ impl QuickSwitcher {
                                                 |ui| {
                                                     ui.add_space(16.0);
                                                     ui.label(
-                                                        RichText::new("⏱")
-                                                            .color(secondary_color)
-                                                            .size(12.0),
+                                                        phosphor_rich_text(TIMER, 12.0)
+                                                            .color(secondary_color),
                                                     )
                                                     .on_hover_text(t!(
                                                         "quick_switcher.recent_tooltip"
@@ -603,24 +604,7 @@ impl QuickSwitcher {
 
     /// Get an icon for a file based on its extension.
     fn file_icon(&self, path: &PathBuf) -> &'static str {
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-
-        match ext.to_lowercase().as_str() {
-            "md" | "markdown" | "mdown" | "mkd" => "📝",
-            "txt" | "text" => "📄",
-            "rs" => "🦀",
-            "js" | "jsx" | "ts" | "tsx" => "📜",
-            "json" => "📋",
-            "toml" | "yaml" | "yml" => "⚙️",
-            "html" | "htm" => "🌐",
-            "css" | "scss" | "sass" => "🎨",
-            "py" => "🐍",
-            "go" => "🐹",
-            "java" | "kt" | "kts" => "☕",
-            "c" | "cpp" | "h" | "hpp" => "⚡",
-            "sh" | "bash" | "zsh" => "💻",
-            _ => "📄",
-        }
+        phosphor_icons::file_icon_for_path(path)
     }
 }
 

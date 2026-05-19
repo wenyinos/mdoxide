@@ -43,7 +43,7 @@ status:
   rainbow_tooltip: "彩虹列着色：%{status}\n点击切换"
   encoding_tooltip: "文件编码：%{encoding}\n%{info}点击进行更改"
   encoding_heading: "文件编码"
-  recent_files_heading: "📄 最近的文件"
+  recent_files_heading: "最近的文件"
   recent_folders_heading: "最近的文件夹"
   file_tooltip: "%{path}\n\n点击：打开\nShift+点击：在后台打开"
   folder_tooltip: "%{path}\n\n点击：作为工作区打开"
@@ -317,7 +317,7 @@ stats:
   tab_links: "链接"
   tab_hub: "中心"
   json_structure: "📁 结构"
-  json_values: "📊 值"
+  json_values: "值"
   json_objects: "对象"
   json_arrays: "数组"
   json_total_keys: "键总数"
@@ -593,9 +593,9 @@ notification:
 
 # Tree viewer (JSON/YAML/TOML)
 tree_viewer:
-  collapse_all: "▶ 全部收起"
-  expand_all: "▼ 全部展开"
-  copy_path: "📋 复制路径"
+  collapse_all: "全部收起"
+  expand_all: "全部展开"
+  copy_path: "复制路径"
   show_raw: "显示原始"
   parse_error: "⚠ 解析错误："
   large_file_warning: "文件较大（%{size} MB）。显示原始内容。"
@@ -682,8 +682,8 @@ csv:
   error: "CSV 解析失败"
   select_delimiter: "选择分隔符"
   header_row: "标题行"
-  has_headers_yes: "✓ 首行为标题"
-  has_headers_no: "✗ 无标题行"
+  has_headers_yes: "首行为标题"
+  has_headers_no: "无标题行"
   show_raw: "显示原始"
   large_file_warning: "文件较大（%{size} MB）。显示原始内容。"
 
@@ -729,7 +729,7 @@ workspace:
   rename: "重命名"
   delete: "删除"
   refresh: "刷新"
-  recent_folders: "📁 最近文件夹"
+  recent_folders: "最近文件夹"
 
 # Zen mode
 zen:
@@ -766,7 +766,7 @@ ribbon:
   show_info_panel: "显示信息面板"
   toggle_outline: "切换大纲"
   copy_html_tooltip: "复制渲染的 HTML 到剪贴板"
-  export_pdf: "📄 导出为 PDF"
+  export_pdf: "导出为 PDF"
   coming_soon: "即将推出"
   heading_level: "标题 %{level}"
 

@@ -16,6 +16,8 @@
 #![allow(dead_code)]
 
 use crate::string_utils::floor_char_boundary;
+use crate::ui::icons::phosphor_rich_text;
+use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FILE};
 use crate::ui::{center_panel_in_viewport, search_panel_constraints, PanelConstraints};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, RichText, ScrollArea, Sense, TextFormat, Vec2};
 use rust_i18n::t;
@@ -434,7 +436,7 @@ impl SearchPanel {
         };
 
         // Build the window with constrained bounds
-        let mut window = egui::Window::new(format!("🔍 {}", t!("search.title")))
+        let mut window = egui::Window::new(t!("search.title").to_string())
             .id(egui::Id::new("search_in_files_window"))
             .collapsible(false)
             .resizable(true)
@@ -529,9 +531,13 @@ impl SearchPanel {
                         let file_id = egui::Id::new("search_file").with(file_idx);
 
                         let header_response = ui.horizontal(|ui| {
-                            let arrow = if file_result.expanded { "▼" } else { "▶" };
-                            ui.label(RichText::new(arrow).size(10.0).color(secondary_color));
-                            ui.label(RichText::new("📄").size(14.0));
+                            let arrow = if file_result.expanded {
+                                CARET_DOWN
+                            } else {
+                                CARET_RIGHT
+                            };
+                            ui.label(phosphor_rich_text(arrow, 10.0).color(secondary_color));
+                            ui.label(phosphor_rich_text(FILE, 14.0));
                             ui.label(
                                 RichText::new(relative_path.as_ref())
                                     .color(text_color)

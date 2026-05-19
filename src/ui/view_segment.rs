@@ -10,6 +10,8 @@ use crate::app::modifier_symbol;
 use crate::config::ViewMode;
 use crate::state::FileType;
 use crate::theme::accent;
+use crate::ui::icons::phosphor_font;
+use crate::ui::phosphor_icons::{PAUSE, TIMER};
 use eframe::egui::{self, Color32, Response, RichText, Sense, Vec2};
 
 /// Height of the segmented control.
@@ -459,7 +461,7 @@ impl TitleBarButton {
             btn.rect.center(),
             egui::Align2::CENTER_CENTER,
             icon,
-            egui::FontId::proportional(14.0),
+            phosphor_font(14.0),
             text_color,
         );
 
@@ -472,7 +474,7 @@ impl TitleBarButton {
     pub fn show_auto_save(ui: &mut egui::Ui, enabled: bool, is_dark: bool) -> Response {
         let size = Vec2::new(28.0, 24.0); // Match other title bar buttons
 
-        let icon = if enabled { "⏱" } else { "⏸" };
+        let icon = if enabled { TIMER } else { PAUSE };
         let tooltip = if enabled {
             "Auto-Save: ON (click to disable)"
         } else {
@@ -514,7 +516,7 @@ impl TitleBarButton {
             btn.rect.center(),
             egui::Align2::CENTER_CENTER,
             icon,
-            egui::FontId::proportional(14.0),
+            phosphor_font(14.0),
             text_color,
         );
 

@@ -358,7 +358,7 @@ outline:
   productivity_unavailable: Produktivitätsanzeige ist nicht verfügbar
   tab_hub: Hub
   json_structure: 📁 Struktur
-  json_values: 📊 Werte
+  json_values: Werte
   json_objects: Objekte
   json_total_keys: Alle Schlüssel
   json_max_depth: Maximale Tiefe
@@ -638,9 +638,9 @@ notification:
   file_loaded: Datei erfolgreich geladen (%{size} MB)
   file_load_failed: 'Fehler beim Laden der Datei: %{error}'
 tree_viewer:
-  collapse_all: "▶ Alles einklappen"
-  expand_all: "▼ Alles aufklappen"
-  copy_path: "📋 Pfad kopieren"
+  collapse_all: "Alles einklappen"
+  expand_all: "Alles aufklappen"
+  copy_path: "Pfad kopieren"
   show_raw: "Rohtext anzeigen"
   parse_error: "⚠ Parsing-Fehler:"
   large_file_warning: "Große Datei (%{size} MB). Rohtext wird angezeigt."
@@ -728,8 +728,8 @@ csv:
   error: "CSV-Datei nicht lesbar"
   select_delimiter: "Trennzeichen auswählen"
   header_row: "Überschrifts-Zeile"
-  has_headers_yes: "✓ Erste Zeile sind Überschriften"
-  has_headers_no: "✗ Keine Überschrifts-Zeile"
+  has_headers_yes: "Erste Zeile sind Überschriften"
+  has_headers_no: "Keine Überschrifts-Zeile"
   show_raw: "Rohtext anzeigen"
   large_file_warning: "Die Datei ist groß (%{size} MD). Rohtext wird angezeigt."
 
@@ -777,7 +777,7 @@ workspace:
   rename: "Umbenennen"
   delete: "Löschen"
   refresh: "Aktualisieren"
-  recent_folders: "📁 Letzte Dateiordner"
+  recent_folders: "Letzte Dateiordner"
 
 # Zen mode
 zen:
@@ -815,7 +815,7 @@ ribbon:
   show_info_panel: "Infofenster anzeigen"
   toggle_outline: "Übersicht ein/aus"
   copy_html_tooltip: "HTML-Darstellung in die Zwischenablage kopieren"
-  export_pdf: "📄 Als PDF exportieren"
+  export_pdf: "Als PDF exportieren"
   coming_soon: "Bald verfügbar"
   heading_level: "Überschrift %{level}"
 

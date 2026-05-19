@@ -22,6 +22,7 @@ use crate::preview::SyncScrollState;
 use crate::state::{FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabContent, TabKind};
 use crate::theme::ThemeColors;
 use crate::ui::{FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction};
+use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_RIGHT, X};
 use eframe::egui;
 use log::{debug, info, trace, warn};
 use rust_i18n::t;
@@ -439,8 +440,8 @@ impl FerriteApp {
                     ui.painter().text(
                         close_rect.center(),
                         egui::Align2::CENTER_CENTER,
-                        "×",
-                        egui::FontId::default(),
+                        X,
+                        phosphor_font(12.0),
                         close_color
                     );
 

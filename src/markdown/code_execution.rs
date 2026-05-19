@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::ui::phosphor_icons::{CHECK, X};
+
 use eframe::egui;
 
 /// [`crate::markdown::MarkdownEditor`] stores the current snapshot at this id for
@@ -198,15 +200,15 @@ impl RunStatus {
         matches!(self, RunStatus::Completed { exit_code: Some(0) })
     }
 
-    /// Single-character status glyph: spinner, ✓, or ✗.
+    /// Status glyph for UI display (Phosphor icons; running uses a separate spinner).
     pub fn glyph(&self) -> &'static str {
         match self {
             RunStatus::Running => "…",
-            RunStatus::Completed { exit_code: Some(0) } => "✓",
+            RunStatus::Completed { exit_code: Some(0) } => CHECK,
             RunStatus::Completed { .. }
             | RunStatus::Failed { .. }
             | RunStatus::TimedOut
-            | RunStatus::Cancelled => "✗",
+            | RunStatus::Cancelled => X,
         }
     }
 }
@@ -658,10 +660,10 @@ mod tests {
     #[test]
     fn status_glyphs() {
         assert_eq!(RunStatus::Running.glyph(), "…");
-        assert_eq!(RunStatus::Completed { exit_code: Some(0) }.glyph(), "✓");
-        assert_eq!(RunStatus::Completed { exit_code: Some(2) }.glyph(), "✗");
-        assert_eq!(RunStatus::TimedOut.glyph(), "✗");
-        assert_eq!(RunStatus::Cancelled.glyph(), "✗");
+        assert_eq!(RunStatus::Completed { exit_code: Some(0) }.glyph(), CHECK);
+        assert_eq!(RunStatus::Completed { exit_code: Some(2) }.glyph(), X);
+        assert_eq!(RunStatus::TimedOut.glyph(), X);
+        assert_eq!(RunStatus::Cancelled.glyph(), X);
     }
 
     #[test]

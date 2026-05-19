@@ -1719,10 +1719,11 @@ impl ViewMode {
     /// Get an icon/symbol for the mode.
     #[allow(dead_code)]
     pub fn icon(&self) -> &'static str {
+        use crate::ui::phosphor_icons::{COLUMNS, EYE, NOTE_PENCIL};
         match self {
-            ViewMode::Raw => "📝",
-            ViewMode::Rendered => "👁",
-            ViewMode::Split => "▌▐", // Left + right half blocks (split panes); widely supported
+            ViewMode::Raw => NOTE_PENCIL,
+            ViewMode::Rendered => EYE,
+            ViewMode::Split => COLUMNS,
         }
     }
 
@@ -3152,9 +3153,9 @@ mod tests {
         assert_eq!(ViewMode::Raw.label(), "Raw");
         assert_eq!(ViewMode::Rendered.label(), "Rendered");
         assert_eq!(ViewMode::Split.label(), "Split");
-        assert_eq!(ViewMode::Raw.icon(), "📝");
-        assert_eq!(ViewMode::Rendered.icon(), "👁");
-        assert_eq!(ViewMode::Split.icon(), "▌▐");
+        assert_eq!(ViewMode::Raw.icon(), crate::ui::phosphor_icons::NOTE_PENCIL);
+        assert_eq!(ViewMode::Rendered.icon(), crate::ui::phosphor_icons::EYE);
+        assert_eq!(ViewMode::Split.icon(), crate::ui::phosphor_icons::COLUMNS);
     }
 
     #[test]

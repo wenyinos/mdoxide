@@ -4,9 +4,25 @@
 //! to `egui::IconData` for use as window icons, and to load PNG images as
 //! textures for display in the UI.
 
-use eframe::egui::{self, TextureHandle};
+use eframe::egui::{self, FontFamily, FontId, RichText, TextureHandle};
 use image::GenericImageView;
 use std::sync::Arc;
+
+/// Named egui font family for Phosphor toolbar icons.
+pub const PHOSPHOR_FONT_FAMILY: &str = "phosphor";
+
+/// Default ribbon/toolbar icon size in points.
+pub const RIBBON_ICON_SIZE: f32 = 16.0;
+
+/// Build a [`FontId`] for rendering a Phosphor icon glyph.
+pub fn phosphor_font(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Name(PHOSPHOR_FONT_FAMILY.into()))
+}
+
+/// Build [`RichText`] for a Phosphor icon at the given size.
+pub fn phosphor_rich_text(icon: &str, size: f32) -> RichText {
+    RichText::new(icon).font(phosphor_font(size))
+}
 
 /// Default icon PNG embedded at compile time (256x256 for good quality)
 /// Falls back gracefully if the icon file doesn't exist during development.

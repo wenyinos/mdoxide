@@ -10,7 +10,13 @@ use crate::config::ViewMode;
 use crate::markdown::formatting::{FormattingState, MarkdownFormatCommand};
 use crate::state::FileType;
 use crate::theme::ThemeColors;
+use crate::ui::icons::{phosphor_font, phosphor_rich_text, RIBBON_ICON_SIZE};
 use eframe::egui::{self, Color32, Response, RichText, Ui, Vec2};
+use egui_phosphor::regular::{
+    CHECK, CLIPBOARD, EXPORT, FILE_MAGNIFYING_GLASS, FILE_PDF, FILE_PLUS, FILE_TEXT, FLOPPY_DISK,
+    FOLDER_SIMPLE_MINUS, FOLDERS, GLOBE, LIGHTNING, MAGNIFYING_GLASS, PRINTER, SPARKLE,
+    TERMINAL_WINDOW,
+};
 use rust_i18n::t;
 
 /// Height of the ribbon toolbar.
@@ -140,8 +146,6 @@ impl Ribbon {
     /// * `theme_colors` - Current theme colors for styling
     /// * `view_mode` - Current view mode (Raw/Rendered) - kept for compatibility
     /// * `show_line_numbers` - Whether line numbers are currently visible - kept for compatibility
-    /// * `can_undo` - Whether undo is available
-    /// * `can_redo` - Whether redo is available
     /// * `can_save` - Whether save is available (file has path and is modified)
     /// * `has_editor` - Whether an editor is currently active
     /// * `formatting_state` - Current formatting state at cursor (for button highlighting)
@@ -163,8 +167,6 @@ impl Ribbon {
         theme_colors: &ThemeColors,
         _view_mode: ViewMode,
         _show_line_numbers: bool,
-        can_undo: bool,
-        can_redo: bool,
         _can_save: bool,
         has_editor: bool,
         _formatting_state: Option<&FormattingState>,
@@ -198,16 +200,19 @@ impl Ribbon {
             .rect_filled(ui.available_rect_before_wrap(), 0.0, ribbon_bg);
 
         ui.horizontal(|ui| {
+            // Expand to full panel width so right-aligned controls stay visible.
+            let ribbon_width = ui.available_width();
+            ui.set_min_width(ribbon_width);
             ui.set_height(self.height());
             ui.spacing_mut().item_spacing.x = 2.0;
 
             // ═══════════════════════════════════════════════════════════════════
-            // File Group (Streamlined with Save Dropdown)
+            // Left: File, workspace, save, format, find
             // ═══════════════════════════════════════════════════════════════════
             // New file button
             if icon_button(
                 ui,
-                "📄",
+                FILE_PLUS,
                 &format!("New ({}+N)", modifier_symbol()),
                 true,
                 is_dark,
@@ -220,7 +225,7 @@ impl Ribbon {
             // Open file button
             if icon_button(
                 ui,
-                "📂",
+                FILE_TEXT,
                 &format!("Open File ({}+O)", modifier_symbol()),
                 true,
                 is_dark,
@@ -232,12 +237,13 @@ impl Ribbon {
 
             // Open Workspace / Close Workspace button
             if is_workspace_mode {
-                if icon_button(ui, "📁", "Close Workspace", true, is_dark).clicked() {
+                if icon_button(ui, FOLDER_SIMPLE_MINUS, "Close Workspace", true, is_dark).clicked()
+                {
                     action = Some(RibbonAction::CloseWorkspace);
                 }
             } else if icon_button(
                 ui,
-                "📁",
+                FOLDERS,
                 &format!("Open Folder ({}+Shift+O)", modifier_symbol()),
                 true,
                 is_dark,
@@ -251,7 +257,7 @@ impl Ribbon {
             if is_workspace_mode {
                 if icon_button(
                     ui,
-                    "🔎",
+                    FILE_MAGNIFYING_GLASS,
                     &format!("Search in Files ({}+Shift+F)", modifier_symbol()),
                     true,
                     is_dark,
@@ -263,7 +269,7 @@ impl Ribbon {
 
                 if icon_button(
                     ui,
-                    "⚡",
+                    LIGHTNING,
                     &format!("Quick File Switcher ({}+P)", modifier_symbol()),
                     true,
                     is_dark,
@@ -275,20 +281,19 @@ impl Ribbon {
             }
 
             // Save Dropdown - replaces separate Save and SaveAs buttons
-            // Note: ComboBox adds its own dropdown arrow, so we don't add ▾ manually
             egui::ComboBox::from_id_source("save_dropdown")
-                .selected_text(RichText::new("💾").size(14.0))
+                .selected_text(phosphor_rich_text(FLOPPY_DISK, 14.0))
                 .width(40.0)
                 .show_ui(ui, |ui| {
                     if ui
-                        .selectable_label(false, format!("💾 {}", t!("menu.file.save")))
+                        .selectable_label(false, t!("menu.file.save"))
                         .on_hover_text(format!("Save ({}+S)", modifier_symbol()))
                         .clicked()
                     {
                         action = Some(RibbonAction::Save);
                     }
                     if ui
-                        .selectable_label(false, format!("📥 {}...", t!("menu.file.save_as")))
+                        .selectable_label(false, format!("{}...", t!("menu.file.save_as")))
                         .on_hover_text(format!("Save As ({}+Shift+S)", modifier_symbol()))
                         .clicked()
                     {
@@ -296,50 +301,15 @@ impl Ribbon {
                     }
                 });
 
-            ui.add_space(4.0);
-            vertical_separator(ui, separator_color, self.height() - 8.0);
-            ui.add_space(4.0);
-
-            // ═══════════════════════════════════════════════════════════════════
-            // Edit Group
-            // ═══════════════════════════════════════════════════════════════════
-            if icon_button(
-                ui,
-                "↩",
-                &format!("Undo ({}+Z)", modifier_symbol()),
-                can_undo,
-                is_dark,
-            )
-            .clicked()
-            {
-                action = Some(RibbonAction::Undo);
-            }
-
-            if icon_button(
-                ui,
-                "↪",
-                &format!("Redo ({}+Y)", modifier_symbol()),
-                can_redo,
-                is_dark,
-            )
-            .clicked()
-            {
-                action = Some(RibbonAction::Redo);
-            }
-
-            ui.add_space(4.0);
-            vertical_separator(ui, separator_color, self.height() - 8.0);
-            ui.add_space(4.0);
-
-            // ═══════════════════════════════════════════════════════════════════
-            // Format Group (Structured data only - markdown formatting moved to
-            // bottom toolbar in the editor area)
-            // ═══════════════════════════════════════════════════════════════════
+            // Format Group (Structured data only)
             if file_type.is_structured() {
-                // Format/Pretty-print button
+                ui.add_space(4.0);
+                vertical_separator(ui, separator_color, self.height() - 8.0);
+                ui.add_space(4.0);
+
                 if icon_button(
                     ui,
-                    "✨",
+                    SPARKLE,
                     &t!("ribbon.format_document").to_string(),
                     has_editor,
                     is_dark,
@@ -349,10 +319,9 @@ impl Ribbon {
                     action = Some(RibbonAction::FormatDocument);
                 }
 
-                // Validate button
                 if icon_button(
                     ui,
-                    "✓",
+                    CHECK,
                     &t!("ribbon.validate_syntax").to_string(),
                     has_editor,
                     is_dark,
@@ -362,11 +331,10 @@ impl Ribbon {
                     action = Some(RibbonAction::ValidateSyntax);
                 }
 
-                // Pipeline button (JSON/YAML only, not TOML)
                 if matches!(file_type, FileType::Json | FileType::Yaml) {
                     if icon_button(
                         ui,
-                        "⚡",
+                        LIGHTNING,
                         &format!("{} ({}+Shift+L)", t!("ribbon.pipeline"), modifier_symbol()),
                         has_editor && pipeline_enabled,
                         is_dark,
@@ -376,20 +344,16 @@ impl Ribbon {
                         action = Some(RibbonAction::TogglePipeline);
                     }
                 }
-
-                ui.add_space(4.0);
-                vertical_separator(ui, separator_color, self.height() - 8.0);
-                ui.add_space(4.0);
             }
-            // Note: View Group removed - controls moved to title bar
 
-            // ═══════════════════════════════════════════════════════════════════
-            // Tools Group
-            // ═══════════════════════════════════════════════════════════════════
             // Find/Replace (universal)
+            ui.add_space(4.0);
+            vertical_separator(ui, separator_color, self.height() - 8.0);
+            ui.add_space(4.0);
+
             if icon_button(
                 ui,
-                "🔍",
+                MAGNIFYING_GLASS,
                 &format!("Find/Replace ({}+F)", modifier_symbol()),
                 true,
                 is_dark,
@@ -399,82 +363,85 @@ impl Ribbon {
                 action = Some(RibbonAction::FindReplace);
             }
 
-            // Note: Outline toggle removed from ribbon - now accessible via side panel toggle strip
-
-            ui.add_space(4.0);
-            vertical_separator(ui, separator_color, self.height() - 8.0);
-            ui.add_space(4.0);
-
             // ═══════════════════════════════════════════════════════════════════
-            // Export Dropdown (Markdown only)
+            // Right: Export + Terminal (pinned to the right edge)
             // ═══════════════════════════════════════════════════════════════════
-            if file_type.is_markdown() {
-                egui::ComboBox::from_id_source("export_dropdown")
-                    .selected_text(RichText::new("🌐").size(12.0))
-                    .width(40.0)
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(false, format!("🌐 {}", t!("menu.file.export_html")))
-                            .on_hover_text(format!(
-                                "Export as HTML ({}+Shift+E)",
-                                modifier_symbol()
-                            ))
-                            .clicked()
-                        {
-                            action = Some(RibbonAction::ExportHtml);
-                        }
-                        if ui
-                            .selectable_label(
-                                false,
-                                format!("📋 {}", t!("menu.file.export_clipboard")),
-                            )
-                            .on_hover_text(t!("ribbon.copy_html_tooltip").to_string())
-                            .clicked()
-                        {
-                            action = Some(RibbonAction::CopyAsHtml);
-                        }
-                        ui.separator();
-                        if ui
-                            .selectable_label(false, t!("ribbon.export_pdf").to_string())
-                            .on_hover_text(format!("Export as PDF ({}+Shift+P)", modifier_symbol()))
-                            .clicked()
-                        {
-                            action = Some(RibbonAction::ExportPdf);
-                        }
-                        if ui
-                            .selectable_label(false, t!("ribbon.print_preview").to_string())
-                            .on_hover_text(format!(
-                                "Print preview (+{}+Alt+P)",
-                                modifier_symbol()
-                            ))
-                            .clicked()
-                        {
-                            action = Some(RibbonAction::PrintPreview);
-                        }
-                    });
-            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Terminal — rightmost (added first in RTL layout)
+                if icon_button(
+                    ui,
+                    TERMINAL_WINDOW,
+                    &format!("Toggle Terminal ({}+`)", modifier_symbol()),
+                    true,
+                    is_dark,
+                )
+                .clicked()
+                {
+                    action = Some(RibbonAction::ToggleTerminal);
+                }
 
-            ui.add_space(4.0);
-            vertical_separator(ui, separator_color, self.height() - 8.0);
-            ui.add_space(4.0);
+                if file_type.is_markdown() {
+                    ui.add_space(4.0);
+                    vertical_separator(ui, separator_color, self.height() - 8.0);
+                    ui.add_space(4.0);
 
-            // ═══════════════════════════════════════════════════════════════════
-            // Terminal Button
-            // ═══════════════════════════════════════════════════════════════════
-            if icon_button(
-                ui,
-                ">_",
-                &format!("Toggle Terminal ({}+`)", modifier_symbol()),
-                true,
-                is_dark,
-            )
-            .clicked()
-            {
-                action = Some(RibbonAction::ToggleTerminal);
-            }
-
-            // Note: Productivity Hub button removed - accessible via side panel toggle strip
-            // Note: Settings Group removed - controls moved to title bar and Settings panel
+                    egui::ComboBox::from_id_source("export_dropdown")
+                        .selected_text(phosphor_rich_text(EXPORT, 14.0))
+                        .width(40.0)
+                        .show_ui(ui, |ui| {
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    format!("{} {}", GLOBE, t!("menu.file.export_html")),
+                                )
+                                .on_hover_text(format!(
+                                    "Export as HTML ({}+Shift+E)",
+                                    modifier_symbol()
+                                ))
+                                .clicked()
+                            {
+                                action = Some(RibbonAction::ExportHtml);
+                            }
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    format!("{} {}", CLIPBOARD, t!("menu.file.export_clipboard")),
+                                )
+                                .on_hover_text(t!("ribbon.copy_html_tooltip").to_string())
+                                .clicked()
+                            {
+                                action = Some(RibbonAction::CopyAsHtml);
+                            }
+                            ui.separator();
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    format!("{} {}", FILE_PDF, t!("ribbon.export_pdf")),
+                                )
+                                .on_hover_text(format!(
+                                    "Export as PDF ({}+Shift+P)",
+                                    modifier_symbol()
+                                ))
+                                .clicked()
+                            {
+                                action = Some(RibbonAction::ExportPdf);
+                            }
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    format!("{} {}", PRINTER, t!("ribbon.print_preview")),
+                                )
+                                .on_hover_text(format!(
+                                    "Print preview (+{}+Alt+P)",
+                                    modifier_symbol()
+                                ))
+                                .clicked()
+                            {
+                                action = Some(RibbonAction::PrintPreview);
+                            }
+                        });
+                }
+            });
         });
 
         // Draw bottom border
@@ -523,19 +490,13 @@ fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str, enabled: bool, is_dark: b
             .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
     }
 
-    // Apply vertical offset for icons that render at wrong baseline
-    let y_offset = match icon {
-        "⚙" => 2.0,
-        _ => 0.0,
-    };
-
-    let icon_pos = egui::pos2(btn.rect.center().x, btn.rect.center().y + y_offset);
+    let icon_pos = egui::pos2(btn.rect.center().x, btn.rect.center().y);
 
     ui.painter().text(
         icon_pos,
         egui::Align2::CENTER_CENTER,
         icon,
-        egui::FontId::proportional(16.0),
+        phosphor_font(RIBBON_ICON_SIZE),
         text_color,
     );
 

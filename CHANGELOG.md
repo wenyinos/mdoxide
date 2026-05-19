@@ -54,10 +54,18 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 #### Localization
 - **Spanish UI language** — **Español** added to the Settings / Welcome language selector (`locales/es.yaml`); system locale `es` / `es-*` detection wired through `Language::Spanish`.
 
+#### UI iconography — Phosphor Icons
+- **Phosphor icon font** — Integrated [`egui-phosphor`](https://github.com/alexbenis/egui-phosphor) **0.9.0** (pinned for egui 0.31). Regular-weight glyphs registered at startup; helpers `phosphor_font()` / `phosphor_rich_text()` and a central mapping module (`src/ui/phosphor_icons.rs`).
+- **App chrome** — Ribbon, format toolbar, outline & productivity panels, terminal, settings & about, command palette, quick switcher, file tree, status bar, dialogs, title bar, tab close, theme toggle, and recovery UI now use Phosphor instead of emoji or mixed Unicode symbols.
+- **Preview & viewers** — Markdown preview widgets (table alignment, list remove, code **Run** / **Stop** / status, mermaid diagram-type icons & warnings), JSON/YAML/TOML tree viewer, CSV row-count banner, Gantt done checkmarks, ER diagram PK/FK markers, and editor gutter fold carets.
+- **Locale cleanup** — Removed duplicate emoji from UI strings in `en`, `de`, `es`, `ja`, and `zh_Hans` where icons are drawn separately (tree viewer toolbar, outline stats heading, CSV header labels).
+- *Unchanged by design:* Git file-status badges, markdown callout body icons (Note/Tip/Warning content), and **R/S/V** view-mode segment letters.
+
 ### Changed
 
 - **Undo granularity in raw mode** — Removed 500 ms time-based merging in `EditHistory`. Each `record_operations` call (typically one per dirty editor frame while typing) is now its own undo step, so Ctrl+Z steps back incrementally instead of reverting an entire fast-typing burst in one action. Replace edits (delete + insert from the same diff) still undo atomically. Rendered mode is unchanged at the block level (e.g. headings still commit on focus loss). See `docs/technical/editor/undo-redo.md` and `docs/technical/editor/edit-history.md`.
 - **Main ribbon toolbar always icon-only** — Removed the left collapse/expand control and section labels ("File", "Edit", "Tools", structured-data type name, Export text). The toolbar is now a fixed compact icon bar (28px tall); Save and Export dropdowns still show full labels inside their menus. Tooltips and keyboard shortcuts are unchanged.
+- **UI icons: emoji → Phosphor** — Replaced inconsistent emoji and one-off Unicode symbols across Ferrite's chrome and rendered-view controls with the Phosphor regular set for sharper, theme-consistent glyphs at all DPI scales. Mixed icon+text labels use separate Phosphor and proportional labels (or painter dual-font rendering) so glyphs render reliably; window titles stay text-only.
 
 ### Fixed
 
@@ -67,6 +75,8 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 - **Rendered / split tables: two clicks to edit another cell after typing** — After editing a cell, the first click on another cell (same table or a different table in the file) often did nothing; a second click was required. Causes: egui using the first click only to defocus the active `TextEdit`; deferred table commits firing on mouse *release* while `any_pressed()` was already false; and tables higher in the document committing before lower tables could record the cross-table target. Fixed with shared `TableGlobalFocus`, pointer-down activation on display cells, and a two-frame deferred commit so layout order does not drop the pending cell. See `docs/technical/markdown/table-cell-focus-navigation.md` and `docs/technical/markdown/table-editing-focus.md`.
 - **Quick file switcher (Ctrl+P) search quality** — Workspace quick open now tokenizes paths on `-`, `_`, `.`, and path separators so queries like `tables` match `test_tables.md` and `box` matches `test_box_drawing.md`. Search includes both indexed tree files and recent files (so unexpanded folders still match files you have opened recently). Replaced loose full-path fuzzy matching and the +100 recent-file score boost that ranked unrelated recent files above real matches. See `src/ui/quick_switcher.rs`.
 - **Frontmatter panel stale after tab switch** — The FM tab could show the previous file’s fields, report “No frontmatter detected” on files that had YAML, or splice the wrong body when **Add frontmatter** was clicked. Caused by caching on `content_version` alone (each tab’s counter starts at `0`). Fixed by keying the cache on `(tab_id, content_version)` with regression tests. See `docs/technical/ui/frontmatter-panel.md` (*Caching*).
+- **Export menu double icons (PDF, Print preview)** — Locale strings still contained emoji while the ribbon already prefixed Phosphor icons; stripped duplicate glyphs from export menu labels in all locale files.
+- **Outline panel tab selector layout** — Phosphor icons in tab labels broke hit-testing when allocated via nested `allocate_ui_at_rect`; fixed with painter-based dual-font tab labels (`paint_tab_label`) so icons and text stay centered and clickable.
 
 ### Known issues (v0.3.0 non-blockers)
 

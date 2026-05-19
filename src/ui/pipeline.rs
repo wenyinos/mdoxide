@@ -7,6 +7,7 @@
 // Allow dead code - includes API methods for future debounce and advanced features
 #![allow(dead_code)]
 
+use crate::ui::phosphor_icons::{phosphor_rich_text, STOP, X};
 use eframe::egui::{self, Color32, Key, RichText, ScrollArea, TextEdit, Ui};
 use rust_i18n::t;
 use std::collections::VecDeque;
@@ -729,7 +730,7 @@ impl PipelinePanel {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close button
                         if ui
-                            .button(RichText::new("✕").color(secondary_text))
+                            .button(phosphor_rich_text(X, 14.0).color(secondary_text))
                             .on_hover_text(t!("pipeline.close_tooltip").to_string())
                             .clicked()
                         {
@@ -740,7 +741,7 @@ impl PipelinePanel {
                         // Cancel button (only when running)
                         if self.is_running() {
                             if ui
-                                .button(RichText::new("⏹").color(error_color))
+                                .button(phosphor_rich_text(STOP, 14.0).color(error_color))
                                 .on_hover_text(t!("pipeline.cancel_tooltip").to_string())
                                 .clicked()
                             {

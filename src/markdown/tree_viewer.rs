@@ -25,6 +25,9 @@ use rust_i18n::t;
 use std::collections::HashMap;
 
 use crate::string_utils::safe_slice_to;
+use crate::ui::phosphor_icons::{
+    phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHECK, CLIPBOARD, WARNING,
+};
 
 /// Blake3 digest of UTF-8 tab content — single hash compare per frame when caches are warm.
 #[inline]
@@ -690,13 +693,21 @@ impl<'a> TreeViewer<'a> {
 
             if !self.state.show_raw {
                 if ui
-                    .button(t!("tree_viewer.expand_all").to_string())
+                    .horizontal(|ui| {
+                        ui.label(phosphor_rich_text(CARET_DOWN, 11.0));
+                        ui.button(t!("tree_viewer.expand_all").to_string())
+                    })
+                    .inner
                     .clicked()
                 {
                     self.state.expand_all();
                 }
                 if ui
-                    .button(t!("tree_viewer.collapse_all").to_string())
+                    .horizontal(|ui| {
+                        ui.label(phosphor_rich_text(CARET_RIGHT, 11.0));
+                        ui.button(t!("tree_viewer.collapse_all").to_string())
+                    })
+                    .inner
                     .clicked()
                 {
                     if self.state.cached_tree.is_some() {
@@ -862,8 +873,13 @@ impl<'a> TreeViewer<'a> {
             ui.add_space(indent);
 
             // Expand/collapse toggle
-            let toggle_text = if is_expanded { "▼" } else { "▶" };
-            if ui.small_button(toggle_text).clicked() {
+            if ui
+                .small_button(phosphor_rich_text(
+                    if is_expanded { CARET_DOWN } else { CARET_RIGHT },
+                    10.0,
+                ))
+                .clicked()
+            {
                 self.state.toggle_expanded(path);
             }
 
@@ -911,8 +927,13 @@ impl<'a> TreeViewer<'a> {
             ui.add_space(indent);
 
             // Expand/collapse toggle
-            let toggle_text = if is_expanded { "▼" } else { "▶" };
-            if ui.small_button(toggle_text).clicked() {
+            if ui
+                .small_button(phosphor_rich_text(
+                    if is_expanded { CARET_DOWN } else { CARET_RIGHT },
+                    10.0,
+                ))
+                .clicked()
+            {
                 self.state.toggle_expanded(path);
             }
 
@@ -989,7 +1010,10 @@ impl<'a> TreeViewer<'a> {
                 }
 
                 if self.state.edit_error {
-                    ui.colored_label(colors.error, "⚠ Invalid");
+                    ui.horizontal(|ui| {
+                        ui.label(phosphor_rich_text(WARNING, 12.0).color(colors.error));
+                        ui.colored_label(colors.error, "Invalid");
+                    });
                 }
             } else {
                 // Display mode
@@ -1031,12 +1055,19 @@ impl<'a> TreeViewer<'a> {
     fn add_context_menu(&mut self, ui: &mut Ui, path: &str, colors: &TreeViewerColors) {
         // Show "copied" feedback
         if self.state.copied_path.as_deref() == Some(path) {
-            ui.colored_label(colors.string, "✓");
+            ui.label(phosphor_rich_text(CHECK, 12.0).color(colors.string));
         }
 
         // Use three dots that render in all fonts (U+2026 horizontal ellipsis may not render)
         ui.menu_button("...", |ui| {
-            if ui.button(t!("tree_viewer.copy_path").to_string()).clicked() {
+            if ui
+                .horizontal(|ui| {
+                    ui.label(phosphor_rich_text(CLIPBOARD, 11.0));
+                    ui.button(t!("tree_viewer.copy_path").to_string())
+                })
+                .inner
+                .clicked()
+            {
                 let json_path = self.path_to_jsonpath(path);
                 ui.output_mut(|o| o.copied_text = json_path);
                 self.state.copied_path = Some(path.to_string());

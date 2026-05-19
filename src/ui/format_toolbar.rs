@@ -10,8 +10,12 @@
 use crate::app::modifier_symbol;
 use crate::markdown::formatting::{FormattingState, MarkdownFormatCommand};
 use crate::markdown::mermaid::{mermaid_kind_menu_label, MermaidTemplateKind};
+use crate::ui::phosphor_icons::{
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_LEFT, CARET_UP, CODE, CODE_BLOCK, LINK,
+    LIST, LIST_BULLETS, LIST_NUMBERS, QUOTES, TEXT_B, TEXT_ITALIC,
+};
 use crate::ui::RibbonAction;
-use eframe::egui::{self, Color32, RichText, Ui, Vec2};
+use eframe::egui::{self, Color32, FontId, RichText, Ui, Vec2};
 use rust_i18n::t;
 
 /// Height of the format toolbar when expanded.
@@ -87,7 +91,7 @@ impl FormatToolbar {
             // Bold
             if format_button(
                 &mut button_ui,
-                "B",
+                TEXT_B,
                 &MarkdownFormatCommand::Bold.tooltip(),
                 has_editor,
                 is_bold,
@@ -102,12 +106,12 @@ impl FormatToolbar {
             // Italic
             if format_button(
                 &mut button_ui,
-                "I",
+                TEXT_ITALIC,
                 &MarkdownFormatCommand::Italic.tooltip(),
                 has_editor,
                 is_italic,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -117,12 +121,12 @@ impl FormatToolbar {
             // Inline code
             if format_button(
                 &mut button_ui,
-                "<>",
+                CODE,
                 &MarkdownFormatCommand::InlineCode.tooltip(),
                 has_editor,
                 is_code,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -132,12 +136,12 @@ impl FormatToolbar {
             // Link
             if format_button(
                 &mut button_ui,
-                "[~]",
+                LINK,
                 &MarkdownFormatCommand::Link.tooltip(),
                 has_editor,
                 is_link,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -193,12 +197,12 @@ impl FormatToolbar {
 
             if format_button(
                 &mut button_ui,
-                "−",
+                LIST_BULLETS,
                 &MarkdownFormatCommand::BulletList.tooltip(),
                 has_editor,
                 is_bullet,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -207,12 +211,12 @@ impl FormatToolbar {
 
             if format_button(
                 &mut button_ui,
-                "1.",
+                LIST_NUMBERS,
                 &MarkdownFormatCommand::NumberedList.tooltip(),
                 has_editor,
                 is_numbered,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -223,12 +227,12 @@ impl FormatToolbar {
             let is_quote = formatting_state.map(|s| s.is_blockquote).unwrap_or(false);
             if format_button(
                 &mut button_ui,
-                ">",
+                QUOTES,
                 &MarkdownFormatCommand::Blockquote.tooltip(),
                 has_editor,
                 is_quote,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -239,12 +243,12 @@ impl FormatToolbar {
             let is_code_block = formatting_state.map(|s| s.is_code_block).unwrap_or(false);
             if format_button(
                 &mut button_ui,
-                "{}",
+                CODE_BLOCK,
                 &MarkdownFormatCommand::CodeBlock.tooltip(),
                 has_editor,
                 is_code_block,
                 is_dark,
-                false,
+                true,
             )
             .clicked()
             {
@@ -262,7 +266,7 @@ impl FormatToolbar {
             // Table of Contents
             if toolbar_icon_button(
                 &mut button_ui,
-                "☰",
+                LIST,
                 &format!(
                     "Insert/Update Table of Contents ({}+Shift+U)",
                     modifier_symbol()
@@ -308,7 +312,7 @@ impl FormatToolbar {
             // Collapse button (right-aligned)
             button_ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let btn = ui.add(
-                    egui::Button::new(RichText::new("▼").size(10.0).color(chevron_color))
+                    egui::Button::new(phosphor_rich_text(CARET_DOWN, 10.0).color(chevron_color))
                         .frame(false)
                         .min_size(Vec2::new(20.0, 18.0)),
                 );
@@ -346,14 +350,15 @@ impl FormatToolbar {
                 egui::Stroke::new(1.0, separator_color),
             );
 
-            // Centered chevron
-            ui.painter().text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "▲ Format",
-                egui::FontId::proportional(10.0),
-                chevron_color,
-            );
+            // Centered chevron + label
+            ui.allocate_ui_at_rect(rect, |ui| {
+                ui.centered_and_justified(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(phosphor_rich_text(CARET_UP, 10.0).color(chevron_color));
+                        ui.label(RichText::new("Format").size(10.0).color(chevron_color));
+                    });
+                });
+            });
 
             if response.clicked() {
                 toggle_visibility = true;
@@ -385,7 +390,7 @@ fn format_button(
     enabled: bool,
     active: bool,
     is_dark: bool,
-    bold_text: bool,
+    use_phosphor: bool,
 ) -> egui::Response {
     let text_color = if enabled {
         if is_dark {
@@ -411,10 +416,19 @@ fn format_button(
         Color32::from_rgb(220, 220, 220)
     };
 
-    let mut text = RichText::new(icon).size(11.0).color(text_color);
-    if bold_text {
-        text = text.strong();
-    }
+    let icon_font = |size: f32| -> FontId {
+        if use_phosphor {
+            phosphor_font(size)
+        } else {
+            FontId::proportional(size)
+        }
+    };
+
+    let text = if use_phosphor {
+        phosphor_rich_text(icon, 11.0).color(text_color)
+    } else {
+        RichText::new(icon).size(11.0).color(text_color)
+    };
 
     let btn = ui.add_enabled(
         enabled,
@@ -426,31 +440,21 @@ fn format_button(
     if active && enabled {
         ui.painter()
             .rect_filled(btn.rect, egui::CornerRadius::same(3), active_bg);
-        let font_id = if bold_text {
-            egui::FontId::new(11.0, egui::FontFamily::Name("Inter-Bold".into()))
-        } else {
-            egui::FontId::proportional(11.0)
-        };
         ui.painter().text(
             btn.rect.center(),
             egui::Align2::CENTER_CENTER,
             icon,
-            font_id,
+            icon_font(11.0),
             text_color,
         );
     } else if btn.hovered() && enabled {
         ui.painter()
             .rect_filled(btn.rect, egui::CornerRadius::same(3), hover_bg);
-        let font_id = if bold_text {
-            egui::FontId::new(11.0, egui::FontFamily::Name("Inter-Bold".into()))
-        } else {
-            egui::FontId::proportional(11.0)
-        };
         ui.painter().text(
             btn.rect.center(),
             egui::Align2::CENTER_CENTER,
             icon,
-            font_id,
+            icon_font(11.0),
             text_color,
         );
     }
@@ -500,7 +504,7 @@ fn toolbar_icon_button(
         btn.rect.center(),
         egui::Align2::CENTER_CENTER,
         icon,
-        egui::FontId::proportional(14.0),
+        phosphor_font(14.0),
         text_color,
     );
 
@@ -519,7 +523,10 @@ fn toolbar_separator(ui: &mut Ui, color: Color32, height: f32) {
 /// Render the side panel toggle strip (shown when the outline panel is closed).
 ///
 /// Returns true if the user clicked to open the side panel.
-pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool) -> bool {
+///
+/// When `blocks_clicks` is true (window resize cursor active), the strip ignores
+/// clicks so east-edge resize is not mistaken for "open side panel".
+pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool, blocks_clicks: bool) -> bool {
     let mut clicked = false;
 
     let strip_width = 20.0;
@@ -559,8 +566,13 @@ pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool) -> bool {
                 egui::Stroke::new(1.0, separator_color),
             );
 
-            // Clickable area for the whole strip
-            let response = ui.allocate_rect(panel_rect, egui::Sense::click());
+            // Clickable area for the whole strip (disabled while resize cursor is active)
+            let sense = if blocks_clicks {
+                egui::Sense::hover()
+            } else {
+                egui::Sense::click()
+            };
+            let response = ui.allocate_rect(panel_rect, sense);
 
             // Hover effect
             if response.hovered() {
@@ -576,12 +588,12 @@ pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool) -> bool {
             ui.painter().text(
                 panel_rect.center(),
                 egui::Align2::CENTER_CENTER,
-                "◀",
-                egui::FontId::proportional(12.0),
+                CARET_LEFT,
+                phosphor_font(12.0),
                 chevron_color,
             );
 
-            if response.clicked() {
+            if response.clicked() && !blocks_clicks {
                 clicked = true;
             }
 

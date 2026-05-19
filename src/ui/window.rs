@@ -39,16 +39,15 @@ const TITLE_BAR_EXCLUSION_HEIGHT: f32 = 35.0;
 /// left and center portions of the window's top edge.
 const TITLE_BAR_BUTTON_AREA_WIDTH: f32 = 280.0;
 
-/// Right margin gap (in logical pixels) between window control buttons and the
-/// window's right edge.  Must be larger than `CORNER_GRAB_SIZE` so the NE
-/// corner grab zone stays button-free.  Kept in sync with the
-/// `ui.add_space(12.0)` call in `title_bar.rs`.
+/// Inset from the right edge of the title bar where NE corner resize is allowed
+/// (must be larger than `CORNER_GRAB_SIZE` so resize does not fight window chrome).
 const TITLE_BAR_BUTTON_RIGHT_MARGIN: f32 = 12.0;
 
-/// Right margin reserved at the bottom of the window so status-bar controls
-/// (Help `?`) do not overlap the SE corner / east-edge resize grab zone.
-/// Kept in sync with `ui.add_space` before the Help button in `status_bar.rs`.
-pub const STATUS_BAR_RESIZE_RIGHT_MARGIN: f32 = 14.0;
+/// Width of invisible click-blocking strips along east/west edges.
+///
+/// Wider than [`RESIZE_BORDER_WIDTH`] because edge UI (side-panel toggle strip,
+/// status-bar controls) extends further inward than the resize cursor zone.
+const EDGE_CLICK_BLOCK_WIDTH: f32 = 24.0;
 
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
@@ -90,12 +89,19 @@ impl WindowResizeState {
         self.block_clicks_in_resize_zone = false;
     }
 
-    /// True when foreground click guards should eat pointer events (active resize
-    /// or one frame after release over a grab zone). Does **not** include mere
-    /// hover over an edge — that ran `consume_clicks_in_resize_zones` every frame
-    /// and could wedge the UI on startup when the cursor sits on a window corner.
+    /// True when foreground click guards should eat pointer events.
     pub fn ui_interaction_blocked(&self, _ctx: &egui::Context) -> bool {
-        self.is_resizing || self.block_clicks_in_resize_zone
+        self.blocks_widget_clicks()
+    }
+
+    /// Whether widgets near window edges should ignore clicks.
+    ///
+    /// True while the resize cursor is shown, during an active resize, or for one
+    /// frame after release over a grab zone (so release does not activate buttons).
+    pub fn blocks_widget_clicks(&self) -> bool {
+        self.resize_cursor_active()
+            || self.is_resizing
+            || self.block_clicks_in_resize_zone
     }
 
     /// Whether the resize cursor is showing (hover over a grab zone or dragging).
@@ -353,11 +359,12 @@ pub fn is_in_resize_zone(window_rect: Rect, pointer_pos: Pos2) -> bool {
 }
 
 /// Paint invisible click targets over resize grab zones so widgets underneath
-/// (e.g. status-bar Help) cannot steal the release click after a resize.
+/// (side-panel toggle, status-bar Help, etc.) cannot steal resize clicks.
 ///
-/// Call near the end of each frame, before [`WindowResizeState::apply_cursor`].
+/// Call near the end of each frame, before [`WindowResizeState::apply_cursor`],
+/// so these foreground areas win hit-testing over earlier UI.
 pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeState) {
-    if !state.ui_interaction_blocked(ctx) {
+    if !state.blocks_widget_clicks() {
         return;
     }
 
@@ -368,6 +375,8 @@ pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeS
     if let Some(dir) = state.current_direction {
         directions.push(dir);
     } else if let Some(pos) = pointer {
+        // After release, `current_direction` is cleared but we still need to eat
+        // the click for one frame (`block_clicks_in_resize_zone`).
         if let Some(dir) = detect_resize_direction(window_rect, pos) {
             directions.push(dir);
         }
@@ -378,7 +387,7 @@ pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeS
     }
 
     for (idx, dir) in directions.into_iter().enumerate() {
-        let zone = get_resize_zone_rect(window_rect, dir);
+        let zone = get_click_block_zone_rect(window_rect, dir);
         let id = egui::Id::new(("resize_click_guard", idx as u32, resize_dir_tag(dir)));
         egui::Area::new(id)
             .order(egui::Order::Foreground)
@@ -388,6 +397,42 @@ pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeS
                 ui.set_min_size(zone.size());
                 ui.allocate_response(zone.size(), egui::Sense::click());
             });
+    }
+}
+
+/// Resize-zone rect used for click blocking (wider than cursor detection on E/W).
+pub fn get_click_block_zone_rect(window_rect: Rect, edge: ResizeDirection) -> Rect {
+    let min = window_rect.min;
+    let max = window_rect.max;
+    let b = RESIZE_BORDER_WIDTH;
+    let c = CORNER_GRAB_SIZE;
+    let e = EDGE_CLICK_BLOCK_WIDTH;
+
+    match edge {
+        ResizeDirection::North => {
+            Rect::from_min_max(Pos2::new(min.x + c, min.y), Pos2::new(max.x - c, min.y + b))
+        }
+        ResizeDirection::South => {
+            Rect::from_min_max(Pos2::new(min.x + c, max.y - b), Pos2::new(max.x - c, max.y))
+        }
+        ResizeDirection::West => {
+            Rect::from_min_max(Pos2::new(min.x, min.y + c), Pos2::new(min.x + e, max.y - c))
+        }
+        ResizeDirection::East => {
+            Rect::from_min_max(Pos2::new(max.x - e, min.y + c), Pos2::new(max.x, max.y - c))
+        }
+        ResizeDirection::NorthWest => {
+            Rect::from_min_max(Pos2::new(min.x, min.y), Pos2::new(min.x + c, min.y + c))
+        }
+        ResizeDirection::NorthEast => {
+            Rect::from_min_max(Pos2::new(max.x - e, min.y), Pos2::new(max.x, min.y + c))
+        }
+        ResizeDirection::SouthWest => {
+            Rect::from_min_max(Pos2::new(min.x, max.y - c), Pos2::new(min.x + c, max.y))
+        }
+        ResizeDirection::SouthEast => {
+            Rect::from_min_max(Pos2::new(max.x - e, max.y - c), Pos2::new(max.x, max.y))
+        }
     }
 }
 
@@ -915,6 +960,23 @@ mod tests {
             detect_resize_direction_with_exclusion(rect, Pos2::new(798.0, 598.0), title_bar_height),
             Some(ResizeDirection::SouthEast)
         );
+    }
+
+    #[test]
+    fn test_click_block_east_wider_than_resize_border() {
+        let rect = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(800.0, 600.0));
+        let resize = get_resize_zone_rect(rect, ResizeDirection::East);
+        let block = get_click_block_zone_rect(rect, ResizeDirection::East);
+        assert!(block.width() > resize.width());
+        assert!((block.width() - EDGE_CLICK_BLOCK_WIDTH).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_blocks_widget_clicks_includes_resize_cursor_hover() {
+        let mut state = WindowResizeState::default();
+        state.current_direction = Some(ResizeDirection::East);
+        assert!(state.blocks_widget_clicks());
+        assert!(state.resize_cursor_active());
     }
 
     #[test]

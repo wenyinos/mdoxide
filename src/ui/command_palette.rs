@@ -7,6 +7,7 @@
 
 use crate::app::commands::{all_palette_commands, PaletteCommand};
 use crate::config::{KeyboardShortcuts, ShortcutCommand};
+use crate::ui::icons::phosphor_rich_text;
 use eframe::egui::{self, Color32, Key, LayerId, Order, Pos2, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -279,7 +280,7 @@ impl CommandPalette {
                                         ui.add_space(16.0);
 
                                         // Icon
-                                        ui.label(RichText::new(result.command.icon).size(14.0));
+                                        ui.label(phosphor_rich_text(result.command.icon, 14.0));
                                         ui.add_space(8.0);
 
                                         // Command name

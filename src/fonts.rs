@@ -929,6 +929,9 @@ pub const FONT_JETBRAINS_ITALIC: &str = "JetBrainsMono-Italic";
 /// Custom font family for JetBrains Mono Bold Italic
 pub const FONT_JETBRAINS_BOLD_ITALIC: &str = "JetBrainsMono-BoldItalic";
 
+/// Phosphor icon font (MIT) for toolbar glyphs — see `egui-phosphor`.
+const FONT_PHOSPHOR: &str = "phosphor";
+
 /// Keys for dynamically loaded CJK system fonts
 const FONT_CJK_KR: &str = "CJK_KR";
 const FONT_CJK_SC: &str = "CJK_SC";
@@ -1935,6 +1938,7 @@ pub fn create_font_definitions_with_cjk_spec(
         cs_state.any_loaded()
     );
 
+    register_phosphor_icon_font(&mut fonts);
     fonts
 }
 
@@ -2183,7 +2187,18 @@ pub fn create_font_definitions_with_settings(
         custom_font.unwrap_or("none")
     );
 
+    register_phosphor_icon_font(&mut fonts);
     fonts
+}
+
+/// Register the Phosphor icon font for ribbon/toolbar glyphs.
+fn register_phosphor_icon_font(fonts: &mut FontDefinitions) {
+    egui_phosphor::add_to_fonts(fonts, egui_phosphor::Variant::Regular);
+    fonts
+        .families
+        .entry(FontFamily::Name(FONT_PHOSPHOR.into()))
+        .or_default()
+        .push(FONT_PHOSPHOR.to_owned());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

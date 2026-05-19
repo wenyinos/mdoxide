@@ -1078,10 +1078,11 @@ impl SpecialTabKind {
 
     /// Get the icon for this special tab kind.
     pub fn icon(&self) -> &'static str {
+        use crate::ui::phosphor_icons::{GEAR, INFO, SPARKLE};
         match self {
-            SpecialTabKind::Settings => "⚙",
-            SpecialTabKind::About => "❓",
-            SpecialTabKind::Welcome => "✨",
+            SpecialTabKind::Settings => GEAR,
+            SpecialTabKind::About => INFO,
+            SpecialTabKind::Welcome => SPARKLE,
         }
     }
 }

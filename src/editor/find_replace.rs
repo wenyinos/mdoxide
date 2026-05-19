@@ -15,6 +15,11 @@ use log::debug;
 use regex::Regex;
 use rust_i18n::t;
 
+use crate::ui::phosphor_icons::{
+    phosphor_rich_text, ARROWS_DOWN_UP, ARROWS_LEFT_RIGHT, CARET_LEFT, CARET_RIGHT, MAGNIFYING_GLASS,
+    X,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Find State
 // ─────────────────────────────────────────────────────────────────────────────
@@ -464,7 +469,7 @@ impl FindReplacePanel {
                         // Close button
                         if ui
                             .add(
-                                egui::Button::new(RichText::new("×").size(16.0).color(muted_color))
+                                egui::Button::new(phosphor_rich_text(X, 16.0).color(muted_color))
                                     .frame(false),
                             )
                             .on_hover_text(t!("find.close_tooltip").to_string())
@@ -475,9 +480,9 @@ impl FindReplacePanel {
 
                         // Toggle replace mode button
                         let mode_icon = if find_state.is_replace_mode {
-                            "⇅"
+                            ARROWS_DOWN_UP
                         } else {
-                            "⇄"
+                            ARROWS_LEFT_RIGHT
                         };
                         let mode_tooltip = if find_state.is_replace_mode {
                             t!("find.hide_replace")
@@ -487,7 +492,7 @@ impl FindReplacePanel {
                         if ui
                             .add(
                                 egui::Button::new(
-                                    RichText::new(mode_icon).size(14.0).color(muted_color),
+                                    phosphor_rich_text(mode_icon, 14.0).color(muted_color),
                                 )
                                 .frame(false),
                             )
@@ -503,7 +508,7 @@ impl FindReplacePanel {
 
                 // Search input row
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("🔍").size(14.0));
+                    ui.label(phosphor_rich_text(MAGNIFYING_GLASS, 14.0).color(muted_color));
 
                     let search_id = egui::Id::new("find_replace_search_input");
                     let search_response = ui.add_sized(
@@ -613,7 +618,7 @@ impl FindReplacePanel {
                     if ui
                         .add_enabled(
                             has_matches,
-                            egui::Button::new(RichText::new("◀").size(12.0))
+                            egui::Button::new(phosphor_rich_text(CARET_LEFT, 12.0))
                                 .min_size(Vec2::new(28.0, 24.0)),
                         )
                         .on_hover_text(t!("find.prev_tooltip").to_string())
@@ -625,7 +630,7 @@ impl FindReplacePanel {
                     if ui
                         .add_enabled(
                             has_matches,
-                            egui::Button::new(RichText::new("▶").size(12.0))
+                            egui::Button::new(phosphor_rich_text(CARET_RIGHT, 12.0))
                                 .min_size(Vec2::new(28.0, 24.0)),
                         )
                         .on_hover_text(t!("find.next_tooltip").to_string())

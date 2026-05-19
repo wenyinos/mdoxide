@@ -5,6 +5,7 @@
 //! (text, tags/lists, booleans). Supports bidirectional sync with the
 //! raw editor.
 
+use crate::ui::phosphor_icons::{phosphor_rich_text, TRASH, WARNING, X};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Ui, Vec2};
 
 const FIELD_SPACING: f32 = 8.0;
@@ -315,9 +316,16 @@ impl FrontmatterPanel {
                 if !self.has_frontmatter {
                     self.render_empty_state(ui, &content, muted_color, &mut output);
                 } else if let Some(ref err) = self.parse_error.clone() {
-                    ui.label(
-                        RichText::new(format!("⚠ {}", err)).color(Color32::from_rgb(220, 160, 60)),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            phosphor_rich_text(WARNING, 12.0)
+                                .color(Color32::from_rgb(220, 160, 60)),
+                        );
+                        ui.label(
+                            RichText::new(err.as_str())
+                                .color(Color32::from_rgb(220, 160, 60)),
+                        );
+                    });
                 } else {
                     self.render_fields(
                         ui,
@@ -409,7 +417,7 @@ impl FrontmatterPanel {
                                 |ui| {
                                     if ui
                                         .small_button(
-                                            RichText::new("🗑").size(11.0).color(muted_color),
+                                            phosphor_rich_text(TRASH, 11.0).color(muted_color),
                                         )
                                         .on_hover_text("Remove field")
                                         .clicked()
@@ -559,7 +567,7 @@ impl FrontmatterPanel {
                         ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
                         ui.label(RichText::new(tag).size(11.5).color(chip_text));
                         if ui
-                            .small_button(RichText::new("×").size(11.0).color(muted_color))
+                            .small_button(phosphor_rich_text(X, 11.0).color(muted_color))
                             .on_hover_text("Remove tag")
                             .clicked()
                         {
