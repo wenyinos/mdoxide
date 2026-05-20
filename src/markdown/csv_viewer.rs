@@ -12,7 +12,7 @@
 //! - Large file handling with row limiting
 
 use crate::ui::phosphor_icons::{phosphor_rich_text, INFO};
-use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
+use eframe::egui::{self, Color32, Label, RichText, ScrollArea, Sense, Ui, Vec2};
 use log::warn;
 use palette::{IntoColor, Oklch, Srgb};
 use rust_i18n::t;
@@ -1053,6 +1053,7 @@ fn render_row_cells(
     font_size: f32,
 ) {
     const TABLE_LEFT_PADDING: f32 = 8.0;
+    const TEXT_H_PADDING: f32 = 4.0;
     const COLUMN_COLOR_BLEND: f32 = 0.35;
 
     ui.add_space(TABLE_LEFT_PADDING);
@@ -1064,7 +1065,7 @@ fn render_row_cells(
         let cell_width = col_width + COLUMN_PADDING;
 
         let display_text = truncate_cell(cell, MAX_CELL_CHARS);
-        let is_truncated = display_text.len() < cell.len();
+        let font_id = egui::FontId::proportional(font_size);
 
         let text_color = if is_header {
             colors.header_text
@@ -1079,22 +1080,36 @@ fn render_row_cells(
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(cell_width, row_height), Sense::hover());
 
+        let text_rect = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x + TEXT_H_PADDING, rect.min.y),
+            egui::pos2(rect.max.x - TEXT_H_PADDING, rect.max.y),
+        );
+        let text_max_width = text_rect.width();
+        let is_truncated = cell.chars().count() > MAX_CELL_CHARS
+            || ui
+                .painter()
+                .layout_no_wrap(display_text.clone(), font_id.clone(), text_color)
+                .size()
+                .x
+                > text_max_width;
+
         // Paint the cell background (only if visible)
         if ui.is_rect_visible(rect) {
             ui.painter().rect_filled(rect, 0.0, cell_bg);
 
-            // Draw text centered vertically in the cell
-            let text_pos = egui::pos2(
-                rect.min.x + 4.0, // Small left padding for text
-                rect.center().y - font_size / 2.0,
-            );
-            ui.painter().text(
-                text_pos,
-                egui::Align2::LEFT_TOP,
-                &display_text,
-                egui::FontId::proportional(font_size),
-                text_color,
-            );
+            // Clip text to the cell and ellipsis-overflow at pixel boundaries.
+            ui.allocate_ui_at_rect(text_rect, |ui| {
+                ui.set_clip_rect(text_rect);
+                ui.with_layout(
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.add(
+                            Label::new(RichText::new(&display_text).font(font_id).color(text_color))
+                                .truncate(),
+                        );
+                    },
+                );
+            });
         }
 
         // Show tooltip for truncated cells

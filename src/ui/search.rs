@@ -18,7 +18,8 @@
 use crate::string_utils::floor_char_boundary;
 use crate::ui::icons::phosphor_rich_text;
 use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FILE};
-use crate::ui::{center_panel_in_viewport, search_panel_constraints, PanelConstraints};
+use crate::ui::{center_panel_in_viewport, file_index_progress_ui, search_panel_constraints, PanelConstraints};
+use crate::workspaces::FileIndexProgress;
 use eframe::egui::{self, Color32, Key, Pos2, Rect, RichText, ScrollArea, Sense, TextFormat, Vec2};
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -122,8 +123,15 @@ impl Default for SearchPanel {
 impl SearchPanel {
     /// Default panel width.
     const DEFAULT_WIDTH: f32 = 500.0;
-    /// Default panel height.
-    const DEFAULT_HEIGHT: f32 = 350.0;
+    /// Default panel height (compact; results scroll inside).
+    const DEFAULT_HEIGHT: f32 = 320.0;
+
+    /// Fixed chrome above the results scroll area (input, summary, separator, hints).
+    const RESULTS_SCROLL_CHROME: f32 = 130.0;
+
+    fn window_id() -> egui::Id {
+        egui::Id::new("search_in_files_window")
+    }
 
     /// Create a new search panel.
     pub fn new() -> Self {
@@ -352,6 +360,7 @@ impl SearchPanel {
         ctx: &egui::Context,
         workspace_root: &PathBuf,
         is_dark: bool,
+        index_progress: Option<FileIndexProgress>,
     ) -> SearchPanelOutput {
         let mut output = SearchPanelOutput::default();
 
@@ -435,11 +444,20 @@ impl SearchPanel {
             Color32::from_rgb(245, 247, 250)
         };
 
+        let max_window_width = (viewport.width() - self.constraints.margin * 2.0)
+            .min(self.constraints.max_width)
+            .max(self.constraints.min_width);
+        let max_window_height = (viewport.height() - self.constraints.margin * 2.0)
+            .min(self.constraints.max_height)
+            .max(self.constraints.min_height);
+
         // Build the window with constrained bounds
         let mut window = egui::Window::new(t!("search.title").to_string())
-            .id(egui::Id::new("search_in_files_window"))
+            .id(Self::window_id())
             .collapsible(false)
             .resizable(true)
+            .fade_in(false)
+            .fade_out(false)
             .default_pos(constrained.pos)
             .default_size(constrained.size)
             .frame(
@@ -455,13 +473,8 @@ impl SearchPanel {
             .order(egui::Order::Foreground)
             .min_width(self.constraints.min_width)
             .min_height(self.constraints.min_height)
-            .max_width(
-                (viewport.width() - self.constraints.margin * 2.0).max(self.constraints.min_width),
-            )
-            .max_height(
-                (viewport.height() - self.constraints.margin * 2.0)
-                    .max(self.constraints.min_height),
-            );
+            .max_width(max_window_width)
+            .max_height(max_window_height);
 
         window.show(ctx, |ui| {
             // Search input row
@@ -480,6 +493,11 @@ impl SearchPanel {
                 ui.checkbox(&mut self.use_regex, t!("find.use_regex"));
                 ui.checkbox(&mut self.case_sensitive, t!("find.match_case_short"));
             });
+
+            if let Some(progress) = index_progress {
+                ui.add_space(4.0);
+                file_index_progress_ui(ui, progress, secondary_color);
+            }
 
             ui.add_space(8.0);
 
@@ -513,12 +531,26 @@ impl SearchPanel {
 
             ui.separator();
 
-            // Results list
+            // Fixed-height results region so egui's Resize container does not grow the
+            // window frame-by-frame as matches load (that reads as a slow animation).
+            let scroll_h = (ui.available_height() - 4.0)
+                .max(self.constraints.min_height - Self::RESULTS_SCROLL_CHROME);
+            let scroll_w = ui.available_width();
+            let (scroll_rect, _) =
+                ui.allocate_exact_size(Vec2::new(scroll_w, scroll_h), Sense::hover());
+            let mut scroll_ui = ui.child_ui(
+                scroll_rect,
+                egui::Layout::top_down(egui::Align::Min),
+                None,
+            );
+            scroll_ui.set_clip_rect(scroll_rect);
+            scroll_ui.set_max_width(scroll_w);
+
             ScrollArea::vertical()
                 .id_source("search_results_scroll")
                 .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.set_min_width(ui.available_width());
+                .show(&mut scroll_ui, |ui| {
+                    ui.set_max_width(scroll_w);
 
                     for (file_idx, file_result) in self.results.iter_mut().enumerate() {
                         // File header
@@ -706,6 +738,15 @@ impl SearchPanel {
                 );
             });
         });
+
+        // Persist user resize / drag from egui window state (not content-driven growth).
+        if let Some(rect) = ctx.memory(|mem| mem.area_rect(Self::window_id())) {
+            self.panel_pos = Some(rect.min);
+            self.panel_size = Vec2::new(
+                rect.width().clamp(self.constraints.min_width, max_window_width),
+                rect.height().clamp(self.constraints.min_height, max_window_height),
+            );
+        }
 
         if output.closed {
             self.close();

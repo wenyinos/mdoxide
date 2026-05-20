@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust (MSRV from rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.92.0
 
       - name: Build release
         run: cargo build --release
@@ -188,7 +188,7 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev
 
       - name: Install Rust (MSRV from rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.92.0
 
       - name: Install cargo-deb and cargo-generate-rpm
         run: |
@@ -242,7 +242,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust (MSRV from rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.92.0
 
       - name: Install cargo-bundle
         run: cargo install cargo-bundle
@@ -293,7 +293,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust with Intel target (MSRV from rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.92.0
         with:
           targets: x86_64-apple-darwin
 

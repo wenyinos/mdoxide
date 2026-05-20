@@ -758,13 +758,9 @@ impl FerriteApp {
         }
 
         if let Some(workspace) = &self.state.workspace {
-            // Walk the workspace directory to find all markdown files.
-            // We use walkdir instead of workspace.all_files() because the file tree
-            // uses shallow/lazy loading — subdirectories may not be scanned yet
-            // (e.g., on session restore), which would miss backlink sources.
             let root = workspace.root_path.clone();
             let hidden = workspace.hidden_patterns.clone();
-            let all_md_files = collect_markdown_files(&root, &hidden);
+            let all_md_files = crate::workspaces::collect_markdown_files(&root, &hidden);
             let file_count = all_md_files.len();
 
             if file_count <= 50 {
@@ -832,44 +828,4 @@ impl FerriteApp {
             }
         }
     }
-}
-
-/// Walk the workspace directory recursively to collect all markdown files,
-/// skipping hidden directories (same patterns as the file tree).
-///
-/// This is independent of the lazy file tree, so it works even when
-/// subdirectories haven't been expanded yet (e.g., right after session restore).
-fn collect_markdown_files(root: &Path, hidden_patterns: &[String]) -> Vec<PathBuf> {
-    use walkdir::WalkDir;
-
-    WalkDir::new(root)
-        .into_iter()
-        .filter_entry(|entry| {
-            let name = entry.file_name().to_string_lossy();
-            // Skip hidden dot-directories/files
-            if name.starts_with('.') {
-                return false;
-            }
-            // Skip directories matching hidden patterns
-            if entry.file_type().is_dir() {
-                for pattern in hidden_patterns {
-                    if name == pattern.as_str() {
-                        return false;
-                    }
-                }
-            }
-            true
-        })
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            if !e.file_type().is_file() {
-                return false;
-            }
-            match e.path().extension().and_then(|ext| ext.to_str()) {
-                Some(ext) => ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"),
-                None => false,
-            }
-        })
-        .map(|e| e.into_path())
-        .collect()
 }

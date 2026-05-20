@@ -65,6 +65,27 @@ impl Default for SyncScrollConfig {
     }
 }
 
+/// Idle time before applying split-view scroll sync after the user stops scrolling.
+pub const SPLIT_SCROLL_IDLE: Duration = Duration::from_millis(120);
+
+/// Pixel tolerance for top/bottom boundary detection (matches mode-toggle sync).
+pub const SCROLL_BOUNDARY_PX: f32 = 5.0;
+
+/// Minimum scroll offset change to treat as user scroll (wheel, scrollbar, keyboard).
+pub const SCROLL_POSITION_EPS: f32 = 2.0;
+
+/// Config tuned for split-view (no animation, longer idle gate).
+impl SyncScrollConfig {
+    pub fn split_view() -> Self {
+        Self {
+            debounce_duration: SPLIT_SCROLL_IDLE,
+            smooth_scrolling: false,
+            animation_duration: 0.0,
+            min_scroll_delta: 2.0,
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Scroll Origin
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,6 +211,12 @@ pub struct SyncScrollState {
     source_line_count: usize,
     /// Total rendered height (for proportional fallback)
     rendered_total_height: f32,
+    /// Last captured raw anchor (1-indexed line, fraction within line) during user scroll
+    stored_raw_anchor: Option<(usize, f32)>,
+    /// Last captured preview Y during user scroll
+    stored_preview_y: Option<f32>,
+    /// Ignore wheel events until this instant (after programmatic scroll)
+    programmatic_until: Option<Instant>,
 }
 
 impl Default for SyncScrollState {
@@ -216,6 +243,9 @@ impl SyncScrollState {
             animation_start_rendered: 0.0,
             source_line_count: 0,
             rendered_total_height: 0.0,
+            stored_raw_anchor: None,
+            stored_preview_y: None,
+            programmatic_until: None,
         }
     }
 
@@ -223,6 +253,14 @@ impl SyncScrollState {
     pub fn with_config(config: SyncScrollConfig) -> Self {
         Self {
             config,
+            ..Self::new()
+        }
+    }
+
+    /// Split-view sync state (instant snap, idle debounce).
+    pub fn for_split_view() -> Self {
+        Self {
+            config: SyncScrollConfig::split_view(),
             ..Self::new()
         }
     }
@@ -310,6 +348,123 @@ impl SyncScrollState {
     pub fn mark_scroll(&mut self, origin: ScrollOrigin) {
         self.scroll_origin = origin;
         self.last_scroll_time = Some(Instant::now());
+    }
+
+    /// True while we should ignore scroll input (programmatic sync just applied).
+    pub fn is_programmatic(&self) -> bool {
+        self.programmatic_until
+            .is_some_and(|until| Instant::now() < until)
+    }
+
+    /// Suppress echo from programmatic scroll for a short window.
+    pub fn mark_programmatic(&mut self) {
+        self.programmatic_until = Some(Instant::now() + Duration::from_millis(80));
+        self.last_scroll_time = None;
+        self.scroll_origin = ScrollOrigin::None;
+    }
+
+    /// Whether the user has been idle long enough to apply a split-view sync snap.
+    pub fn is_scroll_idle(&self) -> bool {
+        match self.last_scroll_time {
+            None => true,
+            Some(t) => t.elapsed() >= SPLIT_SCROLL_IDLE,
+        }
+    }
+
+    /// Store raw anchor while the user scrolls the editor pane.
+    pub fn store_raw_anchor(&mut self, line: usize, fraction: f32) {
+        self.stored_raw_anchor = Some((line.max(1), fraction.clamp(0.0, 1.0)));
+    }
+
+    /// Store preview Y while the user scrolls the rendered pane.
+    pub fn store_preview_y(&mut self, y: f32) {
+        self.stored_preview_y = Some(y.max(0.0));
+    }
+
+    /// Take stored anchors after applying sync.
+    pub fn clear_stored_anchors(&mut self) {
+        self.stored_raw_anchor = None;
+        self.stored_preview_y = None;
+    }
+
+    /// Clear split-sync state when the user turns sync off.
+    pub fn reset_on_disable(&mut self) {
+        self.clear_stored_anchors();
+        self.scroll_origin = ScrollOrigin::None;
+        self.last_scroll_time = None;
+        self.programmatic_until = None;
+        self.target_raw_offset = None;
+        self.target_rendered_offset = None;
+        self.clear_animation();
+    }
+
+    pub fn stored_raw_anchor(&self) -> Option<(usize, f32)> {
+        self.stored_raw_anchor
+    }
+
+    pub fn stored_preview_y(&self) -> Option<f32> {
+        self.stored_preview_y
+    }
+
+    /// True when scroll offset is at the top of the document.
+    pub fn is_at_top(scroll_offset: f32) -> bool {
+        scroll_offset < SCROLL_BOUNDARY_PX
+    }
+
+    /// True when scroll offset is at the bottom of the scrollable range.
+    pub fn is_at_bottom(scroll_offset: f32, content_height: f32, viewport_height: f32) -> bool {
+        let max_scroll = (content_height - viewport_height).max(0.0);
+        max_scroll > 0.0 && (max_scroll - scroll_offset) < SCROLL_BOUNDARY_PX
+    }
+
+    /// Record user scroll activity from any source (wheel, scrollbar drag, keys).
+    ///
+    /// Returns `Some(origin)` when a pane moved enough to be treated as the scroll master.
+    pub fn note_scroll_activity(
+        &mut self,
+        raw_offset: f32,
+        preview_offset: f32,
+        wheel_delta_y: f32,
+        mouse_over_raw: bool,
+        mouse_over_preview: bool,
+        bidirectional: bool,
+    ) -> Option<ScrollOrigin> {
+        if self.is_programmatic() {
+            return None;
+        }
+
+        let raw_delta = (raw_offset - self.last_raw_offset).abs();
+        let preview_delta = (preview_offset - self.last_rendered_offset).abs();
+        let wheel = wheel_delta_y.abs() > 0.5;
+        let raw_moved = raw_delta >= SCROLL_POSITION_EPS;
+        let preview_moved = preview_delta >= SCROLL_POSITION_EPS;
+
+        if !wheel && !raw_moved && !preview_moved {
+            return None;
+        }
+
+        let origin = if mouse_over_raw {
+            ScrollOrigin::Raw
+        } else if mouse_over_preview && bidirectional {
+            ScrollOrigin::Rendered
+        } else if raw_moved && (!preview_moved || !bidirectional) {
+            ScrollOrigin::Raw
+        } else if bidirectional && preview_moved {
+            ScrollOrigin::Rendered
+        } else if raw_moved {
+            ScrollOrigin::Raw
+        } else {
+            return None;
+        };
+
+        self.mark_scroll(origin);
+        Some(origin)
+    }
+
+    /// Persist scroll offsets after each frame (for scrollbar drag detection).
+    pub fn track_pane_offsets(&mut self, raw_offset: f32, preview_offset: f32) {
+        self.last_raw_offset = raw_offset;
+        self.last_rendered_offset = preview_offset;
     }
 
     /// Clear the scroll origin (call after sync is complete).
@@ -666,6 +821,71 @@ impl SyncScrollState {
     ///
     /// # Returns
     /// The Y offset in the preview corresponding to this source line.
+    /// Map a source anchor (line + fraction within that line's block) to preview Y.
+    pub fn source_anchor_to_preview_y(
+        source_line: usize,
+        line_fraction: f32,
+        mappings: &[LineMapping],
+    ) -> f32 {
+        let base = Self::source_line_to_preview_y(source_line, mappings);
+        if mappings.is_empty() || source_line == 0 {
+            return base;
+        }
+
+        let result = mappings.binary_search_by(|mapping| {
+            if source_line < mapping.start_line {
+                std::cmp::Ordering::Greater
+            } else if source_line > mapping.end_line {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        if let Ok(idx) = result {
+            let mapping = &mappings[idx];
+            let line_range = mapping.end_line.saturating_sub(mapping.start_line);
+            if line_range > 0 {
+                let line_offset = source_line.saturating_sub(mapping.start_line);
+                let line_progress = (line_offset as f32 + line_fraction) / line_range as f32;
+                return mapping.rendered_y + line_progress.min(1.0) * mapping.rendered_height;
+            }
+        }
+        base
+    }
+
+    /// Map preview Y to a source anchor (line + fraction within block).
+    pub fn preview_y_to_source_anchor(preview_y: f32, mappings: &[LineMapping]) -> (usize, f32) {
+        let line = Self::preview_y_to_source_line(preview_y, mappings);
+        if mappings.is_empty() {
+            return (line.max(1), 0.0);
+        }
+
+        let result = mappings.binary_search_by(|mapping| {
+            let block_bottom = mapping.rendered_y + mapping.rendered_height;
+            if preview_y < mapping.rendered_y {
+                std::cmp::Ordering::Greater
+            } else if preview_y >= block_bottom {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        let fraction = match result {
+            Ok(idx) => {
+                let mapping = &mappings[idx];
+                if mapping.rendered_height <= 0.0 {
+                    0.0
+                } else {
+                    ((preview_y - mapping.rendered_y) / mapping.rendered_height).clamp(0.0, 1.0)
+                }
+            }
+            _ => 0.0,
+        };
+        (line.max(1), fraction)
+    }
+
     pub fn source_line_to_preview_y(source_line: usize, mappings: &[LineMapping]) -> f32 {
         if mappings.is_empty() || source_line == 0 {
             return 0.0;

@@ -12,7 +12,7 @@ Improved the save prompt logic to skip unnecessary prompts for unmodified untitl
 
 ### Quick note workflow (on by default)
 
-When `Settings.quick_note_workflow` is true (the default), `should_prompt_to_save` also returns **false** for all **pathless** tabs (even if modified), so close/quit does not block. See [quick-note-workflow.md](./quick-note-workflow.md).
+When `Settings.quick_note_workflow` is true (the default), `should_prompt_to_save(..., AppExit)` returns **false** for **pathless** tabs so quit does not block; `TabClose` still prompts for modified untitled tabs. See [quick-note-workflow.md](./quick-note-workflow.md).
 
 ### New Methods Added to Tab
 
@@ -28,9 +28,9 @@ pub fn is_empty_untitled(&self) -> bool {
 }
 
 /// Determine if we should prompt to save before closing
-pub fn should_prompt_to_save(&self, settings: &Settings) -> bool {
+pub fn should_prompt_to_save(&self, settings: &Settings, context: SavePromptContext) -> bool {
     // … special tabs, loading, etc. …
-    if settings.quick_note_workflow && self.is_new_file() {
+    if settings.quick_note_workflow && self.is_new_file() && context == SavePromptContext::AppExit {
         return false;
     }
     if !self.is_modified() {
@@ -45,8 +45,8 @@ pub fn should_prompt_to_save(&self, settings: &Settings) -> bool {
 
 ### Updated Methods
 
-- `close_tab()` - Uses `should_prompt_to_save(&self.settings)`
-- `has_unsaved_changes()` - Uses the same for consistency (and exit confirmation)
+- `close_tab()` - Uses `should_prompt_to_save(..., TabClose)`
+- `has_unsaved_changes()` - Uses `should_prompt_to_save(..., AppExit)` for exit confirmation
 
 ## Behavior Matrix
 
@@ -54,7 +54,8 @@ pub fn should_prompt_to_save(&self, settings: &Settings) -> bool {
 |----------|-------------|
 | New file, unmodified (empty) | No |
 | New file, with content | Yes |
-| New file, with content (quick note workflow) | No |
+| New file, with content (quick note workflow), close tab | Yes |
+| New file, with content (quick note workflow), quit app | No |
 | New file, typed then deleted | No |
 | Existing file, unmodified | No |
 | Existing file, modified | Yes |

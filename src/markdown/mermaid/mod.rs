@@ -1850,6 +1850,16 @@ mod tests {
         assert!(center_x("D") < center_x("C"), "D should be left of C");
         assert!(center_x("E") > center_x("C"), "E should be right of C");
 
+        let min_x = layout
+            .nodes
+            .values()
+            .map(|n| n.pos.x)
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            (min_x - 20.0).abs() < 1.0,
+            "layout should start at margin, not centered in available_width; min_x={min_x}"
+        );
+
         assert!(d.pos.y > c.pos.y, "D should be below C");
         assert!(f.pos.y > d.pos.y, "F should be below D");
         assert!(

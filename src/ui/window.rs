@@ -682,7 +682,7 @@ pub fn search_panel_constraints() -> PanelConstraints {
         min_width: 350.0,  // Minimum to show search field + buttons
         max_width: 700.0,  // Don't get too wide
         min_height: 200.0, // Show at least search field + a few results
-        max_height: 600.0, // Don't take up entire screen
+        max_height: 480.0, // Cap height — results scroll inside; no full-screen growth
         margin: 16.0,      // Keep some padding from edges
     }
 }

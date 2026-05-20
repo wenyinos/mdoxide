@@ -77,6 +77,59 @@ pub(crate) fn compute_back_edge_lanes(
     lanes
 }
 
+/// Horizontal padding (left, right) so back-edge side loops are not clipped.
+///
+/// Only adds padding on sides where back-edges actually route; symmetric padding
+/// on both sides left a visible gap when all loops use one side (e.g. FC-83a).
+pub(crate) fn back_edge_horizontal_padding(
+    layout: &FlowchartLayout,
+    direction: FlowDirection,
+) -> (f32, f32) {
+    if layout.back_edges.is_empty() {
+        return (0.0, 0.0);
+    }
+
+    let side_pad = back_edge_loop_padding(layout, direction);
+
+    match direction {
+        FlowDirection::TopDown | FlowDirection::BottomUp => {
+            let node_rects: HashMap<String, Rect> = layout
+                .nodes
+                .iter()
+                .map(|(id, nl)| (id.clone(), Rect::from_min_size(nl.pos, nl.size)))
+                .collect();
+            let graph_bounds = union_rect_bounds(&node_rects.values().copied().collect::<Vec<_>>());
+
+            let mut left = false;
+            let mut right = false;
+            for (from, _) in &layout.back_edges {
+                let Some(from_rect) = node_rects.get(from) else {
+                    continue;
+                };
+                if back_edge_side_sign(from_rect, &graph_bounds, direction) < 0 {
+                    left = true;
+                } else {
+                    right = true;
+                }
+            }
+
+            (
+                if left { side_pad } else { 0.0 },
+                if right { side_pad } else { 0.0 },
+            )
+        }
+        // LR/RL loops run above/below; keep prior symmetric X padding (separate issue).
+        FlowDirection::LeftRight | FlowDirection::RightLeft => (side_pad, side_pad),
+    }
+}
+
+fn back_edge_loop_padding(layout: &FlowchartLayout, direction: FlowDirection) -> f32 {
+    let max_lanes = max_back_edge_lane_count(layout, direction, Vec2::ZERO);
+    BACK_EDGE_LOOP_MARGIN
+        + NODE_OBSTACLE_PADDING
+        + (max_lanes.saturating_sub(1)) as f32 * BACK_EDGE_LANE_SPACING
+}
+
 /// Maximum parallel back-edge lane count (same target, same side).
 pub(crate) fn max_back_edge_lane_count(
     layout: &FlowchartLayout,
@@ -1381,5 +1434,25 @@ mod back_edge_tests {
         let entry = path.last().unwrap().1;
         assert!((entry.x - b_rect.right()).abs() < 0.1);
         assert!((entry.y - b_rect.center().y).abs() < 0.1);
+    }
+
+    #[test]
+    fn fc_83a_back_edge_padding_is_right_only() {
+        let source = r#"graph TD
+    A[Enter Chart Definition] --> B(Preview)
+    B --> C{decide}
+    C --> D[Keep]
+    C --> E[Edit Definition]
+    E --> B
+    D --> F[Save Image and Code]
+    F --> B"#;
+
+        let flowchart = parse_flowchart(source).unwrap();
+        let text_measurer = EstimatedTextMeasurer::new();
+        let layout = layout_flowchart(&flowchart, 800.0, 14.0, &text_measurer);
+
+        let (left, right) = back_edge_horizontal_padding(&layout, FlowDirection::TopDown);
+        assert_eq!(left, 0.0, "FC-83a loops are on the right; no left gutter");
+        assert!(right > 0.0, "right-side loops need clearance padding");
     }
 }

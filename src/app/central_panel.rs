@@ -9,16 +9,16 @@ use super::types::{DeferredFormatAction, HeadingNavRequest};
 use super::FerriteApp;
 use crate::config::{ShortcutCommand, Theme, ViewMode};
 use crate::editor::{
-    cleanup_ferrite_editor, DocumentOutline, EditorWidget, FindReplacePanel, Minimap,
-    SearchHighlights, SemanticMinimap,
+    cleanup_ferrite_editor, show_split_sync_footer, DocumentOutline, EditorWidget,
+    FindReplacePanel, Minimap, SearchHighlights, SemanticMinimap, SplitSyncFooterOutput,
+    SPLIT_SYNC_FOOTER_HEIGHT,
 };
 use crate::markdown::{
     apply_raw_format, cleanup_rendered_editor_memory, get_structured_file_type,
     get_tabular_file_type, CodeExecutionUi, CsvViewer, CsvViewerState, EditorMode, FormattingState,
     MarkdownEditor, MarkdownFormatCommand, TreeViewer, TreeViewerState, WikilinkContext,
 };
-#[allow(unused_imports)]
-use crate::preview::SyncScrollState;
+use crate::preview::{ScrollOrigin, SyncScrollState};
 use crate::state::{FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabContent, TabKind};
 use crate::theme::ThemeColors;
 use crate::ui::{FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction};
@@ -1350,19 +1350,18 @@ impl FerriteApp {
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Sync Scroll Setup (DISABLED - deferred to v0.3.0)
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-                                // Feature disabled until v0.3.0 - ignore settings value
-                                let sync_scroll_enabled = false; // was: self.state.settings.sync_scroll_enabled
+                                let sync_scroll_enabled = self.state.settings.sync_scroll_enabled
+                                    && is_markdown_file_split;
 
-                                // Get or create sync scroll state for this tab
-                                // Use longer debounce to prevent jitter (200ms instead of 16ms)
+                                if !sync_scroll_enabled {
+                                    if let Some(tab) = self.state.active_tab_mut() {
+                                        tab.clear_sync_pending_scroll();
+                                    }
+                                }
+
                                 let sync_state = self.sync_scroll_states
                                     .entry(tab_id)
-                                    .or_insert_with(|| {
-                                        let mut state = SyncScrollState::new();
-                                        // Disable smooth scrolling to reduce feedback loops
-                                        state.set_enabled(sync_scroll_enabled);
-                                        state
-                                    });
+                                    .or_insert_with(SyncScrollState::for_split_view);
                                 sync_state.set_enabled(sync_scroll_enabled);
 
                                 // Get pending scroll offsets for each pane (from previous frame's sync)
@@ -1394,6 +1393,9 @@ impl FerriteApp {
                                 let mut preview_viewport_height: Option<f32> = None;
                                 let mut preview_line_mappings: Vec<crate::markdown::LineMapping> =
                                     Vec::new();
+                                let mut editor_scroll_anchor_line: usize = 1;
+                                let mut editor_scroll_anchor_fraction: f32 = 0.0;
+                                let mut split_sync_footer = SplitSyncFooterOutput::default();
 
                                 // Split left pane is Raw (FerriteEditor) — no
                                 // central-panel undo snapshot needed for it.
@@ -1536,6 +1538,9 @@ impl FerriteApp {
                                     );
                                     editor_line_height = Some(editor_output.line_height);
                                     editor_viewport_height = Some(editor_output.viewport_height);
+                                    editor_scroll_anchor_line = editor_output.scroll_anchor_line;
+                                    editor_scroll_anchor_fraction =
+                                        editor_output.scroll_anchor_fraction;
 
                                     // NOTE: Fold toggle is handled internally by FerriteEditor and synced
                                     // back to Tab in widget.rs. We just need to check if a fold was toggled
@@ -1580,10 +1585,21 @@ impl FerriteApp {
                                 // Uses semantic minimap for markdown, pixel minimap for others
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 if let Some(mm_rect) = minimap_rect {
+                                    let sync_footer_h = if is_markdown_file_split {
+                                        SPLIT_SYNC_FOOTER_HEIGHT
+                                    } else {
+                                        0.0
+                                    };
+                                    let map_h = (mm_rect.height() - sync_footer_h).max(0.0);
+                                    let map_rect = egui::Rect::from_min_size(
+                                        mm_rect.min,
+                                        egui::vec2(mm_rect.width(), map_h),
+                                    );
+
                                     let mut minimap_ui = ui.child_ui(
-                                        mm_rect,
+                                        map_rect,
                                         egui::Layout::top_down(egui::Align::LEFT),
-                                        None
+                                        None,
                                     );
 
                                     // Semantic minimap for markdown files
@@ -1618,6 +1634,27 @@ impl FerriteApp {
                                                 title: minimap_output.scroll_to_title,
                                                 level: minimap_output.scroll_to_level,
                                             });
+                                        }
+
+                                        if sync_footer_h > 0.0 {
+                                            let footer_rect = egui::Rect::from_min_size(
+                                                egui::pos2(mm_rect.min.x, mm_rect.min.y + map_h),
+                                                egui::vec2(mm_rect.width(), sync_footer_h),
+                                            );
+                                            let mut footer_ui = ui.child_ui(
+                                                footer_rect,
+                                                egui::Layout::top_down(egui::Align::LEFT),
+                                                None,
+                                            );
+                                            split_sync_footer = show_split_sync_footer(
+                                                &mut footer_ui,
+                                                sync_scroll_enabled,
+                                                self.state.settings.sync_scroll_bidirectional,
+                                                &t!("settings.preview.split_sync_scroll"),
+                                                &t!("settings.preview.split_sync_scroll_tooltip"),
+                                                &t!("settings.preview.split_sync_bidirectional"),
+                                                &t!("settings.preview.split_sync_bidirectional_tooltip"),
+                                            );
                                         }
                                     } else if
                                         // Pixel minimap for non-markdown files
@@ -1782,6 +1819,9 @@ impl FerriteApp {
                                         }
                                     }
                                 }
+                                if splitter_response.drag_stopped() {
+                                    self.state.mark_settings_dirty();
+                                }
 
                                 // Set resize cursor
                                 if splitter_response.hovered() || splitter_response.dragged() {
@@ -1928,16 +1968,36 @@ impl FerriteApp {
                                 // Viewport-Based Scroll Sync (Task 36)
                                 // Uses binary search + interpolation for smooth, accurate sync
                                 // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                if sync_scroll_enabled && !preview_line_mappings.is_empty() {
-                                    // Get scroll delta to detect active scrolling
-                                    let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
-                                    let is_scrolling = scroll_delta.y.abs() > 0.5;
+                                if split_sync_footer.sync_toggled {
+                                    self.state.settings.sync_scroll_enabled =
+                                        !self.state.settings.sync_scroll_enabled;
+                                    self.state.mark_settings_dirty();
+                                    if !self.state.settings.sync_scroll_enabled {
+                                        if let Some(tab) = self.state.active_tab_mut() {
+                                            tab.clear_sync_pending_scroll();
+                                        }
+                                        if let Some(state) =
+                                            self.sync_scroll_states.get_mut(&tab_id)
+                                        {
+                                            state.reset_on_disable();
+                                        }
+                                    }
+                                }
+                                if split_sync_footer.bidirectional_toggled {
+                                    self.state.settings.sync_scroll_bidirectional =
+                                        !self.state.settings.sync_scroll_bidirectional;
+                                    self.state.mark_settings_dirty();
+                                }
 
-                                    // Determine which pane the mouse is over
+                                if sync_scroll_enabled && !preview_line_mappings.is_empty() {
+                                    let sync_bidirectional =
+                                        self.state.settings.sync_scroll_bidirectional;
+                                    let wheel_delta_y =
+                                        ui.input(|i| i.smooth_scroll_delta.y);
                                     let mouse_pos = ui.input(|i| i.pointer.hover_pos());
                                     let editor_area = egui::Rect::from_min_max(
                                         left_rect.min,
-                                        egui::pos2(splitter_rect.min.x, left_rect.max.y)
+                                        egui::pos2(splitter_rect.min.x, left_rect.max.y),
                                     );
                                     let mouse_over_editor = mouse_pos
                                         .map(|p| editor_area.contains(p))
@@ -1946,65 +2006,118 @@ impl FerriteApp {
                                         .map(|p| right_rect.contains(p))
                                         .unwrap_or(false);
 
-                                    // Get sync state for this tab
+                                    let raw_off = editor_scroll_offset.unwrap_or(0.0);
+                                    let pv_off = preview_scroll_offset.unwrap_or(0.0);
+                                    let ed_ch = editor_content_height.unwrap_or(0.0);
+                                    let ed_vh = editor_viewport_height.unwrap_or(0.0);
+                                    let pv_ch = preview_content_height.unwrap_or(0.0);
+                                    let pv_vh = preview_viewport_height.unwrap_or(0.0);
+
                                     let sync_state = self.sync_scroll_states
                                         .entry(tab_id)
-                                        .or_insert_with(SyncScrollState::new);
+                                        .or_insert_with(SyncScrollState::for_split_view);
 
-                                    if is_scrolling {
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        // Active scrolling: record origin and offset, sync to other pane
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        if mouse_over_editor {
-                                            if let Some(ed_offset) = editor_scroll_offset {
-                                                // Record that editor is the scroll source
-                                                sync_state.mark_scroll(
-                                                    crate::preview::ScrollOrigin::Raw
+                                    if let Some(origin) = sync_state.note_scroll_activity(
+                                        raw_off,
+                                        pv_off,
+                                        wheel_delta_y,
+                                        mouse_over_editor,
+                                        mouse_over_preview,
+                                        sync_bidirectional,
+                                    ) {
+                                        match origin {
+                                            ScrollOrigin::Raw => {
+                                                sync_state.store_raw_anchor(
+                                                    editor_scroll_anchor_line,
+                                                    editor_scroll_anchor_fraction,
                                                 );
-                                                sync_state.update_raw_offset(ed_offset);
-
-                                                // Sync editor ΓåÆ preview (user scrolling editor)
-                                                if let Some(first_line) = editor_first_visible_line {
-                                                    let source_line = first_line.saturating_add(1);
-                                                    let target_y =
-                                                        SyncScrollState::source_line_to_preview_y(
-                                                            source_line,
-                                                            &preview_line_mappings
-                                                        );
-
-                                                    if let Some(tab) = self.state.active_tab_mut() {
-                                                        tab.pending_scroll_offset = Some(target_y);
-                                                    }
-                                                }
                                             }
-                                        } else if mouse_over_preview {
-                                            if let Some(pv_offset) = preview_scroll_offset {
-                                                // Record that preview is the scroll source
-                                                sync_state.mark_scroll(
-                                                    crate::preview::ScrollOrigin::Rendered
-                                                );
-                                                sync_state.update_rendered_offset(pv_offset);
-
-                                                // Sync preview ΓåÆ editor (user scrolling preview)
-                                                if let Some(ed_line_height) = editor_line_height {
-                                                    let source_line =
-                                                        SyncScrollState::preview_y_to_source_line(
-                                                            pv_offset,
-                                                            &preview_line_mappings
-                                                        );
-                                                    let editor_line = source_line.saturating_sub(1);
-                                                    let target_offset =
-                                                        (editor_line as f32) * ed_line_height;
-
-                                                    sync_state.set_raw_target(target_offset);
-                                                }
+                                            ScrollOrigin::Rendered => {
+                                                sync_state.store_preview_y(pv_off);
                                             }
+                                            _ => {}
                                         }
-                                    } else {
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        // Not scrolling: clear origin after debounce to allow next sync
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        sync_state.clear_origin();
+                                    }
+
+                                    sync_state.track_pane_offsets(raw_off, pv_off);
+
+                                    if !sync_state.is_programmatic()
+                                        && sync_state.is_scroll_idle()
+                                    {
+                                        let mut applied = false;
+                                        match sync_state.scroll_origin() {
+                                            ScrollOrigin::Raw => {
+                                                let target_y =
+                                                    if SyncScrollState::is_at_top(raw_off) {
+                                                        Some(0.0)
+                                                    } else if SyncScrollState::is_at_bottom(
+                                                        raw_off, ed_ch, ed_vh,
+                                                    ) {
+                                                        Some((pv_ch - pv_vh).max(0.0))
+                                                    } else if let Some((line, frac)) =
+                                                        sync_state.stored_raw_anchor()
+                                                    {
+                                                        Some(
+                                                            SyncScrollState::source_anchor_to_preview_y(
+                                                                line,
+                                                                frac,
+                                                                &preview_line_mappings,
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+                                                if let Some(y) = target_y {
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_offset = Some(y);
+                                                    }
+                                                    applied = true;
+                                                }
+                                            }
+                                            ScrollOrigin::Rendered if sync_bidirectional => {
+                                                if SyncScrollState::is_at_top(pv_off) {
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_offset = Some(0.0);
+                                                    }
+                                                    applied = true;
+                                                } else if SyncScrollState::is_at_bottom(
+                                                    pv_off, pv_ch, pv_vh,
+                                                ) {
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_offset =
+                                                            Some((ed_ch - ed_vh).max(0.0));
+                                                    }
+                                                    applied = true;
+                                                } else if let Some(pv_y) =
+                                                    sync_state.stored_preview_y()
+                                                {
+                                                    let (line, frac) =
+                                                        SyncScrollState::preview_y_to_source_anchor(
+                                                            pv_y,
+                                                            &preview_line_mappings,
+                                                        );
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_anchor =
+                                                            Some((line, frac));
+                                                    }
+                                                    applied = true;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        if applied {
+                                            sync_state.mark_programmatic();
+                                            sync_state.clear_stored_anchors();
+                                            ui.ctx().request_repaint();
+                                        }
                                     }
                                 }
 
@@ -2089,12 +2202,27 @@ impl FerriteApp {
                                             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                                     }),
                                 );
+                                let sync_on = self.state.settings.sync_scroll_enabled;
                                 if let Some(tab) = self.state.active_tab_mut() {
                                     tab.prepare_undo_snapshot_hashed();
 
+                                    if !sync_on {
+                                        tab.clear_sync_pending_scroll();
+                                    }
+
                                     // Handle scroll sync: check for pending scroll ratio or offset
-                                    let pending_offset = tab.pending_scroll_offset.take();
-                                    let pending_ratio = tab.pending_scroll_ratio.take();
+                                    let pending_offset = if sync_on {
+                                        tab.pending_scroll_offset.take()
+                                    } else {
+                                        tab.pending_scroll_offset = None;
+                                        None
+                                    };
+                                    let pending_ratio = if sync_on {
+                                        tab.pending_scroll_ratio.take()
+                                    } else {
+                                        tab.pending_scroll_ratio = None;
+                                        None
+                                    };
 
                                     // Build wikilink context from current file and workspace
                                     let wl_ctx = WikilinkContext {
@@ -2153,7 +2281,8 @@ impl FerriteApp {
 
                                     // Handle pending scroll to line: convert to offset using FRESH line mappings
                                     // This provides accurate content-based sync using interpolation
-                                    if let Some(target_line) = tab.pending_scroll_to_line.take() {
+                                    if sync_on {
+                                        if let Some(target_line) = tab.pending_scroll_to_line.take() {
                                         if
                                             let Some(rendered_y) =
                                                 Self::find_rendered_y_for_line_interpolated(
@@ -2190,9 +2319,13 @@ impl FerriteApp {
                                             );
                                             ui.ctx().request_repaint();
                                         }
+                                        }
+                                    } else {
+                                        let _ = tab.pending_scroll_to_line.take();
                                     }
 
                                     // Handle pending scroll ratio: convert to offset now that we have content_height
+                                    if sync_on {
                                     if let Some(ratio) = pending_ratio {
                                         let max_scroll = (
                                             editor_output.content_height -
@@ -2211,6 +2344,7 @@ impl FerriteApp {
                                             // Request repaint to apply the offset on next frame
                                             ui.ctx().request_repaint();
                                         }
+                                    }
                                     }
 
                                     // Update selection from focused element (for rendered mode formatting)
@@ -2264,16 +2398,20 @@ impl FerriteApp {
         // Quick File Switcher Overlay (Ctrl+P)
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if self.quick_switcher.is_open() {
-            if let Some(workspace) = &self.state.workspace {
-                let all_files = workspace.all_files();
-                let recent_files = &workspace.recent_files;
+            let workspace = self.state.workspace.clone();
+            if let Some(workspace) = workspace {
+                let files = self.workspace_files_for_search(&workspace);
+                let recent_files = workspace.recent_files;
+                let root_path = workspace.root_path;
+                let index_progress = self.workspace_file_index.progress();
 
                 let output = self.quick_switcher.show(
                     ctx,
-                    &all_files,
-                    recent_files,
-                    &workspace.root_path,
+                    &files,
+                    &recent_files,
+                    &root_path,
                     is_dark,
+                    index_progress,
                 );
 
                 // Handle file selection
@@ -2372,16 +2510,23 @@ impl FerriteApp {
         // Search in Files Panel (Ctrl+Shift+F)
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if self.search_panel.is_open() {
-            if let Some(workspace) = &self.state.workspace {
-                let workspace_root = workspace.root_path.clone();
-                let hidden_patterns = workspace.hidden_patterns.clone();
-                let all_files = workspace.all_files();
+            let workspace = self.state.workspace.clone();
+            if let Some(workspace) = workspace {
+                let files = self.workspace_files_for_search(&workspace);
+                let workspace_root = workspace.root_path;
+                let hidden_patterns = workspace.hidden_patterns;
+                let index_progress = self.workspace_file_index.progress();
 
-                let output = self.search_panel.show(ctx, &workspace_root, is_dark);
+                let output = self.search_panel.show(
+                    ctx,
+                    &workspace_root,
+                    is_dark,
+                    index_progress,
+                );
 
                 // Trigger search when requested
                 if output.should_search {
-                    self.search_panel.search(&all_files, &hidden_patterns);
+                    self.search_panel.search(&files, &hidden_patterns);
                 }
 
                 // Handle navigation to file

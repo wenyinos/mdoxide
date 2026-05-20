@@ -1928,6 +1928,19 @@ impl Default for TabInfo {
     }
 }
 
+impl TabInfo {
+    /// Look up saved tab state for a file path (view mode, scroll, cursor, etc.).
+    pub fn find_for_path<'a>(tabs: &'a [TabInfo], path: &std::path::Path) -> Option<&'a TabInfo> {
+        let target = crate::path_utils::normalize_path(path.to_path_buf());
+        tabs.iter().find(|info| {
+            info.path
+                .as_ref()
+                .map(|p| crate::path_utils::normalize_path(p.clone()))
+                == Some(target.clone())
+        })
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Settings Struct
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2079,6 +2092,9 @@ pub struct Settings {
     // ─────────────────────────────────────────────────────────────────────────
     /// Whether synchronized scrolling between Raw and Rendered views is enabled
     pub sync_scroll_enabled: bool,
+    /// When true, split-view sync follows scroll in both panes; when false, raw → rendered only.
+    #[serde(default = "default_true")]
+    pub sync_scroll_bidirectional: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Export Settings
@@ -2467,8 +2483,8 @@ impl Default for Settings {
             outline_side: OutlinePanelSide::default(),
             outline_width: 300.0,
 
-            // Sync Scrolling (deferred to v0.3.0 - UI removed, feature disabled)
             sync_scroll_enabled: false,
+            sync_scroll_bidirectional: true,
 
             // Export Settings
             last_export_directory: None,
@@ -2612,6 +2628,29 @@ impl Settings {
         Self {
             language: detected_language,
             ..Self::default()
+        }
+    }
+
+    /// Look up persisted tab state for a file (view mode, split ratio, scroll, etc.).
+    pub fn tab_info_for_path(&self, path: &std::path::Path) -> Option<&TabInfo> {
+        TabInfo::find_for_path(&self.last_open_tabs, path)
+    }
+
+    /// Insert or update persisted tab state for a file path.
+    pub fn upsert_tab_info(&mut self, info: TabInfo) {
+        let Some(path) = info.path.clone() else {
+            return;
+        };
+        let target = crate::path_utils::normalize_path(path);
+        if let Some(existing) = self.last_open_tabs.iter_mut().find(|t| {
+            t.path
+                .as_ref()
+                .map(|p| crate::path_utils::normalize_path(p.clone()))
+                == Some(target.clone())
+        }) {
+            *existing = info;
+        } else {
+            self.last_open_tabs.push(info);
         }
     }
 
@@ -3348,6 +3387,40 @@ mod tests {
     fn test_tab_info_default_view_mode() {
         let tab = TabInfo::default();
         assert_eq!(tab.view_mode, ViewMode::Raw); // Default to raw mode
+    }
+
+    #[test]
+    fn test_tab_info_find_for_path() {
+        let path = std::path::PathBuf::from("/docs/note.md");
+        let tabs = vec![TabInfo {
+            path: Some(path.clone()),
+            view_mode: ViewMode::Split,
+            split_ratio: 0.65,
+            ..TabInfo::default()
+        }];
+        let found = TabInfo::find_for_path(&tabs, &path).unwrap();
+        assert_eq!(found.view_mode, ViewMode::Split);
+        assert_eq!(found.split_ratio, 0.65);
+    }
+
+    #[test]
+    fn test_settings_upsert_tab_info() {
+        let path = std::path::PathBuf::from("/a.md");
+        let mut settings = Settings::default();
+        settings.upsert_tab_info(TabInfo {
+            path: Some(path.clone()),
+            view_mode: ViewMode::Split,
+            ..TabInfo::default()
+        });
+        settings.upsert_tab_info(TabInfo {
+            path: Some(path),
+            view_mode: ViewMode::Rendered,
+            split_ratio: 0.7,
+            ..TabInfo::default()
+        });
+        assert_eq!(settings.last_open_tabs.len(), 1);
+        assert_eq!(settings.last_open_tabs[0].view_mode, ViewMode::Rendered);
+        assert_eq!(settings.last_open_tabs[0].split_ratio, 0.7);
     }
 
     #[test]

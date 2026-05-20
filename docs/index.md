@@ -121,7 +121,7 @@
 | [WYSIWYG Interactions](./technical/markdown/wysiwyg-interactions.md) | WYSIWYG user interaction patterns and behaviors |
 | [Editable Widgets](./technical/markdown/editable-widgets.md) | Standalone editable widgets for headings, paragraphs, lists |
 | [Editable Code Blocks](./technical/markdown/editable-code-blocks.md) | Syntax-highlighted code blocks with edit mode, language selection |
-| [Code block Run](./technical/markdown/code-block-run.md) | Run control in rendered/split preview: background worker, ANSI inline output (CRLF-safe on Windows), ✓/✗ exit, insert-as-fenced-block, **Stop** + hard timeout |
+| [Code block Run](./technical/markdown/code-block-run.md) | Run control in rendered/split preview: background worker, ANSI inline output (CRLF-safe on Windows), ✓/✗ exit, insert-as-fenced-block, **Stop** + hard timeout; § Known limitations + link to manual test file |
 | [Code execution consent dialog](./technical/markdown/code-execution-consent-dialog.md) | First-run modal when clicking **Run** before consent; queues payload; Settings toggle skips modal |
 | [Code block Run cancellation & timeout](./technical/markdown/code-block-cancellation.md) | `RunStatus::Cancelled`, atomic cancel token, Stop button, `Timed out after Ns` / `Stopped by user` labels, reader-thread shutdown |
 | [Editable Links](./technical/markdown/editable-links.md) | Hover-based link editing with popup menu, autolink support |
@@ -183,6 +183,7 @@
 | [Tab System](./technical/files/tab-system.md) | Tab data structure, tab bar UI, close buttons, unsaved changes dialog |
 | [Recent Files](./technical/files/recent-files.md) | Recent files menu in status bar |
 | [Workspace Folder Support](./technical/files/workspace-folder-support.md) | Folder workspace mode, file tree, quick switcher, search in files, file watching |
+| [Workspace File Index](./technical/files/workspace-file-index.md) | Background full-tree index for Ctrl+P and Ctrl+Shift+F (independent of lazy file tree) |
 | [Session Persistence](./technical/files/session-persistence.md) | Crash-safe session state, tab restoration, recovery dialog, lock file mechanism |
 | [Auto-Save](./technical/files/auto-save.md) | Configurable auto-save with temp file backups, toolbar toggle, recovery dialog |
 | [Git Integration](./technical/files/git-integration.md) | Branch display in status bar, file tree Git status badges, git2 integration |
@@ -323,7 +324,7 @@
 | [View Mode Persistence](./technical/view-mode-persistence.md) | Per-tab view mode storage, session restoration, backward compatibility |
 | [Document Statistics](./technical/document-statistics.md) | Statistics panel tab with word count, reading time, heading/link/image counts |
 | [Text Statistics](./technical/text-statistics.md) | Word, character, line counting for status bar |
-| [Sync Scrolling](./technical/sync-scrolling.md) | Bidirectional scroll sync between Raw and Rendered views |
+| [Sync Scrolling](./technical/sync-scrolling.md) | Split-view live sync (minimap **Sync** / **2-way**), Ctrl+E mode-toggle preservation, content anchors |
 | [Configurable Line Width](./technical/configurable-line-width.md) | MaxLineWidth setting (Off/80/100/120/Custom), text centering in all views |
 | [Branding](./branding.md) | Icon design, asset generation, platform integration guidelines |
 

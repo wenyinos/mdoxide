@@ -509,6 +509,85 @@ const MIN_DENSITY_OPACITY: f32 = 0.15;
 /// Maximum density bar opacity
 const MAX_DENSITY_OPACITY: f32 = 0.6;
 
+/// Footer height under the split-view semantic minimap (scroll sync toggles).
+pub const SPLIT_SYNC_FOOTER_HEIGHT: f32 = 32.0;
+
+/// Result from the split-view sync footer controls.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SplitSyncFooterOutput {
+    /// Main Sync button was clicked (toggle sync on/off).
+    pub sync_toggled: bool,
+    /// 2-way sub-toggle was clicked (bidirectional on/off).
+    pub bidirectional_toggled: bool,
+}
+
+/// Split-view sync footer: main Sync toggle + optional 2-way sub-toggle.
+pub fn show_split_sync_footer(
+    ui: &mut Ui,
+    enabled: bool,
+    bidirectional: bool,
+    label: &str,
+    tooltip: &str,
+    bidirectional_label: &str,
+    bidirectional_tooltip: &str,
+) -> SplitSyncFooterOutput {
+    let mut out = SplitSyncFooterOutput::default();
+    ui.allocate_ui_with_layout(
+        Vec2::new(ui.available_width(), SPLIT_SYNC_FOOTER_HEIGHT),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
+            let icon = if enabled { "🔗" } else { "⛓" };
+            let sync_btn = egui::Button::new(
+                egui::RichText::new(format!("{icon} {label}"))
+                    .size(11.0)
+                    .color(if enabled {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        ui.visuals().weak_text_color()
+                    }),
+            )
+            .fill(if enabled {
+                ui.visuals().widgets.active.bg_fill
+            } else {
+                ui.visuals().widgets.inactive.bg_fill
+            });
+            if ui
+                .add(sync_btn)
+                .on_hover_text(tooltip)
+                .clicked()
+            {
+                out.sync_toggled = true;
+            }
+
+            if enabled {
+                let two_way = egui::Button::new(
+                    egui::RichText::new(bidirectional_label)
+                        .size(10.0)
+                        .color(if bidirectional {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().weak_text_color()
+                        }),
+                )
+                .fill(if bidirectional {
+                    ui.visuals().widgets.active.weak_bg_fill
+                } else {
+                    ui.visuals().widgets.inactive.bg_fill
+                });
+                if ui
+                    .add(two_way)
+                    .on_hover_text(bidirectional_tooltip)
+                    .clicked()
+                {
+                    out.bidirectional_toggled = true;
+                }
+            }
+        },
+    );
+    out
+}
+
 /// Output from the semantic minimap widget
 #[derive(Debug, Clone, Default)]
 pub struct SemanticMinimapOutput {

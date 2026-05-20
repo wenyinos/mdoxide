@@ -110,6 +110,8 @@ When crash recovery is detected with unsaved changes, a modal dialog appears off
 - **Restore Session**: Restores all tabs from the previous session, including recovered unsaved content
 - **Start Fresh**: Discards the recovery data and starts with an empty editor
 
+If Ferrite was launched with file paths (e.g. double-click while the app was closed), those paths are **deferred** until the user answers the dialog, then opened afterward (existing tabs with the same path are focused, not duplicated).
+
 ## Conflict Detection
 
 The system tracks file modification time to detect conflicts:

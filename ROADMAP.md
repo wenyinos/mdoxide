@@ -5,7 +5,7 @@
 ### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
 **Status:** Feature scope for v0.3.0 is **implemented** on `egui-0.34-upgrade` (egui **0.34.2** stack, export, code run, Mermaid wave, accent, hub polish, quick-note workflow, and listed bugfixes). **Remaining before tag:** final QA on macOS / Linux (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping, release artifacts, and `git tag v0.3.0`. Windows 0.34 delta regression passed — see [`v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md) §0.34 delta.
 
-**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), optional **quick note workflow** for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), **user-configurable Ferrite accent**, **Phosphor icons**, and **eframe / egui 0.34.2** (skrifa text backend, Popup/Tooltip APIs, HarfRust validation). See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below.
+**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), optional **quick note workflow** for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), **split-view scroll sync** (content-based anchors, optional 2-way), **user-configurable Ferrite accent**, **Phosphor icons**, **full-workspace file index** for Ctrl+P / Ctrl+Shift+F, and **eframe / egui 0.34.2** (skrifa text backend, Popup/Tooltip APIs, HarfRust validation). See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below.
 
 > **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). Remaining work that didn't fit v0.3.0 was split into v0.3.1 / v0.3.2.
 
@@ -21,7 +21,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **Wrapped line scroll stuttering** - Scrolling through documents with many word-wrapped lines still shows micro-stuttering. Likely related to per-line galley layout cost or height cache granularity. Needs further investigation.
 
 ### Deferred
-- [ ] **Bidirectional scroll sync** - Editor-Preview scroll synchronization in Split view. Requires deeper investigation into viewport-based line tracking.
+- [x] **Bidirectional scroll sync** — **Shipped in v0.3.0.** Split-view live sync with line+fraction anchors, idle snap (~120ms), top/bottom boundaries, minimap footer **Sync** / **2-way**, and mode-toggle (Ctrl+E) hybrid sync. See [`docs/technical/sync-scrolling.md`](docs/technical/sync-scrolling.md).
 - [ ] **New file templates** - Optional frontmatter templates when creating new markdown files. Deferred from v0.2.7.
 
 ### Platform & Distribution
@@ -42,8 +42,11 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 
 ### Rendered View Limitations
 - [x] **Slow rendering on large documents** ([#105](https://github.com/OlaProeis/Ferrite/issues/105)) - Fixed in v0.2.8. AST caching, viewport culling, block height cache, and lazy estimation bring large-file rendered view to usable performance.
-- [x] **Mermaid flowchart edges cross node boxes** ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a) — **Landed for v0.3.0.** Obstacle-aware forward routing, orthogonal back-edge side channels at `BACK_EDGE_LOOP_MARGIN = 24 px`, painter sizing from actual node/subgraph bounds (no clipped loops), parallel back-edge lanes (`E → B` and `F → B` no longer merge), inner `E → B` exits top-outer corner and rises vertically along the source edge before entering Preview at side-centre, and `{decide}` snaps under Preview via alone-on-layer barycenter shift. Same-layer sibling overlap (coffee-machine `C/H`, `D/G`) fixed via `resolve_layer_overlaps` safety net. Docs: [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md), [`flowchart-layout-algorithm.md`](docs/technical/mermaid/flowchart-layout-algorithm.md). **FC-83b** (`fa:…` Font Awesome labels) and `linkStyle interpolate basis` curves remain open — see parity matrix.
+- [x] **Mermaid flowchart edges cross node boxes** ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a) — **Landed for v0.3.0.** Obstacle-aware forward routing, orthogonal back-edge side channels at `BACK_EDGE_LOOP_MARGIN = 24 px`, painter sizing from actual node/subgraph bounds (no clipped loops), asymmetric back-edge padding (loop clearance only on the side that needs it), TD/BT layer centering on `max_cross_size` (fixes large left gap / right-shifted diagrams in wide containers), parallel back-edge lanes (`E → B` and `F → B` no longer merge), inner `E → B` exits top-outer corner and rises vertically along the source edge before entering Preview at side-centre, and `{decide}` snaps under Preview via alone-on-layer barycenter shift. Same-layer sibling overlap (coffee-machine `C/H`, `D/G`) fixed via `resolve_layer_overlaps` safety net. Docs: [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md), [`flowchart-layout-algorithm.md`](docs/technical/mermaid/flowchart-layout-algorithm.md). **FC-83b** (`fa:…` Font Awesome labels) and `linkStyle interpolate basis` curves remain open — see parity matrix.
 - [ ] **Click-to-edit cursor drift on mixed-format lines** - When clicking formatted text in rendered/split view, cursor may land 1-5 characters off on long lines with mixed formatting.
+
+### Executable Code Blocks (v0.3.0)
+Core Run (shell + Python, inline output, timeout, **Stop**) works for typical use; manual checklist: [`test_md/test_code_execution.md`](test_md/test_code_execution.md). Remaining edge cases (Windows `bash` without Git Bash, `sh`/`zsh` fallback, run state keyed by line number, copy/insert stderr format) are documented in [`code-block-run.md`](docs/technical/markdown/code-block-run.md) § Known limitations. **Fixes: v0.3.1** — see [Planned Features → v0.3.1 → Executable code blocks — hardening](#executable-code-blocks--hardening--polish).
 
 ---
 
@@ -88,7 +91,8 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 - [x] **State diagram enhancements** — Fork/join + history pseudostates; see [`docs/technical/mermaid/state-pseudostates-fork-join-history.md`](docs/technical/mermaid/state-pseudostates-fork-join-history.md).
 - [x] **Flowchart edge routing parity** ([#83](https://github.com/OlaProeis/Ferrite/issues/83), FC-83a) — Pre-tag rendering polish on native egui flowcharts (not mmdr/SVG). Repro: [`test_md/test_mermaid_issue_83.md`](test_md/test_mermaid_issue_83.md).
   - [x] Forward edges detour around node obstacles via `route_forward_edge` → `try_orthogonal_route` → `route_via_side_corridor`; helpers in [`flowchart/utils.rs`](src/markdown/mermaid/flowchart/utils.rs). Back-edges use fixed-margin side channels (not ±40 px beziers).
-  - [x] Painter allocation from actual node bounds (`layout_content_size`) + horizontal padding so feedback loops are not clipped.
+  - [x] Painter allocation from actual node bounds (`layout_content_size`) + asymmetric horizontal padding (`back_edge_horizontal_padding`) so feedback loops are not clipped without a spurious left gutter.
+  - [x] TD/BT horizontal alignment — layers centered on `max_cross_size` (not `available_width`); post-layout bounds normalized to margin (fixes FC-83a right-shift / left gap in diagram frame).
   - [x] Parallel back-edge lanes (`BACK_EDGE_LANE_SPACING = 36 px`) — separate loops for `E → B` vs `F → B` via `compute_back_edge_lanes`.
   - [x] Inner `E → B` routing: top-outer-corner exit + vertical-first along the source's outer edge into Preview side-centre (`try_inner_back_edge_direct_path`). Pinned by `fc_83a_inner_e_to_b_goes_up_first`.
   - [x] Layout: snap `{decide}` to the children's barycenter when it is alone on its layer (`sugiyama::align_branch_nodes_to_children`); same-layer sibling overlap (e.g. coffee-machine `C/H`, `D/G`) cleared by the `resolve_layer_overlaps` safety net. Pinned by `test_layout_coffee_machine_all_nodes`.
@@ -96,10 +100,17 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
   - *Out of scope here:* `linkStyle interpolate basis` parsing (P2), Font Awesome labels (FC-83b). See [`docs/technical/mermaid/mermaid-parity-matrix.md`](docs/technical/mermaid/mermaid-parity-matrix.md).
 
 #### Files & session
-- [x] **Quick note workflow** (opt-in, **Settings → Files**) — Pathless tabs close without save prompts; modified untitled tabs no longer block quit; double-click tab to rename; session recovery keeps scratch buffers (clean exit preserves `recovery/` content). See [`docs/technical/config/quick-note-workflow.md`](docs/technical/config/quick-note-workflow.md).
+- [x] **Quick note workflow** (opt-in, **Settings → Files**) — Modified untitled tabs no longer block quit; closing an individual untitled tab with content still prompts (Save / Don't save / Cancel); empty untitled tabs close silently; double-click tab to rename; session recovery keeps scratch buffers (clean exit preserves `recovery/` content). See [`docs/technical/config/quick-note-workflow.md`](docs/technical/config/quick-note-workflow.md).
+- [x] **Crash recovery + cold-start file open** — Double-click / “Open with” paths after a crash no longer lost when choosing **Restore session**; startup paths defer until the recovery dialog is answered, then open (dedupe by path). See [`docs/technical/files/session-persistence.md`](docs/technical/files/session-persistence.md).
+- [x] **Workspace file index** — Ctrl+P and Ctrl+Shift+F search the **full workspace** via background `walkdir` (not limited to expanded sidebar folders). Incremental batches + progress UI on large trees; rebuild on create/delete/rename and tree refresh. See [`docs/technical/files/workspace-file-index.md`](docs/technical/files/workspace-file-index.md).
 
 #### Localization
 - [x] **Spanish UI language** — **Español** in Settings / Welcome selector; `locales/es.yaml`; `Language::Spanish` + `es` / `es-*` system locale detection.
+
+#### Editor — scroll sync (v0.3.0)
+- [x] **Split-view live sync** — Raw + rendered preview stay aligned while scrolling (markdown split only). Content-based **line + fraction** anchors (not scroll %); idle snap after ~120ms; wheel, scrollbar drag, and keyboard; hybrid top/bottom (5px) vs middle mapping. Controls on semantic minimap footer: **Sync** (master) and **2-way** (preview → raw, default on). Settings: `sync_scroll_enabled` (default off), `sync_scroll_bidirectional`. See [`docs/technical/sync-scrolling.md`](docs/technical/sync-scrolling.md).
+- [x] **Mode-toggle sync (Ctrl+E)** — Re-enabled with same hybrid boundaries; Raw↔Rendered uses interpolated line mappings; stale pending scroll cleared when sync is off.
+- [x] **Rendered scroll stability** — Height fixup when viewport culling remeasures blocks; no ghost snaps from pending offsets when sync is disabled.
 
 #### Bugfixes & polish (v0.3.0 bucket)
 - [x] **Consecutive fenced code blocks** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Split/rendered view visibility; see [`docs/technical/markdown/consecutive-fenced-blocks-fix.md`](docs/technical/markdown/consecutive-fenced-blocks-fix.md).
@@ -110,7 +121,12 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 - [x] **Frontmatter panel stale on tab switch** — Per-frame cache regression introduced during v0.3.0 perf pass. `update_from_content_versioned` keyed on `content_version` alone, which collides across tabs (each tab's counter starts at `0`); the panel showed "No frontmatter detected" on files that had it, kept the previous tab's fields visible after switching, and could splice the previous tab's body into the active file when **Add frontmatter** was clicked. Fixed by keying the cache on `(tab_id, content_version)`; regression tests added. See [`docs/technical/ui/frontmatter-panel.md`](docs/technical/ui/frontmatter-panel.md) (*Caching*).
 - [x] **Ribbon toolbar icon-only** — Removed collapse/expand toggle and section labels; fixed 28px icon bar. Save/Export menus unchanged. See [`src/ui/ribbon.rs`](src/ui/ribbon.rs).
 - [x] **Undo granularity (raw typing)** — Removed 500 ms time-merge in `EditHistory`; each recorded diff is its own undo step so Ctrl+Z no longer reverts an entire fast-typing burst. See [`docs/technical/editor/undo-redo.md`](docs/technical/editor/undo-redo.md), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
-- [x] **Quick file switcher (Ctrl+P) search** — Token-based matching on `-` / `_` / path separators; search pool = indexed tree + recent files; match quality no longer drowned by recent-file boost or full-path subsequence noise. See [`src/ui/quick_switcher.rs`](src/ui/quick_switcher.rs), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
+- [x] **Quick file switcher (Ctrl+P) search** — Token-based matching on `-` / `_` / path separators; search pool = **full workspace index** + recent files; match quality no longer drowned by recent-file boost or full-path subsequence noise. See [`src/ui/quick_switcher.rs`](src/ui/quick_switcher.rs), [`docs/technical/files/workspace-file-index.md`](docs/technical/files/workspace-file-index.md).
+- [x] **Quick note: save prompt on tab close** — Modified untitled tabs with content again show the unsaved-changes dialog when closed (× / Ctrl+W); app exit still skips the dialog when quick-note workflow is on. `SavePromptContext` splits tab-close vs quit logic in `Tab::should_prompt_to_save`. See [CHANGELOG.md](CHANGELOG.md) § Unreleased.
+- [x] **Per-document view mode persistence** — Raw / Split / Rendered (and split ratio) for a file are restored when reopening after tab close or across restarts; global **Default view mode** applies only to files with no saved entry. `last_open_tabs` upsert on close + merge on save; `open_file` / background load read saved prefs. See [`docs/technical/view-mode-persistence.md`](docs/technical/view-mode-persistence.md), [CHANGELOG.md](CHANGELOG.md) § Unreleased.
+- [x] **Mermaid flowchart horizontal alignment (FC-83a)** ([#83](https://github.com/OlaProeis/Ferrite/issues/83)) — TD/BT diagrams with back-edges no longer render with a large empty strip on the left; Sugiyama centers layers on `max_cross_size`, layout bounds normalize to margin, back-edge painter padding is side-specific. Repro: [`test_md/test_mermaid_issue_83.md`](test_md/test_mermaid_issue_83.md). See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
+- [x] **Multi-cursor copy / cut** — Copy and cut with multiple selections now put every selected range on the clipboard (newline-separated), not only the primary cursor. See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
+- [x] **CSV rendered view cell overflow** — Long values no longer spill past column bounds before ellipsis; pixel-accurate clipping via `Label::truncate()` in `render_row_cells`. See [`docs/technical/viewers/csv-viewer.md`](docs/technical/viewers/csv-viewer.md), [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
 
 #### UI iconography — Phosphor Icons
 - [x] **Phosphor icon font integration** — Added `egui-phosphor = "0.9.0"` (pinned for egui 0.31); font registration in [`src/fonts.rs`](src/fonts.rs); helpers in [`src/ui/icons.rs`](src/ui/icons.rs) and re-exports in [`src/ui/phosphor_icons.rs`](src/ui/phosphor_icons.rs).
@@ -126,14 +142,16 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 - [x] **Hub visual redesign** - Card-based layout matching the rest of the app's design language; themed colors derived from `ui.visuals()`, bordered priority chips, prominent centered Pomodoro timer (34 px monospace), reorder/delete affordances that recede until hover.
 - [x] **`×` re-docks instead of hiding** - Closing the floating Productivity Hub via the title-bar `×` now routes back to the docked sidebar tab (mirrors the explicit `⤵ Dock` button), so the panel can never become unreachable mid-session without a restart or hotkey.
 - [x] **Stable docked panel resizing** - Productivity Hub no longer auto-expands the sidebar or "snaps back" when the user drags the resize handle. Root cause was egui's `SidePanel::PanelState` storing the content's `min_rect`, so any wide widget permanently grew the panel. Fix: lock the outer footprint via `allocate_exact_size` and render content inside a clipped `child_ui` whose allocations don't propagate to the parent.
-- [x] **Detached window stops auto-growing** - Floating Productivity Hub opens at the current dock width (`default_size`) and is capped via `max_size`, so the auto-resize loop in `egui::containers::Resize` (`desired_size = max(desired, last_content_size)`) cannot run away. Notes textarea bound via `desired_width(ui.available_width())` instead of `f32::INFINITY`.
+- [x] **Detached window stops auto-growing** - Floating Productivity Hub opens at the current dock width (`default_size`); wide content is clipped inside a scrollable `child_ui` so `Resize` cannot grow the window each frame; user width/height limits are viewport-based only (removed the old 560px max-width floor that snapped the panel back when dragged narrow).
+- [x] **Search in Files — snappy panel size** - Ctrl+Shift+F no longer animates vertically to near full-window height as matches load; results scroll inside a fixed region (max 480px, default 320px); window fade disabled. Same root cause as the hub: egui `desired_size = max(desired, last_content_size)`.
 - [x] **Sidebar scrollbar/resize cursor flicker** - Increased `style.spacing.scroll.bar_outer_margin` to 6 px so vertical scrollbars no longer overlap the side panel resize hit zone (fixes the rapid cursor flicker between resize and normal pointer at the sidebar edge).
+- [ ] **Productivity Hub — native OS pop-out window** - Detached hub remains an in-app `egui::Window` (cannot move onto a second monitor outside Ferrite). Follow-up: second viewport like integrated terminal pop-out (`show_viewport_immediate`); scoped for v0.3.1+.
 
 ---
 
-### v0.3.1 - LSP, Embeds, GitHub HTML Parity & Mermaid (Heavy)
+### v0.3.1 - LSP, Embeds, GitHub HTML Parity, Mermaid (Heavy) & CSV Editing
 
-**Theme:** Ship LSP for real, land the exploratory webview features, reach GitHub-style HTML parity, and tackle the Mermaid items that need real engineering effort.
+**Theme:** Ship LSP for real, land the exploratory webview features, reach GitHub-style HTML parity, tackle the Mermaid items that need real engineering effort, and enable cell editing in the CSV rendered view.
 
 #### LSP Integration (All 4 Phases) — Drop the feature flag
 *Deferred from v0.2.8: Phase 1–2 implementation had high memory usage (rust-analyzer ~3.8 GB) and no diagnostics panel to surface warnings. Code remains in-tree behind the `lsp` feature flag; this release fixes it and ships it.*
@@ -174,6 +192,42 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
   - Comment-based position hints: `%% @pos <node_id> <x> <y>`
   - Drag-to-reposition in rendered view with source auto-update
   - Export option to strip layout hints ("Export clean")
+
+#### Memory & Runtime — Loaded Modules Panel
+*Context: CJK and complex-script fonts load lazily at first use but stay session-pinned (no unload today — same one-way atomic flags as v0.2.6 CJK lazy loading; LSP idle shutdown is the only existing “unload” pattern). Opening multi-script test files can add ~80 MB that persists after tab close. This panel makes that visible and optionally reversible.*
+
+**Phase 1 — Stats tab visibility (read-only)**
+- [ ] **Runtime section in Stats panel** — New block at the bottom of the right-side **Stats** tab (app-global, not per-document): which CJK families (KR/JP/SC/TC) and complex-script families (Arabic, Bengali, Devanagari, Thai, Hebrew, Tamil, Georgian, Armenian, Ethiopic, Other Indic, Southeast Asian) are loaded; Mermaid diagram cache size; LSP server status; terminal panel visibility / session count.
+- [ ] **`RuntimeModulesInfo` snapshot** — Aggregate from `fonts::get_loaded_cjk_fonts()`, new `get_loaded_complex_script_fonts()`, `mermaid::get_cache_stats()`, LSP status map, terminal manager.
+
+**Phase 2 — Manual unload controls (opt-in)**
+- [ ] **Per-family font unload** — `unload_cjk_script` / `unload_complex_script` in `fonts.rs`: clear atomic flag, rebuild `FontDefinitions`, `bump_font_generation()`, invalidate shaped/line caches. Disable button when an open tab or UI language still needs that script; confirm dialog before unload (tofu until reload).
+- [ ] **Service actions** — Clear Mermaid cache (`clear_diagram_cache()`), stop LSP server, close terminal panel / kill PTY sessions.
+- [ ] **Docs** — Note that OS working set may not drop immediately (mimalloc); unload is best-effort for session RAM hygiene.
+
+#### Data Viewers — CSV Rendered Editing
+*Context: CSV/TSV **Rendered** view is read-only today (painted cells + tooltips); **Raw** mode already supports full text editing via FerriteEditor. Tree viewer and markdown `EditableTable` provide proven edit→serialize→`tab.content` + undo patterns; `csv` crate parsing is in-tree — writing back is the main gap.*
+
+**MVP (v0.3.1)**
+- [ ] **Cell value editing in Rendered view** — Double-click (or click-to-focus) a cell → inline `TextEdit` overlay; Enter commits, Escape cancels. Mirror `TreeViewer` integration: `&mut tab.content`, `prepare_undo_snapshot_hashed`, `output.changed` → undo stack.
+- [ ] **CSV serialization** — `serialize_csv` via `csv::Writer` (RFC 4180 quoting, respect delimiter + header settings).
+- [ ] **Small files only (<1 MB full-parse path)** — Edit against cached `CsvData`; invalidate Blake3-guarded caches on commit. Large lazy-parsed files show “edit in Raw view” (same class of banner as tree viewer).
+
+**Follow-ups (same release if time, else v0.3.2)**
+- [ ] **Tab / Shift+Tab between cells** — Reuse deferred-commit + `lock_focus` patterns from [`EditableTable`](docs/technical/markdown/editable-tables.md) / [`table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md).
+- [ ] **Add/remove rows & columns** — Toolbar controls; structural changes commit immediately.
+- [ ] **Large-file rendered editing** — Row-level patch or load-on-first-edit; architectural follow-up.
+
+Docs: extend [`docs/technical/viewers/csv-viewer.md`](docs/technical/viewers/csv-viewer.md) when implemented.
+
+#### Executable Code Blocks — Hardening & Polish
+*Context: v0.3.0 shipped Run for shell + Python (opt-in, consent, inline ANSI output, timeout, **Stop**). Manual regression passed on Windows ([`test_md/test_code_execution.md`](test_md/test_code_execution.md)). Items below are edge cases and polish — not v0.3.0 blockers. Documented limitations: [`docs/technical/markdown/code-block-run.md`](docs/technical/markdown/code-block-run.md) § Known limitations.*
+
+- [ ] **Windows `bash` / `shell` fence fallback** — When `bash` is not in PATH, stop reusing bash source for `.ps1` / `.bat` temp files; either fail fast with a clear message (“install Git Bash or use a `powershell` fence”) or translate/re-dispatch per interpreter.
+- [ ] **`sh` / `zsh` interpreter fallback** — Extend `shell_interpreters` with a sensible platform chain (e.g. `sh` → `bash` on Windows; document Unix expectations for `zsh`).
+- [ ] **Stable run-state identity** — Key inline output / `RunHandle` by block content hash or AST node id, not `start_line` alone, so edits above the fence do not orphan output.
+- [ ] **Running-with-no-output UX** — Show a “waiting for output…” placeholder in the inline panel while `RunStatus::Running` and both streams are empty.
+- [ ] **Copy / Insert stderr labelling** — Prefix stderr in clipboard and ` ```output ` insertion to match the on-screen `stderr` section (or offer a toggle).
 
 #### Platform & Distribution
 **Windows**
@@ -318,19 +372,22 @@ Surfaced by Task 58's cross-platform regression matrix on Win10 (proxy for Win11
 ## Recently Completed ✅
 
 ### v0.3.0 (target: May 2026) — platform, export, run, diagrams *(pending version tag)*
-Work listed here is **implemented on `main`**; see **[Unreleased] — v0.3.0** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list (excluding in-progress Mermaid FC-83a layout polish). Highlights:
+Work listed here is **implemented on `main`**; see **[0.3.0]** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list. Highlights:
 - **eframe / egui 0.31.1** platform bump (Tasks 57–58; regression matrix doc; Windows proxy pass complete).
 - **PDF export** (krilla + krilla-svg) and **print preview** (temp PDF → viewer tab).
 - **Themed HTML export** with options dialog and Mermaid as SVG.
 - **Executable fenced code blocks** — Run, shell/Python, ANSI output, timeout + Stop, first-run consent, Settings (opt-in).
-- **Quick note workflow** (opt-in) and **Spanish** UI language.
+- **Quick note workflow** (opt-in; quit without save dialog, tab close still prompts when modified) and **Spanish** UI language.
 - **Mermaid first wave** — insert templates, F1 syntax help, inline validation, flowchart shapes/style, state fork/join + history.
-- **Mermaid FC-83a (partial, [#83](https://github.com/OlaProeis/Ferrite/issues/83))** — flowchart obstacle routing, back-edge side channels, parallel lanes for feedback loops; doc [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md). Branch spacing / E→B path shape and `{decide}` centering still open.
-- **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar).
+- **Mermaid FC-83a ([#83](https://github.com/OlaProeis/Ferrite/issues/83))** — flowchart obstacle routing, back-edge side channels, parallel lanes, inner `E → B` path, branch-parent snap, TD/BT horizontal alignment fix (no left-gap / right-shift in wide containers); docs [`flowchart-edge-obstacle-routing.md`](docs/technical/mermaid/flowchart-edge-obstacle-routing.md), [`flowchart-layout-algorithm.md`](docs/technical/mermaid/flowchart-layout-algorithm.md). **Still open:** FC-83b Font Awesome labels, `linkStyle interpolate basis` curves (parity matrix).
+- **Split-view scroll sync** — minimap footer **Sync** / **2-way**, content anchors, mode-toggle (Ctrl+E) preservation; docs [`sync-scrolling.md`](docs/technical/sync-scrolling.md).
+- **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar, snappy detached window).
+- **Search in Files** — fixed-height panel; no content-driven vertical growth.
+- **Workspace file index** — Ctrl+P and Ctrl+Shift+F search all files under the open folder (background walk + progress on large trees); see [`workspace-file-index.md`](docs/technical/files/workspace-file-index.md).
 - **Phosphor Icons** — unified icon font across app chrome, preview widgets, and data viewers; locale strings deduplicated where icons are rendered in code.
 - **Ribbon toolbar** — always icon-only (collapse toggle and section labels removed).
 - **Undo granularity (raw mode)** — per-keystroke Ctrl+Z steps (500 ms merge removed).
-- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), table cell focus after typing (same/cross-table), frontmatter panel stale on tab switch, quick file switcher (Ctrl+P) token/recent-file search, Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
+- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), table cell focus after typing (same/cross-table), frontmatter panel stale on tab switch, crash recovery + cold-start file open, **workspace file index** (Ctrl+P / search in collapsed folders), quick file switcher (Ctrl+P) token/recent-file search, quick note save prompt on untitled tab close ([CHANGELOG](CHANGELOG.md) § Unreleased), per-document view mode restore on reopen ([CHANGELOG](CHANGELOG.md) § Unreleased), Search in Files / detached Productivity Hub panel growth & resize snap ([CHANGELOG](CHANGELOG.md) § 0.3.0 Fixed), multi-cursor copy/cut ([CHANGELOG](CHANGELOG.md) § 0.3.0 Fixed), CSV rendered view cell overflow ([CHANGELOG](CHANGELOG.md) § 0.3.0 Fixed), Mermaid flowchart horizontal alignment (FC-83a), Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
 
 ### v0.2.9 (Apr 2026) - Hotfix Release
 Hotfix for four critical v0.2.8 regressions. No new features.

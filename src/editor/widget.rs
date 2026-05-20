@@ -137,8 +137,12 @@ pub struct EditorOutput {
     pub first_visible_line: usize,
     /// Vertical scroll offset within the first visible line (pixels).
     pub scroll_offset_y: f32,
-    /// Total scroll offset in pixels (first_visible_line * line_height + scroll_offset_y).
+    /// Total scroll offset in pixels (wrap-aware absolute Y from ViewState).
     pub scroll_offset: f32,
+    /// Top-of-viewport source line (1-indexed) for scroll sync anchors.
+    pub scroll_anchor_line: usize,
+    /// Fraction within the anchor line (0..1) for sub-line alignment.
+    pub scroll_anchor_fraction: f32,
     /// Line height in pixels.
     pub line_height: f32,
     /// Viewport height in pixels.
@@ -743,6 +747,22 @@ impl<'a> EditorWidget<'a> {
             );
         }
 
+        // Wrap-aware anchor scroll from rendered preview (split sync)
+        if let Some((line, fraction)) = self.tab.pending_scroll_anchor.take() {
+            let total_lines = editor.buffer().line_count();
+            let line_0 = line.saturating_sub(1).min(total_lines.saturating_sub(1));
+            let line_start = editor.view().get_line_y_offset(line_0);
+            let line_h = editor.view().get_line_height(line_0);
+            let target_y = line_start + fraction.clamp(0.0, 1.0) * line_h;
+            editor
+                .view_mut()
+                .scroll_to_absolute(target_y, total_lines);
+            debug!(
+                "EditorWidget: sync anchor scroll line {} frac {:.2} → {:.1}px",
+                line, fraction, target_y
+            );
+        }
+
         // Handle scroll_to_line from outline panel / minimap navigation
         // scroll_to_line is 1-indexed, ViewState expects 0-indexed
         if let Some(line_1indexed) = self.scroll_to_line {
@@ -886,6 +906,19 @@ impl<'a> EditorWidget<'a> {
         // Use absolute scroll position for output (accounts for wrapped line heights)
         let scroll_total_offset = absolute_scroll_y;
 
+        let (scroll_anchor_line, scroll_anchor_fraction) = {
+            let view = editor.view();
+            let line_0 = view.first_visible_line();
+            let line_start = view.get_line_y_offset(line_0);
+            let line_h = view.get_line_height(line_0);
+            let fraction = if line_h > 0.0 {
+                ((absolute_scroll_y - line_start) / line_h).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            (line_0.saturating_add(1), fraction)
+        };
+
         // Capture Vim mode label before storing editor back
         let vim_mode_label = editor.vim_mode().map(|m| m.label());
 
@@ -906,6 +939,8 @@ impl<'a> EditorWidget<'a> {
             first_visible_line: first_visible,
             scroll_offset_y: scroll_offset_y_val,
             scroll_offset: scroll_total_offset,
+            scroll_anchor_line,
+            scroll_anchor_fraction,
             line_height,
             viewport_height: viewport_height_val,
             content_height: content_height_val,

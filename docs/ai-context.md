@@ -88,6 +88,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | PDF print preview | `app/export.rs` (`handle_print_preview`), `state.rs` (`PdfViewerState` ephemeral temp + session skip); docs: `docs/technical/viewers/print-preview.md` |
 | Terminal | `terminal/` (pty, screen, widget, layout) |
 | Git/VCS | `vcs/git.rs` |
+| Workspace file index | `workspaces/file_index.rs` — full-tree walk for Ctrl+P / search (not lazy tree) |
 
 ## Performance Rules (FerriteEditor)
 
@@ -102,6 +103,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 
 ## Recently Changed
 
+- **2026-05:** **Workspace file index** — Background `walkdir` index for Ctrl+P and Ctrl+Shift+F (full tree, not lazy sidebar); progress bar on large folders. See `docs/technical/files/workspace-file-index.md`.
 - **2026-05:** **v0.3.0** — egui/eframe **0.34.2**, Rust **1.92** MSRV, skrifa text backend, Popup/Tooltip API migrations, HarfRust validation, Phosphor **0.12**. See `docs/technical/platform/eframe-egui-034-upgrade.md`.
 - **2026-05:** User-configurable **Ferrite accent** (`Settings.accent_color`): Settings/Welcome color picker; drives headings, selection tint, tabs, view R/S/V segment, productivity hub, status LSP/branch; markdown links unchanged. See `docs/technical/ui/theme-system.md`.
 

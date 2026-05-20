@@ -11,6 +11,7 @@
 
 use crate::ui::icons::phosphor_rich_text;
 use crate::ui::phosphor_icons::{self, MAGNIFYING_GLASS, TIMER};
+use crate::workspaces::FileIndexProgress;
 use eframe::egui::{self, Color32, Key, LayerId, Order, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -246,6 +247,7 @@ impl QuickSwitcher {
         recent_files: &[PathBuf],
         workspace_root: &PathBuf,
         is_dark: bool,
+        index_progress: Option<FileIndexProgress>,
     ) -> QuickSwitcherOutput {
         let mut output = QuickSwitcherOutput::default();
 
@@ -364,6 +366,11 @@ impl QuickSwitcher {
                         ui.add_space(4.0);
                         ui.separator();
                         ui.add_space(4.0);
+
+                        if let Some(progress) = index_progress {
+                            crate::ui::file_index_progress_ui(ui, progress, secondary_color);
+                            ui.add_space(4.0);
+                        }
 
                         // Results list
                         if results.is_empty() {

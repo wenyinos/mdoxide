@@ -1068,6 +1068,19 @@ impl<'a> MarkdownEditor<'a> {
             .id_salt(id.with("rendered_scroll"))
             .auto_shrink([false, false]);
 
+        let height_fixup_id = id.with("rendered_height_fixup");
+        let user_scrolling = ui.input(|i| {
+            i.smooth_scroll_delta.y.abs() > 0.5 || i.pointer.any_down()
+        });
+        if !user_scrolling {
+            if let Some(offset) = ui.memory(|mem| mem.data.get_temp::<f32>(height_fixup_id)) {
+                ui.memory_mut(|mem| mem.data.remove::<f32>(height_fixup_id));
+                scroll_area = scroll_area.vertical_scroll_offset(offset);
+            }
+        } else {
+            ui.memory_mut(|mem| mem.data.remove::<f32>(height_fixup_id));
+        }
+
         // Priority order for scroll offset:
         // 1. Nav button scroll (from previous frame)
         // 2. Pending scroll offset from mode switch
@@ -1133,6 +1146,7 @@ impl<'a> MarkdownEditor<'a> {
         let culling_id = id.with("viewport_culling");
         let culling_state: Option<ViewportCullingState> =
             ui.memory(|mem| mem.data.get_temp(culling_id));
+        let previous_total_height = culling_state.as_ref().map(|cs| cs.total_height);
 
         let block_count = doc.root.children.len();
         let has_valid_heights = culling_state.as_ref().map_or(false, |s| {
@@ -1554,6 +1568,27 @@ impl<'a> MarkdownEditor<'a> {
 
         // â”€â”€ Persist culling state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if let Some(cs) = new_culling {
+            if let Some(old_total) = previous_total_height {
+                if (old_total - cs.total_height).abs() > 1.0 {
+                    let viewport_h = scroll_output.inner_rect.height();
+                    let max_old = (old_total - viewport_h).max(0.0);
+                    let max_new = (cs.total_height - viewport_h).max(0.0);
+                    let cur = scroll_output.state.offset.y;
+                    let still_scrolling = ui.input(|i| {
+                        i.smooth_scroll_delta.y.abs() > 0.5 || i.pointer.any_down()
+                    });
+                    if !still_scrolling && max_old > 1.0 && max_new > 0.0 {
+                        let ratio = (cur / max_old).clamp(0.0, 1.0);
+                        let corrected = ratio * max_new;
+                        if (corrected - cur).abs() > 1.5 {
+                            ui.memory_mut(|mem| {
+                                mem.data.insert_temp(height_fixup_id, corrected);
+                            });
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                }
+            }
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(culling_id, cs);
             });

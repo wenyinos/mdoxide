@@ -166,6 +166,8 @@ pub struct FerriteApp {
     show_recovery_dialog: bool,
     /// Pending session restore result (set on startup if crash recovery detected)
     pending_recovery: Option<crate::config::SessionRestoreResult>,
+    /// Paths from CLI / file association held until crash-recovery dialog is answered.
+    pending_startup_paths: Vec<std::path::PathBuf>,
     /// Pending auto-save recovery info (for showing recovery dialog)
     pending_auto_save_recovery: Option<AutoSaveRecoveryInfo>,
     /// Snippet manager for text expansion
@@ -214,6 +216,8 @@ pub struct FerriteApp {
     file_load_tx: std::sync::mpsc::Sender<FileLoadMsg>,
     /// Active background loading threads keyed by tab ID for cancellation on tab close.
     loading_tasks: HashMap<usize, std::thread::JoinHandle<()>>,
+    /// Full-workspace file index for quick switcher and search-in-files.
+    workspace_file_index: crate::workspaces::WorkspaceFileIndex,
 }
 
 impl FerriteApp {
@@ -467,6 +471,7 @@ impl FerriteApp {
             git_auto_refresh: GitAutoRefresh::new(),
             show_recovery_dialog,
             pending_recovery,
+            pending_startup_paths: Vec::new(),
             pending_auto_save_recovery: None,
             snippet_manager,
             terminal_panel,
@@ -492,6 +497,7 @@ impl FerriteApp {
             file_load_rx: file_load_rx_init,
             file_load_tx: file_load_tx_init,
             loading_tasks: HashMap::new(),
+            workspace_file_index: crate::workspaces::WorkspaceFileIndex::new(),
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -525,6 +531,17 @@ impl FerriteApp {
         use log::warn;
 
         if paths.is_empty() {
+            return;
+        }
+
+        // Defer opening until the user chooses restore vs start fresh; restoring the
+        // session clears all tabs and would drop files opened from a double-click.
+        if self.show_recovery_dialog {
+            info!(
+                "Deferring {} startup path(s) until crash recovery dialog is answered",
+                paths.len()
+            );
+            self.pending_startup_paths.extend(paths);
             return;
         }
 
@@ -1432,12 +1449,27 @@ impl FerriteApp {
             // Clear recovery data after successful restore
             clear_all_recovery_data();
             self.show_recovery_dialog = false;
+            self.open_deferred_startup_paths();
         } else if discard {
             info!("User discarded crash recovery");
             clear_all_recovery_data();
             self.pending_recovery = None;
             self.show_recovery_dialog = false;
+            self.open_deferred_startup_paths();
         }
+    }
+
+    /// Open paths deferred while the crash recovery dialog was shown.
+    fn open_deferred_startup_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_startup_paths);
+        if paths.is_empty() {
+            return;
+        }
+        info!(
+            "Opening {} deferred startup path(s) after crash recovery choice",
+            paths.len()
+        );
+        self.open_initial_paths(paths);
     }
 
     /// Render the main UI content.
@@ -2273,6 +2305,17 @@ impl FerriteApp {
                 self.state.settings.sync_scroll_enabled = !self.state.settings.sync_scroll_enabled;
                 self.state.mark_settings_dirty();
 
+                if !self.state.settings.sync_scroll_enabled {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.clear_sync_pending_scroll();
+                    }
+                    if let Some(tab_id) = self.state.active_tab().map(|t| t.id) {
+                        if let Some(state) = self.sync_scroll_states.get_mut(&tab_id) {
+                            state.reset_on_disable();
+                        }
+                    }
+                }
+
                 // Show toast message
                 let msg = if self.state.settings.sync_scroll_enabled {
                     "Sync scrolling enabled"
@@ -2523,6 +2566,14 @@ impl eframe::App for FerriteApp {
 
         // Poll file watcher for workspace changes
         self.handle_file_watcher_events();
+
+        // Background workspace file index (quick switcher / search-in-files)
+        self.sync_workspace_file_index();
+        if self.workspace_file_index.poll() {
+            ctx.request_repaint();
+        } else if self.workspace_file_index.is_indexing() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
 
         // Poll LSP manager for status changes and spawn failures
         self.handle_lsp_events(ctx);

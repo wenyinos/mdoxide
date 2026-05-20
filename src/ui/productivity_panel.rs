@@ -1359,19 +1359,20 @@ impl ProductivityPanel {
         let is_dark = ctx.style().visuals.dark_mode;
         let muted_color = ctx.style().visuals.weak_text_color();
 
-        // Cap the window's growth so the auto-resize logic in
-        // `egui::containers::Resize` (which sets
-        // `desired_size = max(desired_size, last_content_size)` every frame)
-        // can't run away if a content widget reports a wide preferred size.
-        let screen_h = crate::ui::window::viewport_window_rect(ctx).height();
-        let initial_w = dock_width.max(220.0);
-        let max_w = initial_w.max(560.0);
+        let viewport = crate::ui::window::viewport_window_rect(ctx);
+        let initial_w = dock_width.clamp(220.0, viewport.width() - 32.0);
+        let max_w = (viewport.width() - 16.0).max(220.0);
+        let max_h = (viewport.height() - 48.0).max(200.0);
+        let default_h = 420.0_f32.min(max_h);
 
         egui::Window::new(t!("productivity.title").to_string())
+            .id(egui::Id::new("productivity_hub_floating"))
             .open(visible)
-            .default_size([initial_w, 540.0_f32.min(screen_h - 80.0)])
+            .fade_in(false)
+            .fade_out(false)
+            .default_size([initial_w, default_h])
             .min_size([220.0, 200.0])
-            .max_size([max_w, (screen_h - 60.0).max(300.0)])
+            .max_size([max_w, max_h])
             .resizable(true)
             .show(ctx, |ui| {
                 // Action bar with the explicit Dock button. The window's `X`
@@ -1402,7 +1403,27 @@ impl ProductivityPanel {
                 });
 
                 ui.add_space(2.0);
-                needs_repaint = self.show_content(ui, ctx, ferrite_accent);
+
+                // Clip content to the window's inner rect so wide widgets cannot
+                // force `Resize` to expand back out (felt like an animated snap).
+                let avail_w = ui.available_width();
+                let avail_h = ui.available_height();
+                let (content_rect, _) =
+                    ui.allocate_exact_size(Vec2::new(avail_w, avail_h), egui::Sense::hover());
+                let mut child_ui = ui.child_ui(
+                    content_rect,
+                    egui::Layout::top_down(egui::Align::Min),
+                    None,
+                );
+                child_ui.set_clip_rect(content_rect);
+                child_ui.set_max_width(avail_w);
+
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(&mut child_ui, |ui| {
+                        ui.set_max_width(avail_w);
+                        needs_repaint = self.show_content(ui, ctx, ferrite_accent);
+                    });
             });
 
         // The window was just closed via the title-bar X. Treat this as a dock

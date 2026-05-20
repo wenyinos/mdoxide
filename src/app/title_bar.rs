@@ -576,6 +576,7 @@ impl FerriteApp {
                             ViewSegmentAction::SetRendered => ViewMode::Rendered,
                         };
                         tab.view_mode = new_mode;
+                        self.state.mark_settings_dirty();
                         debug!("Title bar: Set view mode to {:?}", new_mode);
                     }
                 }

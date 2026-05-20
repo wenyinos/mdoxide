@@ -1273,6 +1273,8 @@ pub struct Tab {
     pub raw_line_height: f32,
     /// Pending target line to scroll to (for sync scrolling, used with line mappings)
     pub pending_scroll_to_line: Option<usize>,
+    /// Pending scroll anchor for wrap-aware raw scroll (1-indexed line, fraction within line)
+    pub pending_scroll_anchor: Option<(usize, f32)>,
     /// Skip cursor sync from editor on next frame (set when navigating from outline/minimap)
     pub skip_cursor_sync: bool,
     /// View mode for this tab (raw or rendered)
@@ -1338,6 +1340,14 @@ pub struct Tab {
 }
 
 impl Tab {
+    /// Clear programmatic scroll targets from split/mode sync (not app-level outline nav).
+    pub fn clear_sync_pending_scroll(&mut self) {
+        self.pending_scroll_offset = None;
+        self.pending_scroll_anchor = None;
+        self.pending_scroll_ratio = None;
+        self.pending_scroll_to_line = None;
+    }
+
     /// Compute a 64-bit hash of content for modification detection.
     fn compute_content_hash(content: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
@@ -1374,6 +1384,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0, // Default, updated on first render
             pending_scroll_to_line: None,
+            pending_scroll_anchor: None,
             skip_cursor_sync: false,
             view_mode: ViewMode::Raw, // New documents default to raw mode
             edit_history: EditHistory::new(),
@@ -1472,6 +1483,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            pending_scroll_anchor: None,
             skip_cursor_sync: false,
             view_mode: ViewMode::Raw,
             edit_history,
@@ -1578,6 +1590,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            pending_scroll_anchor: None,
             skip_cursor_sync: false,
             view_mode: ViewMode::Raw,
             edit_history,
@@ -1703,6 +1716,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            pending_scroll_anchor: None,
             skip_cursor_sync: false,
             view_mode: info.view_mode,
             edit_history,
@@ -1833,6 +1847,7 @@ impl Tab {
             rendered_line_mappings: Vec::new(),
             raw_line_height: 20.0,
             pending_scroll_to_line: None,
+            pending_scroll_anchor: None,
             skip_cursor_sync: false,
             view_mode: info.view_mode,
             edit_history,
@@ -2045,15 +2060,15 @@ impl Tab {
         self.is_new_file() && self.content.is_empty() && self.original_content.is_empty()
     }
 
-    /// Determine if we should prompt to save before closing this tab.
+    /// Determine if we should prompt to save before closing or exiting.
     ///
     /// The logic is:
     /// - If the file is modified (content differs from original), prompt to save
     /// - EXCEPTION: Skip prompt for empty untitled files (nothing to save)
-    /// - EXCEPTION: When **Quick note workflow** is enabled in settings, never
-    ///   prompt for pathless (unsaved) documents so tabs can close and the app
-    ///   can exit without friction; content is still persisted via session recovery.
-    pub fn should_prompt_to_save(&self, settings: &Settings) -> bool {
+    /// - EXCEPTION: When **Quick note workflow** is enabled, skip prompts for
+    ///   pathless documents on **app exit** only; closing an individual untitled
+    ///   tab with content still prompts. Session recovery preserves scratch buffers.
+    pub fn should_prompt_to_save(&self, settings: &Settings, context: SavePromptContext) -> bool {
         // Special tabs, image viewer tabs, PDF viewer tabs, and loading tabs never need to save
         if self.is_special()
             || self.is_image_viewer()
@@ -2064,7 +2079,10 @@ impl Tab {
             return false;
         }
 
-        if settings.quick_note_workflow && self.is_new_file() {
+        if settings.quick_note_workflow
+            && self.is_new_file()
+            && context == SavePromptContext::AppExit
+        {
             return false;
         }
 
@@ -3102,6 +3120,15 @@ fn persisted_untitled_label_from_session(display_title: &str) -> Option<String> 
     }
 }
 
+/// Whether a save confirmation applies to closing one tab or exiting the app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SavePromptContext {
+    /// Closing a single tab (tab strip, Ctrl+W, etc.)
+    TabClose,
+    /// App exit and other checks via [`AppState::has_unsaved_changes`]
+    AppExit,
+}
+
 /// Actions that may need confirmation before execution.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PendingAction {
@@ -3658,9 +3685,22 @@ impl AppState {
         self.tabs.get_mut(index)
     }
 
+    /// Find a tab by its unique ID.
+    pub fn tab_by_id(&self, tab_id: usize) -> Option<&Tab> {
+        self.tabs.iter().find(|t| t.id == tab_id)
+    }
+
     /// Find a tab by its unique ID and return a mutable reference.
     pub fn tab_by_id_mut(&mut self, tab_id: usize) -> Option<&mut Tab> {
         self.tabs.iter_mut().find(|t| t.id == tab_id)
+    }
+
+    /// View mode and split ratio to use when opening a file (saved per path, else global default).
+    pub fn opening_view_prefs_for_path(&self, path: &std::path::Path) -> (ViewMode, f32) {
+        self.settings
+            .tab_info_for_path(path)
+            .map(|i| (i.view_mode, i.split_ratio))
+            .unwrap_or((self.settings.default_view_mode, 0.5))
     }
 
     /// Create a new empty tab and make it active.
@@ -3886,23 +3926,25 @@ impl AppState {
             ));
         }
 
-        // Create new tab with settings-based defaults and encoding detection
+        // Create new tab: restore per-file view mode when known, else use global default
         let auto_save_default = self.settings.auto_save_enabled_default;
-        let default_view_mode = self.settings.default_view_mode;
+        let (view_mode, split_ratio) = self.opening_view_prefs_for_path(&path);
         let mut tab = Tab::with_file_bytes_and_settings(
             self.next_tab_id,
             path.clone(),
             bytes,
             auto_save_default,
-            default_view_mode,
+            view_mode,
         );
+        tab.split_ratio = split_ratio;
 
-        // If default view mode is Split but file type doesn't support it, fall back to Raw
-        if default_view_mode == ViewMode::Split && !tab.file_type().supports_split() {
+        // If view mode is Split but file type doesn't support it, fall back to Raw
+        if tab.view_mode == ViewMode::Split && !tab.file_type().supports_split() {
             tab.view_mode = ViewMode::Raw;
         }
 
         let detected_encoding = tab.current_encoding;
+        let opened_view_mode = tab.view_mode;
         self.next_tab_id += 1;
         self.tabs.push(tab);
         let new_index = self.tabs.len() - 1;
@@ -3914,7 +3956,7 @@ impl AppState {
                 path.display(),
                 detected_encoding,
                 auto_save_default,
-                default_view_mode
+                opened_view_mode
             );
         } else {
             info!(
@@ -3922,7 +3964,7 @@ impl AppState {
                 path.display(),
                 detected_encoding,
                 auto_save_default,
-                default_view_mode
+                opened_view_mode
             );
         }
 
@@ -4021,7 +4063,7 @@ impl AppState {
     /// since there's nothing meaningful to preserve.
     pub fn close_tab(&mut self, index: usize) -> bool {
         if let Some(tab) = self.tabs.get(index) {
-            if tab.should_prompt_to_save(&self.settings) {
+            if tab.should_prompt_to_save(&self.settings, SavePromptContext::TabClose) {
                 // Set up confirmation dialog
                 self.ui.show_confirm_dialog = true;
                 self.ui.confirm_dialog_message =
@@ -4049,6 +4091,14 @@ impl AppState {
             }
             None
         });
+
+        // Persist view mode (and other tab state) before removing so reopen uses it
+        if let Some(tab) = self.tabs.get(index) {
+            if !tab.is_special() {
+                self.settings.upsert_tab_info(tab.to_tab_info());
+                self.settings_dirty = true;
+            }
+        }
 
         self.tabs.remove(index);
 
@@ -4101,11 +4151,13 @@ impl AppState {
 
     /// Check if any tabs have unsaved changes that warrant a save prompt.
     ///
-    /// Uses [`Tab::should_prompt_to_save`] per tab (empty untitled tabs never count).
-    /// When **Quick note workflow** is enabled, modified pathless tabs are excluded
-    /// so the app can exit without a confirmation dialog.
+    /// Uses [`Tab::should_prompt_to_save`] with [`SavePromptContext::AppExit`] per tab.
+    /// Empty untitled tabs never count. When **Quick note workflow** is enabled,
+    /// modified pathless tabs are excluded so the app can exit without a dialog.
     pub fn has_unsaved_changes(&self) -> bool {
-        self.tabs.iter().any(|t| t.should_prompt_to_save(&self.settings))
+        self.tabs
+            .iter()
+            .any(|t| t.should_prompt_to_save(&self.settings, SavePromptContext::AppExit))
     }
 
     /// True if any editable document tab has unsaved content (for crash-recovery throttling).
@@ -4378,13 +4430,15 @@ impl AppState {
     /// Returns `true` if settings were saved.
     pub fn save_settings_if_dirty(&mut self) -> bool {
         if self.settings_dirty {
-            // Update session restoration data (skip special tabs like settings/about)
-            self.settings.last_open_tabs = self
+            // Merge open tabs into last_open_tabs (keep closed files' saved view modes)
+            for info in self
                 .tabs
                 .iter()
                 .filter(|t| !t.is_special())
                 .map(|t| t.to_tab_info())
-                .collect();
+            {
+                self.settings.upsert_tab_info(info);
+            }
             self.settings.active_tab_index = self.active_tab_index;
 
             if save_config_silent(&self.settings) {
@@ -4618,6 +4672,7 @@ impl AppState {
                                 rendered_line_mappings: Vec::new(),
                                 raw_line_height: 20.0,
                                 pending_scroll_to_line: None,
+                                pending_scroll_anchor: None,
                                 skip_cursor_sync: false,
                                 view_mode: ViewMode::Raw,
                                 edit_history,
@@ -5366,56 +5421,61 @@ mod tests {
         let settings = Settings::default();
         let mut settings_classic = Settings::default();
         settings_classic.quick_note_workflow = false;
+        let tab_close = SavePromptContext::TabClose;
+        let app_exit = SavePromptContext::AppExit;
 
         // Case 1: New file unmodified - NO prompt
         let new_unmodified = Tab::new(0);
-        assert!(!new_unmodified.should_prompt_to_save(&settings));
+        assert!(!new_unmodified.should_prompt_to_save(&settings, tab_close));
 
-        // Case 2: New file with content - no prompt when quick note workflow is on (default)
+        // Case 2: New file with content - prompt on tab close; no prompt on app exit (quick note)
         let mut new_with_content = Tab::new(1);
         new_with_content.set_content("hello".to_string());
-        assert!(!new_with_content.should_prompt_to_save(&settings));
-        assert!(new_with_content.should_prompt_to_save(&settings_classic));
+        assert!(!new_with_content.should_prompt_to_save(&settings, app_exit));
+        assert!(new_with_content.should_prompt_to_save(&settings, tab_close));
+        assert!(new_with_content.should_prompt_to_save(&settings_classic, tab_close));
+        assert!(new_with_content.should_prompt_to_save(&settings_classic, app_exit));
 
         // Case 3: New file typed and deleted - NO prompt (back to empty)
         let mut new_typed_deleted = Tab::new(2);
         new_typed_deleted.set_content("hello".to_string());
         new_typed_deleted.set_content(String::new());
-        assert!(!new_typed_deleted.should_prompt_to_save(&settings));
+        assert!(!new_typed_deleted.should_prompt_to_save(&settings, tab_close));
 
         // Case 4: Saved file unmodified - NO prompt
         let saved_unmodified = Tab::with_file(3, PathBuf::from("test.md"), "content".to_string());
-        assert!(!saved_unmodified.should_prompt_to_save(&settings));
+        assert!(!saved_unmodified.should_prompt_to_save(&settings, tab_close));
 
         // Case 5: Saved file modified - prompt
         let mut saved_modified = Tab::with_file(4, PathBuf::from("test.md"), "content".to_string());
         saved_modified.set_content("modified content".to_string());
-        assert!(saved_modified.should_prompt_to_save(&settings));
+        assert!(saved_modified.should_prompt_to_save(&settings, tab_close));
 
         // Case 6: Existing empty file (loaded from disk) unmodified - NO prompt
         let existing_empty = Tab::with_file(5, PathBuf::from("empty.md"), String::new());
-        assert!(!existing_empty.should_prompt_to_save(&settings));
+        assert!(!existing_empty.should_prompt_to_save(&settings, tab_close));
 
         // Case 7: Existing empty file modified - prompt
         let mut existing_empty_modified =
             Tab::with_file(6, PathBuf::from("empty.md"), String::new());
         existing_empty_modified.set_content("now has content".to_string());
-        assert!(existing_empty_modified.should_prompt_to_save(&settings));
+        assert!(existing_empty_modified.should_prompt_to_save(&settings, tab_close));
 
         // Case 8: Saved file, content deleted entirely - prompt (modified)
         let mut saved_then_cleared =
             Tab::with_file(7, PathBuf::from("content.md"), "original".to_string());
         saved_then_cleared.set_content(String::new());
-        assert!(saved_then_cleared.should_prompt_to_save(&settings));
+        assert!(saved_then_cleared.should_prompt_to_save(&settings, tab_close));
 
-        // Quick note (default): pathless modified — no save prompt on close/exit
+        // Quick note (default): pathless modified — no prompt on exit, prompt on tab close
         let mut qn_tab = Tab::new(10);
         qn_tab.set_content("scratch".to_string());
-        assert!(!qn_tab.should_prompt_to_save(&settings));
+        assert!(!qn_tab.should_prompt_to_save(&settings, app_exit));
+        assert!(qn_tab.should_prompt_to_save(&settings, tab_close));
         // Saved files still prompt when modified
         let mut saved_qn = Tab::with_file(11, PathBuf::from("x.md"), "a".to_string());
         saved_qn.set_content("b".to_string());
-        assert!(saved_qn.should_prompt_to_save(&settings));
+        assert!(saved_qn.should_prompt_to_save(&settings, tab_close));
     }
 
     #[test]
@@ -5845,14 +5905,15 @@ mod tests {
     }
 
     #[test]
-    fn test_appstate_quick_note_close_modified_untitled_without_prompt() {
+    fn test_appstate_quick_note_close_modified_untitled_with_prompt() {
         let mut state = AppState::with_settings(Settings::default());
         if let Some(tab) = state.active_tab_mut() {
             tab.set_content("x".to_string());
         }
         state.new_tab();
-        assert!(state.close_tab(0));
-        assert!(!state.ui.show_confirm_dialog);
+        assert!(!state.close_tab(0));
+        assert!(state.ui.show_confirm_dialog);
+        assert_eq!(state.ui.pending_action, Some(PendingAction::CloseTab(0)));
     }
 
     #[test]
@@ -6211,6 +6272,59 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────
     // Open File with Focus Control Tests
     // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_open_file_restores_saved_view_mode() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("ferrite_test_open_view_mode.md");
+        std::fs::File::create(&temp_file)
+            .unwrap()
+            .write_all(b"# Test")
+            .unwrap();
+
+        let mut settings = Settings::default();
+        settings.last_open_tabs = vec![TabInfo {
+            path: Some(temp_file.clone()),
+            view_mode: ViewMode::Split,
+            split_ratio: 0.65,
+            ..TabInfo::default()
+        }];
+
+        let mut state = AppState::with_settings(settings);
+        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        let tab = state.active_tab().unwrap();
+        assert_eq!(tab.view_mode, ViewMode::Split);
+        assert_eq!(tab.split_ratio, 0.65);
+
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_close_tab_persists_view_mode_for_reopen() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("ferrite_test_close_view_mode.md");
+        std::fs::File::create(&temp_file)
+            .unwrap()
+            .write_all(b"# Test")
+            .unwrap();
+
+        let mut state = AppState::with_settings(Settings::default());
+        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        state.active_tab_mut().unwrap().view_mode = ViewMode::Split;
+        state.active_tab_mut().unwrap().split_ratio = 0.7;
+        state.force_close_tab(0);
+
+        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        let tab = state.active_tab().unwrap();
+        assert_eq!(tab.view_mode, ViewMode::Split);
+        assert_eq!(tab.split_ratio, 0.7);
+
+        let _ = std::fs::remove_file(&temp_file);
+    }
 
     #[test]
     fn test_open_file_with_focus_true() {
