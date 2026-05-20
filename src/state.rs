@@ -5364,14 +5364,18 @@ mod tests {
     #[test]
     fn test_tab_should_prompt_to_save() {
         let settings = Settings::default();
+        let mut settings_classic = Settings::default();
+        settings_classic.quick_note_workflow = false;
+
         // Case 1: New file unmodified - NO prompt
         let new_unmodified = Tab::new(0);
         assert!(!new_unmodified.should_prompt_to_save(&settings));
 
-        // Case 2: New file with content - prompt
+        // Case 2: New file with content - no prompt when quick note workflow is on (default)
         let mut new_with_content = Tab::new(1);
         new_with_content.set_content("hello".to_string());
-        assert!(new_with_content.should_prompt_to_save(&settings));
+        assert!(!new_with_content.should_prompt_to_save(&settings));
+        assert!(new_with_content.should_prompt_to_save(&settings_classic));
 
         // Case 3: New file typed and deleted - NO prompt (back to empty)
         let mut new_typed_deleted = Tab::new(2);
@@ -5404,16 +5408,14 @@ mod tests {
         saved_then_cleared.set_content(String::new());
         assert!(saved_then_cleared.should_prompt_to_save(&settings));
 
-        // Quick note: pathless modified — no save prompt on close/exit
-        let mut settings_qn = Settings::default();
-        settings_qn.quick_note_workflow = true;
+        // Quick note (default): pathless modified — no save prompt on close/exit
         let mut qn_tab = Tab::new(10);
         qn_tab.set_content("scratch".to_string());
-        assert!(!qn_tab.should_prompt_to_save(&settings_qn));
+        assert!(!qn_tab.should_prompt_to_save(&settings));
         // Saved files still prompt when modified
         let mut saved_qn = Tab::with_file(11, PathBuf::from("x.md"), "a".to_string());
         saved_qn.set_content("b".to_string());
-        assert!(saved_qn.should_prompt_to_save(&settings_qn));
+        assert!(saved_qn.should_prompt_to_save(&settings));
     }
 
     #[test]
@@ -5712,7 +5714,9 @@ mod tests {
 
     #[test]
     fn test_appstate_has_unsaved_changes() {
-        let mut state = AppState::with_settings(Settings::default());
+        let mut settings = Settings::default();
+        settings.quick_note_workflow = false;
+        let mut state = AppState::with_settings(settings);
         assert!(!state.has_unsaved_changes());
 
         if let Some(tab) = state.active_tab_mut() {
@@ -5800,7 +5804,9 @@ mod tests {
 
     #[test]
     fn test_appstate_request_exit_with_changes() {
-        let mut state = AppState::with_settings(Settings::default());
+        let mut settings = Settings::default();
+        settings.quick_note_workflow = false;
+        let mut state = AppState::with_settings(settings);
         if let Some(tab) = state.active_tab_mut() {
             tab.set_content("modified".to_string());
         }
@@ -5830,9 +5836,7 @@ mod tests {
 
     #[test]
     fn test_appstate_quick_note_exit_without_prompt() {
-        let mut settings = Settings::default();
-        settings.quick_note_workflow = true;
-        let mut state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(Settings::default());
         if let Some(tab) = state.active_tab_mut() {
             tab.set_content("scratch".to_string());
         }
@@ -5842,9 +5846,7 @@ mod tests {
 
     #[test]
     fn test_appstate_quick_note_close_modified_untitled_without_prompt() {
-        let mut settings = Settings::default();
-        settings.quick_note_workflow = true;
-        let mut state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(Settings::default());
         if let Some(tab) = state.active_tab_mut() {
             tab.set_content("x".to_string());
         }
@@ -5855,7 +5857,9 @@ mod tests {
 
     #[test]
     fn test_appstate_close_new_modified_tab_prompts() {
-        let mut state = AppState::with_settings(Settings::default());
+        let mut settings = Settings::default();
+        settings.quick_note_workflow = false;
+        let mut state = AppState::with_settings(settings);
 
         // Modify the initial tab
         if let Some(tab) = state.active_tab_mut() {
@@ -5895,7 +5899,9 @@ mod tests {
 
     #[test]
     fn test_appstate_quit_with_mixed_tabs() {
-        let mut state = AppState::with_settings(Settings::default());
+        let mut settings = Settings::default();
+        settings.quick_note_workflow = false;
+        let mut state = AppState::with_settings(settings);
 
         // Tab 0: new unmodified (initial)
         // Tab 1: new with content (should trigger prompt)

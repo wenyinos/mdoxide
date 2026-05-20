@@ -3,150 +3,125 @@
 ## Environment
 
 - **Project:** Ferrite (markdown editor, Rust + egui)
-- **Tech Stack:** Rust 2021, egui 0.31.1 + eframe 0.31.1
+- **Tech Stack:** Rust 2021 (toolchain **1.92** via `rust-toolchain.toml`), **egui/eframe 0.34.2** (glow backend on Windows)
 - **Context file:** Always read [`docs/ai-context.md`](./ai-context.md) first — project rules, architecture, conventions.
-- **Branch:** master
-- **Goal:** Improve native Mermaid **rendering** before v0.3.0 ships (GitHub #83).
+- **Branch:** `egui-0.34-upgrade` (not `master`)
+- **Parent task:** Task **89** — egui 0.34 upgrade + HarfRust validation
+- **Next subtask:** **89.7** — `egui::Mutex` / lock-order deadlock audit
 
 ## Handover Rules
 
-- **NO HISTORY:** Replace this file when the active task changes; do not accumulate past narratives.
-- **SCOPE:** Flowchart **horizontal spacing / overlap** (primary). FC-83a edge polish is secondary unless a spacing fix regresses it.
-- Run `cargo build` / `cargo test layout_coffee fc_83a obstacle_tests` after code changes.
-- Update layout docs when spacing algorithm changes (see Key docs below).
-- Use Context7 MCP for egui/library docs when needed.
-- Do **not** switch to mmdr or SVG — keep native egui rendering.
+- **SCOPE:** Start **89.7** only. Do **not** re-do 89.1–89.6 unless fixing a regression found in testing.
+- **NO HISTORY:** Do not carry forward unrelated work (Mermaid flowchart spacing, etc.).
+- Run `cargo check` / `cargo test` after changes.
+- Use Context7 MCP for egui 0.34 API docs when unsure.
+- Keep deprecated **`App::update`** with empty **`App::ui`** stub until a dedicated follow-up (not in task 89).
+- **Docs:** §89.7 notes go in [`eframe-egui-034-upgrade.md`](./technical/platform/eframe-egui-034-upgrade.md). **Final** polish (`ai-context.md`, `ROADMAP`, `CHANGELOG`, version bump, full regression matrix sign-off) → **89.8**.
 
 ---
 
-## Current Task: Flowchart branch spacing — fix squished / overlapping nodes
+## Task 89 — Subtask map
 
-Wide branching flowcharts render with **sibling nodes overlapping** in Ferrite. Mermaid.js spreads branches horizontally; Ferrite stacks them too tight or shifts parents onto siblings.
-
-### Primary repro (user-reported)
-
-Open [`test_md/test_flowcharts.md`](../test_md/test_flowcharts.md) — first diagram (**Coffee machine troubleshooting**) in **Rendered** or **Split** view. Compare to [Mermaid Live Editor](https://mermaid.live).
-
-```mermaid
-graph TD
-    A[Coffee machine not working] --> B{Machine has power?}
-    B -->|No| H[Plug in and turn on]
-    B -->|Yes| C[Out of beans or water?] -->|Yes| G[Refill beans and water]
-    C -->|No| D{Filter warning?} -->|Yes| I[Replace or clean filter]
-    D -->|No| F[Send for repair]
-```
-
-**Observed (Ferrite):** `C` overlaps `H`; `D` overlaps `G`; branches feel vertically compressed.  
-**Expected (Mermaid.js):** siblings separated horizontally, no bbox intersection.
-
-### Secondary repro (regression guard)
-
-[`test_md/test_mermaid_issue_83.md`](../test_md/test_mermaid_issue_83.md) — FC-83a feedback loop. Edge routing improved but still not pixel-perfect vs Mermaid; do not break inner/outer back-edge lanes when fixing spacing.
-
----
-
-## Root cause (investigated this session)
-
-`assign_coordinates_with_subgraphs` in [`sugiyama.rs`](../src/markdown/mermaid/flowchart/layout/sugiyama.rs) places siblings left-to-right with fixed `node_spacing.x` (**50 px** in [`layout/mod.rs`](../src/markdown/mermaid/flowchart/layout/mod.rs)).
-
-**Regression:** post-pass `align_branch_nodes_to_children()` (added for FC-83a) shifts branch nodes (2+ forward children) to the **barycenter of their children’s x** without re-spacing the layer or checking sibling overlap.
-
-Measured overlaps at `available_width=800` (`EstimatedTextMeasurer`, `cargo test test_layout_coffee_machine_all_nodes -- --nocapture`):
-
-| Layer (y) | Nodes | Problem |
-|-----------|-------|---------|
-| 220 | H, C | H right ≈ **362**, C left ≈ **294** → overlap ~68 px |
-| 320 | G, D | G right ≈ **406**, D left ≈ **327** → overlap ~79 px |
-| 420 | I, F | OK (no overlap) |
-
-Without the barycenter post-pass, H/C were spaced correctly (H right < C left). **The post-pass moves C and D left onto siblings.**
-
----
-
-## Next steps (priority order)
-
-### 1. Fix overlap from branch barycenter (`sugiyama.rs`)
-
-Pick one approach (or combine):
-
-- **A. Collision-aware shift:** after barycenter move, if node intersects a same-layer sibling, push apart or reject the shift.
-- **B. Layer re-pack:** after all barycenter adjustments, re-run horizontal packing per layer (preserve relative order, enforce `gap >= node_spacing` or `gap >= padding`).
-- **C. Scope the post-pass:** only shift nodes that are **alone on their layer** (FC-83a `decide` case); never shift nodes that share a layer with siblings.
-- **D. Two-phase layout:** compute barycenter **target** during coordinate assignment (dagre-style) instead of mutating positions after packing.
-
-Start with **C** (smallest fix) or **B** (more general). Verify coffee chart visually + add overlap assertion test.
-
-### 2. Minimum horizontal gap / layer width
-
-Even without barycenter, 50 px spacing may be tight for long labels. Consider:
-
-- `node_spacing.x` proportional to max sibling width or font size
-- Layer `start_cross` from **actual packed width**, not sum of widths when nodes were placed before shifts
-- Post-layout `resolve_layer_overlaps()` utility
-
-### 3. Tests to add / extend
-
-| Test | File | Assert |
-|------|------|--------|
-| Coffee machine no overlap | `src/markdown/mermaid/mod.rs` | For each layer, sibling rects `right + spacing <= next.left` |
-| FC-83a layout | existing `test_fc_83a_layout_has_all_nodes` | Keep branch + axis assertions |
-| FC-83a edges | `flowchart/render/edges.rs` `back_edge_tests` | E→B clears `decide` |
+| ID | Title | Status |
+|----|--------|--------|
+| **89.1** | Deps: egui/eframe 0.34.2, phosphor 0.12, rust-toolchain, glow (Windows) | done (`ad60ac1`) |
+| **89.2** | Compile fixes + `App::ui` stub; keep `App::update` | done (`3a9da15`) |
+| **89.3** | Panels, ScrollArea, `screen_rect` → viewport rects | done (uncommitted on branch) |
+| **89.4** | Menus, popups (`Popup` API), tooltips | done (uncommitted on branch) |
+| **89.5** | Font/text layout, skrifa/vello_cpu, Galley audit | done |
+| **89.6** | HarfRust shaping validation + tests | done |
+| **89.7** | `egui::Mutex` deadlock audit | **next** |
+| **89.8** | MSRV/CI, regression matrix, version bump, **final docs** | pending |
 
 ```bash
-cargo test test_layout_coffee_machine
-cargo test fc_83a
-cargo test obstacle_tests
+task-master show 89.7 --json
+task-master set-status -i 89.7 -s in-progress
 ```
-
-### 4. FC-83a edge polish (defer until spacing fixed)
-
-Partially done; user feedback “a bit better”:
-
-- Inner E→B: top-right exit, rise along E’s east edge, enter Preview right at mid-height
-- Outer F→B: margin loop, bottom-right entry
-- Branch barycenter shifts `decide` left (may need collision-aware version from step 1)
-
-Still out of scope: `linkStyle interpolate basis` curves, Font Awesome (FC-83b).
 
 ---
 
-## Key files
+## Completed work (89.5–89.6) — summary for 89.8 doc pass
 
-| File | Role |
+### 89.5 — Fonts / Galley / skrifa
+
+- Confirmed egui 0.34 default text backend (skrifa + vello_cpu); no Ferrite feature flags.
+- Added `fonts::row_height_for_font` — avoid empty-galley height 0 under skrifa.
+- Galley audit: `CCursor` = character index; HarfRust `cluster` = UTF-8 byte index.
+- §89.5 in [`eframe-egui-034-upgrade.md`](./technical/platform/eframe-egui-034-upgrade.md).
+
+### 89.6 — HarfRust validation
+
+- **Bug fix:** `group_clusters` now sorts by `byte_start` + normalizes full UTF-8 coverage (Arabic ligature `لا` cursor).
+- API: `shape_line_clusters`, `validate_cluster_byte_ranges`.
+- **32** shaping unit tests (`cargo test shaping::`).
+- Updated [`harfrust-text-shaping.md`](./technical/editor/harfrust-text-shaping.md) (removed ab_glyph wording).
+- §89.6 in `eframe-egui-034-upgrade.md`.
+- **Known limit:** word wrap + complex script still uses egui galley only (not HarfRust).
+
+### Manual testing
+
+- **User completed** manual checks for 89.3–89.6 (including complex scripts, fonts, popups, shaping samples). No blocking regressions reported.
+
+---
+
+## Current Task: 89.7 — Mutex / deadlock audit
+
+1. Search for `egui::Mutex` (may be **zero** usages — audit `std::sync::Mutex` + `egui::Context` sharing too).
+2. Hot spots: `single_instance.rs` (`Arc<Mutex<Option<egui::Context>>>`), terminal `Arc<Mutex<TerminalScreen>>`, code-run `RunHandle`, global caches (`markdown/cache.rs`, mermaid), `fonts.rs` statics, background file load / workers if enabled.
+3. Verify no lock held across `fonts_mut` / `Context::run` / repaint while waiting on another thread.
+4. Document findings + any fixes in `eframe-egui-034-upgrade.md` §89.7.
+
+**Out of scope here:** version bump, CHANGELOG, full regression matrix (**89.8**).
+
+---
+
+## Verification baseline
+
+```bash
+cargo check
+cargo test
+cargo test shaping::
+```
+
+- **Expected:** `cargo check` OK; **~1484** tests pass, **3 failures** in `state::tests` (see below).
+- Shaping: **32/32** pass.
+
+### Known issues (address in 89.7 or 89.8)
+
+- **`cargo test`:** 3 failures in `state::tests` (`test_appstate_has_unsaved_changes`, `test_appstate_quit_with_mixed_tabs`, `test_appstate_request_exit_with_changes`). Triage/fix before **89.8** release closure.
+- **Uncommitted:** 89.3–89.6 + docs on `egui-0.34-upgrade` (only `ad60ac1`, `3a9da15` committed). Consider commit(s) in **89.8**.
+
+---
+
+## Documentation debt (89.8)
+
+| Item | When |
 |------|------|
-| [`flowchart/layout/sugiyama.rs`](../src/markdown/mermaid/flowchart/layout/sugiyama.rs) | Layer assignment, `assign_coordinates_with_subgraphs`, **`align_branch_nodes_to_children`** ← likely fix here |
-| [`flowchart/layout/mod.rs`](../src/markdown/mermaid/flowchart/layout/mod.rs) | `FlowLayoutConfig`, `node_spacing`, `layout_flowchart` entry |
-| [`flowchart/layout/config.rs`](../src/markdown/mermaid/flowchart/layout/config.rs) | Spacing constants |
-| [`flowchart/render/edges.rs`](../src/markdown/mermaid/flowchart/render/edges.rs) | Back-edge lanes, inner direct path (FC-83a) |
-| [`flowchart/render/mod.rs`](../src/markdown/mermaid/flowchart/render/mod.rs) | Painter sizing, `side_pad` for back-edges |
-
-## Key docs
-
-| Doc | When to update |
-|-----|----------------|
-| [`flowchart-branch-ordering.md`](./technical/mermaid/flowchart-branch-ordering.md) | Branch order conventions |
-| [`flowchart-edge-obstacle-routing.md`](./technical/mermaid/flowchart-edge-obstacle-routing.md) | Edge routing only |
-| [`mermaid-parity-matrix.md`](./technical/mermaid/mermaid-parity-matrix.md) | Status after spacing fix |
+| [`eframe-egui-034-upgrade.md`](./technical/platform/eframe-egui-034-upgrade.md) | §89.7–89.8; finalize |
+| `docs/ai-context.md` | egui version line still says 0.31 |
+| `CHANGELOG`, `ROADMAP`, version **0.4.0** | **89.8** |
+| [`v0.3.0-regression-matrix.md`](./technical/platform/v0.3.0-regression-matrix.md) | Re-run / adapt for 0.4.0 in **89.8** |
+| `App::update` → `App::ui` migration | Separate task (not 89) |
 
 ---
 
-## Pass criteria (spacing task)
+## Key references
 
-- [ ] Coffee machine chart: **no sibling bbox overlap** at 800 px width
-- [ ] Branch order preserved (H left of C; G left of D; I left of F)
-- [ ] FC-83a: all nodes visible; E→B does not pass through `decide`; F→B separate lane
-- [ ] `test_md/test_flowcharts.md` spot-check (shapes, subgraphs, linkStyle)
-- [ ] New overlap regression test in `mod.rs`
+| Doc | Purpose |
+|-----|---------|
+| [`eframe-egui-034-upgrade.md`](./technical/platform/eframe-egui-034-upgrade.md) | Living 0.31→0.34 migration log (89.3–89.6 written) |
+| [`harfrust-text-shaping.md`](./technical/editor/harfrust-text-shaping.md) | Shaping pipeline + known limits |
+| [`eframe-egui-031-upgrade.md`](./technical/platform/eframe-egui-031-upgrade.md) | Prior 0.28→0.31 patterns |
+| [`single-instance.md`](./technical/platform/single-instance.md) | `Mutex` + `egui::Context` repaint thread |
+| `test_md/test_complex_scripts.md` | Manual script samples (already exercised) |
 
 ---
 
-## Verification
+## Task Master
 
 ```bash
-cargo build
-cargo test test_layout_coffee_machine_all_nodes -- --nocapture
-cargo test fc_83a
-cargo test obstacle_tests
+task-master show 89,89.7 --json
+task-master set-status -i 89.7 -s in-progress
+# When 89.7 pass criteria met:
+task-master set-status -i 89.7 -s done
 ```
-
-Manual: coffee diagram + FC-83a vs Mermaid Live; check wide labels and nested branches.

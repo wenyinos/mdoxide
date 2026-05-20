@@ -246,6 +246,8 @@ impl FerriteApp {
         // 6 px of outer margin is enough to clear the default
         // `interaction.resize_grab_radius_side` (5 px).
         style.spacing.scroll.bar_outer_margin = 6.0;
+        // egui 0.34 adds scroll-edge fade gradients; disable to match pre-upgrade look.
+        style.spacing.scroll.fade.strength = 0.0;
 
         cc.egui_ctx.set_style(style);
 
@@ -2412,13 +2414,14 @@ impl eframe::App for FerriteApp {
         // One-shot window diagnostic for debugging borderless offset issues (GH #112)
         if !self.window_diagnostic_logged {
             self.window_diagnostic_logged = true;
-            let screen_rect = ctx.screen_rect();
+            let viewport_rect = ctx.viewport_rect();
+            let content_rect = ctx.content_rect();
             let ppp = ctx.pixels_per_point();
             let inner_rect = ctx.input(|i| i.viewport().inner_rect);
             let outer_rect = ctx.input(|i| i.viewport().outer_rect);
             info!(
-                "Window diagnostic: screen_rect={:?}, pixels_per_point={:.2}, inner={:?}, outer={:?}",
-                screen_rect, ppp, inner_rect, outer_rect
+                "Window diagnostic: viewport_rect={:?}, content_rect={:?}, pixels_per_point={:.2}, inner={:?}, outer={:?}",
+                viewport_rect, content_rect, ppp, inner_rect, outer_rect
             );
         }
 

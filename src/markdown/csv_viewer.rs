@@ -1104,7 +1104,13 @@ fn render_row_cells(
             } else {
                 egui::Id::new(("csv_tooltip", row_idx, col_idx))
             };
-            egui::show_tooltip_at_pointer(ui.ctx(), ui.layer_id(), tooltip_id, |ui| {
+            egui::Tooltip::always_open(
+                ui.ctx().clone(),
+                ui.layer_id(),
+                tooltip_id,
+                egui::PopupAnchor::Pointer,
+            )
+            .show(|ui| {
                 ui.set_max_width(400.0);
                 ui.label(cell);
             });

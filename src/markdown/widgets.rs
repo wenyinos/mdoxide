@@ -4153,11 +4153,10 @@ impl<'a> RenderedLinkWidget<'a> {
             link_response.on_hover_text(tooltip);
         }
 
-        // Use link rect for hover zone (no longer need button extension)
-        let hover_zone = link_rect;
-
-        // Show popup if open
-        if self.state.popup_open {
+        // Show link edit popup (egui 0.34 Popup API; local bool avoids borrow conflict with edit fields).
+        let mut popup_open = self.state.popup_open;
+        let was_popup_open = popup_open;
+        if popup_open {
             let popup_id = link_id.with("popup");
 
             // Popup styling
@@ -4173,16 +4172,12 @@ impl<'a> RenderedLinkWidget<'a> {
                 egui::Color32::from_rgb(180, 185, 195)
             };
 
-            // Position popup below the link
-            let popup_pos = link_rect.left_bottom() + egui::vec2(0.0, 4.0);
-
-            // Track if we should close
-            let mut should_close = false;
-
-            let area_response = egui::Area::new(popup_id)
-                .fixed_pos(popup_pos)
-                .order(egui::Order::Foreground)
-                .show(ui.ctx(), |ui| {
+            egui::Popup::new(popup_id, ui.ctx().clone(), link_rect, ui.layer_id())
+                .open_bool(&mut popup_open)
+                .align(egui::emath::RectAlign::TOP_START)
+                .gap(4.0)
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .show(|ui| {
                     egui::Frame::new()
                         .fill(popup_bg)
                         .stroke(egui::Stroke::new(1.0, border_color))
@@ -4285,27 +4280,11 @@ impl<'a> RenderedLinkWidget<'a> {
                         })
                 });
 
-            // Get the popup's actual rect for click-outside detection
-            let popup_rect = area_response.response.rect;
-
-            // Check for click outside the popup to close it
-            let ctx = ui.ctx();
-            if ctx.input(|i| i.pointer.any_pressed()) {
-                if let Some(mouse_pos) = ctx.input(|i| i.pointer.interact_pos()) {
-                    // Check if click is outside both popup and the link/button hover zone
-                    if !popup_rect.contains(mouse_pos) && !hover_zone.contains(mouse_pos) {
-                        should_close = true;
-                        // Commit any changes made before closing
-                        if self.state.is_modified() {
-                            self.state.commit();
-                            committed_changes = true;
-                        }
-                    }
-                }
-            }
-
-            if should_close {
-                self.state.popup_open = false;
+            self.state.popup_open = popup_open;
+            // Commit edits when the popup closes (click outside or Escape).
+            if was_popup_open && !popup_open && self.state.is_modified() {
+                self.state.commit();
+                committed_changes = true;
             }
         }
 

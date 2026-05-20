@@ -69,13 +69,11 @@ impl FerriteApp {
                         .on_hover_text(t!("tooltip.recent_items").to_string());
                 }
 
-                // Toggle popup on click
-                let just_opened = if button_response.clicked() && has_recent_items {
-                    self.state.ui.show_recent_files_popup = !self.state.ui.show_recent_files_popup;
-                    self.state.ui.show_recent_files_popup // true if we just opened it
-                } else {
-                    false
-                };
+                // Toggle popup on click (Popup::open_bool keeps it alive each frame while open).
+                if button_response.clicked() && has_recent_items {
+                    self.state.ui.show_recent_files_popup =
+                        !self.state.ui.show_recent_files_popup;
+                }
 
                 // Show recent items popup (files and folders)
                 if self.state.ui.show_recent_files_popup && has_recent_items {
@@ -103,11 +101,17 @@ impl FerriteApp {
                         button_response.rect.left(),
                         button_response.rect.top() - 8.0, // Small gap above button
                     );
-                    let popup_response = egui::Area::new(popup_id)
-                        .order(egui::Order::Foreground)
-                        .fixed_pos(popup_pos)
-                        .pivot(egui::Align2::LEFT_BOTTOM) // Anchor at bottom-left so it grows upward
-                        .show(ctx, |ui| {
+                    // egui 0.34: Popup API replaces Area + manual click-outside (CloseOnClickOutside).
+                    let popup_response = egui::Popup::new(
+                        popup_id,
+                        ctx.clone(),
+                        egui::PopupAnchor::Position(popup_pos),
+                        button_response.layer_id,
+                    )
+                    .open_bool(&mut self.state.ui.show_recent_files_popup)
+                    .align(egui::emath::RectAlign::BOTTOM_START)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
                             egui::Frame::popup(ui.style()).show(ui, |ui| {
                                 // Use two-column layout if we have both files and folders
                                 let show_both_columns =
@@ -363,10 +367,12 @@ impl FerriteApp {
 
                                 action
                             })
-                        });
+                            .inner
+                    });
 
                     // Handle action after UI is done
-                    if let Some((path, is_file, focus)) = popup_response.inner.inner {
+                    if let Some(popup_inner) = popup_response {
+                    if let Some((path, is_file, focus)) = popup_inner.inner {
                         if is_file {
                             // Only close popup on normal click (focus=true)
                             // Keep open on shift+click to allow opening multiple files
@@ -431,10 +437,6 @@ impl FerriteApp {
                             }
                         }
                     }
-
-                    // Close popup when clicking outside (but not on the same frame we opened it)
-                    if popup_response.response.clicked_elsewhere() && !just_opened {
-                        self.state.ui.show_recent_files_popup = false;
                     }
                 }
 
@@ -606,17 +608,11 @@ impl FerriteApp {
                                     }
                                 ));
 
-                                if button_response.clicked() {
-                                    ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-                                }
-
-                                // Delimiter picker popup
-                                egui::popup_below_widget(
-                                    ui,
-                                    popup_id,
-                                    &button_response,
-                                    egui::PopupCloseBehavior::CloseOnClickOutside,
-                                    |ui| {
+                                // Delimiter picker popup (egui 0.34 Popup API)
+                                egui::Popup::from_toggle_button_response(&button_response)
+                                    .id(popup_id)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                                    .show(|ui| {
                                         ui.set_min_width(120.0);
                                         ui.label(
                                             egui::RichText::new(
@@ -640,7 +636,6 @@ impl FerriteApp {
                                             {
                                                 state.clear_delimiter_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup(popup_id));
                                         }
 
                                         ui.separator();
@@ -660,11 +655,9 @@ impl FerriteApp {
                                                 {
                                                     state.set_delimiter(delim);
                                                 }
-                                                ui.memory_mut(|mem| mem.close_popup(popup_id));
                                             }
                                         }
-                                    },
-                                );
+                                    });
 
                                 ui.separator();
 
@@ -692,17 +685,11 @@ impl FerriteApp {
                                     }
                                 ));
 
-                                if header_button_response.clicked() {
-                                    ui.memory_mut(|mem| mem.toggle_popup(header_popup_id));
-                                }
-
-                                // Header picker popup
-                                egui::popup_below_widget(
-                                    ui,
-                                    header_popup_id,
-                                    &header_button_response,
-                                    egui::PopupCloseBehavior::CloseOnClickOutside,
-                                    |ui| {
+                                // Header picker popup (egui 0.34 Popup API)
+                                egui::Popup::from_toggle_button_response(&header_button_response)
+                                    .id(header_popup_id)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                                    .show(|ui| {
                                         ui.set_min_width(120.0);
                                         ui.label(
                                             egui::RichText::new(t!("csv.header_row").to_string())
@@ -724,7 +711,6 @@ impl FerriteApp {
                                             {
                                                 state.clear_header_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
 
                                         ui.separator();
@@ -742,7 +728,6 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(true);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
 
                                         if ui
@@ -757,10 +742,8 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(false);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup(header_popup_id));
                                         }
-                                    },
-                                );
+                                    });
 
                                 ui.separator();
 
@@ -808,17 +791,11 @@ impl FerriteApp {
                             }
                         ));
 
-                        if encoding_button_response.clicked() {
-                            ui.memory_mut(|mem| mem.toggle_popup(encoding_popup_id));
-                        }
-
-                        // Encoding picker popup
-                        egui::popup_below_widget(
-                            ui,
-                            encoding_popup_id,
-                            &encoding_button_response,
-                            egui::PopupCloseBehavior::CloseOnClickOutside,
-                            |ui| {
+                        // Encoding picker popup (egui 0.34 Popup API)
+                        egui::Popup::from_toggle_button_response(&encoding_button_response)
+                            .id(encoding_popup_id)
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                            .show(|ui| {
                                 ui.set_min_width(150.0);
                                 ui.label(
                                     egui::RichText::new(t!("status.encoding_heading").to_string())
@@ -832,11 +809,9 @@ impl FerriteApp {
                                     let label = enc.to_uppercase();
                                     if ui.selectable_label(selected, label).clicked() {
                                         pending_encoding_change = Some(enc);
-                                        ui.memory_mut(|mem| mem.close_popup(encoding_popup_id));
                                     }
                                 }
-                            },
-                        );
+                            });
 
                         ui.separator();
 

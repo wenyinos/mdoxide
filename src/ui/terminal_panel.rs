@@ -2380,7 +2380,7 @@ impl TerminalPanel {
                     if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
                         pos_clone.set(Some(outer.min));
                     }
-                    size_clone.set(ctx.screen_rect().size());
+                    size_clone.set(crate::ui::window::viewport_window_rect(ctx).size());
 
                     egui::CentralPanel::default().show(ctx, |ui| {
                         // Handle shortcuts in this viewport

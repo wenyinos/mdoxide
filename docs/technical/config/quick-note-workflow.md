@@ -1,6 +1,6 @@
 # Quick note workflow (ephemeral untitled tabs)
 
-Optional editor mode (`Settings.quick_note_workflow`, **Settings → Files**): reduces friction for pathless “scratch” tabs.
+Default-on editor mode (`Settings.quick_note_workflow`, **Settings → Files**): reduces friction for pathless “scratch” tabs. Turn off in settings to restore the classic save confirmation for new tabs.
 
 ## Behavior
 

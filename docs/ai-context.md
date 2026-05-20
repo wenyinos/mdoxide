@@ -1,6 +1,6 @@
 # Ferrite - AI Context
 
-Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
+Rust (edition 2021) + egui 0.34.2 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file or `current-handover-prompt.md` — only update when explicitly requested.
@@ -12,7 +12,7 @@ Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retai
 - Use Context7 MCP tool to fetch library documentation when needed (resolve library ID first, then fetch docs).
 
 ## Tech Stack
-- **Language:** Rust 2021, egui 0.31.1 + eframe (immediate-mode GUI; bumped from 0.28 in v0.3.0 — see `docs/technical/platform/eframe-egui-031-upgrade.md`)
+- **Language:** Rust 2021 (MSRV **1.92**), egui **0.34.2** + eframe (glow on Windows; bumped 0.28 → 0.31 → 0.34 — see `docs/technical/platform/eframe-egui-031-upgrade.md`, `eframe-egui-034-upgrade.md`)
 - **Text:** ropey (rope buffer), comrak (Markdown AST), syntect (syntax highlighting), harfrust (OTL shaping)
 - **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3 | **PDF read:** hayro | **PDF write:** krilla + krilla-svg
 - **Memory:** mimalloc (Windows), jemalloc (Unix)
@@ -102,6 +102,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 
 ## Recently Changed
 
+- **2026-05:** **v0.3.0** — egui/eframe **0.34.2**, Rust **1.92** MSRV, skrifa text backend, Popup/Tooltip API migrations, HarfRust validation, Phosphor **0.12**. See `docs/technical/platform/eframe-egui-034-upgrade.md`.
 - **2026-05:** User-configurable **Ferrite accent** (`Settings.accent_color`): Settings/Welcome color picker; drives headings, selection tint, tabs, view R/S/V segment, productivity hub, status LSP/branch; markdown links unchanged. See `docs/technical/ui/theme-system.md`.
 
 ## Build & Test

@@ -2013,7 +2013,7 @@ pub struct Settings {
 
     /// Notepad++-style quick notes: pathless tabs close and exit without save prompts;
     /// unsaved buffers persist via session recovery when **Restore session** is on.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub quick_note_workflow: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2443,7 +2443,7 @@ impl Default for Settings {
             use_spaces: true,
             auto_save_enabled_default: false,
             auto_save_delay_ms: 15000, // 15 seconds default
-            quick_note_workflow: false,
+            quick_note_workflow: true,
 
             // Session & History
             restore_session: true, // Restore previous session by default

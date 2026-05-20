@@ -5,9 +5,20 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v0.3.0 work-in-progress
+## [Unreleased]
+
+## [0.3.0] - 2026-05-19
+
+Platform refresh: export, code run, Mermaid first wave, accent, quick-note workflow, Phosphor icons — on **eframe / egui 0.34.2** with **Rust 1.92** MSRV. See [`docs/technical/platform/eframe-egui-034-upgrade.md`](docs/technical/platform/eframe-egui-034-upgrade.md) and the [v0.3.0 regression matrix](docs/technical/platform/v0.3.0-regression-matrix.md) (includes 0.34 delta, Task 89).
 
 ### Added
+
+#### Platform (egui 0.34 / eframe 0.34 — Task 89)
+- **eframe / egui stack upgraded to 0.34.2** — Platform bump (0.28 → 0.31 → 0.34 for v0.3.0). **skrifa + vello_cpu** default text backend; **Phosphor 0.12**; Windows **glow** renderer retained. Migration: viewport rects (`screen_rect` → `viewport_rect` / `content_rect`), **Popup** API for menus/dropdowns, **Tooltip** API, ScrollArea edge-fade disabled globally for visual parity. See `docs/technical/platform/eframe-egui-034-upgrade.md`.
+- **HarfRust validation under egui 0.34** — Complex-script cursor/selection via cluster shaping; `shape_line_clusters`, `validate_cluster_byte_ranges`, 32 shaping unit tests. Word wrap + complex script still uses egui galley only (documented limit).
+- **Mutex / deadlock audit** — Cross-thread paths verified (single-instance, terminal, code-run workers, global caches); no `egui::Mutex` in Ferrite code.
+- **MSRV raised to Rust 1.92** — `rust-toolchain.toml`, `package.rust-version`, CI workflows read the pinned toolchain.
+- **v0.3.0 regression matrix updated** — 0.34-specific delta checks added to `docs/technical/platform/v0.3.0-regression-matrix.md`; Windows manual pass recorded (89.3–89.7).
 
 #### Platform (egui 0.31 / eframe 0.31)
 - **eframe / egui stack upgraded to 0.31.x** (Task 57) — Dependency bump from 0.28 with API migrations across themes, fonts, editor, markdown, terminal, and UI. See `docs/technical/platform/eframe-egui-031-upgrade.md`. Intended to address platform input/windowing issues tied to older winit (e.g. [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111)); confirm on target OS builds before closing.
@@ -55,7 +66,7 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 - **Spanish UI language** — **Español** added to the Settings / Welcome language selector (`locales/es.yaml`); system locale `es` / `es-*` detection wired through `Language::Spanish`.
 
 #### UI iconography — Phosphor Icons
-- **Phosphor icon font** — Integrated [`egui-phosphor`](https://github.com/alexbenis/egui-phosphor) **0.9.0** (pinned for egui 0.31). Regular-weight glyphs registered at startup; helpers `phosphor_font()` / `phosphor_rich_text()` and a central mapping module (`src/ui/phosphor_icons.rs`).
+- **Phosphor icon font** — Integrated [`egui-phosphor`](https://github.com/alexbenis/egui-phosphor) **0.12.0** (egui 0.34). Regular-weight glyphs registered at startup; helpers `phosphor_font()` / `phosphor_rich_text()` and a central mapping module (`src/ui/phosphor_icons.rs`).
 - **App chrome** — Ribbon, format toolbar, outline & productivity panels, terminal, settings & about, command palette, quick switcher, file tree, status bar, dialogs, title bar, tab close, theme toggle, and recovery UI now use Phosphor instead of emoji or mixed Unicode symbols.
 - **Preview & viewers** — Markdown preview widgets (table alignment, list remove, code **Run** / **Stop** / status, mermaid diagram-type icons & warnings), JSON/YAML/TOML tree viewer, CSV row-count banner, Gantt done checkmarks, ER diagram PK/FK markers, and editor gutter fold carets.
 - **Locale cleanup** — Removed duplicate emoji from UI strings in `en`, `de`, `es`, `ja`, and `zh_Hans` where icons are drawn separately (tree viewer toolbar, outline stats heading, CSV header labels).
@@ -63,6 +74,7 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 
 ### Changed
 
+- **Minimum Rust version: 1.92** — Required by the egui 0.34 stack; use `rustup toolchain install 1.92.0` or rely on `rust-toolchain.toml`.
 - **Undo granularity in raw mode** — Removed 500 ms time-based merging in `EditHistory`. Each `record_operations` call (typically one per dirty editor frame while typing) is now its own undo step, so Ctrl+Z steps back incrementally instead of reverting an entire fast-typing burst in one action. Replace edits (delete + insert from the same diff) still undo atomically. Rendered mode is unchanged at the block level (e.g. headings still commit on focus loss). See `docs/technical/editor/undo-redo.md` and `docs/technical/editor/edit-history.md`.
 - **Main ribbon toolbar always icon-only** — Removed the left collapse/expand control and section labels ("File", "Edit", "Tools", structured-data type name, Export text). The toolbar is now a fixed compact icon bar (28px tall); Save and Export dropdowns still show full labels inside their menus. Tooltips and keyboard shortcuts are unchanged.
 - **UI icons: emoji → Phosphor** — Replaced inconsistent emoji and one-off Unicode symbols across Ferrite's chrome and rendered-view controls with the Phosphor regular set for sharper, theme-consistent glyphs at all DPI scales. Mixed icon+text labels use separate Phosphor and proportional labels (or painter dual-font rendering) so glyphs render reliably; window titles stay text-only.
@@ -80,7 +92,7 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 
 ### Known issues (v0.3.0 non-blockers)
 
-These were surfaced by the v0.3.0 regression matrix on Win10 (proxy for Win11) and do **not** gate the v0.3.0 release. Triage scheduled for v0.3.x.
+These were surfaced by the v0.3.0 regression matrix on Win10/11 and do **not** gate the v0.3.0 release. Triage scheduled for v0.3.x.
 
 - **I-1 (S3, WIN-5):** The status-bar Help (`?`) button sits inside the bottom-right corner resize grab zone. Dragging from that corner to resize triggers the help action on release. Same class of bug as the previously-fixed top-right Close-button overlap; needs an analogous bottom-edge button-area exclusion in `src/ui/window.rs` resize hit-testing or a margin around the `?` button.
 - **I-2 (S3, TRM-3):** Typing CJK characters into the integrated terminal shows `????` on the prompt line, but the underlying shell receives the correct bytes (the `echo` *output* renders correctly). Almost certainly a Windows console active-code-page issue (PowerShell defaults to OEM; `chcp 65001` likely fixes it). Not a Ferrite render-path bug; documenting `chcp 65001` as a recommendation for CJK terminal users would resolve the user-visible symptom.

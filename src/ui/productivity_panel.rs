@@ -1363,7 +1363,7 @@ impl ProductivityPanel {
         // `egui::containers::Resize` (which sets
         // `desired_size = max(desired_size, last_content_size)` every frame)
         // can't run away if a content widget reports a wide preferred size.
-        let screen_h = ctx.screen_rect().height();
+        let screen_h = crate::ui::window::viewport_window_rect(ctx).height();
         let initial_w = dock_width.max(220.0);
         let max_w = initial_w.max(560.0);
 

@@ -216,7 +216,8 @@
 |----------|-------------|
 | [eframe Window](./technical/platform/eframe-window.md) | Window lifecycle, dynamic titles, responsive layout, state persistence |
 | **[eframe/egui 0.31 Upgrade](./technical/platform/eframe-egui-031-upgrade.md)** | **v0.3.0 GUI stack bump from 0.28 → 0.31.1 — breaking API migration patterns and validation** |
-| **[v0.3.0 Cross-Platform Regression Matrix](./technical/platform/v0.3.0-regression-matrix.md)** | **Manual regression test matrix for the egui 0.31 upgrade across Windows 11, macOS 14, Linux X11, and Wayland** |
+| [eframe/egui 0.34 Upgrade](./technical/platform/eframe-egui-034-upgrade.md) | **v0.3.0 GUI stack bump to 0.34.2 — viewport rects, Popup API, skrifa/HarfRust, MSRV 1.92** |
+| **[v0.3.0 Cross-Platform Regression Matrix](./technical/platform/v0.3.0-regression-matrix.md)** | **Manual regression matrix for v0.3.0 (egui 0.31 + 0.34 delta, Task 89 §8)** |
 | [Custom Title Bar](./technical/platform/custom-title-bar.md) | Windows-style custom title bar implementation |
 | [Window Resize](./technical/platform/window-resize.md) | Custom resize handles for borderless windows, edge detection |
 | [Windows Borderless Window](./technical/platform/windows-borderless-window.md) | Top edge resize fix, fullscreen toggle (F10), title bar button area exclusion |

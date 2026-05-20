@@ -218,8 +218,8 @@ impl AboutPanel {
     pub fn show(&mut self, ctx: &egui::Context, is_dark: bool) -> AboutPanelOutput {
         let mut output = AboutPanelOutput::default();
 
-        // Semi-transparent overlay
-        let screen_rect = ctx.screen_rect();
+        // Full-window overlay (viewport, not content_rect — covers custom title bar too).
+        let overlay_rect = crate::ui::window::viewport_window_rect(ctx);
         let overlay_color = if is_dark {
             Color32::from_rgba_unmultiplied(0, 0, 0, 180)
         } else {
@@ -228,10 +228,10 @@ impl AboutPanel {
 
         egui::Area::new(egui::Id::new("about_overlay"))
             .order(egui::Order::Middle)
-            .fixed_pos(screen_rect.min)
+            .fixed_pos(overlay_rect.min)
             .show(ctx, |ui| {
-                let response = ui.allocate_response(screen_rect.size(), egui::Sense::click());
-                ui.painter().rect_filled(screen_rect, 0.0, overlay_color);
+                let response = ui.allocate_response(overlay_rect.size(), egui::Sense::click());
+                ui.painter().rect_filled(overlay_rect, 0.0, overlay_color);
 
                 // Close on click outside
                 if response.clicked() {

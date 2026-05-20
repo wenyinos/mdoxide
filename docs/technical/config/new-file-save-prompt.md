@@ -10,9 +10,9 @@ Improved the save prompt logic to skip unnecessary prompts for unmodified untitl
 
 ## Implementation Details
 
-### Quick note workflow (opt-in)
+### Quick note workflow (on by default)
 
-When `Settings.quick_note_workflow` is true, `should_prompt_to_save` also returns **false** for all **pathless** tabs (even if modified), so close/quit does not block. See [quick-note-workflow.md](./quick-note-workflow.md).
+When `Settings.quick_note_workflow` is true (the default), `should_prompt_to_save` also returns **false** for all **pathless** tabs (even if modified), so close/quit does not block. See [quick-note-workflow.md](./quick-note-workflow.md).
 
 ### New Methods Added to Tab
 

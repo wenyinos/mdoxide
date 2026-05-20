@@ -27,6 +27,9 @@ const MIN_PANEL_WIDTH: f32 = 150.0;
 /// Maximum width of the file tree panel.
 const MAX_PANEL_WIDTH: f32 = 500.0;
 
+/// Height of the workspace name header row (matches ribbon row height).
+const WORKSPACE_HEADER_HEIGHT: f32 = 28.0;
+
 /// Indentation per tree level.
 const INDENT_PER_LEVEL: f32 = 16.0;
 
@@ -162,34 +165,36 @@ impl FileTreePanel {
                 }
 
                 // Header with workspace name and close button
-                ui.horizontal(|ui| {
-                    ui.add_space(4.0);
+                ui.allocate_ui_with_layout(
+                    Vec2::new(ui.available_width(), WORKSPACE_HEADER_HEIGHT),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.add_space(4.0);
 
-                    // Folder icon
-                    ui.label(phosphor_rich_text(FOLDER, 14.0));
+                        ui.label(phosphor_rich_text(FOLDER, 14.0));
 
-                    // Workspace name (truncated if needed)
-                    let _name_width = ui.available_width() - 30.0;
-                    ui.add(
-                        egui::Label::new(RichText::new(workspace_name).size(12.0).strong())
-                            .truncate(),
-                    );
+                        ui.add(
+                            egui::Label::new(RichText::new(workspace_name).size(12.0).strong())
+                                .truncate(),
+                        );
 
-                    // Close button (right-aligned with padding from resize handle)
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Add spacing to move button away from panel edge/resize handle
-                        ui.add_space(8.0);
-                        if ui
-                            .add(egui::Button::new(phosphor_rich_text(X, 12.0)).frame(false))
-                            .on_hover_text(t!("workspace.close_folder").to_string())
-                            .clicked()
-                        {
-                            output.close_requested = true;
-                        }
-                    });
-                });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add_space(8.0);
+                            if ui
+                                .add(
+                                    egui::Button::new(phosphor_rich_text(X, 12.0))
+                                        .frame(false)
+                                        .min_size(Vec2::new(20.0, 20.0)),
+                                )
+                                .on_hover_text(t!("workspace.close_folder").to_string())
+                                .clicked()
+                            {
+                                output.close_requested = true;
+                            }
+                        });
+                    },
+                );
 
-                ui.add_space(2.0);
                 ui.separator();
 
                 // Scrollable tree area

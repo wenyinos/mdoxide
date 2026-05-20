@@ -970,6 +970,15 @@ pub fn ttf_bytes_monospace_regular() -> &'static [u8] {
     JETBRAINS_REGULAR
 }
 
+/// Vertical line height in **points** for `font_id`, from egui's loaded font metrics.
+///
+/// Prefer this over laying out an empty string: with egui 0.34's skrifa backend an
+/// empty galley can report zero height while [`Fonts::row_height`] stays correct.
+#[must_use]
+pub fn row_height_for_font(ctx: &egui::Context, font_id: &FontId) -> f32 {
+    ctx.fonts_mut(|fonts| fonts.row_height(font_id))
+}
+
 /// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::ferrite::shaping).
 ///
 /// Named Inter/JetBrains families resolve to the matching weight/style TTF.

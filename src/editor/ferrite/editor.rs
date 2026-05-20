@@ -2142,16 +2142,17 @@ impl FerriteEditor {
                         }
                     }
                     if !tooltip_parts.is_empty() {
-                        egui::show_tooltip_at_pointer(
-                            ui.ctx(),
+                        egui::Tooltip::always_open(
+                            ui.ctx().clone(),
                             ui.layer_id(),
                             egui::Id::new("diag_tooltip"),
-                            |ui| {
-                                for part in &tooltip_parts {
-                                    ui.label(part);
-                                }
-                            },
-                        );
+                            egui::PopupAnchor::Pointer,
+                        )
+                        .show(|ui| {
+                            for part in &tooltip_parts {
+                                ui.label(part);
+                            }
+                        });
                     }
                 }
             }

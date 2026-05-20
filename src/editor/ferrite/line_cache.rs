@@ -4,6 +4,14 @@
 //! (text layouts) keyed by content hash. This avoids expensive galley recreation
 //! on each frame for unchanged lines.
 //!
+//! ## Galley invariants (egui 0.34 / skrifa)
+//!
+//! - [`egui::Galley::cursor_from_pos`] and [`egui::Galley::pos_from_cursor`] use
+//!   [`egui::text::CCursor`] **character** indices, not UTF-8 byte offsets.
+//! - Wrapped layout must use the same `wrap_width` for measure and paint.
+//! - Complex-script lines may use [`ShapedLine`]: HarfRust cluster **advances** for
+//!   width/cursor math; each cluster is still a standard egui galley for drawing.
+//!
 //! # Features
 //! - Content-hash based keys (same content = cache hit)
 //! - LRU eviction when cache exceeds `MAX_CACHE_ENTRIES`
@@ -653,24 +661,26 @@ impl LineCache {
         }
 
         let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(&font_id);
-        let glyphs = match super::shaping::shape_text(line_content, font_bytes, font_id.size) {
-            Ok(g) if !g.is_empty() => g,
+        let clusters = match super::shaping::shape_line_clusters(
+            line_content,
+            font_bytes,
+            font_id.size,
+        ) {
+            Ok(cs) if !cs.is_empty() => cs,
             Ok(_) => return None,
             Err(e) => {
-                log::debug!(target: "ferrite::shaping", "shaped-line: shape_text failed: {e}");
+                log::debug!(target: "ferrite::shaping", "shaped-line: shape failed: {e}");
                 return None;
             }
         };
 
-        let clusters = super::shaping::group_clusters(&glyphs, line_content.len());
-        if clusters.is_empty() {
-            return None;
-        }
+        debug_assert!(super::shaping::validate_cluster_byte_ranges(
+            line_content,
+            &clusters
+        ));
 
-        let row_height = painter
-            .layout_no_wrap(String::new(), font_id.clone(), color)
-            .size()
-            .y;
+        // Use Fonts::row_height — empty galleys can report 0 height under skrifa (0.34).
+        let row_height = crate::fonts::row_height_for_font(painter.ctx(), &font_id);
 
         let mut cluster_galleys = Vec::with_capacity(clusters.len());
         let mut x_offset: f32 = 0.0;
@@ -680,6 +690,16 @@ impl LineCache {
             let start = c.byte_start.min(end);
             let cluster_text = &line_content[start..end];
             let galley = painter.layout_no_wrap(cluster_text.to_string(), font_id.clone(), color);
+            let galley_width = galley.size().x;
+            // Cursor/selection use HarfRust advances; egui (skrifa) lays out cluster substring.
+            if galley_width > c.advance * 1.15 {
+                log::trace!(
+                    target: "ferrite::shaping",
+                    "cluster galley wider than shaped advance: text={cluster_text:?} \
+                     galley_w={galley_width:.2} advance={:.2}",
+                    c.advance
+                );
+            }
 
             cluster_galleys.push(ClusterGalley { galley, x_offset });
             x_offset += c.advance;

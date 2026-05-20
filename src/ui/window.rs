@@ -49,6 +49,14 @@ const TITLE_BAR_BUTTON_RIGHT_MARGIN: f32 = 12.0;
 /// status-bar controls) extends further inward than the resize cursor zone.
 const EDGE_CLICK_BLOCK_WIDTH: f32 = 24.0;
 
+/// Full window bounds in local coordinates (origin at top-left of the window).
+///
+/// Use for borderless resize hit-testing and full-window modal overlays.
+/// For UI laid out inside panels, prefer [`egui::Context::content_rect`].
+pub fn viewport_window_rect(ctx: &egui::Context) -> Rect {
+    ctx.viewport_rect()
+}
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -144,9 +152,8 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
         (pos, pressed, down)
     });
 
-    // Use screen_rect() which gives us the local coordinate rect of the window
-    // This is (0,0) to (width, height) in window-local coordinates
-    let window_rect = ctx.screen_rect();
+    // Full window in local coordinates (0,0) → (width, height) for edge hit-testing.
+    let window_rect = viewport_window_rect(ctx);
 
     let Some(pointer_pos) = pointer_pos else {
         if !primary_down {
@@ -368,7 +375,7 @@ pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeS
         return;
     }
 
-    let window_rect = ctx.screen_rect();
+    let window_rect = viewport_window_rect(ctx);
     let pointer = ctx.input(|i| i.pointer.hover_pos());
 
     let mut directions = Vec::new();
@@ -528,7 +535,7 @@ pub struct ConstrainedPanel {
 /// # Arguments
 ///
 /// * `desired_rect` - The desired position and size of the panel
-/// * `viewport` - The available viewport bounds (typically `ctx.screen_rect()`)
+/// * `viewport` - The available viewport bounds (typically [`viewport_window_rect`])
 /// * `constraints` - Size constraints and margin settings
 ///
 /// # Returns
@@ -538,7 +545,7 @@ pub struct ConstrainedPanel {
 /// # Example
 ///
 /// ```ignore
-/// let viewport = ctx.screen_rect();
+/// let viewport = viewport_window_rect(ctx);
 /// let desired = Rect::from_min_size(Pos2::new(100.0, 100.0), Vec2::new(500.0, 400.0));
 /// let result = constrain_rect_to_viewport(desired, viewport, &PanelConstraints::default());
 /// // Use result.pos and result.size to position the window

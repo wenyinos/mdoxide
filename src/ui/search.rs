@@ -366,8 +366,8 @@ impl SearchPanel {
             return output;
         }
 
-        // Get current viewport
-        let viewport = ctx.screen_rect();
+        // Root viewport bounds for floating panel placement (not panel-shrunk content_rect).
+        let viewport = crate::ui::window::viewport_window_rect(ctx);
         let viewport_size = viewport.size();
 
         // Check if viewport size changed (window resize, DPI change, split view toggle)
