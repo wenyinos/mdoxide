@@ -149,6 +149,17 @@ status:
     %{info}Muutmiseks klõpsa
   recent_files_heading: 📄 Hiljutised failid
   recent_folders_heading: 📁 Hiljutised kaustad
+  encoding_heading: Failide kodeering
+  untitled: Ilma nimeta
+  file_tooltip: |-
+    %{path}
+
+    Klõpsamine: avab
+    Shift+klõpsamine: avab taustal
+  folder_tooltip: |-
+    %{path}
+
+    Klõpsamine: avab töölauana
 dialog:
   unsaved_changes:
     title: Salvestamata muudatused
@@ -182,8 +193,20 @@ dialog:
     location: 'Asukoht: %{path}'
   html_export:
     export: Ekspordi…
+    open_after_export: Ava fail peale eksportimist
   go_to_line:
     go: Mine
+    title: Suundu rea juurde
+    enter_line: 'Sisesta rea number:'
+    range: 'Vahemik: 1-%{max}'
+  code_execution_consent:
+    title: Kas lubad käivitada selles dokumendis leiduvat programmikoodi?
+  pdf_export:
+    title: Ekspordi PDF-failina
+    description: Koosta sellest dokumendist PDF-fail, mis sisaldab kõik 
+      vajaliku.
+    page_size: Lehe suurus
+    margins: Veerised
 settings:
   title: Seadistused
   reset_all: Lähtesta kõik
@@ -198,6 +221,7 @@ settings:
     theme_dark: Tume kujundus
     theme_light: Hele kujundus
     theme_system: Süsteemi kujundus
+    restore_session: Rakenduse käivitamisel taasta viimatine sessioon
   editor:
     title: Muutmisvaade
     font_family: Kirjatüüp
@@ -243,6 +267,21 @@ outline:
   tab_statistics: Statistika
 stats:
   text_stats: Tekst
+  lines: Ridu
+  paragraphs: Lõike
+  characters: Tähemärke
+  words: Sõnu
+  structure: Struktuur
+  headings_total: Pealkirju
+  links: Linke
+  images: Pilte
+  tables: Tabeleid
+  blockquotes: Tsitaadiplokke
+  characters_no_spaces: Tähemärke (tühikuteta)
+  no_data: Statistikat pole saadaval
+  code_diagrams: Kood ja graafikud/joonised
+  code_blocks: Koodiplokke
+  mermaid_diagrams: Mermaidi diagramme
 title_bar:
   restore: Taasta
   maximize: Täisvaatesse
@@ -295,9 +334,103 @@ file_dialog:
 shortcuts:
   category:
     workspace: Tööala
+    file: Fail
+    edit: Muuda
+    view: Vaada
+    formatting: Vormindus
+    navigation: Liikumine
   workspace:
     quick_switcher: Failide kiirvahetus
     search_files: Otsi failidest
+    toggle_tree: Lülita failipuu sisse/välja
+  edit:
+    find: Otsi
+    redo: Korda tegevust
+    undo: Võta tegevus tagasi
+    find_replace: Otsi ja asenda
+    select_all: Vali kõik
+    copy: Kopeeri
+    cut: Lõika
+    paste: Aseta
+    delete_line: Kustuta rida
+    duplicate_line: Tee reast koopia
+    move_line_up: Tõsta rida ülespoole
+    move_line_down: Tõsta rida allapoole
+    select_next_occurrence: Vali järgmine vaste
+  file:
+    close_tab: Sulge vahekaart
+    save_as: Salvesta kui
+    save: Salvesta
+    open: Ava fail
+    new: Uus fail
+  commands:
+    insert_toc: Lisa sisukord
+    print_preview: Printimise eelvaade
+    export_pdf: Ekspordi PDF-failina
+    export_html: Ekspordi HTML-failina
+    open_about: Rakenduse teave / Abiteave
+    open_settings: Ava seadistused
+    save: Salvesta
+    undo: Võta tegevus tagasi
+    redo: Korda tegevust
+    find: Otsi
+    bold: Paks kiri
+    italic: Kaldkiri
+    link: Link
+    image: Pilt
+    heading_1: Pealkiri 1
+    heading_2: Pealkiri 2
+    heading_3: Pealkiri 3
+    heading_4: Pealkiri 4
+    heading_5: Pealkiri 5
+    heading_6: Pealkiri 6
+    save_as: Salvesta kui
+    open: Ava fail
+    new: Uus fail
+    new_tab: Uus vahekaart
+    close_tab: Sulge vahekaart
+    next_tab: Järgmine vahekaart
+    prev_tab: Eelmine vahekaart
+    go_to_line: Suundu rea juurde
+    quick_open: Kiiravamine
+    toggle_view_mode: Vaheta vaaterežiime
+    cycle_theme: Vaheta kujundusi
+    toggle_zen_mode: Lülita zen-vaade sisse/välja
+    toggle_fullscreen: Lülita täisekraanivaade sisse/välja
+    delete_line: Kustuta rida
+    duplicate_line: Tee reast koopia
+    move_line_up: Tõsta rida ülespoole
+    move_line_down: Tõsta rida allapoole
+    select_next_occurrence: Vali järgmine vaste
+    find_replace: Otsi ja asenda
+    find_next: Näita järgmist
+    find_prev: Näita eelmist
+    search_in_files: Otsi failidest
+    inline_code: Lõigusisene kood
+    code_block: Koodiplokk
+    blockquote: Tsitaadiplokk
+    bullet_list: Nummerdamata loend
+    numbered_list: Nummerdatud loend
+  title: Klaviatuuri kiirklahvid
+  expand_hint: Kategooria näitamiseks või peitmiseks klõpsa temal
+  view:
+    zoom_in: Suumi sisse/suurenda
+    zoom_out: Suumi välja/vähenda
+    reset_zoom: Lähtesta suum
+    settings: Seadistused
+    about: Rakenduse teave / Abiteave
+  format:
+    bold: Paks kiri
+    italic: Kaldkiri
+    underline: Allajoonitud kiri
+    link: Lisa link
+    code: Lõigusisene kood
+  nav:
+    next_tab: Järgmine vahekaart
+    prev_tab: Eelmine vahekaart
+    go_to_line: Suundu rea juurde
+    find_next: Näita järgmist
+    find_prev: Näita eelmist
 workspace:
   close_folder: Sulge kaust
   new_file: Uus fail
@@ -321,3 +454,52 @@ terminal:
     ferrite_workspace: Ferrite'i tööala
 productivity:
   workspace_hint: Ava tööala ning ülesanded ja märked säilivad
+view_mode:
+  raw_desc: Teksti muutmine otse markdownina
+  rendered_desc: WYSIWYG ehk „Näed, nagu on“ muutmisvaade
+  split_desc: Teksti muutmine otse markdownina + lõplik visuaal kõrvuti
+search:
+  title: Otsi failidest
+  label: 'Otsi:'
+  placeholder: Sisesta otsitav tekst…
+  more_matches: '    ... täiendavat vastet pole näidatud'
+  keyboard_hints: Otsimiseks vajuta sisestusklahvi • Tulemuse avamiseks klõpsa •
+    Esc-klahviga sulged vaate
+about:
+  title: Rakenduse teave / Abiteave
+  tab:
+    about: Rakenduse teave
+    shortcuts: Kiirklahvid
+  links: Lingid
+  github_label: 'GitHub:'
+  license: Litsents
+  view_on_github: Vaata GitHubis
+  github_tooltip: Ava lähtekoodihoidla veebibrauseris
+  report_issue_label: 'Teata veast või probleemist:'
+  submit_bug: Koosta veateade
+  issue_tooltip: Ava veahaldus veebibrauseris
+  built_with: Kompileerimisel oli kasutusel
+  license_type: MIT litsents
+  copyright: © 2026 Ferrite'i kaasautorid
+  version: Versioon %{version}
+notification:
+  restored_auto_save: Taastatud automaatsest salvestusest
+  auto_save_discarded: Oled loobunud automaatselt salvestatust
+  session_restored: Sessioon on taastatud
+  large_file_performance: Fail on väga suur (%{size} MB). See võib mõjutada 
+    jõudlust.
+  large_file_loading: Laadin suurt faili (%{size} MB) taustal...
+  file_loaded: Faili laadimine õnnestus (%{size} MB)
+  file_load_failed: 'Viga faili laadimisel: %{error}'
+  format_failed: 'Vormindamine ei õnnestunud: %{error}'
+  parse_error: 'Viga töölemisel/parsimisel: %{error}'
+  no_document_validate: Pole dokumenti, mida kontrollida
+common:
+  ok: Sobib
+  copy: Kopeeri
+  error: Viga
+  dismiss: Loobu
+widgets:
+  code_block:
+    copy_tooltip: Kopeeri lõikelauale
+    finish_tooltip: Lõpeta muutmine
