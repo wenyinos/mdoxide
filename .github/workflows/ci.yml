@@ -1,11 +1,7 @@
-# PR / push CI — compile and test with project MSRV (rust-toolchain.toml)
+# PR CI — compile and test with project MSRV (rust-toolchain.toml)
 name: CI
 
 on:
-  push:
-    branches:
-      - master
-      - 'egui-*'
   pull_request:
 
 env:
