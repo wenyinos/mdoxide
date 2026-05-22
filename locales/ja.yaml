@@ -562,6 +562,8 @@ shortcuts:
   # File shortcuts (for help panel)
     export_pdf: PDF へエクスポート
     print_preview: 印刷プレビュー
+    toggle_terminal: ターミナルの切り替え
+    toggle_productivity_hub: Productivity Hub を切り替え
   file:
     new: "新しいファイル"
     open: "ファイルを開く"

@@ -221,8 +221,11 @@ settings:
       Deaktiviert: mit einer leeren Karteikarte starten. Sitzungsdaten werden immer
       gespeichert."
     quick_note_workflow: "Schnellnotiz-Workflow (unbenannte Tabs)"
-    quick_note_workflow_tooltip: "Unbenannte Tabs schließen ohne Speicherdialog; Beenden mit geändertem unbenanntem Tab ohne Rückfrage. Ungespeicherter Text landet weiterhin in der Sitzungswiederherstellung, wenn Wiederherstellen aktiv ist."
-    quick_note_workflow_hint: "Doppelklick auf unbenannten Tab für den Anzeigenamen. Deaktivieren für die üblichen Speicherabfragen."
+    quick_note_workflow_tooltip: "Unbenannte Tabs schließen ohne Speicherdialog; Beenden
+      mit geändertem unbenanntem Tab ohne Rückfrage. Ungespeicherter Text landet weiterhin
+      in der Sitzungswiederherstellung, wenn Wiederherstellen aktiv ist."
+    quick_note_workflow_hint: "Doppelklick auf unbenannten Tab für den Anzeigenamen.
+      Deaktivieren für die üblichen Speicherabfragen."
     enable_auto_save: "Standardmäßig automatische Speicherung aktivieren"
     auto_save_tooltip: "Bei neuen Dokumenten ist automatische Speicherung aktiviert.
       Verwendung von temporären Dateien, um Datenverlust zu vermeiden."
