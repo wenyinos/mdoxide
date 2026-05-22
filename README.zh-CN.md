@@ -615,6 +615,7 @@ Rust 1.70+，egui/eframe 图形界面，comrak Markdown 解析，ropey 绳索文
 - [Task Master](https://github.com/eyaltoledano/claude-task-master) — 开发任务管理
 
 ### 贡献者
+- [@moabtools](https://github.com/moabtools) — 渲染视图中 Ctrl+Home / Ctrl+End 跳转到文档首尾（[PR #137](https://github.com/OlaProeis/Ferrite/pull/137)）
 - [@liuxiaopai-ai](https://github.com/liuxiaopai-ai) — Nix/NixOS flake 支持，可复现构建与开发 shell（[PR #92](https://github.com/OlaProeis/Ferrite/pull/92)）
 - [@blizzard007dev](https://github.com/blizzard007dev) — 首次启动欢迎页（[PR #80](https://github.com/OlaProeis/Ferrite/pull/80)）
 - [@wolverin0](https://github.com/wolverin0) — 集成终端工作区与 Productivity Hub（[PR #74](https://github.com/OlaProeis/Ferrite/pull/74)）
