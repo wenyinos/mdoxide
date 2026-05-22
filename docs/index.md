@@ -7,7 +7,7 @@
 ## Core Context
 - [AI Context](./ai-context.md) - Core project architecture, rules, and conventions (attach to every AI chat)
 - [README](../README.md) - Project overview and installation
-- [macOS install & Gatekeeper](./install/macos.md) - Unsigned CI bundles, Gatekeeper / quarantine workarounds (#130); signing in v0.3.1
+- [macOS install & Gatekeeper](./install/macos.md) - Unsigned CI bundles, Gatekeeper / quarantine workarounds (#130)
 - [Building Guide](./building.md) - Build from source instructions
 - [CLI Reference](./cli.md) - Command-line interface documentation
 - [Contributing](../CONTRIBUTING.md) - Contribution guidelines
@@ -239,7 +239,7 @@
 | **[SignPath Code Signing](./technical/platform/signpath-code-signing.md)** | **Windows code signing via SignPath for OSS** |
 | **[Single-Instance Protocol](./technical/platform/single-instance.md)** | **Lock file + TCP IPC to open files in existing window** |
 | **[macOS .app Bundle CI](./technical/platform/macos-app-bundle-ci.md)** | **CI workflow for proper macOS .app bundle packaging** |
-| [macOS Gatekeeper (GitHub Releases)](./technical/platform/macos-gatekeeper-github-releases.md) | Unsigned v0.3.0 artifacts, doc map (#130), release checklist; signing in v0.3.1 |
+| [macOS Gatekeeper (GitHub Releases)](./technical/platform/macos-gatekeeper-github-releases.md) | Unsigned CI artifacts, doc map (#130), release checklist |
 | [macOS Markdown file association](./technical/platform/macos-markdown-file-association.md) | UTI for .md files, Finder Open With / default app |
 | [macOS Intel CPU Optimization](./technical/platform/macos-intel-cpu-optimization.md) | Idle repaint optimization to reduce CPU usage on Intel Macs |
 | [Intel Mac Repaint Investigation](./technical/platform/intel-mac-continuous-repaint-investigation.md) | Investigation into continuous repaint issues on Intel Macs |
@@ -344,7 +344,7 @@
 
 | Guide | Description |
 |-------|-------------|
-| [macOS install & Gatekeeper](./install/macos.md) | Unsigned CI bundles, macOS 15.x / Sequoia, `xattr` quarantine removal, temporary workarounds until v0.3.1 signing |
+| [macOS install & Gatekeeper](./install/macos.md) | Unsigned CI bundles, macOS 15.x / Sequoia, `xattr` quarantine removal, Open Anyway workarounds |
 | [GitHub Release checklist](./github-release-checklist.md) | Pre-tag, GitHub Release, Flathub, and Nix steps; macOS Gatekeeper blurb (#130) |
 | [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
 | [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n, for Weblate extraction |

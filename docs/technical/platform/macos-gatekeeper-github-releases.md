@@ -4,7 +4,7 @@
 
 CI-built macOS artifacts (`Ferrite.app` inside `.dmg` / `.tar.gz`) ship **without** Apple Developer ID signing or notarization through **v0.3.0**. Gatekeeper—especially on **macOS 15.x**—may block or warn. This document maps **where** that behavior is documented and **what** maintainers ship.
 
-**Tracking:** [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130). **Planned fix:** Developer ID sign + notarize in CI for **v0.3.1** ([`ROADMAP.md`](../../../ROADMAP.md)).
+**Tracking:** [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130). Signed GitHub releases depend on Apple Developer Program enrollment and CI wiring — no release date committed.
 
 ## User-facing
 

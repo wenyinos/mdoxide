@@ -2,7 +2,7 @@
 
 GitHub release builds of Ferrite for macOS ship as a proper `Ferrite.app` bundle (see [`macos-app-bundle-ci.md`](../technical/platform/macos-app-bundle-ci.md)). **v0.3.0** artifacts from CI are **not** signed with an Apple Developer ID and are **not** notarized. That matches how many open-source projects ship macOS binaries today, but **Gatekeeper**—especially on **macOS 15.x (Sequoia), including 15.6+**—may block or warn on first launch because the system treats the download as untrusted until you explicitly allow it.
 
-**This is a temporary distribution limitation.** Apple Developer ID signing plus notarization in CI is planned for **v0.3.1** (see [`ROADMAP.md`](../../ROADMAP.md)). Background: [GitHub issue #130](https://github.com/OlaProeis/Ferrite/issues/130).
+GitHub CI builds are not Developer ID signed or notarized. Use the workarounds below, build from source, or install via Homebrew. Tracked: [GitHub issue #130](https://github.com/OlaProeis/Ferrite/issues/130).
 
 ---
 
@@ -67,6 +67,6 @@ If `com.apple.quarantine` is absent after `xattr -dr`, Gatekeeper should no long
 ## Related links
 
 - [GitHub #130 — Gatekeeper / macOS 15.x](https://github.com/OlaProeis/Ferrite/issues/130)
-- [Roadmap — v0.3.1 signing & notarization](../../ROADMAP.md)
+- [Roadmap](../../ROADMAP.md)
 - [Building from source](../building.md)
 - [macOS `.app` CI packaging](../technical/platform/macos-app-bundle-ci.md)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-macOS releases are packaged as proper `.app` bundles instead of raw binaries so Finder, Spotlight, and document associations behave like a normal Mac app. **GitHub CI builds are still not Developer ID signed or notarized** (as of **v0.3.0**), so Gatekeeper may still warn or block on downloaded artifacts—see **[macOS install & Gatekeeper](../../install/macos.md)** and [#130](https://github.com/OlaProeis/Ferrite/issues/130). Signing + notarization is planned for **v0.3.1**.
+macOS releases are packaged as proper `.app` bundles instead of raw binaries so Finder, Spotlight, and document associations behave like a normal Mac app. **GitHub CI builds are not Developer ID signed or notarized**, so Gatekeeper may still warn or block on downloaded artifacts—see **[macOS install & Gatekeeper](../../install/macos.md)** and [#130](https://github.com/OlaProeis/Ferrite/issues/130).
 
 ## Key Changes
 

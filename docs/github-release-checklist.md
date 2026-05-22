@@ -29,14 +29,14 @@ git push origin master && git push origin vX.Y.Z
 ## After the GitHub Release workflow runs
 
 1. Confirm all platform artifacts attached (Windows signed zip/MSI/PAF, Linux tar/deb/rpm, macOS DMG + tar per arch).
-2. Paste the macOS Gatekeeper block below into the release description (v0.3.x until signing ships).
+2. Paste the macOS Gatekeeper block below into the release description (while GitHub macOS builds remain unsigned).
 3. Spot-check links in the pasted section (issue #130, install doc).
 
 ---
 
-## macOS — paste into release description (v0.3.0 until signing ships)
+## macOS — paste into release description (unsigned CI builds)
 
-**Until [v0.3.1](../ROADMAP.md) adds Developer ID signing and notarization**, prepend or append the following block to the GitHub Release body so macOS downloaders see it immediately (see [#130](https://github.com/OlaProeis/Ferrite/issues/130)).
+While GitHub **DMG / `.tar.gz`** artifacts are **not** Developer ID signed or notarized, prepend or append the following block to the GitHub Release body so macOS downloaders see it immediately (see [#130](https://github.com/OlaProeis/Ferrite/issues/130)).
 
 Copy everything inside the fence:
 
@@ -50,8 +50,6 @@ GitHub **DMG / `.tar.gz`** builds for **v0.3.x** are **unsigned** and **not nota
 - **Terminal** (reliable): `xattr -dr com.apple.quarantine /Applications/Ferrite.app` — change the path if `Ferrite.app` is not in Applications.
 - **Finder:** Control-click `Ferrite.app` → **Open** → **Open** (may not work on every 15.x build).
 - **Homebrew:** `brew install --cask ferrite` often avoids quarantine friction.
-
-**Proper fix:** Apple Developer ID signing + notarization is planned for **v0.3.1**.
 
 Full detail: [docs/install/macos.md](https://github.com/OlaProeis/Ferrite/blob/master/docs/install/macos.md)
 ```

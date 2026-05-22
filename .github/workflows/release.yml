@@ -333,7 +333,7 @@ jobs:
   # The glibc build (Ubuntu 22.04) provides good compatibility across Linux distributions.
 
   # Create GitHub Release with all artifacts
-  # Maintainer note: until macOS Developer ID signing ships (v0.3.1), paste the Gatekeeper
+  # Maintainer note: GitHub macOS builds are unsigned — paste the Gatekeeper
   # block from docs/github-release-checklist.md into the release description (#130).
   release:
     name: Create Release

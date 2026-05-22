@@ -48,7 +48,7 @@ Ferrite does **NOT** access passwords, browser data, or make unsolicited network
 <details>
 <summary><strong>🍎 macOS Installation & Gatekeeper</strong></summary>
 
-**GitHub Release** `.dmg` / `.tar.gz` builds through **v0.3.0** are packaged as `Ferrite.app` but are **not** signed with an Apple Developer ID and are **not** notarized (CI limitation). **Gatekeeper**, especially on **macOS 15.x (Sequoia / 15.6+)**, may block or warn on first launch—see [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130). **Developer ID signing + notarization is planned for v0.3.1** ([roadmap](ROADMAP.md)).
+**GitHub Release** `.dmg` / `.tar.gz` builds are packaged as `Ferrite.app` but are **not** signed with an Apple Developer ID and are **not** notarized (CI limitation). **Gatekeeper**, especially on **macOS 15.x (Sequoia / 15.6+)**, may block or warn on first launch—see [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130) and the workarounds below.
 
 📖 **Full troubleshooting:** [docs/install/macos.md](docs/install/macos.md)
 
@@ -123,7 +123,7 @@ This transparency is intentional — I want others to learn from (and improve up
 
 > ✨ **v0.3.0 (Latest):** **eframe / egui 0.34.2** platform refresh. **PDF + themed HTML export**. **Executable code blocks** (`▶ Run`). **Rendered edit session** (one-click WYSIWYG block switching). **Split-view scroll sync**. **User accent color**. **Mermaid** insert toolbar + validation + flowchart polish. **Phosphor icons**. **Session recovery** hardening. **Quick note workflow**. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 🛠️ **Coming in v0.3.1:** macOS **Developer ID signing + notarization** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)), LSP diagnostics panel, executable code block hardening, and remaining Mermaid parity. See [ROADMAP.md](ROADMAP.md) for the full plan.
+> 🛠️ **Coming in v0.3.1:** LSP diagnostics panel, executable code block hardening, and remaining Mermaid parity. See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 > 📦 **v0.2.6 Highlights:** Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
@@ -361,7 +361,7 @@ tar -xzf ferrite-macos-x64.tar.gz
 cp -R Ferrite.app /Applications/
 ```
 
-> **Gatekeeper (GitHub downloads, v0.3.0):** Unsigned / non-notarized CI builds may be blocked on **macOS 15.x**. See **[docs/install/macos.md](docs/install/macos.md)** — quickest fix: `xattr -dr com.apple.quarantine /Applications/Ferrite.app` (adjust path). Signing + notarization: **v0.3.1** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)).
+> **Gatekeeper (GitHub downloads):** Unsigned / non-notarized CI builds may be blocked on **macOS 15.x**. See **[docs/install/macos.md](docs/install/macos.md)** — quickest fix: `xattr -dr com.apple.quarantine /Applications/Ferrite.app` (adjust path). Tracked: [#130](https://github.com/OlaProeis/Ferrite/issues/130).
 
 </details>
 

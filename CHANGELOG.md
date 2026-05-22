@@ -55,7 +55,7 @@ The native flowchart renderer (no mmdr / SVG fallback) gained several rendering 
 - **Productivity Hub polish** — Card layout, Pomodoro emphasis, floating **×** re-docks to sidebar (does not hide the hub), stable docked widths via clipped child UI, detached window respects user resize without content-driven growth or a fixed 560px width floor, scrollbar margin vs resize handle (`docs/technical/productivity/productivity-panel.md`).
 
 #### Distribution & fonts
-- **macOS Gatekeeper troubleshooting** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — Unsigned CI `.app` on macOS 15.x: docs at `docs/install/macos.md`, index + release checklist links; signing/notarization planned v0.3.1.
+- **macOS Gatekeeper troubleshooting** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) — Unsigned CI `.app` on macOS 15.x: docs at `docs/install/macos.md`, index + release checklist links; quarantine / Open Anyway workarounds documented.
 - **Custom font picker stability (Intel macOS)** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred font load until explicit combo selection to avoid spurious error toast (`docs/technical/fonts/custom-font-picker-deferred-load.md`).
 
 #### Files & session

@@ -277,7 +277,7 @@ cargo test shaping:: # 32/32
 |-------|--------|
 | `App::update` → `App::ui` / `App::logic` lifecycle | Separate task |
 | Wayland / macOS Sonoma keyboard verification [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111) | Community / CI hardware |
-| macOS Developer ID signing [#130](https://github.com/OlaProeis/Ferrite/issues/130) | v0.3.1 |
+| macOS Developer ID signing [#130](https://github.com/OlaProeis/Ferrite/issues/130) | Blocked on Apple Developer Program enrollment |
 
 ## Verification
 

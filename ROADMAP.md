@@ -27,7 +27,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 
 ### Platform & Distribution
 - [x] **macOS Gatekeeper blocking** ([#93](https://github.com/OlaProeis/Ferrite/issues/93)) - Fixed: CI now packages proper `.app` bundle via `cargo-bundle`.
-- [ ] **macOS 15.x Gatekeeper on unsigned GitHub releases** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - **v0.3.0** `.app` artifacts lack Developer ID signing / notarization; users may need quarantine removal or **Open Anyway**. Documented: [`docs/install/macos.md`](docs/install/macos.md). **Fix: v0.3.1** — signing & notarization in CI.
+- [ ] **macOS 15.x Gatekeeper on unsigned GitHub releases** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - GitHub CI `.app` artifacts lack Developer ID signing / notarization; users may need quarantine removal or **Open Anyway**. Documented: [`docs/install/macos.md`](docs/install/macos.md). Signed GitHub releases depend on Apple Developer Program enrollment and CI wiring — no release date committed.
 - [ ] **Wayland keyboard input on Ubuntu 24.04** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) - **v0.3.0** ships **egui 0.34 / winit 0.31+**. **Release gate:** confirm on real Ubuntu 24.04 Wayland before closing #106; until then the workaround remains `WAYLAND_DISPLAY= ferrite` for 0.2.x builds.
 - [ ] **macOS Sonoma keyboard input** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) - **v0.3.0** ships the 0.34 stack; **release gate:** verify on Sonoma hardware before closing #111.
 - [x] **Windows 11 borderless window offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Fixed in v0.2.8 with `.with_transparent(true)` DWM workaround. v0.3.0 ships **egui 0.34.2** / winit 0.31+ stack (Task 38); close #112 after verification on target hardware.
@@ -302,9 +302,6 @@ Docs: add `docs/technical/editor/raw-table-alignment.md` when implemented; link 
 #### Platform & Distribution
 **Windows**
 - [ ] **Inno Setup installer** - Alternative to MSI for users who prefer it; smaller download.
-
-**macOS**
-- [ ] **App signing & notarization** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - Apple Developer Program enrollment; CI integration for Developer ID sign + notarize so GitHub **DMG/tar.gz** installs avoid Gatekeeper friction (follow-up to unsigned **v0.3.0** macOS artifacts).
 
 ---
 
