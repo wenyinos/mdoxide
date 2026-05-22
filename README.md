@@ -130,7 +130,8 @@ This transparency is intentional — I want others to learn from (and improve up
 ## Features
 
 ### Core Editing
-- **WYSIWYG Markdown Editing** - Edit markdown with live preview, click-to-edit formatting, and syntax highlighting
+- **WYSIWYG Markdown Editing** - Edit markdown with live preview, **one-click block switching** between headings, paragraphs, lists, and table cells in rendered mode, click-to-edit formatting, and syntax highlighting
+- **Executable Code Blocks** - Run shell or Python fenced blocks from rendered/split preview (`▶ Run`); inline ANSI output, timeout, and Stop (opt-in via Settings; first-run consent)
 - **Multi-Format Support** - Native support for Markdown, JSON, CSV, YAML, and TOML files
 - **Multi-Encoding Support** - Auto-detect and preserve file encodings (UTF-8, Latin-1, Shift-JIS, Windows-1252, GBK, and more)
 - **Tree Viewer** - Hierarchical view for JSON/YAML/TOML with inline editing, expand/collapse, and path copying
@@ -139,7 +140,7 @@ This transparency is intentional — I want others to learn from (and improve up
 - **Undo/Redo** - Full undo/redo support per tab
 
 ### View Modes
-- **Split View** - Side-by-side raw editor and rendered preview with resizable divider; both panes are fully editable
+- **Split View** - Side-by-side raw editor and rendered preview with resizable divider; both panes are fully editable; optional **live scroll sync** (minimap **Sync** / **2-way** controls)
 - **Zen Mode** - Distraction-free writing with centered text column
 
 ### Editor Features
@@ -165,8 +166,11 @@ This transparency is intentional — I want others to learn from (and improve up
 Native rendering of 11 diagram types directly in the preview:
 - Flowchart, Sequence, Pie, State, Mindmap
 - Class, ER, Git Graph, Gantt, Timeline, User Journey
+- **Insert templates** - Format toolbar → **Insert → Mermaid…** for starter snippets per diagram type
+- **Inline validation** - Parse errors in preview with squiggles on broken `mermaid` blocks in the raw editor
+- **Flowchart polish** - Improved edge routing, extra shapes, `style` / classDef support; state diagrams support fork/join and history nodes
 
-> **v0.2.5 Mermaid Update:** Native Mermaid rendering now supports YAML frontmatter, parallel edges (`A --> B & C`), `classDef`/`linkStyle` styling, improved subgraphs, and more. Complex diagrams may still have rendering differences from mermaid.js. See [ROADMAP.md](ROADMAP.md) for planned improvements.
+> **v0.3.0 Mermaid update:** Insert toolbar, syntax help (F1), inline validation, flowchart edge-routing and layout fixes, and state-diagram pseudostates. Complex diagrams may still differ from mermaid.js. See [ROADMAP.md](ROADMAP.md) for planned parity work.
 
 ### CSV/TSV Viewer
 - **Native Table View** - View CSV and TSV files in a formatted table with fixed-width column alignment
@@ -176,8 +180,10 @@ Native rendering of 11 diagram types directly in the preview:
 
 ### Workspace Features
 - **Workspace Mode** - Open folders with file tree, quick switcher (Ctrl+P), and search-in-files (Ctrl+Shift+F)
+- **Workspace File Index** - Ctrl+P and Search in Files scan the **entire workspace** in the background (not only expanded folders in the tree)
+- **Quick Note Workflow** - Pathless scratch tabs: quit without a save dialog by default; closing a tab still prompts; unsaved notes persist via session recovery (Settings → Files)
 - **Git Integration** - Visual status indicators (modified, added, untracked, ignored) with auto-refresh on save, focus, and file changes
-- **Session Persistence** - Restore open tabs, cursor positions, and scroll offsets on restart
+- **Session Persistence** - Restore open tabs, cursor positions, and scroll offsets on restart; hardened crash recovery with identity checks and disk-conflict banner
 
 ### Terminal Workspace
 - **Integrated Terminal** - Multiple instances with shell selection (PowerShell, CMD, WSL, bash)
@@ -189,10 +195,11 @@ Native rendering of 11 diagram types directly in the preview:
 - **AI-Ready** - Visual "breathing" indicator when terminal is waiting for input (perfect for AI agents)
 
 ### Additional Features
-- **Light & Dark Themes** - Beautiful themes with runtime switching
+- **Light & Dark Themes** - Beautiful themes with runtime switching; **custom Ferrite accent color** (Settings / Welcome) for headings, selection, tabs, and chrome
 - **Document Outline & Statistics** - Navigate with outline panel; tabbed statistics showing word count, reading time, heading/link/image counts
-- **Export Options** - Export to HTML with themed styling, or copy as HTML
-- **Formatting Toolbar** - Quick access to bold, italic, headings, lists, links, and more
+- **Export & Print** - Export to **PDF** or **themed HTML** (options dialog, Mermaid as SVG); **print preview** opens a temp PDF in the in-app viewer; copy as HTML
+- **Formatting Toolbar** - Quick access to bold, italic, headings, lists, links, Mermaid insert, and more
+- **Phosphor Icons** - Consistent icon font across ribbon, toolbar, panels, and preview controls
 - **Live Pipeline** - Pipe JSON/YAML content through shell commands (for developers)
 - **Custom Window** - Borderless window with custom title bar and resize handles
 - **Recent Files & Folders** - Click filename in status bar to access recently opened files and workspace folders
