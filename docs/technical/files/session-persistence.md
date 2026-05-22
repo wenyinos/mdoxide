@@ -34,6 +34,17 @@ The session persistence system consists of three main components:
    - Tab ID
    - Full document content
    - Save timestamp
+   - **`path`** (added in task 106) — file path the recovery is anchored to (`None` for untitled tabs)
+   - **`original_content_hash`** (task 106) — hash of the on-disk content the tab was loaded from when the recovery was written
+   - **`schema_version`** (task 106) — defaults to `1` for legacy files via serde defaults; future schema bumps are rejected at the loader boundary
+
+4. **AutoSaveMetadata** - JSON header for `<file>.autosave` temp files:
+   - Tab ID, original path, save timestamp, content hash
+   - **`disk_content_hash`** (task 106) — hash of the on-disk content the tab was loaded from at the moment this autosave was written; defaults to `None` for legacy files via serde defaults
+
+5. **RecoveryConflict** (task 106.5) - Lives on `AppState.recovery_conflicts` keyed by `tab_id` while the central panel banner is visible:
+   - `recovered_content` — buffer applied during restore
+   - `on_disk_content` — current disk content captured at restore time
 
 ### File Locations
 
@@ -112,6 +123,108 @@ When crash recovery is detected with unsaved changes, a modal dialog appears off
 
 If Ferrite was launched with file paths (e.g. double-click while the app was closed), those paths are **deferred** until the user answers the dialog, then opened afterward (existing tabs with the same path are focused, not duplicated).
 
+### Recovery vs. Disk Conflict Banner (task 106.5)
+
+When an identity-validated recovery file is applied but its buffer differs from
+the current disk content, the central panel renders a non-blocking banner above
+the editor for the active tab. Editing is allowed while the banner is visible —
+only the two action buttons clear it:
+
+- **Keep Recovered** (`AppState::keep_recovered_buffer`) — drops the conflict
+  entry; the buffer stays modified so the user can save manually.
+- **Reload from Disk** (`AppState::apply_reload_from_disk_for_conflict`) —
+  replaces the tab buffer with the on-disk content captured at restore time
+  and marks the tab saved.
+
+Closing the tab also clears any pending conflict so the banner cannot resurrect
+on a future tab whose runtime id collides with the cleared one.
+
+## Identity-Gated Recovery (task 106)
+
+Recovery files in `recovery/<tab_id>.json` and autosave files under `autosave/`
+persist across launches, but the per-session `tab_id` namespace is reset to 0
+on every launch and re-issued monotonically. Without identity checks, a
+leftover recovery file from a previous session could silently apply to an
+unrelated tab in the current session that happened to be assigned the same id
+— a data-loss hazard ("cross-tab bleed"; the original repro was an untitled
+buffer named `asdasd` for `tab_id=10` overwriting
+`task_50_table_inline_formatting.md` on save).
+
+`AppState::try_apply_recovery` (`src/state.rs`) gates application of recovery
+content in three layers, in order:
+
+1. **Legacy bypass.** Pre-task-106 files have neither `path` nor
+   `original_content_hash` set. They fall back to historical "tab id only"
+   matching so users upgrading from older Ferrite versions don't lose
+   recovered text. No conflict banner can be raised in this branch.
+2. **Path equality.** `recovered.path` must equal `session_tab.path` (covers
+   untitled tabs via `None == None`). A mismatch indicates a reused tab id and
+   is rejected with the `session_recovery_identity_mismatch` diag event.
+3. **Disk hash.** When the tab is path-backed and the file exists on disk,
+   the current disk content is hashed (same algorithm as
+   `crate::config::hash_content`) and compared against
+   `recovered.original_content_hash`. A mismatch means the file was edited
+   externally between sessions; the recovery is rejected and the caller falls
+   through to a fresh disk load. Encoding-failure on `read_to_string` is
+   tolerated (path identity is trusted).
+
+When all three layers pass and the recovered buffer differs from current disk
+content, `try_apply_recovery` returns
+`ResolvedContent::RecoveredWithDiskDivergence { content, on_disk_content }`
+and `restore_from_session_result` populates `AppState.recovery_conflicts` so
+the banner described above is rendered.
+
+### Disk-hash anchoring across recovery cycles
+
+**Invariant:** after `restore_from_session_result` applies a divergent
+recovery, the new `Tab` must keep `original_content` (and therefore
+`disk_content_hash()`) anchored to the **actual on-disk text**, not to the
+recovered buffer.
+
+If the anchor is set to the recovered buffer instead, the bug manifests on
+the *second* crash/restore cycle:
+
+1. Edit → kill → Restore. `Tab::with_file(path, recovered)` was used, so
+   `original_content == content`, `is_modified() == false`, and
+   `disk_content_hash() == hash(recovered)`.
+2. New edits happen → `is_modified()` flips to `true` → the next crash
+   snapshot writes `recovery/<id>.json` with
+   `original_content_hash = hash(recovered)`.
+3. Kill → restart. Disk hash check in `try_apply_recovery` compares
+   `hash(disk) != hash(recovered)` and rejects the recovery file. The tab
+   silently falls back to disk content — every edit since the previous
+   recovery is gone.
+
+`restore_from_session_result` handles this by using `on_disk_content` for
+the constructor call when the resolver returned
+`ResolvedContent::RecoveredWithDiskDivergence`, then calling `set_content`
+to swap in the recovered buffer (which bumps `content_version`, records one
+undo step, and leaves `original_content` pointing at disk). Regression
+tests: `test_restore_with_divergence_anchors_original_to_disk` and
+`test_restore_then_edit_keeps_disk_hash_anchor` in `state.rs`.
+
+The autosave path enforces equivalent identity in
+`config::session::check_auto_save_identity`:
+`metadata.original_path != tab_path` is rejected outright; when
+`metadata.disk_content_hash` is `Some(want)` the disk is re-hashed and a
+mismatch is rejected. Both sides emit the same
+`session_recovery_identity_mismatch` diag key (with `source=autosave` in the
+message).
+
+### Pruning Stale Files
+
+`AppState::prune_stale_recovery_files` runs once after session restore and
+deletes:
+
+- `recovery/<tab_id>.json` whose id is not in the live tab set
+  (`config::prune_recovery_dir`)
+- `autosave/untitled_<tab_id>.md.autosave` whose id is not in the live tab
+  set (`config::prune_auto_save_dir`)
+
+Path-backed autosaves (`<stem>_<pathhash>.md.autosave`) are not pruned by id
+because they are keyed by file path; identity for those is enforced at
+recovery time by `check_auto_save_identity`.
+
 ## Conflict Detection
 
 The system tracks file modification time to detect conflicts:
@@ -121,14 +234,18 @@ The system tracks file modification time to detect conflicts:
 - **FileDeleted**: File no longer exists
 - **NoFile**: Tab has no associated file
 
-Currently, conflict information is tracked but not actively surfaced to the user (planned for future enhancement).
+This is independent of the identity-gated recovery banner above: mtime-based
+conflict detection runs at restore time for every tab, while the recovery
+banner only appears for tabs whose recovered buffer differs from current disk
+after passing the identity gate.
 
 ## Implementation Files
 
-- `src/config/session.rs` - Session state model and persistence functions
+- `src/config/session.rs` - Session state model, persistence functions, and identity helpers (`check_auto_save_identity`, `prune_recovery_dir`, `prune_auto_save_dir`)
 - `src/config/mod.rs` - Module exports
-- `src/state.rs` - `capture_session_state()` and `restore_from_session_result()` methods
-- `src/app.rs` - Lifecycle integration (startup, periodic saves, shutdown)
+- `src/state.rs` - `capture_session_state()`, `restore_from_session_result()`, `try_apply_recovery()`, conflict-banner action methods (`keep_recovered_buffer`, `apply_reload_from_disk_for_conflict`)
+- `src/app/mod.rs` - Lifecycle integration (startup, periodic saves, shutdown), autosave loop with `disk_content_hash` propagation
+- `src/app/central_panel.rs` - `render_recovery_conflict_banner` (task 106.5)
 
 ## Workspace Session Persistence
 
@@ -186,7 +303,7 @@ The system handles various error conditions gracefully:
 
 ## Future Enhancements
 
-1. **Conflict Resolution UI**: Show dialog when file changed on disk
+1. **Diff View in Conflict Banner**: Show a side-by-side diff of recovered vs. on-disk inside the banner before the user picks `Keep Recovered` / `Reload from Disk` (task 106.5 just exposes the strings via `RecoveryConflict`).
 2. **Rendered Scroll Sync**: Track rendered mode scroll offset separately
 3. **Multi-window Support**: Track multiple window states
 4. **Session History**: Keep history of previous sessions

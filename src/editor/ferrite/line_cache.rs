@@ -105,6 +105,7 @@ pub struct HighlightedSegment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CacheKey(u64);
 
+#[allow(dead_code)]
 impl CacheKey {
     /// Creates a new cache key from line content and styling.
     ///
@@ -276,7 +277,7 @@ pub struct ClusterGalley {
 pub struct ShapedLine {
     pub clusters: Vec<ClusterGalley>,
     pub total_width: f32,
-    pub height: f32,
+    pub _height: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -338,6 +339,7 @@ impl Default for LineCache {
     }
 }
 
+#[allow(dead_code)] // LineCache measurement and invalidation API
 impl LineCache {
     /// Creates a new empty `LineCache` with default minimum capacity.
     ///
@@ -661,18 +663,15 @@ impl LineCache {
         }
 
         let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(&font_id);
-        let clusters = match super::shaping::shape_line_clusters(
-            line_content,
-            font_bytes,
-            font_id.size,
-        ) {
-            Ok(cs) if !cs.is_empty() => cs,
-            Ok(_) => return None,
-            Err(e) => {
-                log::debug!(target: "ferrite::shaping", "shaped-line: shape failed: {e}");
-                return None;
-            }
-        };
+        let clusters =
+            match super::shaping::shape_line_clusters(line_content, font_bytes, font_id.size) {
+                Ok(cs) if !cs.is_empty() => cs,
+                Ok(_) => return None,
+                Err(e) => {
+                    log::debug!(target: "ferrite::shaping", "shaped-line: shape failed: {e}");
+                    return None;
+                }
+            };
 
         debug_assert!(super::shaping::validate_cluster_byte_ranges(
             line_content,
@@ -708,7 +707,7 @@ impl LineCache {
         let shaped = Arc::new(ShapedLine {
             clusters: cluster_galleys,
             total_width: x_offset,
-            height: row_height,
+            _height: row_height,
         });
 
         self.insert_shaped(key, Arc::clone(&shaped));
@@ -1170,7 +1169,7 @@ mod tests {
             shaped: Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 0.0,
-                height: 14.0,
+                _height: 14.0,
             }),
             last_access: access,
         }
@@ -1187,7 +1186,7 @@ mod tests {
             Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 40.0,
-                height: 14.0,
+                _height: 14.0,
             }),
         );
 
@@ -1276,7 +1275,7 @@ mod tests {
             Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 0.0,
-                height: 14.0,
+                _height: 14.0,
             }),
         );
 

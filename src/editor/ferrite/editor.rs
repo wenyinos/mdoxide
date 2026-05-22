@@ -216,6 +216,7 @@ impl Default for FerriteEditor {
     }
 }
 
+#[allow(dead_code)] // FerriteEditor public API surface (widgets, tests, future crate extraction)
 impl FerriteEditor {
     /// Creates a new empty editor.
     ///
@@ -1952,7 +1953,8 @@ impl FerriteEditor {
         // and custom chrome (local widget coords are not sufficient on Windows).
         if let Some(cursor_rect) = cursor_rect_for_ime {
             let layer_transform = ui
-                .memory(|m| m.layer_transforms(ui.layer_id()))
+                .ctx()
+                .layer_transform_to_global(ui.layer_id())
                 .unwrap_or_default();
             ui.ctx().output_mut(|o| {
                 o.ime = Some(egui::output::IMEOutput {

@@ -67,39 +67,6 @@ impl FerriteApp {
 
     /// Filter out Event::Cut when nothing is selected to prevent egui bug.
     ///
-    /// egui's TextEdit has a bug where Ctrl+X with no selection cuts the entire
-    /// document. This happens because eframe generates Event::Cut events which
-    /// TextEdit processes. We filter out these events when there's no selection.
-    ///
-    /// Skips handling when the terminal has focus so the terminal widget can
-    /// process clipboard shortcuts directly.
-    pub(crate) fn filter_cut_event_if_no_selection(&mut self, ctx: &egui::Context) {
-        // Skip editor cut/copy/paste handling when terminal has focus
-        if self.terminal_panel_state.terminal_has_focus
-            && self.terminal_panel_state.renaming_index.is_none()
-        {
-            return;
-        }
-
-        // Check if there's a selection in the active tab
-        let has_selection = self
-            .state
-            .active_tab()
-            .map(|tab| tab.cursors.primary().is_selection())
-            .unwrap_or(false);
-
-        // If no selection, filter out Event::Cut to prevent egui from cutting everything
-        if !has_selection {
-            ctx.input_mut(|i| {
-                let had_cut = i.events.iter().any(|e| matches!(e, egui::Event::Cut));
-                i.events.retain(|e| !matches!(e, egui::Event::Cut));
-                if had_cut {
-                    debug!("Event::Cut filtered out - no selection");
-                }
-            });
-        }
-    }
-
     /// Consume the command palette shortcut (default Alt+Space) BEFORE render.
     ///
     /// On Windows, Alt+Space opens the system window menu. On some Linux WMs it

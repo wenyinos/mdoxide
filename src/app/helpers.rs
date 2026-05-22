@@ -127,29 +127,6 @@ pub(crate) fn byte_to_char_offset(content: &str, byte_offset: usize) -> usize {
     content[..byte_offset.min(content.len())].chars().count()
 }
 
-/// Convert a character offset to (line, column) - 0-indexed.
-///
-/// NOTE: This expects a CHARACTER offset, not a byte offset.
-/// Use `byte_to_char_offset()` first if you have a byte offset from `String::find()`.
-pub(crate) fn offset_to_line_col(content: &str, char_offset: usize) -> (usize, usize) {
-    let mut line = 0;
-    let mut col = 0;
-
-    for (i, ch) in content.chars().enumerate() {
-        if i >= char_offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-
-    (line, col)
-}
-
 /// Get the current formatting state for the active editor.
 ///
 /// Returns None if no editor is active.

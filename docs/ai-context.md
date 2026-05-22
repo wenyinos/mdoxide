@@ -25,7 +25,7 @@ Rust (edition 2021) + egui 0.34.2 markdown editor. Immediate-mode GUI — no ret
 | `state.rs` | All application state (`AppState`, `Tab`, `TabKind`, `SpecialTabKind`, `FileType`) |
 | `editor/ferrite/` | Rope-based editor (`ropey`): buffer, cursor, history, view, rendering, line_cache |
 | `editor/widget.rs` | EditorWidget wrapper, integrates FerriteEditor via egui memory |
-| `markdown/` | `editor.rs` (rendered view), `code_execution.rs` (fenced Run + `RunHandle`/`RunStatus`), `ansi_render.rs` (vte-backed SGR parser for inline run output), `parser.rs` (comrak AST), `mermaid/` (11 diagram types + `validation.rs` for `MermaidError` / inline diagnostics), `csv_viewer.rs`, `tree_viewer.rs` |
+| `markdown/` | `editor.rs` (rendered view), `rendered_session.rs` (edit session coordinator), `rendered_commit_undo.rs` (commit-boundary undo queue), `code_execution.rs`, … |
 | `terminal/` | Integrated terminal (PTY, VTE, screen, themes, split layouts) |
 | `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome, command_palette |
 | `config/` | Settings persistence, session/crash recovery, snippets |
@@ -76,7 +76,12 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | Add/modify a UI panel | `ui/` → create or edit panel module |
 | Modify editor core | `editor/ferrite/editor.rs` (behavior), `buffer.rs` (text), `view.rs` (viewport) |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
-| Rendered table cells (hits, Tab focus) | `markdown/widgets.rs` `EditableTable` — [`table-cell-focus-navigation.md`](./technical/markdown/table-cell-focus-navigation.md) |
+| Rendered edit session | `markdown/rendered_session.rs`; hub: [`rendered-edit-session.md`](./technical/markdown/rendered-edit-session.md); block wiring in `editor.rs` |
+| Rendered commit undo | `markdown/rendered_commit_undo.rs` (pre/post snapshot queue); `Tab::apply_rendered_commit_undo_entries` in `state.rs`; drained from `central_panel.rs` after `MarkdownEditor::show` |
+| Session / crash recovery | `config/session.rs` (`RecoveryContent`, autosave); `state.rs` `resolve_tab_content` — [`session-persistence.md`](./technical/files/session-persistence.md) |
+| Rendered widget id scope | `markdown/editor.rs` `push_id(editor_id + source_epoch)` — [`rendered-widget-identity.md`](./technical/markdown/rendered-widget-identity.md) |
+| External invalidation epoch (`source_epoch`) | `state.rs` → `Tab::source_epoch()`, `bump_source_epoch()`, `record_external_edit_from_snapshot()` |
+| Rendered table cells (hits, Tab focus) | `markdown/widgets.rs` `EditableTable` — [`table-cell-focus-navigation.md`](./technical/markdown/table-cell-focus-navigation.md); session/force-commit in [`rendered-edit-session-tables.md`](./technical/markdown/rendered-edit-session-tables.md) |
 | Modify markdown parsing | `markdown/parser.rs` |
 | Modify central panel | `app/central_panel.rs` |
 | Add special tab | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` |

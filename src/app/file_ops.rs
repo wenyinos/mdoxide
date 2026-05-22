@@ -233,17 +233,11 @@ impl FerriteApp {
                 }
                 FileLoadMsg::Complete { tab_id, bytes } => {
                     let auto_save = self.state.settings.auto_save_enabled_default;
-                    let file_path = self
-                        .state
-                        .tab_by_id(tab_id)
-                        .and_then(|t| t.path.clone());
+                    let file_path = self.state.tab_by_id(tab_id).and_then(|t| t.path.clone());
                     let (view_mode, split_ratio) = file_path
                         .as_ref()
                         .map(|p| self.state.opening_view_prefs_for_path(p))
-                        .unwrap_or((
-                            self.state.settings.default_view_mode,
-                            0.5,
-                        ));
+                        .unwrap_or((self.state.settings.default_view_mode, 0.5));
 
                     if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
                         let file_size = bytes.len() as f64 / (1024.0 * 1024.0);
@@ -1215,6 +1209,7 @@ impl FerriteApp {
                             if should_reload {
                                 if let Some(tab) = self.state.tab_mut(idx) {
                                     tab.content = new_content.clone();
+                                    tab.notify_external_content_change();
                                     // Clamp cursor to new content length
                                     let max_chars = tab.content.chars().count();
                                     let current_cursor = tab.cursors.primary().head.min(max_chars);

@@ -420,10 +420,7 @@ fn parse_state_diagram_block(
             if let Some(as_pos) = rest_line.find(" as ") {
                 let mut label = rest_line[..as_pos].trim().trim_matches('"').to_string();
                 let id = rest_line[as_pos + 4..].trim().to_string();
-                let pseudo = if matches!(
-                    stereo,
-                    StatePseudostate::Fork | StatePseudostate::Join
-                ) {
+                let pseudo = if matches!(stereo, StatePseudostate::Fork | StatePseudostate::Join) {
                     stereo
                 } else {
                     pseudostate_for_history_id(&id)
@@ -446,10 +443,7 @@ fn parse_state_diagram_block(
                 }
             } else {
                 let id = rest_line.trim_matches('"').to_string();
-                let pseudo = if matches!(
-                    stereo,
-                    StatePseudostate::Fork | StatePseudostate::Join
-                ) {
+                let pseudo = if matches!(stereo, StatePseudostate::Fork | StatePseudostate::Join) {
                     stereo
                 } else {
                     pseudostate_for_history_id(&id)
@@ -578,16 +572,15 @@ pub fn render_state_diagram(ui: &mut Ui, diagram: &StateDiagram, dark_mode: bool
             .iter()
             .filter(|s| !s.is_start && !s.is_end)
             .map(|state| {
-                let width =
-                    if matches!(
-                        state.pseudostate,
-                        StatePseudostate::Fork | StatePseudostate::Join
-                    ) {
-                        (min_state_width * 1.35).max(88.0)
-                    } else {
-                        let text_size = text_measurer.measure(&state.label, font_size);
-                        (text_size.width * 1.15 + state_padding.x).max(min_state_width)
-                    };
+                let width = if matches!(
+                    state.pseudostate,
+                    StatePseudostate::Fork | StatePseudostate::Join
+                ) {
+                    (min_state_width * 1.35).max(88.0)
+                } else {
+                    let text_size = text_measurer.measure(&state.label, font_size);
+                    (text_size.width * 1.15 + state_padding.x).max(min_state_width)
+                };
                 (state.id.clone(), width)
             })
             .collect()
@@ -1270,11 +1263,10 @@ mod tests {
         assert_eq!(f.pseudostate, StatePseudostate::Fork);
         let j = find_state(&d, "join1").expect("join");
         assert_eq!(j.pseudostate, StatePseudostate::Join);
-        assert!(
-            d.transitions
-                .iter()
-                .any(|t| t.from == "fork1" && t.to == "B")
-        );
+        assert!(d
+            .transitions
+            .iter()
+            .any(|t| t.from == "fork1" && t.to == "B"));
     }
 
     #[test]

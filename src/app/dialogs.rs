@@ -9,13 +9,11 @@
 #[allow(unused_imports)]
 use super::helpers::modifier_symbol;
 use super::FerriteApp;
-use crate::config::ViewMode;
 use crate::markdown::{spawn_run, take_pending_code_execution_consent};
-use crate::state::{FileType, PendingAction};
-use crate::ui::{FileOperationResult, GoToLineResult};
-use crate::ui::phosphor_icons::{PACKAGE, phosphor_rich_text, WARNING};
+use crate::state::PendingAction;
+use crate::ui::phosphor_icons::{phosphor_rich_text, PACKAGE, WARNING};
 use eframe::egui;
-use log::{debug, warn};
+use log::debug;
 use rust_i18n::t;
 use std::time::Duration;
 
@@ -273,7 +271,7 @@ impl FerriteApp {
 
         // Find/Replace panel
         if self.state.ui.show_find_replace {
-            let is_dark = ctx.style().visuals.dark_mode;
+            let is_dark = ctx.global_style().visuals.dark_mode;
             let output = self
                 .find_replace_panel
                 .show(ctx, &mut self.state.ui.find_state, is_dark);

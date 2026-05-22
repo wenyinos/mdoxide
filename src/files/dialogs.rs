@@ -20,12 +20,14 @@ pub enum DialogResult<T> {
     /// User cancelled the dialog
     Cancelled,
     /// Dialog failed (likely portal issue on Linux)
+    #[allow(dead_code)]
     Failed {
         is_portal_error: bool,
         desktop_env: Option<String>,
     },
 }
 
+#[allow(dead_code)] // DialogResult helpers for native/portal file dialogs
 impl<T> DialogResult<T> {
     /// Convert to Option, discarding error information
     pub fn ok(self) -> Option<T> {

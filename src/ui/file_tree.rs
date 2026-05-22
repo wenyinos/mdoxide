@@ -8,8 +8,8 @@
 // configurable panel width and drag-to-resize functionality
 #![allow(dead_code)]
 
-use crate::ui::icons::{phosphor_font, phosphor_rich_text};
 use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
+use crate::ui::icons::{phosphor_font, phosphor_rich_text};
 use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FOLDER, X};
 use crate::vcs::GitFileStatus;
 use crate::workspaces::{FileTreeNode, FileTreeNodeKind};
@@ -124,7 +124,7 @@ impl FileTreePanel {
     /// * `git_statuses` - Optional map of file paths to Git statuses
     pub fn show(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         file_tree: &FileTreeNode,
         workspace_name: &str,
         is_dark: bool,
@@ -151,12 +151,12 @@ impl FileTreePanel {
             Color32::from_rgb(235, 235, 235)
         };
 
-        egui::SidePanel::left("file_tree_panel")
+        egui::Panel::left("file_tree_panel")
             .resizable(true)
-            .default_width(self.width)
-            .width_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
+            .default_size(self.width)
+            .size_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
             .frame(docked_sidebar::frame(panel_bg))
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // Update width from panel
                 let panel_width = ui.available_width();
                 if (panel_width - self.width).abs() > 1.0 {
@@ -586,7 +586,7 @@ impl FileTreePanel {
                 .clicked()
             {
                 output.context_action = Some(FileTreeContextAction::NewFile(node.path.clone()));
-                ui.close_menu();
+                ui.close();
             }
             // ▪ (small filled square) for folder icon
             if ui
@@ -594,7 +594,7 @@ impl FileTreePanel {
                 .clicked()
             {
                 output.context_action = Some(FileTreeContextAction::NewFolder(node.path.clone()));
-                ui.close_menu();
+                ui.close();
             }
             ui.separator();
         }
@@ -602,7 +602,7 @@ impl FileTreePanel {
         // Text-only for rename (no simple icon fits well)
         if ui.button(t!("workspace.rename").to_string()).clicked() {
             output.context_action = Some(FileTreeContextAction::Rename(node.path.clone()));
-            ui.close_menu();
+            ui.close();
         }
 
         // ✕ (multiplication x) for delete action - in COMMON_SYMBOLS
@@ -611,7 +611,7 @@ impl FileTreePanel {
             .clicked()
         {
             output.context_action = Some(FileTreeContextAction::Delete(node.path.clone()));
-            ui.close_menu();
+            ui.close();
         }
 
         ui.separator();
@@ -623,7 +623,7 @@ impl FileTreePanel {
         {
             output.context_action =
                 Some(FileTreeContextAction::RevealInExplorer(node.path.clone()));
-            ui.close_menu();
+            ui.close();
         }
 
         ui.separator();
@@ -635,7 +635,7 @@ impl FileTreePanel {
             .clicked()
         {
             output.context_action = Some(FileTreeContextAction::Refresh);
-            ui.close_menu();
+            ui.close();
         }
     }
 }

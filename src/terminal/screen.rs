@@ -30,7 +30,7 @@ impl Color {
         is_foreground: bool,
         ansi_colors: &[eframe::egui::Color32; 16],
         default_fg: eframe::egui::Color32,
-        default_bg: eframe::egui::Color32,
+        _default_bg: eframe::egui::Color32,
     ) -> eframe::egui::Color32 {
         match self {
             Color::Default => {
@@ -92,6 +92,7 @@ pub struct CellAttributes {
     pub blink: bool,
 }
 
+#[allow(dead_code)] // VTE cell attribute helpers
 impl CellAttributes {
     /// Create attributes with all flags disabled.
     pub fn new() -> Self {
@@ -134,6 +135,7 @@ impl Default for Cell {
     }
 }
 
+#[allow(dead_code)] // VTE cell construction helpers
 impl Cell {
     /// Create a new cell with the given character.
     pub fn new(ch: char) -> Self {
@@ -206,6 +208,7 @@ pub struct TerminalScreen {
     selection: Option<((usize, usize), (usize, usize))>,
 }
 
+#[allow(dead_code)] // TerminalScreen VTE emulation API
 impl TerminalScreen {
     /// Create a new terminal screen with the given dimensions and scrollback limit.
     pub fn new(cols: u16, rows: u16, max_scrollback: usize) -> Self {

@@ -447,6 +447,12 @@ impl SyncScrollState {
             ScrollOrigin::Raw
         } else if mouse_over_preview && bidirectional {
             ScrollOrigin::Rendered
+        } else if mouse_over_preview && (preview_moved || wheel) && !bidirectional {
+            // 2-way off: user is scrolling the preview — do not leave a stale Raw origin
+            // that would trigger an idle Raw→preview snap after scroll stops.
+            ScrollOrigin::Rendered
+        } else if preview_moved && !bidirectional {
+            ScrollOrigin::Rendered
         } else if raw_moved && (!preview_moved || !bidirectional) {
             ScrollOrigin::Raw
         } else if bidirectional && preview_moved {
@@ -456,6 +462,10 @@ impl SyncScrollState {
         } else {
             return None;
         };
+
+        if origin == ScrollOrigin::Rendered && !bidirectional {
+            self.stored_raw_anchor = None;
+        }
 
         self.mark_scroll(origin);
         Some(origin)
@@ -1127,6 +1137,27 @@ mod tests {
         // No mappings - should use proportional
         assert!((state.line_to_rendered_offset(50) - 1000.0).abs() < 0.01);
         assert_eq!(state.rendered_offset_to_line(1000.0), 50);
+    }
+
+    #[test]
+    fn test_note_scroll_activity_preview_only_when_not_bidirectional() {
+        let mut state = SyncScrollState::for_split_view();
+        state.last_raw_offset = 100.0;
+        state.last_rendered_offset = 200.0;
+        state.mark_scroll(ScrollOrigin::Raw);
+        state.store_raw_anchor(5, 0.0);
+
+        let origin = state.note_scroll_activity(
+            100.0,
+            250.0,
+            0.0,
+            false,
+            true,
+            false,
+        );
+        assert_eq!(origin, Some(ScrollOrigin::Rendered));
+        assert_eq!(state.scroll_origin(), ScrollOrigin::Rendered);
+        assert!(state.stored_raw_anchor().is_none());
     }
 
     #[test]

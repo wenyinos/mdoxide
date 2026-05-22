@@ -97,19 +97,12 @@ impl WindowResizeState {
         self.block_clicks_in_resize_zone = false;
     }
 
-    /// True when foreground click guards should eat pointer events.
-    pub fn ui_interaction_blocked(&self, _ctx: &egui::Context) -> bool {
-        self.blocks_widget_clicks()
-    }
-
     /// Whether widgets near window edges should ignore clicks.
     ///
     /// True while the resize cursor is shown, during an active resize, or for one
     /// frame after release over a grab zone (so release does not activate buttons).
     pub fn blocks_widget_clicks(&self) -> bool {
-        self.resize_cursor_active()
-            || self.is_resizing
-            || self.block_clicks_in_resize_zone
+        self.resize_cursor_active() || self.is_resizing || self.block_clicks_in_resize_zone
     }
 
     /// Whether the resize cursor is showing (hover over a grab zone or dragging).

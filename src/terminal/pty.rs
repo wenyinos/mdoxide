@@ -10,6 +10,42 @@ use std::thread;
 
 use serde::{Deserialize, Serialize};
 
+/// Which Windows shell binary we are launching (for UTF-8 startup args).
+#[cfg(windows)]
+enum WindowsLaunchShell {
+    PowerShell,
+    Cmd,
+    Wsl,
+}
+
+/// Configure the child console for UTF-8 so PSReadLine/cmd echo CJK paste/input
+/// correctly instead of `?` while the shell still receives valid UTF-8 bytes.
+#[cfg(windows)]
+fn apply_windows_utf8_init(cmd: &mut CommandBuilder, shell: WindowsLaunchShell) {
+    match shell {
+        WindowsLaunchShell::PowerShell => {
+            cmd.args([
+                "-NoLogo",
+                "-NoExit",
+                "-Command",
+                "[Console]::InputEncoding = [Console]::OutputEncoding = (New-Object System.Text.UTF8Encoding $false); \
+                 $OutputEncoding = [Console]::OutputEncoding; chcp 65001 | Out-Null",
+            ]);
+        }
+        WindowsLaunchShell::Cmd => {
+            cmd.args(["/K", "chcp 65001>nul"]);
+        }
+        WindowsLaunchShell::Wsl => {
+            // WSL defaults to UTF-8; leave locale to the distro profile.
+        }
+    }
+}
+
+#[cfg(windows)]
+fn is_windows_powershell_available() -> bool {
+    std::path::Path::new("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").exists()
+}
+
 /// Shell type for terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ShellType {
@@ -137,31 +173,34 @@ impl TerminalPty {
         working_dir: Option<std::path::PathBuf>,
     ) -> CommandBuilder {
         let mut cmd = if cfg!(windows) {
-            match shell_type {
-                ShellType::PowerShell => CommandBuilder::new("powershell.exe"),
+            let (mut cmd, win_shell) = match shell_type {
+                ShellType::PowerShell => (
+                    CommandBuilder::new("powershell.exe"),
+                    WindowsLaunchShell::PowerShell,
+                ),
                 ShellType::Cmd => {
                     let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-                    CommandBuilder::new(shell)
+                    (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
                 }
-                ShellType::Wsl => {
-                    // Launch WSL with default distribution
-                    CommandBuilder::new("wsl.exe")
-                }
+                ShellType::Wsl => (
+                    CommandBuilder::new("wsl.exe"),
+                    WindowsLaunchShell::Wsl,
+                ),
                 ShellType::Default => {
-                    // Default to PowerShell on Windows
-                    if std::path::Path::new(
-                        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-                    )
-                    .exists()
-                    {
-                        CommandBuilder::new("powershell.exe")
+                    if is_windows_powershell_available() {
+                        (
+                            CommandBuilder::new("powershell.exe"),
+                            WindowsLaunchShell::PowerShell,
+                        )
                     } else {
                         let shell =
                             std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-                        CommandBuilder::new(shell)
+                        (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
                     }
                 }
-            }
+            };
+            apply_windows_utf8_init(&mut cmd, win_shell);
+            cmd
         } else {
             // On Unix, use SHELL environment variable or fall back to /bin/sh
             let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());

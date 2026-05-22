@@ -552,29 +552,24 @@ pub fn show_split_sync_footer(
             } else {
                 ui.visuals().widgets.inactive.bg_fill
             });
-            if ui
-                .add(sync_btn)
-                .on_hover_text(tooltip)
-                .clicked()
-            {
+            if ui.add(sync_btn).on_hover_text(tooltip).clicked() {
                 out.sync_toggled = true;
             }
 
             if enabled {
-                let two_way = egui::Button::new(
-                    egui::RichText::new(bidirectional_label)
-                        .size(10.0)
-                        .color(if bidirectional {
+                let two_way =
+                    egui::Button::new(egui::RichText::new(bidirectional_label).size(10.0).color(
+                        if bidirectional {
                             ui.visuals().strong_text_color()
                         } else {
                             ui.visuals().weak_text_color()
-                        }),
-                )
-                .fill(if bidirectional {
-                    ui.visuals().widgets.active.weak_bg_fill
-                } else {
-                    ui.visuals().widgets.inactive.bg_fill
-                });
+                        },
+                    ))
+                    .fill(if bidirectional {
+                        ui.visuals().widgets.active.weak_bg_fill
+                    } else {
+                        ui.visuals().widgets.inactive.bg_fill
+                    });
                 if ui
                     .add(two_way)
                     .on_hover_text(bidirectional_tooltip)
@@ -767,10 +762,10 @@ impl<'a> SemanticMinimap<'a> {
         }
 
         // Create a child UI for the content area so ScrollArea renders inside it
-        let mut content_ui = ui.child_ui(
-            content_rect,
-            egui::Layout::top_down(egui::Align::LEFT),
-            None,
+        let mut content_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(content_rect)
+                .layout(egui::Layout::top_down(egui::Align::LEFT)),
         );
 
         // Calculate densities if enabled
@@ -783,7 +778,7 @@ impl<'a> SemanticMinimap<'a> {
         // Create a scrollable area for headers
         let scroll_id = content_ui.id().with("semantic_minimap_scroll");
         egui::ScrollArea::vertical()
-            .id_source(scroll_id)
+            .id_salt(scroll_id)
             .auto_shrink([false, false])
             .max_height(content_rect.height())
             .show(&mut content_ui, |ui| {

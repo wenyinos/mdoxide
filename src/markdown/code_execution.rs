@@ -23,8 +23,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::ui::phosphor_icons::{CHECK, X};
-
 use eframe::egui;
 
 /// [`crate::markdown::MarkdownEditor`] stores the current snapshot at this id for
@@ -98,15 +96,7 @@ pub enum RunnableKind {
 
 pub fn classify_language(lang: &str) -> Option<RunnableKind> {
     match lang.trim().to_ascii_lowercase().as_str() {
-        "bash"
-        | "sh"
-        | "shell"
-        | "zsh"
-        | "pwsh"
-        | "powershell"
-        | "ps1"
-        | "cmd"
-        | "bat"
+        "bash" | "sh" | "shell" | "zsh" | "pwsh" | "powershell" | "ps1" | "cmd" | "bat"
         | "batch" => Some(RunnableKind::Shell),
         "python" | "python3" | "py" => Some(RunnableKind::Python),
         _ => None,
@@ -196,11 +186,8 @@ impl RunStatus {
         matches!(self, RunStatus::Running)
     }
 
-    pub fn is_success(&self) -> bool {
-        matches!(self, RunStatus::Completed { exit_code: Some(0) })
-    }
-
     /// Status glyph for UI display (Phosphor icons; running uses a separate spinner).
+    #[cfg(test)]
     pub fn glyph(&self) -> &'static str {
         match self {
             RunStatus::Running => "…",
@@ -315,8 +302,8 @@ pub fn spawn_run(
 
 /// Synchronous helper: run a snippet and return the combined output string.
 ///
-/// Kept for tests and any caller that prefers a blocking API. Inline-output
-/// callers should use [`spawn_run`] instead.
+/// Test-only blocking API; production uses [`spawn_run`].
+#[cfg(test)]
 pub fn run_snippet(
     code: &str,
     fence_lang: &str,
@@ -619,6 +606,7 @@ fn push_chunk(handle: Option<&RunHandle>, bytes: &[u8], is_stderr: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::phosphor_icons::{CHECK, X};
 
     #[test]
     fn classify_normalizes_case() {
@@ -688,6 +676,6 @@ mod tests {
     fn cancelled_status_is_terminal() {
         let cancelled = RunStatus::Cancelled;
         assert!(!cancelled.is_running());
-        assert!(!cancelled.is_success());
+        assert!(!matches!(cancelled, RunStatus::Completed { exit_code: Some(0) }));
     }
 }

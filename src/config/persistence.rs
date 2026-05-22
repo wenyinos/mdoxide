@@ -83,14 +83,6 @@ fn get_portable_dir() -> Option<PathBuf> {
     })
 }
 
-/// Returns true if the application is running in portable mode.
-///
-/// Portable mode is active when either `FERRITE_DATA_DIR` is set or a
-/// `portable/` folder exists next to the executable.
-pub fn is_portable_mode() -> bool {
-    get_portable_dir().is_some()
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform-Specific Directory Resolution
 // ─────────────────────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@
 //! Non-raw modes use diff-based recording:
 //! 1. Before editor `show()`: `Tab::prepare_undo_snapshot_hashed()` clones content
 //!    only when the blake3 hash changes (avoids per-frame allocation).
-//! 2. After editor `show()`: if changed, `Tab::record_edit_from_snapshot()` computes
+//! 2. After editor `show()`: if changed, `Tab::record_external_edit_from_snapshot()` computes
 //!    a minimal diff via [`compute_edit_ops`] and pushes the resulting operations.
 //!
 //! Raw mode relies on FerriteEditor's own undo — no central-panel snapshot.
@@ -22,8 +22,6 @@
 //! - Memory-efficient: stores only changed text, not full content
 //! - Atomic batches: each `record_operations` call is one undo step (replace = delete+insert together)
 //! - Works on both `TextBuffer` (rope) and plain `String`
-
-use super::buffer::TextBuffer;
 
 /// Represents a single edit operation that can be undone or redone.
 ///
@@ -237,6 +235,7 @@ impl Default for EditHistory {
     }
 }
 
+#[allow(dead_code)] // EditHistory API for alternate undo recording paths
 impl EditHistory {
     /// Creates a new empty `EditHistory`.
     ///

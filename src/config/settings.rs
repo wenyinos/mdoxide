@@ -2039,6 +2039,11 @@ pub struct Settings {
     /// it back on will restore the previous session.
     pub restore_session: bool,
 
+    /// Show the Welcome tab when Ferrite launches with no documents open
+    /// (only empty untitled placeholders). Disable via the checkbox on Welcome.
+    #[serde(default = "default_true")]
+    pub show_welcome_on_empty_launch: bool,
+
     /// Recently opened files (most recent first)
     pub recent_files: Vec<PathBuf>,
 
@@ -2463,6 +2468,7 @@ impl Default for Settings {
 
             // Session & History
             restore_session: true, // Restore previous session by default
+            show_welcome_on_empty_launch: true,
             recent_files: Vec::new(),
             max_recent_files: 20,
             last_open_tabs: Vec::new(),

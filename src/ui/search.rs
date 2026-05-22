@@ -18,7 +18,9 @@
 use crate::string_utils::floor_char_boundary;
 use crate::ui::icons::phosphor_rich_text;
 use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FILE};
-use crate::ui::{center_panel_in_viewport, file_index_progress_ui, search_panel_constraints, PanelConstraints};
+use crate::ui::{
+    center_panel_in_viewport, file_index_progress_ui, search_panel_constraints, PanelConstraints,
+};
 use crate::workspaces::FileIndexProgress;
 use eframe::egui::{self, Color32, Key, Pos2, Rect, RichText, ScrollArea, Sense, TextFormat, Vec2};
 use rust_i18n::t;
@@ -461,10 +463,10 @@ impl SearchPanel {
             .default_pos(constrained.pos)
             .default_size(constrained.size)
             .frame(
-                egui::Frame::window(&ctx.style())
+                egui::Frame::window(&ctx.global_style())
                     .fill(bg_color)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(8.0)
+                    .corner_radius(8.0)
                     .inner_margin(12.0),
             );
 
@@ -538,16 +540,16 @@ impl SearchPanel {
             let scroll_w = ui.available_width();
             let (scroll_rect, _) =
                 ui.allocate_exact_size(Vec2::new(scroll_w, scroll_h), Sense::hover());
-            let mut scroll_ui = ui.child_ui(
-                scroll_rect,
-                egui::Layout::top_down(egui::Align::Min),
-                None,
+            let mut scroll_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(scroll_rect)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
             );
             scroll_ui.set_clip_rect(scroll_rect);
             scroll_ui.set_max_width(scroll_w);
 
             ScrollArea::vertical()
-                .id_source("search_results_scroll")
+                .id_salt("search_results_scroll")
                 .auto_shrink([false, false])
                 .show(&mut scroll_ui, |ui| {
                     ui.set_max_width(scroll_w);
@@ -743,8 +745,10 @@ impl SearchPanel {
         if let Some(rect) = ctx.memory(|mem| mem.area_rect(Self::window_id())) {
             self.panel_pos = Some(rect.min);
             self.panel_size = Vec2::new(
-                rect.width().clamp(self.constraints.min_width, max_window_width),
-                rect.height().clamp(self.constraints.min_height, max_window_height),
+                rect.width()
+                    .clamp(self.constraints.min_width, max_window_width),
+                rect.height()
+                    .clamp(self.constraints.min_height, max_window_height),
             );
         }
 

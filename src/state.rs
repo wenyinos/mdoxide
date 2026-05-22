@@ -1284,6 +1284,11 @@ pub struct Tab {
     /// Content version counter - incremented on undo/redo to signal
     /// external content changes to the editor widget
     content_version: u64,
+    /// Monotonic counter bumped only on **external** content invalidation (raw edits,
+    /// file reload, undo/redo, split-pane raw sync). Rendered WYSIWYG block commits do
+    /// not bump this — future stable egui widget id scope (`ui.push_id(source_epoch, …)`).
+    /// Independent of per-frame `content_hash()` used for viewport culling / height caches.
+    source_epoch: u64,
     /// Cached file type (computed from path, updated on path change)
     file_type: FileType,
     /// Whether the editor should request focus on next frame
@@ -1389,6 +1394,7 @@ impl Tab {
             view_mode: ViewMode::Raw, // New documents default to raw mode
             edit_history: EditHistory::new(),
             content_version: 0,
+            source_epoch: 0,
             file_type: FileType::Markdown, // New tabs default to markdown
             needs_focus: true,             // Auto-focus new tabs
             transient_highlight: TransientHighlight::new(),
@@ -1488,6 +1494,7 @@ impl Tab {
             view_mode: ViewMode::Raw,
             edit_history,
             content_version: 0,
+            source_epoch: 0,
             file_type,
             needs_focus: true,
             transient_highlight: TransientHighlight::new(),
@@ -1595,6 +1602,7 @@ impl Tab {
             view_mode: ViewMode::Raw,
             edit_history,
             content_version: 0,
+            source_epoch: 0,
             file_type,
             needs_focus: true,
             transient_highlight: TransientHighlight::new(),
@@ -1721,6 +1729,7 @@ impl Tab {
             view_mode: info.view_mode,
             edit_history,
             content_version: 0,
+            source_epoch: 0,
             file_type,
             needs_focus: false,
             transient_highlight: TransientHighlight::new(),
@@ -1852,6 +1861,7 @@ impl Tab {
             view_mode: info.view_mode,
             edit_history,
             content_version: 0,
+            source_epoch: 0,
             file_type,
             needs_focus: false,
             transient_highlight: TransientHighlight::new(),
@@ -1958,6 +1968,7 @@ impl Tab {
         };
         self.tab_content = TabContent::Ready;
         self.content_version = self.content_version.wrapping_add(1);
+        self.bump_source_epoch();
     }
 
     /// Mark this tab's loading as failed with an error message.
@@ -2037,6 +2048,30 @@ impl Tab {
     /// Check if this is a large file that uses memory-optimized storage.
     pub fn is_large_file(&self) -> bool {
         self.is_large_file
+    }
+
+    /// Hash of the disk content this tab was last loaded from (or last saved to).
+    ///
+    /// Used by session recovery (`RecoveryContent::original_content_hash`) and
+    /// autosave identity checks to verify that a recovery file still belongs to
+    /// the same on-disk file the tab was opened with — independent of whether
+    /// the in-memory buffer has diverged.
+    ///
+    /// - Large files: returns the cached `original_content_hash` (computed at
+    ///   load / `mark_saved`).
+    /// - Small files (where `original_content` holds the disk text): hashes
+    ///   `original_content` on the fly with the same `DefaultHasher` algorithm
+    ///   used by `crate::config::session::hash_content`, so the value is
+    ///   directly comparable to a hash of current disk content.
+    /// - Untitled tabs that have never been written to disk: returns `None`.
+    pub fn disk_content_hash(&self) -> Option<u64> {
+        if let Some(hash) = self.original_content_hash {
+            return Some(hash);
+        }
+        if self.path.is_none() && self.original_content.is_empty() {
+            return None;
+        }
+        Some(Self::compute_content_hash(&self.original_content))
     }
 
     /// Check if this is a new/untitled file (not yet saved to disk).
@@ -2434,6 +2469,7 @@ impl Tab {
             self.edit_history.record_operations(ops);
             self.content = new_content;
             self.content_version = self.content_version.wrapping_add(1);
+            self.bump_source_epoch();
             self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             self.mark_content_edited();
         }
@@ -2450,6 +2486,7 @@ impl Tab {
         let cursor = self.edit_history.undo_string(&mut self.content);
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
+            self.bump_source_epoch();
             self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             match self.pending_undo_snapshot.as_mut() {
                 Some(snap) => snap.clone_from(&self.content),
@@ -2470,6 +2507,7 @@ impl Tab {
         let cursor = self.edit_history.redo_string(&mut self.content);
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
+            self.bump_source_epoch();
             self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             match self.pending_undo_snapshot.as_mut() {
                 Some(snap) => snap.clone_from(&self.content),
@@ -2512,6 +2550,34 @@ impl Tab {
         self.content_version
     }
 
+    /// External-invalidation epoch for stable rendered-mode widget ids.
+    ///
+    /// Bumped on raw edits, file reload, undo/redo, and other changes that replace
+    /// content outside the rendered edit session. Rendered WYSIWYG block commits do
+    /// not bump this counter.
+    pub fn source_epoch(&self) -> u64 {
+        self.source_epoch
+    }
+
+    /// Bump [`source_epoch`] after external content invalidation.
+    pub fn bump_source_epoch(&mut self) {
+        self.source_epoch = self.source_epoch.saturating_add(1);
+        log::trace!(
+            "Tab {} source_epoch bumped to {}",
+            self.id,
+            self.source_epoch
+        );
+    }
+
+    /// Signal external content change after assigning to [`Self::content`] directly.
+    ///
+    /// Bumps [`content_version`] and [`source_epoch`]. Does not record undo — pair with
+    /// [`record_edit`](Self::record_edit) when undo support is needed.
+    pub fn notify_external_content_change(&mut self) {
+        self.content_version = self.content_version.wrapping_add(1);
+        self.bump_source_epoch();
+    }
+
     /// Increment the content version counter.
     ///
     /// Call this when content is modified programmatically (e.g., snippet expansion)
@@ -2544,16 +2610,42 @@ impl Tab {
 
     /// Record an edit by diffing the pending snapshot against current content.
     ///
-    /// After recording, updates the snapshot in-place via `clone_from` to
-    /// reuse the buffer, and refreshes the blake3 hash. This avoids a fresh
-    /// allocation on the next frame.
-    ///
-    /// Also bumps `content_version` when operations were actually recorded so
-    /// the cached `is_modified()` / `text_stats()` invalidate. Without this
-    /// the title bar dirty-mark and the on-close save prompt never fire for
-    /// edits made through editors that mutate `tab.content` directly
-    /// (v0.2.8 data-loss hotfix).
+    /// Rendered-mode edits: use this method (does **not** bump [`source_epoch`]).
+    /// Raw / external paths: use [`record_external_edit_from_snapshot`].
     pub fn record_edit_from_snapshot(&mut self) {
+        self.record_edit_from_snapshot_inner(false);
+    }
+
+    /// Apply queued rendered block commits as logical undo steps (one per commit boundary).
+    ///
+    /// Called from `central_panel` after `MarkdownEditor::show` drains
+    /// [`crate::markdown::rendered_commit_undo::take_pending_commits`].
+    pub fn apply_rendered_commit_undo_entries(
+        &mut self,
+        entries: impl IntoIterator<Item = crate::markdown::rendered_commit_undo::PendingRenderedCommitUndo>,
+    ) {
+        let final_content = self.content.clone();
+        for entry in entries {
+            if entry.break_group_before {
+                self.break_undo_group();
+            }
+            self.content = entry.post_commit_snapshot;
+            self.pending_undo_snapshot = Some(entry.pre_commit_snapshot);
+            self.record_edit_from_snapshot();
+        }
+        self.content = final_content;
+        self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+        if let Some(snap) = self.pending_undo_snapshot.as_mut() {
+            snap.clone_from(&self.content);
+        }
+    }
+
+    /// Like [`record_edit_from_snapshot`] but bumps [`source_epoch`] when content changes.
+    pub fn record_external_edit_from_snapshot(&mut self) {
+        self.record_edit_from_snapshot_inner(true);
+    }
+
+    fn record_edit_from_snapshot_inner(&mut self, bump_epoch: bool) {
         if let Some(mut old_content) = self.pending_undo_snapshot.take() {
             if old_content != self.content {
                 let ops = compute_edit_ops(&old_content, &self.content);
@@ -2561,6 +2653,9 @@ impl Tab {
                 old_content.clone_from(&self.content);
                 self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
                 self.content_version = self.content_version.wrapping_add(1);
+                if bump_epoch {
+                    self.bump_source_epoch();
+                }
             }
             self.pending_undo_snapshot = Some(old_content);
         }
@@ -2574,6 +2669,7 @@ impl Tab {
             self.edit_history.record_operations(ops);
             self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             self.pending_undo_snapshot = None;
+            self.bump_source_epoch();
         }
     }
 
@@ -2803,7 +2899,7 @@ impl Tab {
         let char_pos = pos.min(chars.len().saturating_sub(1));
 
         // Find word boundaries
-        let is_word_char = |c: char| (c.is_alphanumeric() || c == '_');
+        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
         // Check if we're on a word character
         if char_pos < chars.len() && !is_word_char(chars[char_pos]) {
@@ -2838,7 +2934,7 @@ impl Tab {
         let chars: Vec<char> = self.content.chars().collect();
         let char_pos = pos.min(chars.len().saturating_sub(1));
 
-        let is_word_char = |c: char| (c.is_alphanumeric() || c == '_');
+        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
         // Check if we're on a word character
         if char_pos < chars.len() && !is_word_char(chars[char_pos]) {
@@ -3110,10 +3206,31 @@ pub struct UiState {
     pub rename_untitled_tab: Option<(usize, String)>,
 }
 
+/// True when a persisted session title matches a special tab (Settings, About, Welcome).
+///
+/// Legacy sessions incorrectly stored special tabs as pathless documents; skip those titles
+/// when restoring custom untitled labels so they are not applied to document tabs.
+fn is_reserved_special_tab_display_title(display_title: &str) -> bool {
+    let s = display_title.trim().trim_end_matches('*').trim();
+    [
+        SpecialTabKind::Settings,
+        SpecialTabKind::About,
+        SpecialTabKind::Welcome,
+    ]
+    .into_iter()
+    .any(|kind| {
+        let with_icon = format!("{} {}", kind.icon(), kind.title());
+        s == with_icon || s == kind.title()
+    })
+}
+
 /// Parse persisted session title into an optional custom untitled tab label.
 fn persisted_untitled_label_from_session(display_title: &str) -> Option<String> {
     let s = display_title.trim().trim_end_matches('*').trim();
-    if s.is_empty() || s.eq_ignore_ascii_case("untitled") {
+    if s.is_empty()
+        || s.eq_ignore_ascii_case("untitled")
+        || is_reserved_special_tab_display_title(s)
+    {
         None
     } else {
         Some(s.to_string())
@@ -3152,11 +3269,50 @@ pub enum PendingAction {
 // Session Content Resolution
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Snapshot of a recovered-vs-disk mismatch surfaced via the conflict banner.
+///
+/// Stored in [`AppState::recovery_conflicts`] keyed by `tab_id` while a tab
+/// has both a recovered buffer (already applied) and a meaningfully different
+/// on-disk version. The user picks one of two actions in the banner:
+///
+/// * **Keep Recovered** — drop the conflict entry; the buffer is unchanged
+///   so the tab simply stays modified relative to disk and the user can
+///   save manually.
+/// * **Reload from Disk** — replace the tab's buffer with `on_disk_content`
+///   and mark the tab saved (no longer modified).
+///
+/// See task 106.5 (hardened session recovery banner).
+#[derive(Debug, Clone)]
+pub struct RecoveryConflict {
+    /// The buffer that was applied to the tab during session restore.
+    pub recovered_content: String,
+    /// The current on-disk content captured at restore time. Used to
+    /// replace the buffer if the user picks `Reload from Disk`; also kept
+    /// so a future enhancement can render a diff.
+    pub on_disk_content: String,
+}
+
 /// Result of resolving tab content from various sources.
 /// Contains the content and optional encoding information for files loaded from disk.
+#[derive(Debug)]
 enum ResolvedContent {
-    /// Content recovered from crash recovery (already UTF-8)
+    /// Content recovered from crash recovery (already UTF-8).
+    ///
+    /// Either the recovery file matched the tab's identity exactly (path +
+    /// hash), or it is a legacy pre-task-106 file with no identity to verify.
     Recovered(String),
+    /// Content recovered from crash recovery whose buffer differs from the
+    /// current on-disk content even though the recovery file's identity
+    /// (path + `original_content_hash`) matched at restore time.
+    ///
+    /// The caller applies `content` to the tab and uses `on_disk_content` to
+    /// surface a non-blocking conflict banner so the user can pick
+    /// `Keep Recovered` (do nothing) or `Reload from Disk` (replace with the
+    /// disk version) instead of silently keeping one side. See task 106.5.
+    RecoveredWithDiskDivergence {
+        content: String,
+        on_disk_content: String,
+    },
     /// Content loaded from disk with encoding detection
     FromDisk {
         content: String,
@@ -3230,7 +3386,7 @@ impl BacklinkIndex {
             .filter(|f| {
                 f.extension()
                     .and_then(|e| e.to_str())
-                    .map(|e| (e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")))
+                    .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
                     .unwrap_or(false)
             })
             .collect();
@@ -3310,7 +3466,7 @@ impl BacklinkIndex {
             let is_md = file_path
                 .extension()
                 .and_then(|e| e.to_str())
-                .map(|e| (e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")))
+                .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
                 .unwrap_or(false);
             if !is_md {
                 continue;
@@ -3452,6 +3608,14 @@ pub struct AppState {
     pub diagnostics: DiagnosticMap,
     /// Optional toast message to display on the first frame (for startup errors).
     pub pending_toast: Option<String>,
+    /// Active recovery-vs-disk conflicts keyed by `tab_id`.
+    ///
+    /// Populated during [`Self::restore_from_session_result`] when an
+    /// identity-validated recovery file is applied but its buffer differs
+    /// from the current disk content. The active tab's banner reads from
+    /// here and clears the entry when the user picks `Keep Recovered` or
+    /// `Reload from Disk` (task 106.5).
+    pub recovery_conflicts: HashMap<usize, RecoveryConflict>,
 }
 
 impl AppState {
@@ -3486,6 +3650,7 @@ impl AppState {
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
             pending_toast: None,
+            recovery_conflicts: HashMap::new(),
         };
 
         // Try to restore tabs from previous session
@@ -3585,6 +3750,47 @@ impl AppState {
         }
     }
 
+    /// Whether any non-special document tabs are open (saved files, scratch notes, viewers).
+    pub fn has_open_documents(&self) -> bool {
+        if self.is_workspace_mode() {
+            return true;
+        }
+        self.tabs
+            .iter()
+            .any(|t| !t.is_special() && !t.is_empty_untitled())
+    }
+
+    /// True when the Welcome tab should appear on startup (no CLI paths).
+    pub fn should_show_welcome_on_empty_launch(&self) -> bool {
+        self.settings.show_welcome_on_empty_launch && !self.has_open_documents()
+    }
+
+    /// Remove default empty untitled placeholders before showing Welcome.
+    fn remove_empty_untitled_tabs(&mut self) {
+        let mut i = 0;
+        while i < self.tabs.len() {
+            if self.tabs[i].is_empty_untitled() {
+                self.tabs.remove(i);
+                if self.active_tab_index > i {
+                    self.active_tab_index -= 1;
+                } else if self.active_tab_index >= self.tabs.len() && !self.tabs.is_empty() {
+                    self.active_tab_index = self.tabs.len() - 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// Open the Welcome tab on empty launch, or activate it if it already exists.
+    pub fn open_welcome_on_empty_launch(&mut self) {
+        if !self.should_show_welcome_on_empty_launch() {
+            return;
+        }
+        self.remove_empty_untitled_tabs();
+        self.show_welcome_tab();
+    }
+
     /// Open the Welcome tab, or activate it if it already exists.
     pub fn show_welcome_tab(&mut self) {
         // If Welcome tab already exists, just activate it.
@@ -3621,6 +3827,7 @@ impl AppState {
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
             pending_toast: None,
+            recovery_conflicts: HashMap::new(),
         };
 
         // Try to restore tabs from session data
@@ -4100,6 +4307,12 @@ impl AppState {
             }
         }
 
+        // Clear any pending recovery conflict for this tab so the banner does
+        // not reappear if the runtime id is later reused (task 106.5).
+        if let Some(tab) = self.tabs.get(index) {
+            self.recovery_conflicts.remove(&tab.id);
+        }
+
         self.tabs.remove(index);
 
         if let Some(path) = ephemeral_pdf_path {
@@ -4202,6 +4415,11 @@ impl AppState {
         // Update original_bytes to match what we saved
         tab.original_bytes = encoded_bytes;
         tab.mark_saved();
+        let tab_id = tab.id;
+        // Drop the stale recovery file now that the on-disk version is current
+        // — prevents the file from hijacking another tab that may inherit this
+        // id in a future session (see `resolve_tab_content`).
+        crate::config::delete_recovery_content(tab_id);
         info!("Saved file: {} (encoding: {})", path.display(), encoding);
         Ok(())
     }
@@ -4228,6 +4446,10 @@ impl AppState {
         // Update original_bytes to match what we saved
         tab.original_bytes = encoded_bytes;
         tab.mark_saved();
+        let tab_id = tab.id;
+        // Drop the stale recovery file now that the on-disk version is current
+        // — see note in `save_active_tab`.
+        crate::config::delete_recovery_content(tab_id);
 
         // Update recent files and save immediately for persistence
         self.settings.add_recent_file(path.clone());
@@ -4472,6 +4694,8 @@ impl AppState {
             .tabs
             .iter()
             .filter(|tab| match &tab.kind {
+                // Special tabs are UI panels — never persist (see docs/technical/ui/special-tabs.md).
+                TabKind::Special(_) => false,
                 TabKind::PdfViewer(vs) => !vs.ephemeral_temp_file,
                 _ => true,
             })
@@ -4538,18 +4762,109 @@ impl AppState {
 
     /// Save recovery content for tabs with unsaved changes.
     ///
-    /// This saves the actual content of tabs that have unsaved changes,
-    /// allowing crash recovery to restore the content even if the app crashes.
+    /// Captures each modified tab's current buffer along with its on-disk
+    /// identity (`path` + hash of the content the tab was loaded from) so
+    /// restore can reject recovery files whose tab id was reused for a
+    /// different document or whose disk file was changed externally
+    /// (task 106 — hardened session recovery).
     pub fn save_recovery_content(&self) {
         use crate::config::save_recovery_content;
 
         for tab in &self.tabs {
+            if tab.is_special() {
+                continue;
+            }
             if tab.is_modified() {
-                if !save_recovery_content(tab.id, &tab.content) {
+                let ok = save_recovery_content(
+                    tab.id,
+                    &tab.content,
+                    tab.path.as_deref(),
+                    tab.disk_content_hash(),
+                );
+                if !ok {
                     warn!("Failed to save recovery content for tab {}", tab.id);
                 }
             }
         }
+    }
+
+    /// Whether the given tab id currently has a recovery-vs-disk conflict.
+    ///
+    /// Used by the central panel to decide whether to render the conflict
+    /// banner above the editor (task 106.5).
+    pub fn has_recovery_conflict(&self, tab_id: usize) -> bool {
+        self.recovery_conflicts.contains_key(&tab_id)
+    }
+
+    /// Read-only access to a recovery conflict (mostly for tests / UI).
+    pub fn recovery_conflict(&self, tab_id: usize) -> Option<&RecoveryConflict> {
+        self.recovery_conflicts.get(&tab_id)
+    }
+
+    /// Banner action: dismiss the recovery conflict, leaving the recovered
+    /// buffer in place. The tab stays modified and the user can save manually
+    /// (task 106.5). Returns `true` if a conflict was actually cleared.
+    pub fn keep_recovered_buffer(&mut self, tab_id: usize) -> bool {
+        let removed = self.recovery_conflicts.remove(&tab_id).is_some();
+        if removed {
+            log::info!("Recovery conflict for tab {} resolved: kept recovered buffer", tab_id);
+        }
+        removed
+    }
+
+    /// Banner action: replace the tab's buffer with the on-disk content
+    /// captured at restore time and mark the tab saved (no longer modified).
+    /// Clears the conflict entry on success.
+    ///
+    /// Returns `true` if a conflict was found and the buffer was replaced.
+    /// Untitled tabs and unknown tab ids return `false` without touching
+    /// state. Used by the central panel banner (task 106.5).
+    pub fn apply_reload_from_disk_for_conflict(&mut self, tab_id: usize) -> bool {
+        let Some(conflict) = self.recovery_conflicts.remove(&tab_id) else {
+            return false;
+        };
+        let Some(idx) = self.tabs.iter().position(|t| t.id == tab_id) else {
+            return false;
+        };
+        let Some(tab) = self.tabs.get_mut(idx) else {
+            return false;
+        };
+
+        tab.content = conflict.on_disk_content;
+        tab.notify_external_content_change();
+        tab.mark_saved();
+
+        // Clamp cursor to new content length so the user does not land past EOF.
+        let max_chars = tab.content.chars().count();
+        let cursor = tab.cursors.primary().head.min(max_chars);
+        tab.pending_cursor_restore = Some(cursor);
+
+        log::info!(
+            "Recovery conflict for tab {} resolved: reloaded from disk",
+            tab_id
+        );
+        true
+    }
+
+    /// Delete every `recovery/<tab_id>.json` whose id is NOT currently open
+    /// AND every `untitled_<tab_id>.md.autosave` whose id is not in use
+    /// (task 106.6 — autosave hardening).
+    ///
+    /// Call once after session restore is fully complete. Tab ids are
+    /// reassigned every launch and both the recovery and autosave folders
+    /// are append-only, so leftover files from previous sessions would
+    /// otherwise sit there indefinitely and risk hijacking unrelated tabs
+    /// in a future restore — see safety note on `resolve_tab_content`.
+    pub fn prune_stale_recovery_files(&self) {
+        use std::collections::HashSet;
+        let valid_ids: HashSet<usize> = self
+            .tabs
+            .iter()
+            .filter(|t| !t.is_special())
+            .map(|t| t.id)
+            .collect();
+        crate::config::prune_recovery_dir(&valid_ids);
+        crate::config::prune_auto_save_dir(&valid_ids);
     }
 
     /// Restore session from a SessionRestoreResult.
@@ -4602,18 +4917,79 @@ impl AppState {
             // Try to load content from various sources
             let resolved = self.resolve_tab_content(session_tab, result);
 
+            // Extract the conflict (recovered + on-disk pair) before consuming
+            // the resolved enum so the match arm below can apply the recovered
+            // buffer the same way it does for plain `Recovered`. The conflict
+            // is then stored in `self.recovery_conflicts` (task 106.5) keyed
+            // by the tab id we are about to assign so the central panel banner
+            // can render `Keep Recovered` / `Reload from Disk`.
+            let pending_conflict: Option<(usize, RecoveryConflict)> = match &resolved {
+                Some(ResolvedContent::RecoveredWithDiskDivergence {
+                    content,
+                    on_disk_content,
+                }) => Some((
+                    self.next_tab_id,
+                    RecoveryConflict {
+                        recovered_content: content.clone(),
+                        on_disk_content: on_disk_content.clone(),
+                    },
+                )),
+                _ => None,
+            };
+
             if let Some(resolved) = resolved {
                 let mut tab = match resolved {
                     ResolvedContent::Recovered(content) => {
-                        // Recovery content is UTF-8
+                        // No divergence: try_apply_recovery already verified that
+                        // either disk == content, or disk was unreadable. In both
+                        // cases `original_content = content` is the only safe
+                        // anchor we have, so `Tab::with_file` is correct here.
                         if let Some(path) = &session_tab.path {
                             let mut t =
                                 Tab::with_file(self.next_tab_id, path.clone(), content.clone());
-                            // Set encoding to UTF-8 for recovered content
                             t.detected_encoding = Some("utf-8");
                             t.current_encoding = "utf-8";
                             t
                         } else {
+                            let mut t = Tab::new(self.next_tab_id);
+                            t.content = content.clone();
+                            t
+                        }
+                    }
+                    ResolvedContent::RecoveredWithDiskDivergence {
+                        content,
+                        on_disk_content,
+                    } => {
+                        // CRITICAL: original_content must be the on-disk text,
+                        // NOT the recovered buffer. Otherwise the tab loses its
+                        // identity link to the file on disk: `is_modified()`
+                        // returns false and `disk_content_hash()` hashes the
+                        // recovered buffer instead of disk, which poisons the
+                        // next recovery snapshot's `original_content_hash`. The
+                        // hash check in `try_apply_recovery` then rejects the
+                        // recovery on the *following* launch and silently
+                        // discards all edits made since the previous recovery
+                        // (data-loss bug — see `docs/technical/files/
+                        // session-persistence.md`, "Disk-hash anchoring across
+                        // recovery cycles").
+                        if let Some(path) = &session_tab.path {
+                            let mut t = Tab::with_file(
+                                self.next_tab_id,
+                                path.clone(),
+                                on_disk_content.clone(),
+                            );
+                            t.detected_encoding = Some("utf-8");
+                            t.current_encoding = "utf-8";
+                            // Swap in the recovered buffer without losing the
+                            // disk anchor. `set_content` records one undo entry
+                            // (so Ctrl+Z brings the user back to disk if they
+                            // want), bumps `content_version`, and ensures all
+                            // is_modified caches see content != original_content.
+                            t.set_content(content.clone());
+                            t
+                        } else {
+                            // Untitled tabs cannot have divergence (no disk),
+                            // but handle for completeness.
                             let mut t = Tab::new(self.next_tab_id);
                             t.content = content.clone();
                             t
@@ -4677,6 +5053,7 @@ impl AppState {
                                 view_mode: ViewMode::Raw,
                                 edit_history,
                                 content_version: 0,
+                                source_epoch: 0,
                                 file_type,
                                 needs_focus: false,
                                 transient_highlight: TransientHighlight::new(),
@@ -4745,6 +5122,19 @@ impl AppState {
 
                 self.tabs.push(tab);
                 restored_count += 1;
+
+                // If this tab was applied with a recovery-vs-disk divergence,
+                // record the conflict so the central panel renders the
+                // Keep Recovered / Reload from Disk banner above the editor
+                // (task 106.5). Conflicts are keyed by the tab's runtime id.
+                if let Some((tab_id, conflict)) = pending_conflict {
+                    log::info!(
+                        "Recovery conflict for tab {} ({}): recovered buffer differs \
+                         from current disk content; banner will be shown.",
+                        tab_id, session_tab.display_title
+                    );
+                    self.recovery_conflicts.insert(tab_id, conflict);
+                }
 
                 debug!(
                     "Restored tab {} from session: {}",
@@ -4855,12 +5245,165 @@ impl AppState {
         restored_count > 0
     }
 
+    /// Identity-gated recovery application (task 106.4).
+    ///
+    /// Returns `Some(ResolvedContent)` only when the recovery file is safe to
+    /// apply. Identity is verified in three layers:
+    ///
+    /// 1. **Legacy bypass** — pre-task-106 recovery files have neither `path`
+    ///    nor `original_content_hash` set. Those fall back to the historical
+    ///    "tab id only" matching (`has_unsaved_content` was already required
+    ///    by the caller) so users upgrading from older Ferrite versions don't
+    ///    silently lose recovered buffers. No conflict banner can be raised
+    ///    in this branch because we have no identity to compare against.
+    /// 2. **Path equality** — `recovered.path` must equal `session_tab.path`.
+    ///    A mismatch indicates the `tab_id` was reused for an unrelated
+    ///    document (the original "bleed" data-loss hazard). Untitled tabs are
+    ///    covered by this check too: both sides must have `path == None`.
+    /// 3. **Disk hash** — when the tab is path-backed, the file exists on
+    ///    disk, and `recovered.original_content_hash` is `Some(want)`, the
+    ///    current disk content is hashed (using the same algorithm as
+    ///    [`crate::config::hash_content`]). A mismatch means the
+    ///    file was edited externally between sessions; we reject the
+    ///    recovery and fall through to a fresh disk load. If the file is
+    ///    unreadable as UTF-8 we trust the path-only identity to avoid
+    ///    losing the user's recovered edits to encoding edge cases.
+    ///
+    /// On a clean identity match the buffer is applied via either
+    /// [`ResolvedContent::Recovered`] (no divergence — disk is byte-for-byte
+    /// identical to the recovered buffer) or
+    /// [`ResolvedContent::RecoveredWithDiskDivergence`] (disk has the same
+    /// hash the recovery was anchored to but its current content differs
+    /// from the recovered buffer — the user had unsaved edits we want to
+    /// surface via the conflict banner from task 106.5).
+    fn try_apply_recovery(
+        session_tab: &crate::config::SessionTabState,
+        recovered: &crate::config::RecoveryContent,
+    ) -> Option<ResolvedContent> {
+        let is_legacy =
+            recovered.path.is_none() && recovered.original_content_hash.is_none();
+
+        if is_legacy {
+            // Pre-task-106 recovery file with no identity to verify.
+            // Preserve historical behaviour so upgrading users keep their
+            // recovered buffers; the caller already required has_unsaved_content
+            // and `prune_stale_recovery_files` cleans up dangling tab ids.
+            debug!(
+                "Applying legacy recovery (no identity) for tab {} ({})",
+                session_tab.tab_id, session_tab.display_title
+            );
+            return Some(ResolvedContent::Recovered(recovered.content.clone()));
+        }
+
+        // Layer 2: path equality (covers untitled-tab case via None == None).
+        if recovered.path != session_tab.path {
+            warn!(
+                "Rejecting recovery for tab {} ({}): recovered path {:?} \
+                 does not match session path {:?}; recovery file is from a \
+                 reused tab id and will be pruned.",
+                session_tab.tab_id,
+                session_tab.display_title,
+                recovered.path,
+                session_tab.path
+            );
+            crate::diag::event(
+                "session_recovery_identity_mismatch",
+                format!(
+                    "tab_id={} title={} session_path={:?} recovered_path={:?} \
+                     reason=path_mismatch",
+                    session_tab.tab_id,
+                    session_tab.display_title,
+                    session_tab.path,
+                    recovered.path,
+                ),
+            );
+            return None;
+        }
+
+        // Layer 3: disk hash check (path-backed tabs whose file exists).
+        // We read the disk text once and reuse it for the divergence check
+        // below to avoid two reads.
+        let disk_content: Option<String> = session_tab
+            .path
+            .as_ref()
+            .filter(|p| p.exists())
+            .and_then(|p| std::fs::read_to_string(p).ok());
+
+        if let (Some(want), Some(disk)) =
+            (recovered.original_content_hash, disk_content.as_ref())
+        {
+            let got = crate::config::hash_content(disk);
+            if got != want {
+                warn!(
+                    "Rejecting recovery for tab {} ({}): disk content hash {:?} \
+                     does not match recovered original_content_hash {:?}; the \
+                     file changed externally between sessions.",
+                    session_tab.tab_id, session_tab.display_title, got, want
+                );
+                crate::diag::event(
+                    "session_recovery_identity_mismatch",
+                    format!(
+                        "tab_id={} title={} session_path={:?} recovered_path={:?} \
+                         expected_hash={:?} disk_hash={:?} reason=hash_mismatch",
+                        session_tab.tab_id,
+                        session_tab.display_title,
+                        session_tab.path,
+                        recovered.path,
+                        Some(want),
+                        Some(got),
+                    ),
+                );
+                return None;
+            }
+        }
+
+        // Identity OK. If the path-backed tab has disk content that differs
+        // from the recovered buffer, surface as RecoveredWithDiskDivergence so
+        // the conflict banner can offer Keep Recovered / Reload from Disk.
+        // If we couldn't read the disk (encoding failure, missing file), we
+        // skip divergence detection — the banner is purely informational and
+        // not safety-critical when identity already matched.
+        let divergence = disk_content
+            .as_deref()
+            .filter(|disk| *disk != recovered.content.as_str())
+            .map(|d| d.to_string());
+
+        debug!(
+            "Using recovered content for tab {} ({}) (divergent_disk={})",
+            session_tab.tab_id,
+            session_tab.display_title,
+            divergence.is_some()
+        );
+
+        Some(match divergence {
+            Some(on_disk_content) => ResolvedContent::RecoveredWithDiskDivergence {
+                content: recovered.content.clone(),
+                on_disk_content,
+            },
+            None => ResolvedContent::Recovered(recovered.content.clone()),
+        })
+    }
+
     /// Resolve content for a tab from various sources.
     ///
     /// Priority:
-    /// 1. Recovery content (if tab had unsaved changes)
+    /// 1. Recovery content (if the session itself flagged the tab as having
+    ///    unsaved changes AND the recovery file's identity matches —
+    ///    see [`Self::try_apply_recovery`])
     /// 2. File on disk (if path exists)
     /// 3. None (if file is missing and no recovery content)
+    ///
+    /// **Safety:** Recovery files live in `recovery/<tab_id>.json` and persist
+    /// across launches, but the `tab_id` namespace is per-session and starts at
+    /// 0 every launch. A leftover recovery file from a previous session can
+    /// otherwise be applied to an unrelated tab in the current session that
+    /// happens to be assigned the same id (silent data loss — the corrupted
+    /// tab is presented as clean and a save would overwrite the real file).
+    /// We therefore only consult recovery content when the session_tab itself
+    /// declared `has_unsaved_content` AND the recovery file's `path` +
+    /// `original_content_hash` line up with the tab's on-disk identity (task
+    /// 106.4). Mismatched recovery is logged with a `session_recovery_*`
+    /// diag event and pruned at startup by `prune_stale_recovery_files`.
     fn resolve_tab_content(
         &self,
         session_tab: &crate::config::SessionTabState,
@@ -4868,13 +5411,33 @@ impl AppState {
     ) -> Option<ResolvedContent> {
         use chardetng::EncodingDetector;
 
-        // First, check if we have recovery content
+        // First, check if we have recovery content — but only trust it if the
+        // session itself flagged the tab as having unsaved changes AND the
+        // recovery file's identity matches the tab's on-disk identity (task
+        // 106.4). Identity here means the recovery file's `path` and
+        // `original_content_hash` are consistent with the session tab's path
+        // and the current disk content.
         if let Some(recovered) = result.recovered_content.get(&session_tab.tab_id) {
-            debug!(
-                "Using recovered content for tab {} ({})",
-                session_tab.tab_id, session_tab.display_title
-            );
-            return Some(ResolvedContent::Recovered(recovered.clone()));
+            if !session_tab.has_unsaved_content {
+                warn!(
+                    "Ignoring stale recovery file for tab {} ({}): session reports no unsaved \
+                     content. The recovery file is likely from a previous session that reused \
+                     the same tab id; it will be pruned.",
+                    session_tab.tab_id, session_tab.display_title
+                );
+                crate::diag::event(
+                    "session_recovery_stale_ignored",
+                    format!(
+                        "tab_id={} title={} path={:?}",
+                        session_tab.tab_id, session_tab.display_title, session_tab.path
+                    ),
+                );
+            } else if let Some(resolved) = Self::try_apply_recovery(session_tab, recovered) {
+                return Some(resolved);
+            }
+            // Identity rejected (or hash mismatch) — fall through to disk load
+            // below. The stale recovery file is pruned at startup by
+            // `prune_stale_recovery_files`.
         }
 
         // Next, try to load from disk with encoding detection
@@ -5377,6 +5940,567 @@ mod tests {
     }
 
     #[test]
+    fn test_tab_disk_content_hash_untitled_returns_none() {
+        let tab = Tab::new(0);
+        assert!(
+            tab.disk_content_hash().is_none(),
+            "untitled empty tab has no disk hash"
+        );
+    }
+
+    #[test]
+    fn test_tab_disk_content_hash_path_backed_small_file() {
+        // Small files store the disk text in `original_content`, so the hash
+        // is computed on demand. It must equal the hash of that content using
+        // the same DefaultHasher algorithm as session::hash_content.
+        let path = PathBuf::from("/tmp/example.md");
+        let body = "# Hello\n\nbody".to_string();
+        let tab = Tab::with_file(1, path, body.clone());
+
+        let got = tab.disk_content_hash().expect("path-backed tab has hash");
+        assert_eq!(got, crate::config::hash_content(&body));
+    }
+
+    #[test]
+    fn test_tab_disk_content_hash_does_not_track_in_memory_edits() {
+        // The hash must reflect *disk* content, not the in-memory buffer,
+        // so a recovery file written from a modified tab still references the
+        // unmodified disk identity used to detect external changes.
+        let path = PathBuf::from("/tmp/example.md");
+        let original = "v1".to_string();
+        let mut tab = Tab::with_file(1, path, original.clone());
+        let pristine_hash = tab.disk_content_hash().unwrap();
+
+        tab.set_content("v2 unsaved".to_string());
+        assert!(tab.is_modified());
+        assert_eq!(
+            tab.disk_content_hash(),
+            Some(pristine_hash),
+            "edits in the buffer must not change the disk hash"
+        );
+    }
+
+    #[test]
+    fn test_tab_disk_content_hash_reflects_save() {
+        // After mark_saved, the disk hash should follow the new content
+        // (the file on disk is now what's in the buffer).
+        let path = PathBuf::from("/tmp/example.md");
+        let mut tab = Tab::with_file(1, path, "v1".to_string());
+
+        tab.set_content("v2".to_string());
+        tab.mark_saved();
+
+        let expected = crate::config::hash_content("v2");
+        assert_eq!(tab.disk_content_hash(), Some(expected));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 106.4 — resolve_tab_content / try_apply_recovery identity gating
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Build a `SessionTabState` that resembles a path-backed tab the user
+    /// closed with unsaved edits. Used by the recovery-identity tests below.
+    fn session_tab(
+        tab_id: usize,
+        path: Option<PathBuf>,
+        has_unsaved: bool,
+    ) -> crate::config::SessionTabState {
+        crate::config::SessionTabState {
+            tab_id,
+            path,
+            display_title: format!("test-tab-{tab_id}"),
+            has_unsaved_content: has_unsaved,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_recovery_identity_path_match_no_hash_returns_recovered() {
+        use crate::config::RecoveryContent;
+        // Path matches and there's no `original_content_hash` to verify
+        // (e.g. tab whose disk file went away between sessions). Identity
+        // is trusted on path equality alone — buffer is applied as Recovered
+        // (no disk to diff against, no banner).
+        let path = PathBuf::from("/non/existent/identity-1.md");
+        let st = session_tab(7, Some(path.clone()), true);
+        let rc = RecoveryContent::new_with_identity(7, "buf".into(), Some(path), None);
+
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("identity ok");
+        assert!(
+            matches!(resolved, ResolvedContent::Recovered(ref c) if c == "buf"),
+            "path-only match must apply as Recovered, got: {resolved:?}"
+        );
+    }
+
+    #[test]
+    fn test_recovery_identity_path_mismatch_rejected() {
+        use crate::config::RecoveryContent;
+        // Original "tab id bleed": tab 10 in the previous session was a
+        // markdown file; in this session tab 10 is a different file. The
+        // recovery file's path must not be silently applied to it.
+        let st = session_tab(10, Some(PathBuf::from("/notes/task_50.md")), true);
+        let rc = RecoveryContent::new_with_identity(
+            10,
+            "asdasd".into(),
+            None, // recovery was for an untitled tab
+            None,
+        );
+
+        assert!(
+            AppState::try_apply_recovery(&st, &rc).is_none(),
+            "untitled recovery must NOT apply to path-backed tab with same id"
+        );
+    }
+
+    #[test]
+    fn test_recovery_identity_path_mismatch_different_files_rejected() {
+        use crate::config::RecoveryContent;
+        // Path-backed in both sessions but for two different files.
+        let st = session_tab(3, Some(PathBuf::from("/work/b.md")), true);
+        let rc = RecoveryContent::new_with_identity(
+            3,
+            "x".into(),
+            Some(PathBuf::from("/work/a.md")),
+            Some(0xabc),
+        );
+
+        assert!(
+            AppState::try_apply_recovery(&st, &rc).is_none(),
+            "differing recovered.path must reject"
+        );
+    }
+
+    #[test]
+    fn test_recovery_identity_legacy_file_path_backed_session_applied() {
+        use crate::config::RecoveryContent;
+        // Pre-task-106 recovery file (no path, no hash) on a path-backed
+        // session tab is applied via the back-compat fallback so users
+        // upgrading from older Ferrite versions do not lose recovered text.
+        let st = session_tab(4, Some(PathBuf::from("/legacy/notes.md")), true);
+        let rc = RecoveryContent::new(4, "legacy buffer".into());
+        assert!(rc.path.is_none() && rc.original_content_hash.is_none());
+
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("legacy back-compat");
+        match resolved {
+            ResolvedContent::Recovered(c) => assert_eq!(c, "legacy buffer"),
+            other => panic!("legacy file must apply as Recovered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_recovery_identity_legacy_file_untitled_session_applied() {
+        use crate::config::RecoveryContent;
+        // Both sides have None paths. Same legacy fallback applies.
+        let st = session_tab(8, None, true);
+        let rc = RecoveryContent::new(8, "buf".into());
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("legacy back-compat");
+        assert!(matches!(resolved, ResolvedContent::Recovered(ref c) if c == "buf"));
+    }
+
+    #[test]
+    fn test_recovery_identity_untitled_match_applied() {
+        use crate::config::RecoveryContent;
+        // Untitled tabs with explicit path=None on both sides match.
+        let st = session_tab(11, None, true);
+        let rc = RecoveryContent::new_with_identity(11, "buf".into(), None, None);
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("untitled match");
+        assert!(matches!(resolved, ResolvedContent::Recovered(ref c) if c == "buf"));
+    }
+
+    #[test]
+    fn test_recovery_identity_hash_match_no_divergence_recovered() {
+        use crate::config::RecoveryContent;
+        // Path matches AND `original_content_hash` matches the disk content
+        // AND the disk content is byte-for-byte identical to the recovery
+        // buffer (i.e. the user had no unsaved edits when the recovery was
+        // taken — unusual but possible). Apply as plain Recovered.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("identity-eq.md");
+        let body = "shared body";
+        std::fs::write(&path, body).expect("write");
+
+        let st = session_tab(12, Some(path.clone()), true);
+        let want = crate::config::hash_content(body);
+        let rc = RecoveryContent::new_with_identity(
+            12,
+            body.to_string(),
+            Some(path),
+            Some(want),
+        );
+
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("identity ok");
+        assert!(
+            matches!(resolved, ResolvedContent::Recovered(ref c) if c == body),
+            "identical buffer + identical disk must apply as Recovered, got: {resolved:?}"
+        );
+    }
+
+    #[test]
+    fn test_recovery_identity_hash_match_with_divergence_returns_divergence() {
+        use crate::config::RecoveryContent;
+        // Path matches, disk-hash matches the recorded `original_content_hash`,
+        // but the recovered buffer has unsaved edits on top of disk. Surface
+        // RecoveredWithDiskDivergence so 106.5's banner can offer Reload from
+        // Disk vs Keep Recovered.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("identity-divergent.md");
+        let disk_body = "v1 disk";
+        std::fs::write(&path, disk_body).expect("write");
+
+        let st = session_tab(13, Some(path.clone()), true);
+        let recovered_buffer = "v1 disk + unsaved edits";
+        let rc = RecoveryContent::new_with_identity(
+            13,
+            recovered_buffer.to_string(),
+            Some(path),
+            Some(crate::config::hash_content(disk_body)),
+        );
+
+        let resolved = AppState::try_apply_recovery(&st, &rc).expect("identity ok");
+        match resolved {
+            ResolvedContent::RecoveredWithDiskDivergence {
+                content,
+                on_disk_content,
+            } => {
+                assert_eq!(content, recovered_buffer);
+                assert_eq!(on_disk_content, disk_body);
+            }
+            other => panic!("expected divergence variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_recovery_identity_hash_mismatch_rejected() {
+        use crate::config::RecoveryContent;
+        // Path matches but disk has been edited externally between
+        // sessions, so the disk hash no longer matches the recovery's
+        // `original_content_hash`. Reject so the user does not silently
+        // overwrite the new disk content with stale recovery.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("identity-hashmiss.md");
+        std::fs::write(&path, "external edit").expect("write");
+
+        let st = session_tab(14, Some(path.clone()), true);
+        // Recovery was anchored to a different disk content hash.
+        let rc = RecoveryContent::new_with_identity(
+            14,
+            "stale recovery buffer".into(),
+            Some(path),
+            Some(crate::config::hash_content("recovery-time disk content")),
+        );
+
+        assert!(
+            AppState::try_apply_recovery(&st, &rc).is_none(),
+            "hash mismatch must reject so caller falls through to disk load"
+        );
+    }
+
+    #[test]
+    fn test_recovery_identity_original_bleeding_repro_rejected() {
+        use crate::config::RecoveryContent;
+        // Acceptance regression for task 106: a leftover recovery file from
+        // a previous session named `asdasd` (untitled, tab_id=10) must not
+        // bleed into a path-backed tab that happens to be assigned the same
+        // tab_id in the new session. Without the path check this exact
+        // scenario silently overwrote `task_50_table_inline_formatting.md`
+        // with the unrelated text on save.
+        let st = session_tab(
+            10,
+            Some(PathBuf::from("/notes/task_50_table_inline_formatting.md")),
+            true,
+        );
+        let rc = RecoveryContent::new_with_identity(
+            10,
+            "asdasd".into(),
+            None,
+            None,
+        );
+
+        assert!(
+            AppState::try_apply_recovery(&st, &rc).is_none(),
+            "cross-tab bleed must be rejected even when prune_recovery_dir is bypassed"
+        );
+    }
+
+    /// Regression: restoring a path-backed tab from a divergent recovery
+    /// snapshot must anchor `original_content` (and therefore
+    /// `disk_content_hash()`) to the actual on-disk text, NOT to the
+    /// recovered buffer. Previously, `Tab::with_file(path, recovered)` made
+    /// `original_content == content`, so:
+    ///
+    /// * `is_modified()` returned false right after Restore
+    /// * `disk_content_hash()` hashed the recovered buffer
+    /// * the next crash snapshot wrote that wrong hash into
+    ///   `recovery/<id>.json::original_content_hash`
+    /// * on the *following* launch, `try_apply_recovery`'s disk-hash check
+    ///   rejected the recovery file and the tab silently fell back to disk
+    ///   content — destroying every edit made since the previous recovery.
+    ///
+    /// This is the exact data-loss path reported as: edit-raw → kill →
+    /// recover (ok) → edit-rendered → kill → recover (jumps back to
+    /// pre-first-edit, losing both edits).
+    #[test]
+    fn test_restore_with_divergence_anchors_original_to_disk() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("anchor-to-disk.md");
+        let disk_body = "ORIG disk content\n";
+        std::fs::write(&path, disk_body).expect("write disk");
+
+        // Session captured one tab whose buffer had unsaved edits on top of disk.
+        let recovered_buffer = "ORIG disk content\nedit1 from raw mode\n";
+
+        let mut session_tab_state = session_tab(7, Some(path.clone()), true);
+        session_tab_state.display_title = "anchor-to-disk.md".to_string();
+        let session = crate::config::SessionState {
+            version: 1,
+            saved_at: 0,
+            clean_shutdown: false,
+            tabs: vec![session_tab_state],
+            active_tab_index: 0,
+            app_mode: crate::config::SessionAppMode::default(),
+            zen_mode: false,
+        };
+
+        let mut recovered_content = std::collections::HashMap::new();
+        recovered_content.insert(
+            7,
+            crate::config::RecoveryContent::new_with_identity(
+                7,
+                recovered_buffer.to_string(),
+                Some(path.clone()),
+                Some(crate::config::hash_content(disk_body)),
+            ),
+        );
+
+        let result = crate::config::SessionRestoreResult {
+            session: Some(session),
+            is_crash_recovery: true,
+            recovered_content,
+            conflicted_tabs: Vec::new(),
+            missing_file_tabs: Vec::new(),
+        };
+
+        let mut state = AppState::with_settings(Settings::default());
+        assert!(state.restore_from_session_result(&result), "should restore");
+
+        let tab = state
+            .tabs
+            .iter()
+            .find(|t| t.path.as_deref() == Some(path.as_path()))
+            .expect("restored tab present");
+
+        // Buffer holds the recovered (divergent) text.
+        assert_eq!(tab.content, recovered_buffer);
+
+        // Disk anchor must be the actual disk content — NOT the recovered buffer.
+        assert_eq!(
+            tab.original_content, disk_body,
+            "original_content must reflect disk text so disk_content_hash() returns hash(disk)"
+        );
+
+        // `is_modified()` must be true so subsequent recovery snapshots and
+        // autosaves treat this tab as having unsaved changes.
+        assert!(
+            tab.is_modified(),
+            "restored-with-divergence tab must report as modified"
+        );
+
+        // `disk_content_hash()` is the anchor written into future recovery
+        // snapshots' `original_content_hash`; it must match the live disk.
+        assert_eq!(
+            tab.disk_content_hash(),
+            Some(crate::config::hash_content(disk_body)),
+            "disk_content_hash() must hash the on-disk text, not the recovered buffer"
+        );
+    }
+
+    /// Regression cycle (the exact user repro): after a recovery cycle, a
+    /// fresh edit + new recovery snapshot must still anchor to the live disk
+    /// hash. Validates the failure mode by exercising the full
+    /// `disk_content_hash()` API path that `save_recovery_content` reads.
+    #[test]
+    fn test_restore_then_edit_keeps_disk_hash_anchor() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("recover-cycle.md");
+        let disk_body = "DISK only\n";
+        std::fs::write(&path, disk_body).expect("write disk");
+
+        let recovered_buffer = "DISK only\nfirst raw edit\n";
+
+        let mut session_tab_state = session_tab(11, Some(path.clone()), true);
+        session_tab_state.display_title = "recover-cycle.md".to_string();
+        let session = crate::config::SessionState {
+            version: 1,
+            saved_at: 0,
+            clean_shutdown: false,
+            tabs: vec![session_tab_state],
+            active_tab_index: 0,
+            app_mode: crate::config::SessionAppMode::default(),
+            zen_mode: false,
+        };
+        let mut recovered_content = std::collections::HashMap::new();
+        recovered_content.insert(
+            11,
+            crate::config::RecoveryContent::new_with_identity(
+                11,
+                recovered_buffer.to_string(),
+                Some(path.clone()),
+                Some(crate::config::hash_content(disk_body)),
+            ),
+        );
+        let result = crate::config::SessionRestoreResult {
+            session: Some(session),
+            is_crash_recovery: true,
+            recovered_content,
+            conflicted_tabs: Vec::new(),
+            missing_file_tabs: Vec::new(),
+        };
+
+        let mut state = AppState::with_settings(Settings::default());
+        state.restore_from_session_result(&result);
+
+        // Simulate the rendered-mode commit path: tab.content gains another edit.
+        let tab_idx = state
+            .tabs
+            .iter()
+            .position(|t| t.path.as_deref() == Some(path.as_path()))
+            .expect("restored tab present");
+        let post_edit = "DISK only\nfirst raw edit\nsecond rendered edit\n";
+        state.tabs[tab_idx].set_content(post_edit.to_string());
+
+        let tab = &state.tabs[tab_idx];
+        assert_eq!(tab.content, post_edit);
+        // disk_content_hash() is what `save_recovery_content` writes into the
+        // recovery file's `original_content_hash`. It MUST stay equal to the
+        // live disk hash across the recovery cycle, otherwise the next launch
+        // rejects the snapshot and falls back to disk (the data-loss bug).
+        assert_eq!(
+            tab.disk_content_hash(),
+            Some(crate::config::hash_content(disk_body)),
+            "disk hash anchor must survive a recover-then-edit cycle"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 106.5 — RecoveryConflict banner action handlers
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Build a fresh AppState with one path-backed document tab and a
+    /// pre-populated recovery conflict for that tab. Returns (state, tab_id).
+    fn state_with_conflict(
+        recovered_buffer: &str,
+        on_disk: &str,
+    ) -> (AppState, usize) {
+        let mut state = AppState::with_settings(Settings::default());
+        // Reset to a known-clean tab list — `with_settings` always seeds an
+        // empty untitled tab, but we want a single path-backed tab.
+        state.tabs.clear();
+        let tab_id = state.next_tab_id;
+        let path = PathBuf::from("/tmp/conflict-test.md");
+        let mut tab = Tab::with_file(tab_id, path, recovered_buffer.to_string());
+        tab.detected_encoding = Some("utf-8");
+        tab.current_encoding = "utf-8";
+        state.tabs.push(tab);
+        state.next_tab_id += 1;
+        state.active_tab_index = 0;
+
+        state.recovery_conflicts.insert(
+            tab_id,
+            RecoveryConflict {
+                recovered_content: recovered_buffer.to_string(),
+                on_disk_content: on_disk.to_string(),
+            },
+        );
+
+        (state, tab_id)
+    }
+
+    #[test]
+    fn test_recovery_conflict_keep_recovered_clears_entry_keeps_buffer() {
+        let (mut state, tab_id) = state_with_conflict("recovered", "on disk");
+        assert!(state.has_recovery_conflict(tab_id));
+
+        let cleared = state.keep_recovered_buffer(tab_id);
+        assert!(cleared, "Keep Recovered should report a cleared conflict");
+        assert!(!state.has_recovery_conflict(tab_id));
+
+        // Buffer untouched, tab still modified relative to disk so user can save.
+        let tab = state.tabs.iter().find(|t| t.id == tab_id).unwrap();
+        assert_eq!(tab.content, "recovered");
+    }
+
+    #[test]
+    fn test_recovery_conflict_reload_from_disk_replaces_buffer_and_marks_saved() {
+        let (mut state, tab_id) =
+            state_with_conflict("recovered + edits", "fresh disk content");
+        assert!(state.has_recovery_conflict(tab_id));
+
+        let applied = state.apply_reload_from_disk_for_conflict(tab_id);
+        assert!(applied, "Reload should report success");
+        assert!(!state.has_recovery_conflict(tab_id));
+
+        let tab = state.tabs.iter().find(|t| t.id == tab_id).unwrap();
+        assert_eq!(tab.content, "fresh disk content");
+        assert!(
+            !tab.is_modified(),
+            "after reload, tab must not be marked modified"
+        );
+        assert!(
+            tab.pending_cursor_restore.is_some(),
+            "cursor should be clamped to new content"
+        );
+    }
+
+    #[test]
+    fn test_recovery_conflict_reload_unknown_tab_id_is_no_op() {
+        let mut state = AppState::with_settings(Settings::default());
+        // No conflict registered for this id.
+        assert!(!state.apply_reload_from_disk_for_conflict(99_999));
+        assert!(!state.keep_recovered_buffer(99_999));
+    }
+
+    #[test]
+    fn test_force_close_tab_clears_recovery_conflict() {
+        let (mut state, tab_id) = state_with_conflict("buf", "disk");
+        let idx = state.tabs.iter().position(|t| t.id == tab_id).unwrap();
+        assert!(state.has_recovery_conflict(tab_id));
+
+        // force_close_tab should drop the conflict so the banner does not
+        // resurrect on a future tab whose runtime id collides with `tab_id`.
+        let closed = state.force_close_tab(idx);
+        assert!(closed);
+        assert!(!state.has_recovery_conflict(tab_id));
+    }
+
+    #[test]
+    fn test_resolve_tab_content_no_recovery_no_disk_returns_none() {
+        // When there's no recovery file *and* no disk path, untitled tabs
+        // without unsaved content should resolve to an empty Recovered, while
+        // untitled tabs with unsaved content but no recovery return None.
+        let state = AppState::with_settings(Settings::default());
+
+        let st_clean = session_tab(99, None, false);
+        let result = crate::config::SessionRestoreResult {
+            session: None,
+            is_crash_recovery: false,
+            recovered_content: std::collections::HashMap::new(),
+            conflicted_tabs: Vec::new(),
+            missing_file_tabs: Vec::new(),
+        };
+        let resolved = state.resolve_tab_content(&st_clean, &result);
+        assert!(
+            matches!(resolved, Some(ResolvedContent::Recovered(ref s)) if s.is_empty()),
+            "untitled clean tab returns empty Recovered"
+        );
+
+        let st_dirty = session_tab(100, None, true);
+        assert!(
+            state.resolve_tab_content(&st_dirty, &result).is_none(),
+            "untitled dirty tab without recovery cannot be resolved"
+        );
+    }
+
+    #[test]
     fn test_tab_is_new_file() {
         // New tab has no path - is a new file
         let tab = Tab::new(0);
@@ -5414,6 +6538,71 @@ mod tests {
         assert!(!tab_typed_deleted.is_empty_untitled());
         tab_typed_deleted.set_content(String::new());
         assert!(tab_typed_deleted.is_empty_untitled());
+    }
+
+    #[test]
+    fn test_should_show_welcome_on_empty_launch() {
+        let mut state = AppState::with_settings(Settings::default());
+        assert!(state.should_show_welcome_on_empty_launch());
+
+        state.settings.show_welcome_on_empty_launch = false;
+        assert!(!state.should_show_welcome_on_empty_launch());
+
+        state.settings.show_welcome_on_empty_launch = true;
+        state.tabs[0].set_content("scratch note".to_string());
+        assert!(!state.should_show_welcome_on_empty_launch());
+    }
+
+    #[test]
+    fn test_open_welcome_on_empty_launch_replaces_placeholder_tab() {
+        let mut state = AppState::with_settings(Settings::default());
+        assert_eq!(state.tab_count(), 1);
+        assert!(state.active_tab().unwrap().is_empty_untitled());
+
+        state.open_welcome_on_empty_launch();
+
+        assert_eq!(state.tab_count(), 1);
+        assert!(matches!(
+            state.active_tab().unwrap().kind,
+            TabKind::Special(SpecialTabKind::Welcome)
+        ));
+    }
+
+    #[test]
+    fn test_persisted_untitled_label_rejects_special_tab_titles() {
+        let settings_with_icon = format!(
+            "{} {}",
+            SpecialTabKind::Settings.icon(),
+            SpecialTabKind::Settings.title()
+        );
+        assert!(persisted_untitled_label_from_session(&settings_with_icon).is_none());
+        assert!(persisted_untitled_label_from_session("Settings*").is_none());
+
+        let about_with_icon = format!(
+            "{} {}",
+            SpecialTabKind::About.icon(),
+            SpecialTabKind::About.title()
+        );
+        assert!(persisted_untitled_label_from_session(&about_with_icon).is_none());
+
+        assert_eq!(
+            persisted_untitled_label_from_session("My quick note").as_deref(),
+            Some("My quick note")
+        );
+    }
+
+    #[test]
+    fn test_capture_session_state_excludes_special_tabs() {
+        let mut state = AppState::new();
+        state.open_special_tab(SpecialTabKind::Settings);
+        let session = state.capture_session_state();
+        assert!(
+            session
+                .tabs
+                .iter()
+                .all(|t| !is_reserved_special_tab_display_title(&t.display_title)),
+            "special tabs must not be written to session state"
+        );
     }
 
     #[test]
@@ -5514,6 +6703,101 @@ mod tests {
 
         tab.redo();
         assert_eq!(tab.content, "second");
+    }
+
+    #[test]
+    fn test_tab_source_epoch_starts_at_zero() {
+        let tab = Tab::new(0);
+        assert_eq!(tab.source_epoch(), 0);
+    }
+
+    #[test]
+    fn test_tab_bump_source_epoch_saturates() {
+        let mut tab = Tab::new(0);
+        tab.bump_source_epoch();
+        assert_eq!(tab.source_epoch(), 1);
+        tab.source_epoch = u64::MAX;
+        tab.bump_source_epoch();
+        assert_eq!(tab.source_epoch(), u64::MAX);
+    }
+
+    #[test]
+    fn test_tab_set_content_bumps_source_epoch() {
+        let mut tab = Tab::new(0);
+        tab.set_content("hello".to_string());
+        assert_eq!(tab.source_epoch(), 1);
+        tab.set_content("hello".to_string());
+        assert_eq!(tab.source_epoch(), 1);
+    }
+
+    #[test]
+    fn test_tab_undo_redo_bumps_source_epoch() {
+        let mut tab = Tab::new(0);
+        tab.set_content("a".to_string());
+        let after_edit = tab.source_epoch();
+        tab.undo();
+        assert_eq!(tab.source_epoch(), after_edit + 1);
+        tab.redo();
+        assert_eq!(tab.source_epoch(), after_edit + 2);
+    }
+
+    #[test]
+    fn test_tab_record_edit_from_snapshot_rendered_no_epoch_bump() {
+        let mut tab = Tab::new(0);
+        tab.prepare_undo_snapshot_hashed();
+        tab.content = "rendered edit".to_string();
+        tab.record_edit_from_snapshot();
+        assert_eq!(tab.source_epoch(), 0);
+    }
+
+    #[test]
+    fn test_tab_apply_rendered_commit_undo_entries_one_logical_step() {
+        use crate::markdown::rendered_commit_undo::PendingRenderedCommitUndo;
+
+        let mut tab = Tab::new(0);
+        tab.content = "# Hello".to_string();
+        tab.apply_rendered_commit_undo_entries([PendingRenderedCommitUndo {
+            pre_commit_snapshot: "# Hi".to_string(),
+            post_commit_snapshot: "# Hello".to_string(),
+            break_group_before: false,
+        }]);
+        assert!(tab.can_undo());
+        tab.undo();
+        assert_eq!(tab.content, "# Hi");
+    }
+
+    #[test]
+    fn test_tab_apply_rendered_commit_undo_entries_chained_blocks() {
+        use crate::markdown::rendered_commit_undo::PendingRenderedCommitUndo;
+
+        let mut tab = Tab::new(0);
+        tab.content = "C".to_string();
+        tab.apply_rendered_commit_undo_entries([
+            PendingRenderedCommitUndo {
+                pre_commit_snapshot: "A".to_string(),
+                post_commit_snapshot: "B".to_string(),
+                break_group_before: true,
+            },
+            PendingRenderedCommitUndo {
+                pre_commit_snapshot: "B".to_string(),
+                post_commit_snapshot: "C".to_string(),
+                break_group_before: true,
+            },
+        ]);
+        assert_eq!(tab.undo_count(), 2);
+        tab.undo();
+        assert_eq!(tab.content, "B");
+        tab.undo();
+        assert_eq!(tab.content, "A");
+    }
+
+    #[test]
+    fn test_tab_record_external_edit_from_snapshot_bumps_epoch() {
+        let mut tab = Tab::new(0);
+        tab.prepare_undo_snapshot_hashed();
+        tab.content = "raw edit".to_string();
+        tab.record_external_edit_from_snapshot();
+        assert_eq!(tab.source_epoch(), 1);
     }
 
     #[test]
@@ -6293,7 +7577,9 @@ mod tests {
         }];
 
         let mut state = AppState::with_settings(settings);
-        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        state
+            .open_file_with_focus(temp_file.clone(), true, None)
+            .unwrap();
         let tab = state.active_tab().unwrap();
         assert_eq!(tab.view_mode, ViewMode::Split);
         assert_eq!(tab.split_ratio, 0.65);
@@ -6313,12 +7599,16 @@ mod tests {
             .unwrap();
 
         let mut state = AppState::with_settings(Settings::default());
-        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        state
+            .open_file_with_focus(temp_file.clone(), true, None)
+            .unwrap();
         state.active_tab_mut().unwrap().view_mode = ViewMode::Split;
         state.active_tab_mut().unwrap().split_ratio = 0.7;
         state.force_close_tab(0);
 
-        state.open_file_with_focus(temp_file.clone(), true, None).unwrap();
+        state
+            .open_file_with_focus(temp_file.clone(), true, None)
+            .unwrap();
         let tab = state.active_tab().unwrap();
         assert_eq!(tab.view_mode, ViewMode::Split);
         assert_eq!(tab.split_ratio, 0.7);

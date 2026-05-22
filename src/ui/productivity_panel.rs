@@ -85,23 +85,6 @@ impl Task {
         })
     }
 
-    /// Convert task back to markdown format.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let task = Task { completed: false, text: "Buy milk".to_string(), priority: 0 };
-    /// assert_eq!(task.to_markdown(), "- [ ] Buy milk");
-    /// ```
-    pub fn to_markdown(&self) -> String {
-        let checkbox = if self.completed { "[x]" } else { "[ ]" };
-        let priority_prefix = match self.priority {
-            2 => "!! ",
-            1 => "! ",
-            _ => "",
-        };
-        format!("- {} {}{}", checkbox, priority_prefix, self.text)
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -767,7 +750,7 @@ impl ProductivityPanel {
 
                 // Task list
                 ScrollArea::vertical()
-                    .id_source("tasks_scroll")
+                    .id_salt("tasks_scroll")
                     .max_height(220.0)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
@@ -936,11 +919,7 @@ impl ProductivityPanel {
             .inner_margin(Margin::symmetric(10, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(
-                        phosphor_rich_text(TIMER, 13.0)
-                            .strong()
-                            .color(header_color),
-                    );
+                    ui.label(phosphor_rich_text(TIMER, 13.0).strong().color(header_color));
                     ui.label(
                         RichText::new(t!("productivity.pomodoro.title").to_string())
                             .size(13.0)
@@ -1001,26 +980,18 @@ impl ProductivityPanel {
 
                 ui.add_space(8.0);
 
-                // Action buttons
+                // Action buttons (icon + label rendered inside each button)
                 ui.horizontal(|ui| {
                     if self.timer.is_active() {
                         if ui
-                            .horizontal(|ui| {
-                                ui.label(
-                                    phosphor_rich_text(STOP, 11.0).color(danger_color),
-                                );
-                                ui.add_sized(
-                                    [ui.available_width() - 20.0, 26.0],
-                                    Button::new(
-                                        RichText::new(
-                                            t!("productivity.pomodoro.stop").to_string(),
-                                        )
-                                        .size(11.0)
-                                        .color(danger_color),
-                                    ),
-                                )
-                            })
-                            .inner
+                            .add_sized(
+                                [ui.available_width(), 26.0],
+                                Button::new(Self::pomodoro_button_label(
+                                    STOP,
+                                    &t!("productivity.pomodoro.stop").to_string(),
+                                    danger_color,
+                                )),
+                            )
                             .clicked()
                         {
                             self.timer.stop();
@@ -1041,39 +1012,27 @@ impl ProductivityPanel {
                     } else {
                         let half_w = (ui.available_width() - 6.0) / 2.0;
                         if ui
-                            .horizontal(|ui| {
-                                ui.label(phosphor_rich_text(PLAY, 11.0).color(accent_color));
-                                ui.add_sized(
-                                    [half_w - 20.0, 26.0],
-                                    Button::new(
-                                        RichText::new(
-                                            t!("productivity.pomodoro.start_work").to_string(),
-                                        )
-                                        .size(11.0)
-                                        .color(accent_color),
-                                    ),
-                                )
-                            })
-                            .inner
+                            .add_sized(
+                                [half_w, 26.0],
+                                Button::new(Self::pomodoro_button_label(
+                                    PLAY,
+                                    &t!("productivity.pomodoro.start_work").to_string(),
+                                    accent_color,
+                                )),
+                            )
                             .clicked()
                         {
                             self.timer.start_work();
                         }
                         if ui
-                            .horizontal(|ui| {
-                                ui.label(phosphor_rich_text(COFFEE, 11.0).color(success_color));
-                                ui.add_sized(
-                                    [half_w - 20.0, 26.0],
-                                    Button::new(
-                                        RichText::new(
-                                            t!("productivity.pomodoro.start_break").to_string(),
-                                        )
-                                        .size(11.0)
-                                        .color(success_color),
-                                    ),
-                                )
-                            })
-                            .inner
+                            .add_sized(
+                                [half_w, 26.0],
+                                Button::new(Self::pomodoro_button_label(
+                                    COFFEE,
+                                    &t!("productivity.pomodoro.start_break").to_string(),
+                                    success_color,
+                                )),
+                            )
                             .clicked()
                         {
                             self.timer.start_break();
@@ -1165,7 +1124,7 @@ impl ProductivityPanel {
                     } else {
                         ui.horizontal(|ui| {
                             let combo_w = (ui.available_width() - 90.0).max(80.0);
-                            ComboBox::from_id_source("note_selector")
+                            ComboBox::from_id_salt("note_selector")
                                 .selected_text(RichText::new(&self.current_note).size(11.0))
                                 .width(combo_w)
                                 .show_ui(ui, |ui| {
@@ -1218,9 +1177,11 @@ impl ProductivityPanel {
 
                             if ui
                                 .add(
-                                    Button::new(phosphor_rich_text(PENCIL, 11.0).color(muted_color))
-                                        .frame(false)
-                                        .min_size(Vec2::new(20.0, 20.0)),
+                                    Button::new(
+                                        phosphor_rich_text(PENCIL, 11.0).color(muted_color),
+                                    )
+                                    .frame(false)
+                                    .min_size(Vec2::new(20.0, 20.0)),
                                 )
                                 .on_hover_text(t!("productivity.notes.rename_note").to_string())
                                 .clicked()
@@ -1318,6 +1279,34 @@ impl ProductivityPanel {
         needs_repaint
     }
 
+    /// Build button label text with a Phosphor icon glyph followed by caption text.
+    fn pomodoro_button_label(icon: &str, label: &str, color: eframe::egui::Color32) -> eframe::egui::text::LayoutJob {
+        use crate::ui::icons::phosphor_font;
+        use eframe::egui::text::{LayoutJob, TextFormat};
+        use eframe::egui::FontId;
+
+        let mut job = LayoutJob::default();
+        job.append(
+            icon,
+            0.0,
+            TextFormat {
+                font_id: phosphor_font(11.0),
+                color,
+                ..Default::default()
+            },
+        );
+        job.append(
+            &format!(" {label}"),
+            0.0,
+            TextFormat {
+                font_id: FontId::proportional(11.0),
+                color,
+                ..Default::default()
+            },
+        );
+        job
+    }
+
     /// Draw a small colored chip used for task priority indicators.
     fn draw_priority_chip(ui: &mut eframe::egui::Ui, label: &str, color: eframe::egui::Color32) {
         use eframe::egui::{Color32, CornerRadius, Frame, Margin, RichText, Stroke};
@@ -1351,13 +1340,13 @@ impl ProductivityPanel {
         dock_width: f32,
         ferrite_accent: eframe::egui::Color32,
     ) -> bool {
-        use eframe::egui::{self, Color32, Layout, RichText, Vec2};
+        use eframe::egui::{self, Layout, RichText, Vec2};
 
         let was_visible = *visible;
         let mut needs_repaint = false;
 
-        let is_dark = ctx.style().visuals.dark_mode;
-        let muted_color = ctx.style().visuals.weak_text_color();
+        let _is_dark = ctx.global_style().visuals.dark_mode;
+        let muted_color = ctx.global_style().visuals.weak_text_color();
 
         let viewport = crate::ui::window::viewport_window_rect(ctx);
         let initial_w = dock_width.clamp(220.0, viewport.width() - 32.0);
@@ -1410,10 +1399,10 @@ impl ProductivityPanel {
                 let avail_h = ui.available_height();
                 let (content_rect, _) =
                     ui.allocate_exact_size(Vec2::new(avail_w, avail_h), egui::Sense::hover());
-                let mut child_ui = ui.child_ui(
-                    content_rect,
-                    egui::Layout::top_down(egui::Align::Min),
-                    None,
+                let mut child_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(content_rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
                 child_ui.set_clip_rect(content_rect);
                 child_ui.set_max_width(avail_w);

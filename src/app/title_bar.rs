@@ -7,8 +7,8 @@
 use super::FerriteApp;
 use crate::config::ViewMode;
 use crate::state::FileType;
-use crate::ui::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
 use crate::ui::phosphor_icons::{phosphor_font, ARROWS_IN, GEAR, NOTE_PENCIL};
+use crate::ui::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
 use eframe::egui;
 use log::debug;
 use rust_i18n::t;
@@ -22,16 +22,17 @@ impl FerriteApp {
     /// Render the custom title bar panel.
     pub(crate) fn render_title_bar(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         is_maximized: bool,
         is_dark: bool,
-        zen_mode: bool,
+        _zen_mode: bool,
         title_bar_color: egui::Color32,
         button_hover_color: egui::Color32,
         close_hover_color: egui::Color32,
         text_color: egui::Color32,
     ) {
-        egui::TopBottomPanel::top("title_bar")
+        let ctx = ui.ctx().clone();
+        egui::Panel::top("title_bar")
             .frame(
                 egui::Frame::new()
                     .fill(title_bar_color)
@@ -39,7 +40,7 @@ impl FerriteApp {
                     .inner_margin(egui::Margin::ZERO),
             )
             .show_separator_line(false)
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // Remove spacing between elements
                 ui.spacing_mut().item_spacing.y = 0.0;
 

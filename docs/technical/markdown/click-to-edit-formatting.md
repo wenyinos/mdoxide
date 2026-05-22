@@ -1,5 +1,7 @@
 # Click-to-Edit for Formatted Content
 
+> **Status:** Superseded. The `FormattedItemEditState` design described below has been replaced by [`RenderedEditSession`](./rendered-edit-session-formatted.md) — formatted state now lives on the per-tab session alongside headings, plain paragraphs, and list items. **Session owns** `BlockEditState.text`, `formatted_editing`, and `dirty`; display ↔ edit toggle, click-to-place caret, Enter saves, Escape discards. See the [architecture overview](./rendered-edit-session.md). This page is kept for historical context.
+
 ## Overview
 
 Implements a hybrid editing approach for list items and paragraphs that contain inline markdown formatting (bold, italic, code, links). Instead of trying to edit styled text directly (which would require complex rich text editing), this feature uses a click-to-edit pattern: display formatted text normally, switch to raw markdown editing on click.

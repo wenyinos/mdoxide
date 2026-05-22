@@ -43,7 +43,10 @@ pub fn trace(step: &str) {
     let path = trace_path();
     let line = format!(
         "{:>7.3}s  {}",
-        START_INSTANT.get_or_init(Instant::now).elapsed().as_secs_f64(),
+        START_INSTANT
+            .get_or_init(Instant::now)
+            .elapsed()
+            .as_secs_f64(),
         step
     );
     if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -65,16 +68,16 @@ pub fn trace_reset() {
     }
     let _ = START_INSTANT.set(Instant::now());
     let path = trace_path();
-    let header = format!(
-        "Ferrite startup trace — {}\n",
-        chrono_lite_timestamp()
-    );
+    let header = format!("Ferrite startup trace — {}\n", chrono_lite_timestamp());
     let _ = std::fs::write(path, header);
     // Also drop a pointer file users can find easily
     let pointer = std::env::temp_dir().join("ferrite_DIAG_LOG_HERE.txt");
     let _ = std::fs::write(
         &pointer,
-        format!("Open this log while diagnosing Ferrite:\n{}\n", path.display()),
+        format!(
+            "Open this log while diagnosing Ferrite:\n{}\n",
+            path.display()
+        ),
     );
 }
 

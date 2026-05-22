@@ -322,8 +322,7 @@ impl FrontmatterPanel {
                                 .color(Color32::from_rgb(220, 160, 60)),
                         );
                         ui.label(
-                            RichText::new(err.as_str())
-                                .color(Color32::from_rgb(220, 160, 60)),
+                            RichText::new(err.as_str()).color(Color32::from_rgb(220, 160, 60)),
                         );
                     });
                 } else {

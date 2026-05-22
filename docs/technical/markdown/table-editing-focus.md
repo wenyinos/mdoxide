@@ -1,11 +1,13 @@
 # Table Editing Focus Fix
 
 **Status**: Resolved  
-**Version**: v0.2.5
+**Version**: v0.2.5 (deferred widget commits); v0.3.x session integration
 
 ## Summary
 
-Fixed the cursor focus loss issue when editing table cells in Rendered and Split view modes. Table cells now buffer edits and only commit changes to the source when focus leaves the table, preventing the re-parsing loop that caused focus loss.
+Fixed the cursor focus loss issue when editing table cells in Rendered and Split view modes. Table cells buffer edits and only commit changes to the source when focus leaves the table, preventing the re-parsing loop that caused focus loss.
+
+**Session model (v0.3.x):** Leaving a table for a non-table block (heading, paragraph, etc.) is handled by [`RenderedEditSession`](./rendered-edit-session-tables.md) — `commit_session_block` for `BlockRef::TableCell` sets a one-shot `signal_table_force_commit`, and the table widget flushes on its next frame. Intra-table Tab/Enter navigation still defers commit until focus leaves the grid entirely.
 
 ## Previous Issue
 
@@ -97,5 +99,7 @@ This matches the behavior of other click-to-edit widgets (paragraphs, list items
 ## Related Documentation
 
 - [Editable Tables](./editable-tables.md) - Full table widget documentation
+- [Rendered edit session (tables)](./rendered-edit-session-tables.md) - Session + force-commit on cross-block leave
+- [Rendered edit session (overview)](./rendered-edit-session.md) - Architecture hub
 - [Split View](./split-view.md) - Split view mode documentation
 - [WYSIWYG Editor](./wysiwyg-editor.md) - Overall editor architecture

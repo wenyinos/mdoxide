@@ -6,7 +6,7 @@ use egui::{CornerRadius, FontId, Pos2, Rect, Stroke, Vec2};
 
 use super::super::types::*;
 use super::super::utils::{
-    collect_node_obstacles, draw_arrow_head, draw_dashed_line, expand_rect, find_node_subgraph,
+    collect_node_obstacles, draw_arrow_head, draw_dashed_line, find_node_subgraph,
     line_rect_intersection, path_intersects_any, segment_intersects_rect, union_rect_bounds,
     BACK_EDGE_LANE_SPACING, BACK_EDGE_LOOP_MARGIN, NODE_OBSTACLE_PADDING,
 };
@@ -36,12 +36,7 @@ pub(crate) fn compute_back_edge_lanes(
     let node_rects: HashMap<String, Rect> = layout
         .nodes
         .iter()
-        .map(|(id, nl)| {
-            (
-                id.clone(),
-                Rect::from_min_size(nl.pos + offset, nl.size),
-            )
-        })
+        .map(|(id, nl)| (id.clone(), Rect::from_min_size(nl.pos + offset, nl.size)))
         .collect();
 
     let graph_bounds = union_rect_bounds(&node_rects.values().copied().collect::<Vec<_>>());
@@ -324,8 +319,14 @@ fn draw_back_edge(
     }
 
     if let Some(info) = label_info {
-        let start = path_segments.first().map(|s| s.0).unwrap_or(from_rect.center());
-        let end = path_segments.last().map(|s| s.1).unwrap_or(to_rect.center());
+        let start = path_segments
+            .first()
+            .map(|s| s.0)
+            .unwrap_or(from_rect.center());
+        let end = path_segments
+            .last()
+            .map(|s| s.1)
+            .unwrap_or(to_rect.center());
         let mid = path_midpoint(&path_segments, start, end);
         let label_pos = Pos2::new(mid.x - info.size.x / 2.0 - 8.0, mid.y);
         let label_rect = Rect::from_center_size(label_pos, info.size);
@@ -484,7 +485,11 @@ fn compute_edge_endpoints(
                 from_rect.center().x + from_rect.width() * 0.25
             };
 
-            let end_x = if vertically_forward { to_center_x } else { to_center_x };
+            let end_x = if vertically_forward {
+                to_center_x
+            } else {
+                to_center_x
+            };
 
             (
                 Pos2::new(start_x, from_rect.top()),
@@ -703,11 +708,7 @@ fn inner_back_edge_path_candidates(
             };
 
             // 1) Top-outer corner → rise along source east/west edge → enter target side.
-            out.push(vec![
-                start_top,
-                Pos2::new(edge_x, entry_y),
-                end,
-            ]);
+            out.push(vec![start_top, Pos2::new(edge_x, entry_y), end]);
 
             // 2) Side-centre exit → rise along outer edge (same column).
             out.push(vec![
@@ -750,11 +751,7 @@ fn inner_back_edge_path_candidates(
                 Pos2::new(from_rect.left(), from_rect.bottom())
             };
 
-            out.push(vec![
-                start_bottom,
-                Pos2::new(edge_x, entry_y),
-                end,
-            ]);
+            out.push(vec![start_bottom, Pos2::new(edge_x, entry_y), end]);
             out.push(vec![
                 Pos2::new(edge_x, from_rect.center().y),
                 Pos2::new(edge_x, entry_y),
@@ -880,13 +877,9 @@ fn build_back_edge_side_path(
             return direct;
         }
         // Inner lane failed: use a tight side loop just outside the source (not the graph margin).
-        if let Some(tight) = try_inner_back_edge_tight_loop(
-            from_rect,
-            to_rect,
-            direction,
-            side_sign,
-            obstacles,
-        ) {
+        if let Some(tight) =
+            try_inner_back_edge_tight_loop(from_rect, to_rect, direction, side_sign, obstacles)
+        {
             return tight;
         }
     }
@@ -964,28 +957,15 @@ fn build_back_edge_side_path(
     } else {
         match direction {
             FlowDirection::TopDown | FlowDirection::BottomUp => {
-                vec![
-                    start,
-                    horizontal_target,
-                    Pos2::new(loop_coord, end.y),
-                    end,
-                ]
+                vec![start, horizontal_target, Pos2::new(loop_coord, end.y), end]
             }
             FlowDirection::LeftRight | FlowDirection::RightLeft => {
-                vec![
-                    start,
-                    horizontal_target,
-                    Pos2::new(end.x, loop_coord),
-                    end,
-                ]
+                vec![start, horizontal_target, Pos2::new(end.x, loop_coord), end]
             }
         }
     };
 
-    waypoints
-        .windows(2)
-        .map(|w| (w[0], w[1]))
-        .collect()
+    waypoints.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
 fn back_edge_anchors(
@@ -1121,7 +1101,10 @@ fn route_forward_edge(
 
     // Last resort: route via graph-side corridor matching back-edge side preference
     let side_segments = route_via_side_corridor(start, end, direction, obstacles);
-    (side_segments.clone(), path_midpoint(&side_segments, start, end))
+    (
+        side_segments.clone(),
+        path_midpoint(&side_segments, start, end),
+    )
 }
 
 fn segment_intersects_any_obstacle(from: Pos2, to: Pos2, obstacles: &[Rect]) -> bool {
@@ -1164,14 +1147,12 @@ fn try_orthogonal_route(
             let mid_y = (start.y + end.y) / 2.0;
             let bounds = union_rect_bounds(obstacles);
             vec![
-                ortho_path(start, end, vec![Pos2::new(start.x, mid_y), Pos2::new(end.x, mid_y)]),
                 ortho_path(
                     start,
                     end,
-                    vec![
-                        Pos2::new(start.x, end.y),
-                    ],
+                    vec![Pos2::new(start.x, mid_y), Pos2::new(end.x, mid_y)],
                 ),
+                ortho_path(start, end, vec![Pos2::new(start.x, end.y)]),
                 ortho_path(
                     start,
                     end,
@@ -1194,14 +1175,12 @@ fn try_orthogonal_route(
             let mid_x = (start.x + end.x) / 2.0;
             let bounds = union_rect_bounds(obstacles);
             vec![
-                ortho_path(start, end, vec![Pos2::new(mid_x, start.y), Pos2::new(mid_x, end.y)]),
                 ortho_path(
                     start,
                     end,
-                    vec![
-                        Pos2::new(end.x, start.y),
-                    ],
+                    vec![Pos2::new(mid_x, start.y), Pos2::new(mid_x, end.y)],
                 ),
+                ortho_path(start, end, vec![Pos2::new(end.x, start.y)]),
                 ortho_path(
                     start,
                     end,
@@ -1264,10 +1243,7 @@ fn ortho_path(start: Pos2, end: Pos2, waypoints: Vec<Pos2>) -> Vec<(Pos2, Pos2)>
     points.extend(waypoints);
     points.push(end);
 
-    points
-        .windows(2)
-        .map(|w| (w[0], w[1]))
-        .collect()
+    points.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
 fn path_midpoint(segments: &[(Pos2, Pos2)], start: Pos2, end: Pos2) -> Pos2 {
@@ -1410,13 +1386,17 @@ mod back_edge_tests {
             .nodes
             .iter()
             .filter(|(id, _)| id.as_str() != "E" && id.as_str() != "B")
-            .map(|(_, nl)| {
-                expand_rect(Rect::from_min_size(nl.pos, nl.size), NODE_OBSTACLE_PADDING)
-            })
+            .map(|(_, nl)| expand_rect(Rect::from_min_size(nl.pos, nl.size), NODE_OBSTACLE_PADDING))
             .collect();
 
-        let path = try_inner_back_edge_direct_path(&e_rect, &b_rect, FlowDirection::TopDown, 1.0, &obstacles)
-            .expect("E→B inner direct path should be clear after branch layout");
+        let path = try_inner_back_edge_direct_path(
+            &e_rect,
+            &b_rect,
+            FlowDirection::TopDown,
+            1.0,
+            &obstacles,
+        )
+        .expect("E→B inner direct path should be clear after branch layout");
 
         assert!(path.len() >= 2, "inner path has vertical + horizontal legs");
         let (v_start, v_end) = path[0];
@@ -1429,7 +1409,10 @@ mod back_edge_tests {
             v_start.x >= e_rect.right() - 0.1,
             "rise must stay on or outside E's right edge, not through its column"
         );
-        assert!(!path_intersects_any(&path, &[c_obstacle]), "must not pass through decide");
+        assert!(
+            !path_intersects_any(&path, &[c_obstacle]),
+            "must not pass through decide"
+        );
 
         let entry = path.last().unwrap().1;
         assert!((entry.x - b_rect.right()).abs() < 0.1);

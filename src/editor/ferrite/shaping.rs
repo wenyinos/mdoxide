@@ -101,6 +101,7 @@ pub fn shape_text(
 
 /// Sum of horizontal advances (points), useful for width estimates.
 #[must_use]
+#[allow(dead_code)]
 pub fn shaped_width(glyphs: &[ShapedGlyph]) -> f32 {
     glyphs.iter().map(|g| g.x_advance).sum()
 }
@@ -615,7 +616,11 @@ mod tests {
 
     #[test]
     fn validate_cluster_byte_ranges_latin_and_arabic() {
-        for text in ["Hello", "\u{0644}\u{0627}", "\u{0633}\u{0644}\u{0627}\u{0645}"] {
+        for text in [
+            "Hello",
+            "\u{0644}\u{0627}",
+            "\u{0633}\u{0644}\u{0627}\u{0645}",
+        ] {
             let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
             assert!(
                 validate_cluster_byte_ranges(text, &cs),

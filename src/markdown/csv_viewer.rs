@@ -12,7 +12,7 @@
 //! - Large file handling with row limiting
 
 use crate::ui::phosphor_icons::{phosphor_rich_text, INFO};
-use eframe::egui::{self, Color32, Label, RichText, ScrollArea, Sense, Ui, Vec2};
+use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 use log::warn;
 use palette::{IntoColor, Oklch, Srgb};
 use rust_i18n::t;
@@ -1064,7 +1064,6 @@ fn render_row_cells(
             .unwrap_or(MIN_COLUMN_WIDTH);
         let cell_width = col_width + COLUMN_PADDING;
 
-        let display_text = truncate_cell(cell, MAX_CELL_CHARS);
         let font_id = egui::FontId::proportional(font_size);
 
         let text_color = if is_header {
@@ -1080,36 +1079,32 @@ fn render_row_cells(
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(cell_width, row_height), Sense::hover());
 
-        let text_rect = egui::Rect::from_min_max(
-            egui::pos2(rect.min.x + TEXT_H_PADDING, rect.min.y),
-            egui::pos2(rect.max.x - TEXT_H_PADDING, rect.max.y),
-        );
-        let text_max_width = text_rect.width();
-        let is_truncated = cell.chars().count() > MAX_CELL_CHARS
-            || ui
-                .painter()
-                .layout_no_wrap(display_text.clone(), font_id.clone(), text_color)
-                .size()
-                .x
-                > text_max_width;
+        let text_max_width = (cell_width - TEXT_H_PADDING * 2.0).max(0.0);
+        let display_text =
+            truncate_cell_to_pixel_width(ui, cell, &font_id, text_color, text_max_width);
+        let is_truncated = display_text.as_str() != cell.as_str();
 
         // Paint the cell background (only if visible)
         if ui.is_rect_visible(rect) {
             ui.painter().rect_filled(rect, 0.0, cell_bg);
 
-            // Clip text to the cell and ellipsis-overflow at pixel boundaries.
-            ui.allocate_ui_at_rect(text_rect, |ui| {
-                ui.set_clip_rect(text_rect);
-                ui.with_layout(
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.add(
-                            Label::new(RichText::new(&display_text).font(font_id).color(text_color))
-                                .truncate(),
-                        );
-                    },
+            let text_clip = egui::Rect::from_min_max(
+                egui::pos2(rect.min.x + TEXT_H_PADDING, rect.min.y),
+                egui::pos2(rect.max.x - TEXT_H_PADDING, rect.max.y),
+            );
+            let text_pos = egui::pos2(
+                rect.min.x + TEXT_H_PADDING,
+                rect.center().y - font_size / 2.0,
+            );
+            ui.painter()
+                .with_clip_rect(text_clip)
+                .text(
+                    text_pos,
+                    egui::Align2::LEFT_TOP,
+                    &display_text,
+                    font_id,
+                    text_color,
                 );
-            });
         }
 
         // Show tooltip for truncated cells
@@ -1733,6 +1728,57 @@ fn truncate_cell(s: &str, max_chars: usize) -> String {
         let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
         format!("{}...", truncated)
     }
+}
+
+/// Measure single-line text width in pixels using egui font metrics.
+fn measure_text_width(ui: &Ui, text: &str, font_id: &egui::FontId, color: Color32) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_string(), font_id.clone(), color)
+        .size()
+        .x
+}
+
+/// Truncate cell text to fit a pixel width, with ellipsis when needed.
+///
+/// Applies [`MAX_CELL_CHARS`] first so pathological cells do not require measuring
+/// every character.
+fn truncate_cell_to_pixel_width(
+    ui: &Ui,
+    cell: &str,
+    font_id: &egui::FontId,
+    color: Color32,
+    max_width: f32,
+) -> String {
+    if max_width <= 0.0 {
+        return String::new();
+    }
+
+    let capped = truncate_cell(cell, MAX_CELL_CHARS);
+    if measure_text_width(ui, &capped, font_id, color) <= max_width {
+        return capped;
+    }
+
+    const ELLIPSIS: &str = "...";
+    let ellipsis_width = measure_text_width(ui, ELLIPSIS, font_id, color);
+    let available = max_width - ellipsis_width;
+    if available <= 0.0 {
+        return ELLIPSIS.to_string();
+    }
+
+    let chars: Vec<char> = capped.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = chars.len();
+    while lo < hi {
+        let mid = lo + (hi - lo + 1) / 2;
+        let candidate: String = chars.iter().take(mid).collect();
+        if measure_text_width(ui, &candidate, font_id, color) <= available {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    format!("{}{}", chars.iter().take(lo).collect::<String>(), ELLIPSIS)
 }
 
 /// Check if a file path is a tabular file (CSV or TSV).

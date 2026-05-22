@@ -77,6 +77,7 @@ pub struct Selection {
     pub head: Cursor,
 }
 
+#[allow(dead_code)] // Selection helpers used by multi-cursor and future editor features
 impl Selection {
     /// Creates a new selection with the given anchor and head.
     #[must_use]

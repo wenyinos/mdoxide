@@ -48,7 +48,12 @@ fn compute_displayed_cursor_index(
 
 | File | Purpose |
 |------|---------|
-| `src/markdown/editor.rs` | Helper function and click handlers |
+| `src/markdown/editor.rs` | `compute_displayed_cursor_index`, click handlers |
+| `src/markdown/rendered_session.rs` | `PendingActivation` applied on formatted block open |
+
+## Session entry points
+
+Formatted display clicks call `session.switch_to_ui(block, PendingActivation { cursor_char_index, request_focus: true })` — galley mapping runs **before** switch; the session applies focus and `CCursor` on the next frame. See [`rendered-edit-session-formatted.md`](../markdown/rendered-edit-session-formatted.md) and [`rendered-edit-session.md`](../markdown/rendered-edit-session.md).
 
 ## Implementation Details
 

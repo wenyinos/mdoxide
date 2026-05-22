@@ -22,7 +22,6 @@ use rust_i18n::t;
 const TOOLBAR_HEIGHT_EXPANDED: f32 = 32.0;
 
 /// Height of the format toolbar when collapsed (just the toggle strip).
-const TOOLBAR_HEIGHT_COLLAPSED: f32 = 18.0;
 
 /// Format toolbar component for the bottom of the raw editor.
 pub struct FormatToolbar;
@@ -75,10 +74,10 @@ impl FormatToolbar {
             );
 
             // Render buttons inside the rect
-            let mut button_ui = ui.child_ui(
-                rect.shrink2(Vec2::new(4.0, 2.0)),
-                egui::Layout::left_to_right(egui::Align::Center),
-                None,
+            let mut button_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rect.shrink2(Vec2::new(4.0, 2.0)))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
             );
             button_ui.spacing_mut().item_spacing.x = 2.0;
 
@@ -162,7 +161,7 @@ impl FormatToolbar {
                 .map(|h| format!("H{}", h as u8))
                 .unwrap_or_else(|| "H".to_string());
 
-            egui::ComboBox::from_id_source("format_bar_heading_dropdown")
+            egui::ComboBox::from_id_salt("format_bar_heading_dropdown")
                 .selected_text(RichText::new(heading_label).size(11.0))
                 .width(36.0)
                 .show_ui(&mut button_ui, |ui| {
@@ -351,7 +350,7 @@ impl FormatToolbar {
             );
 
             // Centered chevron + label
-            ui.allocate_ui_at_rect(rect, |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                 ui.centered_and_justified(|ui| {
                     ui.horizontal(|ui| {
                         ui.label(phosphor_rich_text(CARET_UP, 10.0).color(chevron_color));
@@ -526,7 +525,7 @@ fn toolbar_separator(ui: &mut Ui, color: Color32, height: f32) {
 ///
 /// When `blocks_clicks` is true (window resize cursor active), the strip ignores
 /// clicks so east-edge resize is not mistaken for "open side panel".
-pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool, blocks_clicks: bool) -> bool {
+pub fn side_panel_toggle_strip(ui: &mut egui::Ui, is_dark: bool, blocks_clicks: bool) -> bool {
     let mut clicked = false;
 
     let strip_width = 20.0;
@@ -549,16 +548,16 @@ pub fn side_panel_toggle_strip(ctx: &egui::Context, is_dark: bool, blocks_clicks
         Color32::from_rgb(120, 120, 120)
     };
 
-    egui::SidePanel::right("side_panel_toggle_strip")
+    egui::Panel::right("side_panel_toggle_strip")
         .resizable(false)
-        .exact_width(strip_width)
+        .exact_size(strip_width)
         .frame(
-            egui::Frame::none()
+            egui::Frame::NONE
                 .fill(bg)
                 .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::ZERO),
         )
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             // Left border
             let panel_rect = ui.available_rect_before_wrap();
             ui.painter().line_segment(

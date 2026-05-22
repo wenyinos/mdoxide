@@ -17,7 +17,7 @@ mod persistence;
 mod settings;
 mod watcher;
 
-pub use file_index::{collect_all_files, collect_markdown_files, FileIndexProgress, WorkspaceFileIndex};
+pub use file_index::{collect_markdown_files, FileIndexProgress, WorkspaceFileIndex};
 pub use file_tree::{FileTreeNode, FileTreeNodeKind};
 pub use persistence::{load_workspace_state, save_workspace_state, WorkspaceState};
 pub use settings::{load_workspace_settings, save_workspace_settings, WorkspaceSettings};

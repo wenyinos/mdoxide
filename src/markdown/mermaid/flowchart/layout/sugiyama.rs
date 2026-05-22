@@ -806,9 +806,7 @@ impl SugiyamaLayout {
                 continue;
             }
 
-            entries.sort_by(|a, b| {
-                a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
             // Iterative relaxation. Each pass resolves the largest local
             // violation; converges in O(layer.len()) passes in practice.

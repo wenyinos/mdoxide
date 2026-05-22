@@ -211,7 +211,7 @@ impl ThemeManager {
     pub fn apply_if_needed(&mut self, ctx: &Context) -> bool {
         // For System theme, check if system preference changed
         if self.current_theme == Theme::System {
-            let current_system_dark = ctx.style().visuals.dark_mode;
+            let current_system_dark = ctx.global_style().visuals.dark_mode;
             if self.last_system_dark_mode != Some(current_system_dark) {
                 self.last_system_dark_mode = Some(current_system_dark);
                 self.needs_apply = true;
@@ -240,7 +240,7 @@ impl ThemeManager {
             Theme::Dark => dark::create_dark_visuals(acc),
             Theme::System => {
                 // Follow system preference
-                let system_dark = ctx.style().visuals.dark_mode;
+                let system_dark = ctx.global_style().visuals.dark_mode;
                 self.last_system_dark_mode = Some(system_dark);
                 if system_dark {
                     dark::create_dark_visuals(acc)
@@ -261,7 +261,7 @@ impl ThemeManager {
     pub fn colors(&self, ctx: &Context) -> ThemeColors {
         ThemeColors::from_theme(
             self.current_theme,
-            &ctx.style().visuals,
+            &ctx.global_style().visuals,
             self.accent_color32(),
         )
     }
@@ -273,7 +273,7 @@ impl ThemeManager {
         match self.current_theme {
             Theme::Dark => true,
             Theme::Light => false,
-            Theme::System => ctx.style().visuals.dark_mode,
+            Theme::System => ctx.global_style().visuals.dark_mode,
         }
     }
 
@@ -302,7 +302,7 @@ impl ThemeManager {
             Theme::Light => "Light theme".to_string(),
             Theme::Dark => "Dark theme".to_string(),
             Theme::System => {
-                let effective = if ctx.style().visuals.dark_mode {
+                let effective = if ctx.global_style().visuals.dark_mode {
                     "dark"
                 } else {
                     "light"

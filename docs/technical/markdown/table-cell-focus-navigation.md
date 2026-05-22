@@ -2,7 +2,7 @@
 
 Rendered GFM tables use `EditableTable` in `src/markdown/widgets.rs`. This note covers **keyboard focus** during in-cell editing (Tab / Shift+Tab) and **hit-testing** for empty display-mode cells.
 
-For general table behavior (deferred commits, toolbar, markdown sync), see [`editable-tables.md`](./editable-tables.md).
+For general table behavior (deferred commits, toolbar, markdown sync), see [`editable-tables.md`](./editable-tables.md). For **session-triggered commit** when leaving a table for another block type, see [`rendered-edit-session-tables.md`](./rendered-edit-session-tables.md).
 
 ## Empty cells — display hit area ([issue #131](https://github.com/OlaProeis/Ferrite/issues/131))
 
@@ -20,4 +20,4 @@ Table cells use **`TextEdit::lock_focus(true)`** so Tab is reserved for grid nav
 
 ## Manual regression
 
-Manual cases **`TBLE-1` … `TBLE-3`** live in [`v0.3.0-regression-matrix.md`](../platform/v0.3.0-regression-matrix.md) §3.11.
+Manual cases **`TBLE-1` … `TBLE-3`** live in [`v0.3.0-regression-matrix.md`](../platform/v0.3.0-regression-matrix.md) §3.11. Rendered-session cross-block cases **`RS-1` … `RS-7`** (including RS-5 table → heading) are in §3.12 — see [`rendered-edit-session.md`](./rendered-edit-session.md).

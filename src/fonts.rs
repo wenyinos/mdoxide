@@ -2367,7 +2367,7 @@ fn configure_text_styles(ctx: &egui::Context) {
     ]
     .into();
 
-    ctx.style_mut(|style| {
+    ctx.global_style_mut(|style| {
         style.text_styles = text_styles.clone();
     });
 }

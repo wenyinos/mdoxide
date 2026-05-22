@@ -5,9 +5,8 @@
 
 use super::helpers::{char_index_to_line_col, line_col_to_char_index};
 use super::FerriteApp;
-use crate::config::ViewMode;
 use crate::markdown::{apply_raw_format, insert_or_update_toc, MarkdownFormatCommand, TocOptions};
-use crate::state::{FileType, PendingAction};
+use crate::state::FileType;
 use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
@@ -58,6 +57,7 @@ impl FerriteApp {
             if let Some(Some((content, cursor_pos, selection))) = ferrite_result {
                 if let Some(tab) = self.state.active_tab_mut() {
                     tab.content = content;
+                    tab.notify_external_content_change();
                     tab.cursor_position = cursor_pos;
                     tab.selection = selection;
                     // Note: is_modified() automatically detects changes via content comparison
@@ -160,6 +160,7 @@ impl FerriteApp {
                 if let Some(Some((content, cursor_pos, selection))) = ferrite_result {
                     if let Some(tab) = self.state.active_tab_mut() {
                         tab.content = content;
+                        tab.notify_external_content_change();
                         tab.cursor_position = cursor_pos;
                         tab.selection = selection;
                         debug!(

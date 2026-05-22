@@ -53,12 +53,17 @@ use crate::markdown::ast_ops::{
 };
 use crate::markdown::cache;
 use crate::markdown::code_execution::CodeExecutionUi;
+use crate::markdown::rendered_session::{
+    self, BlockRef, CommitPolicy, PendingActivation, RenderedEditSession,
+};
+use crate::markdown::rendered_commit_undo;
 use crate::markdown::parser::{
     CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
 };
 use crate::markdown::widgets::{
-    CodeBlockData, EditableCodeBlock, EditableTable, MermaidBlock, MermaidBlockData,
-    RenderedLinkState, RenderedLinkWidget, TableData, TableEditState, WidgetColors,
+    build_inline_markdown_layout_job, map_displayed_to_raw, CodeBlockData, EditableCodeBlock,
+    EditableTable, MermaidBlock, MermaidBlockData, RenderedLinkState, RenderedLinkWidget,
+    TableData, TableEditState, WidgetColors,
 };
 use crate::ui::{render_nav_buttons, NavAction};
 use eframe::egui::{
@@ -67,6 +72,7 @@ use eframe::egui::{
 };
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Editor Mode
@@ -92,6 +98,8 @@ pub struct MarkdownEditorOutput {
     pub response: Response,
     /// Whether the content was modified.
     pub changed: bool,
+    /// True when block-commit undo entries were queued this frame (see `rendered_commit_undo`).
+    pub undo_recorded: bool,
     /// Current cursor position (line, column) - 0-indexed.
     pub cursor_position: (usize, usize),
     /// Current editing mode.
@@ -169,6 +177,33 @@ struct ViewportCullingState {
     /// Per-block flag: `true` = height was obtained from a real egui render or
     /// the block-height cache; `false` = heuristic estimate only.
     block_measured: Vec<bool>,
+    /// `(start_line, end_line)` per top-level block — used to reuse layout when only
+    /// inline content changes (e.g. task checkbox toggles) without remeasuring.
+    block_line_ranges: Vec<(usize, usize)>,
+}
+
+fn block_line_ranges_from_nodes(children: &[MarkdownNode]) -> Vec<(usize, usize)> {
+    children
+        .iter()
+        .map(|n| (n.start_line, n.end_line))
+        .collect()
+}
+
+fn block_structure_matches(ranges: &[(usize, usize)], children: &[MarkdownNode]) -> bool {
+    !ranges.is_empty()
+        && ranges.len() == children.len()
+        && ranges
+            .iter()
+            .zip(children.iter())
+            .all(|(&(s, e), n)| n.start_line == s && n.end_line == e)
+}
+
+/// True when the user is actively scrolling (wheel or scrollbar drag), not merely clicking.
+fn is_active_scroll_input(ui: &Ui) -> bool {
+    ui.input(|i| {
+        i.smooth_scroll_delta.y.abs() > 0.5
+            || (i.pointer.any_down() && i.pointer.is_decidedly_dragging())
+    })
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -674,6 +709,8 @@ pub struct MarkdownEditor<'a> {
     current_search_match: usize,
     /// Gating and cwd for running fenced code from the preview (optional).
     code_execution: Option<CodeExecutionUi>,
+    /// External-invalidation epoch from tab state; scopes rendered widget ids (see PRD).
+    source_epoch: u64,
 }
 
 /// Context for resolving wikilinks to actual files during rendering.
@@ -710,6 +747,7 @@ impl<'a> MarkdownEditor<'a> {
             search_highlights: None,
             current_search_match: 0,
             code_execution: None,
+            source_epoch: 0,
         }
     }
 
@@ -864,6 +902,15 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Per-tab external invalidation epoch for stable rendered widget ids.
+    ///
+    /// Bumps only on raw edits, undo/redo, reload, etc. — not on rendered WYSIWYG commits.
+    #[must_use]
+    pub fn source_epoch(mut self, epoch: u64) -> Self {
+        self.source_epoch = epoch;
+        self
+    }
+
     /// Show the editor widget and return the output.
     pub fn show(self, ui: &mut Ui) -> MarkdownEditorOutput {
         let id = self.id.unwrap_or_else(|| ui.id().with("markdown_editor"));
@@ -938,6 +985,7 @@ impl<'a> MarkdownEditor<'a> {
         MarkdownEditorOutput {
             response: text_output.response.response,
             changed,
+            undo_recorded: false,
             cursor_position,
             mode: EditorMode::Raw,
             focused_element: None, // Raw mode doesn't use element tracking
@@ -950,12 +998,17 @@ impl<'a> MarkdownEditor<'a> {
     }
 
     /// Show the WYSIWYG rendered editor.
+    ///
+    /// Rendered block editing is coordinated by [`RenderedEditSession`](crate::markdown::rendered_session::RenderedEditSession).
+    /// See `docs/technical/markdown/rendered-edit-session.md`.
     fn show_rendered_editor(
         self,
         ui: &mut Ui,
         id: egui::Id,
         colors: &EditorColors,
     ) -> MarkdownEditorOutput {
+        rendered_commit_undo::begin_frame(ui.ctx());
+
         let mut edit_state = EditState::new();
         let mut structural_state = StructuralEditState::new();
 
@@ -1069,17 +1122,20 @@ impl<'a> MarkdownEditor<'a> {
             .auto_shrink([false, false]);
 
         let height_fixup_id = id.with("rendered_height_fixup");
-        let user_scrolling = ui.input(|i| {
-            i.smooth_scroll_delta.y.abs() > 0.5 || i.pointer.any_down()
-        });
-        if !user_scrolling {
-            if let Some(offset) = ui.memory(|mem| mem.data.get_temp::<f32>(height_fixup_id)) {
-                ui.memory_mut(|mem| mem.data.remove::<f32>(height_fixup_id));
-                scroll_area = scroll_area.vertical_scroll_offset(offset);
-            }
-        } else {
+        let scroll_cooldown_id = id.with("rendered_scroll_cooldown");
+        let user_scrolling = is_active_scroll_input(ui);
+        if user_scrolling {
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(scroll_cooldown_id, Instant::now());
+            });
             ui.memory_mut(|mem| mem.data.remove::<f32>(height_fixup_id));
+        } else if let Some(offset) = ui.memory(|mem| mem.data.get_temp::<f32>(height_fixup_id)) {
+            ui.memory_mut(|mem| mem.data.remove::<f32>(height_fixup_id));
+            scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
+        let within_scroll_cooldown = ui
+            .memory(|mem| mem.data.get_temp::<Instant>(scroll_cooldown_id))
+            .is_some_and(|t| t.elapsed() < Duration::from_millis(200));
 
         // Priority order for scroll offset:
         // 1. Nav button scroll (from previous frame)
@@ -1098,10 +1154,9 @@ impl<'a> MarkdownEditor<'a> {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
 
-        // Compute content hash to use as a unique ID scope.
-        // This ensures that when content changes (e.g., edited in raw mode),
-        // all inner TextEdit widgets get new IDs and re-read their content
-        // instead of using cached internal state.
+        // Hash of current content — used only for viewport culling / height-cache invalidation.
+        // Widget identity is scoped by (editor_id, source_epoch) so rendered commits do not
+        // reset egui focus. See `docs/technical/markdown/rendered-widget-identity.md`.
         let content_hash = {
             use std::collections::hash_map::DefaultHasher;
             use std::hash::{Hash, Hasher};
@@ -1109,6 +1164,8 @@ impl<'a> MarkdownEditor<'a> {
             self.content.hash(&mut hasher);
             hasher.finish()
         };
+        let source_epoch = self.source_epoch;
+        let mut rendered_session = rendered_session::load_for_epoch(ui, id, source_epoch);
 
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
@@ -1149,11 +1206,17 @@ impl<'a> MarkdownEditor<'a> {
         let previous_total_height = culling_state.as_ref().map(|cs| cs.total_height);
 
         let block_count = doc.root.children.len();
+        let block_line_ranges = block_line_ranges_from_nodes(&doc.root.children);
+        let block_structure_valid = culling_state.as_ref().map_or(false, |s| {
+            s.block_heights.len() == block_count
+                && (s.available_width - outer_available_width).abs() < 1.0
+                && block_structure_matches(&s.block_line_ranges, &doc.root.children)
+        });
         let has_valid_heights = culling_state.as_ref().map_or(false, |s| {
             s.content_hash == content_hash
                 && s.block_heights.len() == block_count
                 && (s.available_width - outer_available_width).abs() < 1.0
-        });
+        }) || block_structure_valid;
 
         // Accumulator for the updated culling state (populated inside the closure).
         let mut new_culling: Option<ViewportCullingState> = None;
@@ -1167,7 +1230,12 @@ impl<'a> MarkdownEditor<'a> {
                 }
             }
 
-            ui.push_id(content_hash, |ui| {
+            ui.push_id(id, |ui| {
+                ui.push_id(source_epoch, |ui| {
+                ui.memory_mut(|mem| {
+                    mem.data
+                        .insert_temp(session_active_clicked_key(ui), false);
+                });
                 ui.horizontal(|ui| {
                     if content_margin > 0.0 {
                         ui.add_space(content_margin);
@@ -1221,6 +1289,7 @@ impl<'a> MarkdownEditor<'a> {
                                     node,
                                     self.content,
                                     &mut edit_state,
+                                    &mut rendered_session,
                                     colors,
                                     self.font_size,
                                     &self.font_family,
@@ -1320,6 +1389,7 @@ impl<'a> MarkdownEditor<'a> {
                                     block_heights: updated_heights,
                                     total_height: y,
                                     block_measured: updated_measured,
+                                    block_line_ranges: block_line_ranges.clone(),
                                 });
                                 // Still have unmeasured blocks â€” request another frame
                                 // so the progressive pass continues.
@@ -1432,6 +1502,7 @@ impl<'a> MarkdownEditor<'a> {
                                         node,
                                         self.content,
                                         &mut edit_state,
+                                        &mut rendered_session,
                                         colors,
                                         self.font_size,
                                         &self.font_family,
@@ -1540,6 +1611,7 @@ impl<'a> MarkdownEditor<'a> {
                                 block_heights: boot_heights,
                                 total_height: final_total,
                                 block_measured: boot_measured,
+                                block_line_ranges: block_line_ranges.clone(),
                             });
 
                             if new_culling
@@ -1561,10 +1633,21 @@ impl<'a> MarkdownEditor<'a> {
                     }
                 });
 
+                session_dismiss_if_clicked_outside(
+                    ui,
+                    &mut rendered_session,
+                    self.content,
+                    &mut edit_state,
+                );
+
                 ui.allocate_response(Vec2::ZERO, egui::Sense::focusable_noninteractive())
+                })
+                .inner
             })
             .inner
         });
+
+        rendered_session::save_for_epoch(ui, id, source_epoch, rendered_session);
 
         // â”€â”€ Persist culling state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if let Some(cs) = new_culling {
@@ -1574,10 +1657,12 @@ impl<'a> MarkdownEditor<'a> {
                     let max_old = (old_total - viewport_h).max(0.0);
                     let max_new = (cs.total_height - viewport_h).max(0.0);
                     let cur = scroll_output.state.offset.y;
-                    let still_scrolling = ui.input(|i| {
-                        i.smooth_scroll_delta.y.abs() > 0.5 || i.pointer.any_down()
-                    });
-                    if !still_scrolling && max_old > 1.0 && max_new > 0.0 {
+                    let still_scrolling = is_active_scroll_input(ui);
+                    if !still_scrolling
+                        && !within_scroll_cooldown
+                        && max_old > 1.0
+                        && max_new > 0.0
+                    {
                         let ratio = (cur / max_old).clamp(0.0, 1.0);
                         let corrected = ratio * max_new;
                         if (corrected - cur).abs() > 1.5 {
@@ -1592,6 +1677,16 @@ impl<'a> MarkdownEditor<'a> {
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(culling_id, cs);
             });
+        } else if block_structure_valid {
+            if let Some(ref cs) = culling_state {
+                if cs.content_hash != content_hash {
+                    let mut updated = cs.clone();
+                    updated.content_hash = content_hash;
+                    ui.memory_mut(|mem| {
+                        mem.data.insert_temp(culling_id, updated);
+                    });
+                }
+            }
         }
 
         // Render navigation buttons overlay (top-left corner of scroll area)
@@ -1665,6 +1760,7 @@ impl<'a> MarkdownEditor<'a> {
         MarkdownEditorOutput {
             response: scroll_output.inner,
             changed,
+            undo_recorded: rendered_commit_undo::had_commits(ui.ctx()),
             cursor_position: (0, 0), // Position tracking is simplified in WYSIWYG mode
             mode: EditorMode::Rendered,
             focused_element,
@@ -1689,6 +1785,7 @@ fn render_node_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -1701,17 +1798,18 @@ fn render_node_with_structural_keys(
 ) {
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
-            render_heading_with_structural_keys(
+            render_heading(
                 ui,
                 node,
                 source,
                 edit_state,
-                structural_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
                 *level,
                 header_spacing,
+                true,
             );
         }
         MarkdownNodeType::Paragraph => {
@@ -1720,6 +1818,7 @@ fn render_node_with_structural_keys(
                 node,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -1742,6 +1841,7 @@ fn render_node_with_structural_keys(
                 node,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -1761,6 +1861,7 @@ fn render_node_with_structural_keys(
                 node,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -1779,6 +1880,7 @@ fn render_node_with_structural_keys(
                 node,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -1791,7 +1893,16 @@ fn render_node_with_structural_keys(
             render_thematic_break(ui, colors);
         }
         MarkdownNodeType::Table { .. } => {
-            render_table(ui, node, source, edit_state, colors, font_size, editor_font);
+            render_table(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+            );
         }
         MarkdownNodeType::FrontMatter(content) => {
             render_front_matter(ui, colors, font_size, content);
@@ -1851,6 +1962,7 @@ fn render_node_with_structural_keys(
                     child,
                     source,
                     edit_state,
+                    session,
                     structural_state,
                     colors,
                     font_size,
@@ -1888,6 +2000,7 @@ fn render_node(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -1902,11 +2015,13 @@ fn render_node(
                 node,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
                 *level,
                 header_spacing,
+                false,
             );
         }
         MarkdownNodeType::Paragraph => {
@@ -1915,6 +2030,7 @@ fn render_node(
                 node,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
@@ -1936,6 +2052,7 @@ fn render_node(
                 node,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
@@ -1954,6 +2071,7 @@ fn render_node(
                 node,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
@@ -1971,6 +2089,7 @@ fn render_node(
                 node,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
@@ -1982,7 +2101,16 @@ fn render_node(
             render_thematic_break(ui, colors);
         }
         MarkdownNodeType::Table { .. } => {
-            render_table(ui, node, source, edit_state, colors, font_size, editor_font);
+            render_table(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+            );
         }
         MarkdownNodeType::FrontMatter(content) => {
             render_front_matter(ui, colors, font_size, content);
@@ -2045,6 +2173,7 @@ fn render_node(
                     child,
                     source,
                     edit_state,
+                    session,
                     colors,
                     font_size,
                     editor_font,
@@ -2094,22 +2223,650 @@ fn header_margins(spacing: HeaderSpacing, level: HeadingLevel) -> (f32, f32) {
     }
 }
 
-/// Render a heading as an editable widget.
+/// Derive heading level from the `#` prefix on a source line (for session commits).
+fn heading_level_from_source(source: &str, line: usize) -> HeadingLevel {
+    source
+        .lines()
+        .nth(line.saturating_sub(1))
+        .map(|l| {
+            let count = l
+                .chars()
+                .take_while(|&c| c == '#')
+                .count()
+                .clamp(1, 6) as u8;
+            HeadingLevel::from(count)
+        })
+        .unwrap_or(HeadingLevel::H1)
+}
+
+fn mark_line_modified(edit_state: &mut EditState, line: usize) {
+    if let Some(node) = edit_state.nodes.iter_mut().find(|n| n.start_line == line) {
+        node.modified = true;
+    }
+}
+
+/// Write a session block buffer to source (headings, paragraphs, list items, formatted variants).
+///
+/// For [`BlockRef::TableCell`] the buffer is not committed directly — the cell text lives in the
+/// `EditableTable` widget, not in `BlockEditState`. Instead this records a one-shot force-commit
+/// signal so the table flushes its buffered edits on its next render.
+fn write_session_block_to_source(
+    ctx: &egui::Context,
+    block: BlockRef,
+    state: &rendered_session::BlockEditState,
+    source: &mut String,
+    edit_state: &mut EditState,
+) {
+    match block {
+        BlockRef::Heading { line, .. } => {
+            let commit_level = heading_level_from_source(source, line);
+            update_source_line(
+                source,
+                line,
+                &format_heading(&state.text, commit_level),
+            );
+            mark_line_modified(edit_state, line);
+        }
+        BlockRef::Paragraph { line } | BlockRef::FormattedParagraph { line, .. } => {
+            let end_line = edit_state
+                .nodes
+                .iter()
+                .find(|n| n.start_line == line)
+                .map(|n| n.end_line)
+                .unwrap_or(line);
+            update_source_range(source, line, end_line, &state.text);
+            mark_line_modified(edit_state, line);
+        }
+        BlockRef::ListItem { line, .. } | BlockRef::FormattedListItem { line, .. } => {
+            let text = state.text.replace('\n', "");
+            let end_line = edit_state
+                .nodes
+                .iter()
+                .find(|n| n.start_line == line)
+                .map(|n| n.end_line)
+                .unwrap_or(line);
+            update_source_range(source, line, end_line, &text);
+            mark_line_modified(edit_state, line);
+        }
+        BlockRef::TableCell { table_line, .. } => {
+            // Table cell text is owned by EditableTable, not BlockEditState. Signal the
+            // table to flush dirty edits on its next render so leaving a cell for a
+            // heading/paragraph/list item commits buffered cell changes synchronously.
+            crate::markdown::widgets::signal_table_force_commit(ctx, table_line);
+        }
+    }
+}
+
+/// Commit a session block to source and enqueue one logical undo step (see `rendered_commit_undo`).
+fn commit_session_block(
+    ctx: &egui::Context,
+    block: BlockRef,
+    state: &rendered_session::BlockEditState,
+    source: &mut String,
+    edit_state: &mut EditState,
+) {
+    log::trace!("commit_block: {:?}", block);
+    if matches!(block, BlockRef::TableCell { .. }) {
+        // Table flush may not mutate source on this frame; undo is recorded when the table
+        // writes markdown in `render_table`.
+        write_session_block_to_source(ctx, block, state, source, edit_state);
+        return;
+    }
+    rendered_commit_undo::record_source_commit(ctx, source, |source| {
+        write_session_block_to_source(ctx, block, state, source, edit_state);
+    });
+}
+
+/// Switch active block and break the undo group before committing the previous block.
+fn session_switch_to_ui(
+    ui: &mut Ui,
+    session: &mut RenderedEditSession,
+    block: BlockRef,
+    activation: PendingActivation,
+    source: &mut String,
+    edit_state: &mut EditState,
+) {
+    rendered_commit_undo::mark_break_before_next_commit(ui.ctx());
+    let ctx = ui.ctx().clone();
+    let mut commit = |block: BlockRef, state: &rendered_session::BlockEditState| {
+        commit_session_block(&ctx, block, state, source, edit_state);
+    };
+    session.switch_to_ui(ui, block, activation, &mut commit);
+}
+
+/// Reload a formatted block's session buffer from source (Escape / discard path).
+fn reload_formatted_block_from_source(
+    block: BlockRef,
+    state: &mut rendered_session::BlockEditState,
+    source: &str,
+    edit_state: &EditState,
+) {
+    match block {
+        BlockRef::FormattedParagraph { line, .. } => {
+            let end_line = edit_state
+                .nodes
+                .iter()
+                .find(|n| n.start_line == line)
+                .map(|n| n.end_line)
+                .unwrap_or(line);
+            state.text = extract_paragraph_content(source, line, end_line);
+        }
+        BlockRef::FormattedListItem { line, .. } => {
+            state.text = extract_list_item_content(source, line);
+        }
+        _ => {}
+    }
+}
+
+/// Stable Id for the per-frame "active block was clicked" flag.
+///
+/// Must be stable across all `ui` scopes — `ui.id()` differs depending on
+/// `ui.horizontal/vertical/scope` nesting depth, so deriving the key from `ui.id()`
+/// caused writes (from deeply nested blocks) and reads (from the outer
+/// `session_dismiss_if_clicked_outside` scope) to land on different keys. Only one
+/// rendered editor renders per frame, so a process-global Id is safe.
+fn session_active_clicked_key(_ui: &Ui) -> egui::Id {
+    egui::Id::new("ferrite_rendered_session_active_clicked")
+}
+
+fn note_session_active_clicked(ui: &mut Ui, block_ref: BlockRef, session: &RenderedEditSession, response: &Response) {
+    if session.active == Some(block_ref) && response.clicked() {
+        ui.memory_mut(|mem| {
+            mem.data.insert_temp(session_active_clicked_key(ui), true);
+        });
+    }
+}
+
+/// Commit and close the active session block when the user clicks outside it.
+///
+/// Rect-based hit tests are unreliable — multiline TextEdit `response.rect` can extend
+/// below the visible text and swallow clicks meant for blocks underneath. Instead we
+/// track whether the active block received `response.clicked()` this frame.
+fn session_dismiss_if_clicked_outside(
+    ui: &mut Ui,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+) {
+    if session.active.is_none() {
+        return;
+    }
+
+    if !ui.input(|i| i.pointer.any_click()) {
+        return;
+    }
+
+    if ui
+        .memory(|mem| mem.data.get_temp::<bool>(session_active_clicked_key(ui)))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let ctx = ui.ctx().clone();
+    let mut commit =
+        |block: BlockRef, state: &rendered_session::BlockEditState| {
+            commit_session_block(&ctx, block, state, source, edit_state);
+        };
+    session.close_active_ui(ui, CommitPolicy::SaveIfDirty, &mut commit);
+}
+
+/// Ensure a formatted block has a session buffer seeded from raw source.
+///
+/// Called once per render before display/edit dispatch so the buffer is always ready
+/// (e.g. on first paint, after `invalidate_buffers` from a source-epoch bump).
+fn ensure_formatted_block_initialized(
+    session: &mut RenderedEditSession,
+    block_ref: BlockRef,
+    cold_text: String,
+) {
+    if !session.blocks.contains_key(&block_ref) {
+        session.on_text_changed(block_ref, cold_text);
+        // `on_text_changed` marks dirty; this is a cold seed, not a user edit.
+        if let Some(state) = session.blocks.get_mut(&block_ref) {
+            state.dirty = false;
+        }
+    }
+}
+
+/// Session-backed raw-markdown TextEdit for formatted blocks (paragraphs / list items).
+///
+/// Renders the multiline TextEdit bound to `session.blocks[block_ref].text`, applies any
+/// `PendingActivation` (focus + cursor), and handles Enter (commit + return to display),
+/// Escape (discard + return to display), and lost_focus (commit). Caller is responsible
+/// for parent layout (horizontal row, indent space).
+fn render_session_formatted_edit_text(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+    font_size: f32,
+    font_family: egui::FontFamily,
+    text_color: egui::Color32,
+    leading: f32,
+    editor_font: &EditorFont,
+    strip_newlines: bool,
+) -> (bool, Option<(usize, usize)>) {
+    let widget_id = block_ref.widget_id(ui);
+
+    let ctx = ui.ctx().clone();
+    let mut commit_block = |block: BlockRef, state: &rendered_session::BlockEditState| {
+        commit_session_block(&ctx, block, state, source, edit_state);
+    };
+
+    let font_family_clone = font_family.clone();
+    let leading_for_layout = leading;
+    let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+        let text = buf.as_str();
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = wrap_width;
+        job.append(
+            text,
+            leading_for_layout,
+            egui::text::TextFormat {
+                font_id: FontId::new(font_size, font_family_clone.clone()),
+                color: text_color,
+                ..Default::default()
+            },
+        );
+        ui.fonts_mut(|f| f.layout_job(job))
+    };
+
+    let mut output = {
+        let block_state = session
+            .blocks
+            .get_mut(&block_ref)
+            .expect("formatted block initialized above");
+        if strip_newlines && block_state.text.contains('\n') {
+            block_state.text = block_state.text.replace('\n', "");
+        }
+        TextEdit::multiline(&mut block_state.text)
+            .id(widget_id)
+            .font(FontId::new(font_size, font_family))
+            .text_color(text_color)
+            .frame(egui::Frame::NONE)
+            .margin(egui::vec2(0.0, 0.0))
+            .desired_width(ui.available_width())
+            .desired_rows(1)
+            .layouter(&mut layouter)
+            .show(ui)
+    };
+
+    let response = output.response.clone();
+
+    if let Some(activation) = session
+        .blocks
+        .get_mut(&block_ref)
+        .and_then(|s| s.pending_activation.take())
+    {
+        if activation.request_focus {
+            response.request_focus();
+        }
+        if let Some(pos) = activation.cursor_char_index {
+            let ccursor = egui::text::CCursor::new(pos);
+            output
+                .state
+                .cursor
+                .set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+            output.state.store(ui.ctx(), widget_id);
+        }
+    }
+
+    if response.changed() {
+        let mut text = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.text.clone())
+            .unwrap_or_default();
+        if strip_newlines && text.contains('\n') {
+            text = text.replace('\n', "");
+        }
+        session.on_text_changed(block_ref, text);
+    }
+
+    let has_focus_now = response.has_focus();
+    // Lists strip newlines anyway, so any Enter exits. Paragraphs let Shift+Enter
+    // insert a newline (preserved on commit) and plain Enter commits + exits.
+    let enter_pressed = has_focus_now
+        && ui.input(|i| i.key_pressed(Key::Enter) && (strip_newlines || !i.modifiers.shift));
+    let escape_pressed = has_focus_now && ui.input(|i| i.key_pressed(Key::Escape));
+
+    if enter_pressed {
+        log::trace!(
+            "session formatted: enter -> commit + display {:?}",
+            block_ref
+        );
+        session.close_active_ui(ui, CommitPolicy::SaveIfDirty, &mut commit_block);
+    } else if escape_pressed {
+        log::trace!(
+            "session formatted: escape -> discard + display {:?}",
+            block_ref
+        );
+        let mut reload = |blk: BlockRef, state: &mut rendered_session::BlockEditState| {
+            reload_formatted_block_from_source(blk, state, source, edit_state);
+        };
+        session.discard_active(&mut reload);
+        // `discard_active` does not clear `active` or surrender focus.
+        session.active = None;
+        block_ref.surrender_focus(ui);
+    } else if session.active == Some(block_ref) && response.lost_focus() {
+        session.close_active_ui(ui, CommitPolicy::SaveIfDirty, &mut commit_block);
+    } else if session.active != Some(block_ref) && response.has_focus() {
+        // Focus arrived by Tab cycling or focus_id replay — record as active.
+        session_switch_to_ui(
+            ui,
+            session,
+            block_ref,
+            PendingActivation {
+                cursor_char_index: None,
+                request_focus: false,
+            },
+            source,
+            edit_state,
+        );
+    }
+
+    note_session_active_clicked(ui, block_ref, session, &response);
+
+    let _ = editor_font;
+
+    let has_focus = response.has_focus();
+    let selection = if has_focus {
+        output.cursor_range.map(|range| {
+            let primary = range.primary.index;
+            let secondary = range.secondary.index;
+            if primary < secondary {
+                (primary, secondary)
+            } else {
+                (secondary, primary)
+            }
+        })
+    } else {
+        None
+    };
+    (has_focus, selection)
+}
+
+/// Activate a formatted block from a display-area click: switch session, queue cursor.
+///
+/// Cursor mapping is displayed-position → raw-position so the caret lands where the
+/// user clicked even though the styled display elides the raw markdown markers
+/// (`**`, `_`, `` ` ``, `[…](url)`).
+fn enter_formatted_edit_on_display_click(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+    display_rect: egui::Rect,
+    displayed_plaintext: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    layout_wrap_width: f32,
+) {
+    // Bail if a link widget consumed this click first.
+    let link_consumed = ui.memory(|mem| {
+        mem.data
+            .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
+            .unwrap_or(false)
+    });
+    if link_consumed {
+        return;
+    }
+
+    let raw_text = session
+        .blocks
+        .get(&block_ref)
+        .map(|s| s.text.clone())
+        .unwrap_or_default();
+
+    let cursor_pos = ui.ctx().input(|i| i.pointer.interact_pos()).map(|click_pos| {
+        let displayed_idx = compute_displayed_cursor_index(
+            ui,
+            displayed_plaintext,
+            click_pos,
+            display_rect,
+            font_size,
+            editor_font,
+            &raw_text,
+            0.0,
+            layout_wrap_width,
+        );
+        map_displayed_to_raw(displayed_idx, &raw_text).min(raw_text.chars().count())
+    });
+
+    session_switch_to_ui(
+        ui,
+        session,
+        block_ref,
+        PendingActivation {
+            cursor_char_index: cursor_pos,
+            request_focus: true,
+        },
+        source,
+        edit_state,
+    );
+    if let Some(state) = session.blocks.get_mut(&block_ref) {
+        state.formatted_editing = true;
+    }
+    // The display widget that received the click is not the active block's TextEdit
+    // (the TextEdit only renders next frame), so `note_session_active_clicked` is
+    // never reached for it. Mark the click here so the end-of-frame
+    // `session_dismiss_if_clicked_outside` does not immediately close the block we
+    // just switched into edit mode.
+    mark_session_active_clicked_if_clicked(ui);
+    log::trace!(
+        "session formatted: display click -> edit {:?} cursor={:?}",
+        block_ref,
+        cursor_pos
+    );
+}
+
+/// Session-backed multiline TextEdit for plain paragraphs and simple list items.
+fn render_session_plain_text_block(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+    _end_line: usize,
+    cold_text: String,
+    font_size: f32,
+    font_family: egui::FontFamily,
+    text_color: egui::Color32,
+    leading: f32,
+    editor_font: &EditorFont,
+    strip_newlines: bool,
+) -> (bool, Option<(usize, usize)>) {
+    if !session.blocks.contains_key(&block_ref) {
+        session.on_text_changed(block_ref, cold_text);
+    }
+
+    let widget_id = block_ref.widget_id(ui);
+
+    let font_family_clone = font_family.clone();
+    let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+        let text = buf.as_str();
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = wrap_width;
+        job.append(
+            text,
+            leading,
+            egui::text::TextFormat {
+                font_id: FontId::new(font_size, font_family_clone.clone()),
+                color: text_color,
+                ..Default::default()
+            },
+        );
+        ui.fonts_mut(|f| f.layout_job(job))
+    };
+
+    let mut output = {
+        let block_state = session
+            .blocks
+            .get_mut(&block_ref)
+            .expect("session block initialized above");
+        if strip_newlines && block_state.text.contains('\n') {
+            block_state.text = block_state.text.replace('\n', "");
+        }
+        TextEdit::multiline(&mut block_state.text)
+            .id(widget_id)
+            .font(FontId::new(font_size, font_family))
+            .text_color(text_color)
+            .frame(egui::Frame::NONE)
+            .margin(egui::vec2(0.0, 0.0))
+            .desired_width(ui.available_width())
+            .desired_rows(1)
+            .layouter(&mut layouter)
+            .show(ui)
+    };
+
+    let response = &output.response;
+    let buffer_snapshot = session
+        .blocks
+        .get(&block_ref)
+        .map(|s| s.text.clone())
+        .unwrap_or_default();
+
+    if response.has_focus() {
+        if session.active != Some(block_ref) {
+            session_switch_to_ui(
+                ui,
+                session,
+                block_ref,
+                PendingActivation {
+                    cursor_char_index: None,
+                    request_focus: false,
+                },
+                source,
+                edit_state,
+            );
+        }
+    } else if session.active.is_some_and(|a| a != block_ref)
+        && (response.clicked()
+            || (response.hovered() && ui.input(|i| i.pointer.primary_pressed())))
+    {
+        let cursor_idx =
+            heading_click_cursor(ui, response, &buffer_snapshot, font_size, editor_font);
+        session_switch_to_ui(
+            ui,
+            session,
+            block_ref,
+            PendingActivation {
+                cursor_char_index: cursor_idx,
+                request_focus: true,
+            },
+            source,
+            edit_state,
+        );
+        response.request_focus();
+    }
+
+    if let Some(activation) = session
+        .blocks
+        .get_mut(&block_ref)
+        .and_then(|s| s.pending_activation.take())
+    {
+        if activation.request_focus {
+            response.request_focus();
+        }
+        if let Some(pos) = activation.cursor_char_index {
+            let ccursor = egui::text::CCursor::new(pos);
+            output.state.cursor.set_char_range(Some(
+                egui::text::CCursorRange::one(ccursor),
+            ));
+            output.state.store(ui.ctx(), widget_id);
+        }
+    }
+
+    if response.changed() {
+        let mut text = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.text.clone())
+            .unwrap_or_default();
+        if strip_newlines && text.contains('\n') {
+            text = text.replace('\n', "");
+        }
+        session.on_text_changed(block_ref, text);
+    }
+
+    let ctx = ui.ctx().clone();
+    let mut commit_block =
+        |block: BlockRef, state: &rendered_session::BlockEditState| {
+            commit_session_block(&ctx, block, state, source, edit_state);
+        };
+
+    if session.active == Some(block_ref) && response.lost_focus() {
+        session.close_active_ui(ui, CommitPolicy::SaveIfDirty, &mut commit_block);
+    }
+
+    note_session_active_clicked(ui, block_ref, session, response);
+
+    let has_focus = response.has_focus();
+    let selection = if has_focus {
+        output.cursor_range.map(|range| {
+            let primary = range.primary.index;
+            let secondary = range.secondary.index;
+            if primary < secondary {
+                (primary, secondary)
+            } else {
+                (secondary, primary)
+            }
+        })
+    } else {
+        None
+    };
+
+    (has_focus, selection)
+}
+
+fn heading_click_cursor(
+    ui: &Ui,
+    response: &Response,
+    text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+) -> Option<usize> {
+    let click_pos = ui.ctx().input(|i| i.pointer.interact_pos())?;
+    Some(
+        compute_displayed_cursor_index(
+            ui,
+            text,
+            click_pos,
+            response.rect,
+            font_size,
+            editor_font,
+            text,
+            0.0,
+            response.rect.width(),
+        )
+        .min(text.chars().count()),
+    )
+}
+
+/// Render a heading as an editable widget (session-backed; `structural` selects widget id path).
 fn render_heading(
     ui: &mut Ui,
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     base_font_size: f32,
     editor_font: &EditorFont,
     level: HeadingLevel,
     header_spacing: HeaderSpacing,
+    structural: bool,
 ) {
-    let text = node.text_content();
-    let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
+    let source_text = node.text_content();
+    let node_id = edit_state.add_node(source_text.clone(), node.start_line, node.end_line);
+    let block_ref = BlockRef::Heading {
+        line: node.start_line,
+        structural,
+    };
 
-    // Font sizes for different heading levels
     let font_size = match level {
         HeadingLevel::H1 => base_font_size * 1.8,
         HeadingLevel::H2 => base_font_size * 1.5,
@@ -2119,25 +2876,14 @@ fn render_heading(
         HeadingLevel::H6 => base_font_size,
     };
 
-    // Headings use bold font
     let font_family = fonts::get_styled_font_family(true, false, editor_font);
-
-    // Add top margin for headings (separation from previous content)
     let (top_margin, bottom_margin) = header_margins(header_spacing, level);
     ui.add_space(top_margin);
 
-    // Editable heading text with left indent
-    // Create explicit ID for heading TextEdit to prevent any potential conflicts
-    let heading_widget_id = ui.id().with("heading_text").with(node.start_line);
-    let heading_edit_buffer_id = ui.id().with("heading_edit_buffer").with(node.start_line);
-    let heading_edit_tracking_id = ui.id().with("heading_edit_tracking").with(node.start_line);
-
-    // Track whether this heading was previously focused (to detect focus loss)
-    let was_editing = ui.memory(|mem| {
-        mem.data
-            .get_temp::<bool>(heading_edit_tracking_id)
-            .unwrap_or(false)
-    });
+    let widget_id = block_ref.widget_id(ui);
+    if !session.blocks.contains_key(&block_ref) {
+        session.on_text_changed(block_ref, source_text);
+    }
 
     let available_width = ui.available_width();
     let (has_focus, selection) = ui
@@ -2145,177 +2891,128 @@ fn render_heading(
             ui.set_max_width(available_width);
             ui.add_space(4.0);
 
-            if let Some(editable) = edit_state.get_node_mut(node_id) {
-                let mut edit_buffer = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp_mut_or_insert_with(heading_edit_buffer_id, || {
-                            editable.text.clone()
-                        })
-                        .clone()
-                });
-
-                let text_edit = TextEdit::singleline(&mut edit_buffer)
-                    .id(heading_widget_id)
+            let mut output = {
+                let block_state = session
+                    .blocks
+                    .get_mut(&block_ref)
+                    .expect("heading block initialized above");
+                TextEdit::singleline(&mut block_state.text)
+                    .id(widget_id)
                     .font(FontId::new(font_size, font_family))
                     .text_color(colors.heading)
                     .frame(egui::Frame::NONE)
                     .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(ui.available_width());
+                    .desired_width(ui.available_width())
+                    .show(ui)
+            };
 
-                let output = text_edit.show(ui);
+            let response = &output.response;
+            let buffer_snapshot = session
+                .blocks
+                .get(&block_ref)
+                .map(|s| s.text.clone())
+                .unwrap_or_default();
 
-                let has_focus = output.response.has_focus();
-                let selection = if has_focus {
-                    output.cursor_range.map(|range| {
-                        let primary = range.primary.index;
-                        let secondary = range.secondary.index;
-                        if primary < secondary {
-                            (primary, secondary)
-                        } else {
-                            (secondary, primary)
-                        }
-                    })
-                } else {
-                    None
+            if response.has_focus() {
+                if session.active != Some(block_ref) {
+                    session_switch_to_ui(
+                        ui,
+                        session,
+                        block_ref,
+                        PendingActivation {
+                            cursor_char_index: None,
+                            request_focus: false,
+                        },
+                        source,
+                        edit_state,
+                    );
+                }
+            } else if session.active.is_some_and(|a| a != block_ref)
+                && (response.clicked()
+                    || (response.hovered() && ui.input(|i| i.pointer.primary_pressed())))
+            {
+                let cursor_idx = heading_click_cursor(
+                    ui,
+                    response,
+                    &buffer_snapshot,
+                    font_size,
+                    editor_font,
+                );
+                session_switch_to_ui(
+                    ui,
+                    session,
+                    block_ref,
+                    PendingActivation {
+                        cursor_char_index: cursor_idx,
+                        request_focus: true,
+                    },
+                    source,
+                    edit_state,
+                );
+                response.request_focus();
+            }
+
+            if let Some(activation) = session
+                .blocks
+                .get_mut(&block_ref)
+                .and_then(|s| s.pending_activation.take())
+            {
+                if activation.request_focus {
+                    response.request_focus();
+                }
+                if let Some(pos) = activation.cursor_char_index {
+                    let ccursor = egui::text::CCursor::new(pos);
+                    output.state.cursor.set_char_range(Some(
+                        egui::text::CCursorRange::one(ccursor),
+                    ));
+                    output.state.store(ui.ctx(), widget_id);
+                }
+            }
+
+            if response.changed() {
+                if let Some(text) = session.blocks.get(&block_ref).map(|s| s.text.clone()) {
+                    session.on_text_changed(block_ref, text);
+                }
+            }
+
+            let ctx = ui.ctx().clone();
+            let mut commit_heading =
+                |block: BlockRef, state: &rendered_session::BlockEditState| {
+                    commit_session_block(&ctx, block, state, source, edit_state);
                 };
 
-                // Update edit buffer and tracking in memory
-                ui.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(heading_edit_buffer_id, edit_buffer.clone());
-                    mem.data.insert_temp(heading_edit_tracking_id, has_focus);
-                });
-
-                // Only commit changes when focus is LOST (was editing, now not)
-                // This prevents rebuild during active editing
-                if was_editing && !has_focus {
-                    editable.modified = true;
-                    update_source_line(
-                        source,
-                        node.start_line,
-                        &format_heading(&edit_buffer, level),
-                    );
-                    // Clear the edit buffer
-                    ui.memory_mut(|mem| {
-                        mem.data.remove::<String>(heading_edit_buffer_id);
-                    });
-                }
-
-                (has_focus, selection)
-            } else {
-                (false, None)
+            if session.active == Some(block_ref) && response.lost_focus() {
+                session.close_active_ui(
+                    ui,
+                    CommitPolicy::SaveIfDirty,
+                    &mut commit_heading,
+                );
             }
+
+            note_session_active_clicked(ui, block_ref, session, response);
+
+            let has_focus = response.has_focus();
+            let selection = if has_focus {
+                output.cursor_range.map(|range| {
+                    let primary = range.primary.index;
+                    let secondary = range.secondary.index;
+                    if primary < secondary {
+                        (primary, secondary)
+                    } else {
+                        (secondary, primary)
+                    }
+                })
+            } else {
+                None
+            };
+
+            (has_focus, selection)
         })
         .inner;
 
-    // Track focus
     if has_focus {
         edit_state.set_focus(node_id, selection);
     }
-    // Add bottom margin based on header spacing setting
-    if bottom_margin > 0.0 {
-        ui.add_space(bottom_margin);
-    }
-}
-
-/// Render a heading with structural key handling (Enter creates paragraph after).
-fn render_heading_with_structural_keys(
-    ui: &mut Ui,
-    node: &MarkdownNode,
-    source: &mut String,
-    edit_state: &mut EditState,
-    structural_state: &mut StructuralEditState,
-    colors: &EditorColors,
-    base_font_size: f32,
-    editor_font: &EditorFont,
-    level: HeadingLevel,
-    header_spacing: HeaderSpacing,
-) {
-    let text = node.text_content();
-    let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
-
-    // Font sizes for different heading levels
-    let font_size = match level {
-        HeadingLevel::H1 => base_font_size * 1.8,
-        HeadingLevel::H2 => base_font_size * 1.5,
-        HeadingLevel::H3 => base_font_size * 1.3,
-        HeadingLevel::H4 => base_font_size * 1.15,
-        HeadingLevel::H5 => base_font_size * 1.05,
-        HeadingLevel::H6 => base_font_size,
-    };
-
-    // Headings use bold font
-    let font_family = fonts::get_styled_font_family(true, false, editor_font);
-
-    // Add top margin for headings
-    let (top_margin, bottom_margin) = header_margins(header_spacing, level);
-    ui.add_space(top_margin);
-
-    // Editable heading text with left indent
-    // Create explicit ID for heading TextEdit to prevent any potential conflicts
-    let heading_widget_id = ui.id().with("heading_text_sk").with(node.start_line);
-    let heading_edit_buffer_id = ui.id().with("heading_sk_edit_buffer").with(node.start_line);
-    let heading_edit_tracking_id = ui
-        .id()
-        .with("heading_sk_edit_tracking")
-        .with(node.start_line);
-
-    // Track whether this heading was previously focused
-    let was_editing = ui.memory(|mem| {
-        mem.data
-            .get_temp::<bool>(heading_edit_tracking_id)
-            .unwrap_or(false)
-    });
-
-    let available_width = ui.available_width();
-    ui.horizontal(|ui| {
-        ui.set_max_width(available_width);
-        ui.add_space(4.0);
-
-        if let Some(editable) = edit_state.get_node_mut(node_id) {
-            let mut edit_buffer = ui.memory_mut(|mem| {
-                mem.data
-                    .get_temp_mut_or_insert_with(heading_edit_buffer_id, || editable.text.clone())
-                    .clone()
-            });
-
-            let response = ui.add(
-                TextEdit::singleline(&mut edit_buffer)
-                    .id(heading_widget_id)
-                    .font(FontId::new(font_size, font_family))
-                    .text_color(colors.heading)
-                    .frame(egui::Frame::NONE)
-                    .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(ui.available_width()),
-            );
-
-            let _ = structural_state;
-
-            let has_focus = response.has_focus();
-
-            // Update edit buffer and tracking in memory
-            ui.memory_mut(|mem| {
-                mem.data
-                    .insert_temp(heading_edit_buffer_id, edit_buffer.clone());
-                mem.data.insert_temp(heading_edit_tracking_id, has_focus);
-            });
-
-            // Only commit when focus is lost
-            if was_editing && !has_focus {
-                editable.modified = true;
-                update_source_line(
-                    source,
-                    node.start_line,
-                    &format_heading(&edit_buffer, level),
-                );
-                // Clear the edit buffer
-                ui.memory_mut(|mem| {
-                    mem.data.remove::<String>(heading_edit_buffer_id);
-                });
-            }
-        }
-    });
-    // Add bottom margin based on header spacing setting
     if bottom_margin > 0.0 {
         ui.add_space(bottom_margin);
     }
@@ -2327,6 +3024,7 @@ fn render_paragraph_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -2358,276 +3056,137 @@ fn render_paragraph_with_structural_keys(
     };
 
     if has_inline_elements {
-        // For formatted paragraphs, use hybrid click-to-edit approach
-        let formatted_para_id = ui.id().with("formatted_paragraph_sk").with(node.start_line);
+        // Formatted paragraphs (structural): session-backed click-to-edit.
+        // Structural Enter (paragraph split) remains disabled; mirrored from prior code.
+        let _ = structural_state;
+        let block_ref = BlockRef::FormattedParagraph {
+            line: node.start_line,
+            structural: true,
+        };
+        let cold_text = extract_paragraph_content(source, node.start_line, node.end_line);
+        let node_id = edit_state.add_node(cold_text.clone(), node.start_line, node.end_line);
+        ensure_formatted_block_initialized(session, block_ref, cold_text);
 
-        let mut para_edit_state = ui.memory_mut(|mem| {
-            mem.data
-                .get_temp_mut_or_insert_with(
-                    formatted_para_id.with("edit_state"),
-                    FormattedItemEditState::default,
-                )
-                .clone()
-        });
-
-        let widget_id = formatted_para_id.with("text_edit");
-
+        let editing = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.formatted_editing)
+            .unwrap_or(false);
+        let base_indent = 4.0 + indent_level as f32 * 20.0;
         let available_width = ui.available_width();
-        ui.horizontal(|ui| {
-            ui.set_max_width(available_width);
-            ui.add_space(4.0 + indent_level as f32 * 20.0);
 
-            if para_edit_state.editing {
-                let font_family_clone = font_family.clone();
-                let text_color = colors.text;
-                let cjk_leading = cjk_indent;
-                let mut layouter =
-                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                        let text = buf.as_str();
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            cjk_leading,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_clone.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts_mut(|f| f.layout_job(job))
-                    };
-                let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
-                    .id(widget_id)
-                    .font(FontId::new(font_size, font_family.clone()))
-                    .text_color(colors.text)
-                    .frame(egui::Frame::NONE)
-                    .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(ui.available_width())
-                    .desired_rows(1)
-                    .layouter(&mut layouter);
-
-                let mut output = text_edit.show(ui);
-                let response = output.response.clone();
-
-                if para_edit_state.needs_focus {
-                    response.request_focus();
-                    para_edit_state.needs_focus = false;
-
-                    // Apply pending cursor position if set
-                    if let Some(cursor_pos) = para_edit_state.pending_cursor_pos.take() {
-                        let ccursor = egui::text::CCursor::new(cursor_pos);
-                        let cursor_range = egui::text::CCursorRange::one(ccursor);
-                        output.state.cursor.set_char_range(Some(cursor_range));
-                        output.state.store(ui.ctx(), widget_id);
-                        debug!("[PARA_DEBUG] Set cursor position to {} for paragraph", cursor_pos);
-                    }
-                }
-
-                let enter_pressed = response.has_focus()
-                    && ui.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift);
-                let escape_pressed =
-                    response.has_focus() && ui.input(|i| i.key_pressed(Key::Escape));
-                let focus_lost = response.lost_focus() && !enter_pressed && !escape_pressed;
-
-                if enter_pressed || focus_lost {
-                    update_source_range(
+        if editing {
+            let (has_focus, selection) = ui
+                .horizontal(|ui| {
+                    ui.set_max_width(available_width);
+                    ui.add_space(base_indent);
+                    render_session_formatted_edit_text(
+                        ui,
+                        block_ref,
+                        session,
                         source,
-                        node.start_line,
-                        node.end_line,
-                        &para_edit_state.edit_text,
-                    );
-
-                    let node_id = edit_state.add_node(
-                        para_edit_state.edit_text.clone(),
-                        node.start_line,
-                        node.end_line,
-                    );
-                    if let Some(editable) = edit_state.get_node_mut(node_id) {
-                        editable.modified = true;
-                    }
-
-                    para_edit_state.editing = false;
-                    debug!(
-                        "Saved and exiting edit mode for formatted paragraph at line {}",
-                        node.start_line
-                    );
-                } else if escape_pressed {
-                    para_edit_state.editing = false;
-                    debug!(
-                        "Cancelled edit mode for formatted paragraph at line {}",
-                        node.start_line
-                    );
-                }
-
-                // Note: Structural key handling disabled for now
-                let _ = structural_state;
-
-                ui.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                });
-            } else {
-                // DISPLAY MODE: Show formatted text, click to edit
-                let display_response = ui
-                    .horizontal_wrapped(|ui| {
-                        // CJK first-line indent: Add spacer at start of horizontal_wrapped
-                        // This only affects the first line - wrapped content starts flush left
-                        if cjk_indent > 0.0 {
-                            ui.add_space(cjk_indent);
-                        }
-                        let style = TextStyle::new();
-                        for child in &node.children {
-                            render_inline_node(
-                                ui,
-                                child,
-                                source,
-                                edit_state,
-                                colors,
-                                font_size,
-                                editor_font,
-                                style,
-                            );
-                        }
-                    })
-                    .response;
-
-                let sense_response = ui.interact(
-                    display_response.rect,
-                    formatted_para_id.with("click_sense"),
-                    egui::Sense::click(),
-                );
-
-                if sense_response.clicked() {
-                    // Check if a link widget consumed this click
-                    let link_consumed = ui.memory(|mem| {
-                        mem.data
-                            .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
-                            .unwrap_or(false)
-                    });
-
-                    if !link_consumed {
-                        para_edit_state.editing = true;
-                        para_edit_state.needs_focus = true;
-                        para_edit_state.edit_text =
-                            extract_paragraph_content(source, node.start_line, node.end_line);
-
-                        // Calculate cursor position from click location using Galley for accuracy
-                        // This maps screen position to character index in displayed text
-                        let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                            let displayed_text = node.text_content();
-                            let displayed_idx = compute_displayed_cursor_index(
-                                ui,
-                                &displayed_text,
-                                click_pos,
-                                display_response.rect,
-                                font_size,
-                                editor_font,
-                                &para_edit_state.edit_text,
-                            );
-                            // Map displayed position to raw position (accounting for formatting markers)
-                        let raw_idx = map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
-                        Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
-                    } else {
-                        None
-                    };
-                    para_edit_state.pending_cursor_pos = cursor_pos;
-
-                        debug!(
-                            "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
-                            node.start_line, cursor_pos
-                        );
-
-                        ui.memory_mut(|mem| {
-                            mem.data
-                                .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                        });
-                    }
-                }
-
-                if sense_response.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                }
+                        edit_state,
+                        font_size,
+                        font_family.clone(),
+                        colors.text,
+                        cjk_indent,
+                        editor_font,
+                        false,
+                    )
+                })
+                .inner;
+            if has_focus {
+                edit_state.set_focus(node_id, selection);
             }
-        });
+        } else {
+            let raw_display = session
+                .blocks
+                .get(&block_ref)
+                .map(|s| s.text.as_str())
+                .unwrap_or("");
+            let (display_response, layout_wrap_w) = ui
+                .horizontal(|ui| {
+                    ui.set_max_width(available_width);
+                    ui.add_space(base_indent);
+
+                    if cjk_indent > 0.0 {
+                        ui.add_space(cjk_indent);
+                    }
+                    let wrap_w = ui.available_width();
+                    (
+                        show_formatted_block_galley_display(
+                            ui,
+                            raw_display,
+                            font_size,
+                            editor_font,
+                            colors,
+                            wrap_w,
+                        ),
+                        wrap_w,
+                    )
+                })
+                .inner;
+
+            let sense_id = block_ref.widget_id(ui).with("display_sense");
+            let sense_response =
+                ui.interact(display_response.rect, sense_id, egui::Sense::click());
+
+            if sense_response.clicked() {
+                let displayed_plaintext = node.text_content();
+                enter_formatted_edit_on_display_click(
+                    ui,
+                    block_ref,
+                    session,
+                    source,
+                    edit_state,
+                    display_response.rect,
+                    &displayed_plaintext,
+                    font_size,
+                    editor_font,
+                    layout_wrap_w,
+                );
+            }
+            if sense_response.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+            }
+        }
     } else {
-        // Simple text-only paragraph â€” persist edit buffer in egui memory
-        // to prevent trailing spaces being stripped by AST round-trip each frame.
+        // Simple text-only paragraph — session-backed buffer (preserves trailing spaces via extract).
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
-
-        let para_edit_buffer_id = ui.id().with("para_edit_buffer").with(node.start_line);
-        let para_edit_tracking_id = ui.id().with("para_edit_tracking").with(node.start_line);
-
-        let was_editing = ui.memory(|mem| {
-            mem.data
-                .get_temp::<bool>(para_edit_tracking_id)
-                .unwrap_or(false)
-        });
+        let block_ref = BlockRef::Paragraph {
+            line: node.start_line,
+        };
+        let source_text = extract_paragraph_content(source, node.start_line, node.end_line);
 
         let available_width = ui.available_width();
-        ui.horizontal(|ui| {
-            ui.set_max_width(available_width);
-            ui.add_space(4.0 + indent_level as f32 * 20.0);
-
-            if let Some(editable) = edit_state.get_node_mut(node_id) {
-                let source_text = extract_paragraph_content(source, node.start_line, node.end_line);
-                let mut edit_buffer = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp_mut_or_insert_with(para_edit_buffer_id, || source_text)
-                        .clone()
-                });
-
-                let font_family_clone = font_family.clone();
-                let text_color = colors.text;
-                let cjk_leading = cjk_indent;
-                let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                    let text = buf.as_str();
-                    let mut job = egui::text::LayoutJob::default();
-                    job.wrap.max_width = wrap_width;
-                    job.append(
-                        text,
-                        cjk_leading,
-                        egui::text::TextFormat {
-                            font_id: FontId::new(font_size, font_family_clone.clone()),
-                            color: text_color,
-                            ..Default::default()
-                        },
-                    );
-                    ui.fonts_mut(|f| f.layout_job(job))
-                };
-
-                let widget_id = ui.id().with("para_text").with(node.start_line);
-                let text_edit = TextEdit::multiline(&mut edit_buffer)
-                    .id(widget_id)
-                    .font(FontId::new(font_size, font_family.clone()))
-                    .text_color(colors.text)
-                    .frame(egui::Frame::NONE)
-                    .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(ui.available_width())
-                    .desired_rows(1)
-                    .layouter(&mut layouter);
-
-                let output = text_edit.show(ui);
-                let has_focus = output.response.has_focus();
+        let (has_focus, selection) = ui
+            .horizontal(|ui| {
+                ui.set_max_width(available_width);
+                ui.add_space(4.0 + indent_level as f32 * 20.0);
 
                 let _ = structural_state;
+                render_session_plain_text_block(
+                    ui,
+                    block_ref,
+                    session,
+                    source,
+                    edit_state,
+                    node.end_line,
+                    source_text,
+                    font_size,
+                    font_family.clone(),
+                    colors.text,
+                    cjk_indent,
+                    editor_font,
+                    false,
+                )
+            })
+            .inner;
 
-                ui.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(para_edit_buffer_id, edit_buffer.clone());
-                    mem.data.insert_temp(para_edit_tracking_id, has_focus);
-                });
-
-                if was_editing && !has_focus {
-                    editable.modified = true;
-                    update_source_range(source, node.start_line, node.end_line, &edit_buffer);
-                    ui.memory_mut(|mem| {
-                        mem.data.remove::<String>(para_edit_buffer_id);
-                    });
-                }
-            }
-        });
+        if has_focus {
+            edit_state.set_focus(node_id, selection);
+        }
     }
 }
 
@@ -2637,6 +3196,7 @@ fn render_blockquote_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -2662,6 +3222,7 @@ fn render_blockquote_with_structural_keys(
                     child,
                     source,
                     edit_state,
+                    session,
                     structural_state,
                     colors,
                     font_size,
@@ -2684,6 +3245,44 @@ fn render_blockquote_with_structural_keys(
     );
     ui.painter()
         .rect_filled(border_rect, 0.0, colors.quote_border);
+}
+
+/// Collapse/expand chevrons for callout title rows (Unicode escapes avoid source encoding issues).
+const CALLOUT_ARROW_COLLAPSED: &str = "\u{25B6}"; // ▶
+const CALLOUT_ARROW_EXPANDED: &str = "\u{25BC}"; // ▼
+
+/// Paint the callout background wash and left accent bar.
+///
+/// Uses the scroll/content rect for height so the fill does not bleed over
+/// subsequent blocks when the outer horizontal layout claims extra vertical space.
+fn paint_callout_chrome(
+    group_rect: egui::Rect,
+    content_rect: egui::Rect,
+    base_indent: f32,
+    border_width: f32,
+    border_color: Color32,
+    bg_color: Color32,
+    painter: &egui::Painter,
+) {
+    let paint_rect = if content_rect.is_positive() {
+        egui::Rect::from_min_max(
+            egui::pos2(group_rect.min.x + base_indent, content_rect.min.y),
+            egui::pos2(group_rect.max.x, content_rect.max.y),
+        )
+    } else {
+        egui::Rect::from_min_size(
+            egui::pos2(group_rect.min.x + base_indent, group_rect.min.y),
+            Vec2::new(group_rect.width() - base_indent, group_rect.height()),
+        )
+    };
+
+    painter.rect_filled(paint_rect, 4.0, bg_color);
+
+    let border_rect = egui::Rect::from_min_size(
+        egui::pos2(group_rect.min.x + base_indent, paint_rect.min.y),
+        Vec2::new(border_width, paint_rect.height()),
+    );
+    painter.rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Get the color scheme for a callout type.
@@ -2776,6 +3375,7 @@ fn render_callout_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -2798,6 +3398,7 @@ fn render_callout_with_structural_keys(
     // between multiple callouts. Using (start_line, end_line) for uniqueness.
     let scope_id = ("callout_struct", node.start_line, node.end_line);
 
+    let mut content_paint_rect = egui::Rect::NOTHING;
     let group_response = ui.push_id(scope_id, |ui| {
         let callout_id = ui.make_persistent_id("collapsed");
         let is_collapsed = ui.data_mut(|d| *d.get_persisted_mut_or(callout_id, default_collapsed));
@@ -2810,81 +3411,91 @@ fn render_callout_with_structural_keys(
             ui.set_max_width(available_width);
             ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
 
-            ui.vertical(|ui| {
-                let title_row = ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(icon)
-                            .color(title_color)
-                            .font(FontId::proportional(font_size)),
-                    );
+            // See issue #129: auto_shrink y must be true so this horizontal
+            // scroll area shrinks to fit its content vertically.
+            let scroll_out = egui::ScrollArea::horizontal()
+                .id_salt("scroll")
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        let title_row = ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(icon)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size)),
+                            );
 
-                    let arrow = if is_collapsed { "â–¶" } else { "â–¼" };
-                    ui.label(
-                        RichText::new(arrow)
-                            .color(title_color)
-                            .font(FontId::proportional(font_size * 0.7)),
-                    );
+                            let arrow = if is_collapsed {
+                                CALLOUT_ARROW_COLLAPSED
+                            } else {
+                                CALLOUT_ARROW_EXPANDED
+                            };
+                            ui.label(
+                                RichText::new(arrow)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size * 0.7)),
+                            );
 
-                    ui.label(
-                        RichText::new(title_text)
-                            .color(title_color)
-                            .font(FontId::proportional(font_size))
-                            .strong(),
-                    );
-                });
+                            ui.label(
+                                RichText::new(title_text)
+                                    .color(title_color)
+                                    .font(FontId::proportional(font_size))
+                                    .strong(),
+                            );
+                        });
 
-                // Place a clickable rect over the title row for collapse toggle
-                let title_rect = title_row.response.rect;
-                let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
-                if click_response.clicked() {
-                    ui.data_mut(|d| {
-                        let val = d.get_persisted_mut_or(callout_id, default_collapsed);
-                        *val = !*val;
+                        // Place a clickable rect over the title row for collapse toggle
+                        let title_rect = title_row.response.rect;
+                        let click_response = ui.allocate_rect(title_rect, egui::Sense::click());
+                        if click_response.clicked() {
+                            ui.data_mut(|d| {
+                                let val = d.get_persisted_mut_or(callout_id, default_collapsed);
+                                *val = !*val;
+                            });
+                        }
+                        // Show pointer cursor on hover
+                        if click_response.hovered() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+
+                        if !is_collapsed {
+                            ui.add_space(2.0);
+                            for child in &node.children {
+                                render_node_with_structural_keys(
+                                    ui,
+                                    child,
+                                    source,
+                                    edit_state,
+                                    session,
+                                    structural_state,
+                                    colors,
+                                    font_size,
+                                    editor_font,
+                                    indent_level + 1,
+                                    None,
+                                    None,
+                                    paragraph_indent,
+                                    header_spacing,
+                                );
+                            }
+                        }
                     });
-                }
-                // Show pointer cursor on hover
-                if click_response.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                }
-
-                if !is_collapsed {
-                    ui.add_space(2.0);
-                    for child in &node.children {
-                        render_node_with_structural_keys(
-                            ui,
-                            child,
-                            source,
-                            edit_state,
-                            structural_state,
-                            colors,
-                            font_size,
-                            editor_font,
-                            indent_level + 1,
-                            None,
-                            None,
-                            paragraph_indent,
-                            header_spacing,
-                        );
-                    }
-                }
-            });
+                    ui.min_rect()
+                });
+            content_paint_rect = scroll_out.inner;
         });
         inner.response
     });
 
-    // Paint styled background and left border
-    let rect = group_response.response.rect;
-    let content_rect = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
-        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    paint_callout_chrome(
+        group_response.response.rect,
+        content_paint_rect,
+        BASE_INDENT,
+        BORDER_WIDTH,
+        border_color,
+        bg_color,
+        ui.painter(),
     );
-    ui.painter().rect_filled(content_rect, 4.0, bg_color);
-
-    let border_rect = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
-        Vec2::new(BORDER_WIDTH, rect.height()),
-    );
-    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list with structural key support for items.
@@ -2893,6 +3504,7 @@ fn render_list_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -2925,6 +3537,7 @@ fn render_list_with_structural_keys(
                 child,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -2949,6 +3562,7 @@ fn render_list_item_with_structural_keys(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     structural_state: &mut StructuralEditState,
     colors: &EditorColors,
     font_size: f32,
@@ -3116,264 +3730,106 @@ fn render_list_item_with_structural_keys(
         // Render item content
         if has_inline_formatting {
             if let Some(para) = para_node {
-                let formatted_item_id = ui
-                    .id()
-                    .with("formatted_list_item_sk")
-                    .with(para.start_line)
-                    .with(item_index);
+                // Formatted list items (structural): session-backed click-to-edit.
+                // Structural Enter handling stays disabled (mirrors prior code).
+                let _ = structural_state;
+                let block_ref = BlockRef::FormattedListItem {
+                    line: para.start_line,
+                    item: item_index as u32,
+                    structural: true,
+                };
+                let cold_text = extract_list_item_content(source, para.start_line);
+                let node_id = edit_state.add_node(cold_text.clone(), para.start_line, para.end_line);
+                ensure_formatted_block_initialized(session, block_ref, cold_text);
 
-                // Get or create edit state for this formatted item
-                let mut item_edit_state = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp_mut_or_insert_with(
-                            formatted_item_id.with("edit_state"),
-                            FormattedItemEditState::default,
-                        )
-                        .clone()
-                });
+                let editing = session
+                    .blocks
+                    .get(&block_ref)
+                    .map(|s| s.formatted_editing)
+                    .unwrap_or(false);
 
-                let widget_id = formatted_item_id.with("text_edit");
-
-                if item_edit_state.editing {
-                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
-                    let font_family_for_layout = font_family.clone();
-                    let text_color = colors.text;
-                    let mut layouter =
-                        move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                            let text = buf.as_str();
-                            let mut job = egui::text::LayoutJob::default();
-                            job.wrap.max_width = wrap_width;
-                            job.append(
-                                text,
-                                0.0,
-                                egui::text::TextFormat {
-                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
-                                    color: text_color,
-                                    ..Default::default()
-                                },
-                            );
-                            ui.fonts_mut(|f| f.layout_job(job))
-                        };
-                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
-                        .id(widget_id)
-                        .font(FontId::new(font_size, font_family.clone()))
-                        .text_color(colors.text)
-                        .frame(egui::Frame::NONE)
-                        .desired_width(ui.available_width())
-                        .desired_rows(1)
-                        .margin(egui::vec2(0.0, 2.0))
-                        .layouter(&mut layouter);
-
-                    // Use show() to get TextEditOutput for cursor manipulation
-                    let mut output = text_edit.show(ui);
-                    let response = output.response.clone();
-
-                    // Strip newlines that multiline TextEdit inserts on Enter
-                    if item_edit_state.edit_text.contains('\n') {
-                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                if editing {
+                    let (has_focus, selection) = render_session_formatted_edit_text(
+                        ui,
+                        block_ref,
+                        session,
+                        source,
+                        edit_state,
+                        font_size,
+                        font_family.clone(),
+                        colors.text,
+                        0.0,
+                        editor_font,
+                        true,
+                    );
+                    if has_focus {
+                        edit_state.set_focus(node_id, selection);
                     }
-
-                    // Request focus if needed (first frame after entering edit mode)
-                    if item_edit_state.needs_focus {
-                        response.request_focus();
-                        item_edit_state.needs_focus = false;
-
-                        // Apply pending cursor position if set
-                        if let Some(cursor_pos) = item_edit_state.pending_cursor_pos.take() {
-                            let ccursor = egui::text::CCursor::new(cursor_pos);
-                            let cursor_range = egui::text::CCursorRange::one(ccursor);
-                            output.state.cursor.set_char_range(Some(cursor_range));
-                            output.state.store(ui.ctx(), widget_id);
-                            debug!("[LIST_DEBUG] Set cursor position to {} for list item (sk)", cursor_pos);
-                        }
-                    }
-
-                    // Check for exit conditions
-                    let enter_pressed =
-                        response.has_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    let escape_pressed =
-                        response.has_focus() && ui.input(|i| i.key_pressed(Key::Escape));
-                    let focus_lost = response.lost_focus() && !enter_pressed && !escape_pressed;
-
-                    if enter_pressed || focus_lost {
-                        // Save changes and exit edit mode
-                        update_source_range(
-                            source,
-                            para.start_line,
-                            para.end_line,
-                            &item_edit_state.edit_text,
-                        );
-
-                        // Mark as modified
-                        let node_id = edit_state.add_node(
-                            item_edit_state.edit_text.clone(),
-                            para.start_line,
-                            para.end_line,
-                        );
-                        if let Some(editable) = edit_state.get_node_mut(node_id) {
-                            editable.modified = true;
-                        }
-
-                        item_edit_state.editing = false;
-                        debug!(
-                            "Saved and exiting edit mode for formatted list item at line {}",
-                            para.start_line
-                        );
-                    } else if escape_pressed {
-                        // Cancel without saving
-                        item_edit_state.editing = false;
-                        debug!(
-                            "Cancelled edit mode for formatted list item at line {}",
-                            para.start_line
-                        );
-                    }
-
-                    // Note: Structural key handling disabled for now
-                    let _ = structural_state;
-
-                    // Always save the current state (including text edits)
-                    ui.memory_mut(|mem| {
-                        mem.data
-                            .insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
-                    });
                 } else {
-                    // DISPLAY MODE: Show formatted text, click to edit
-                    let display_response = ui
-                        .horizontal_wrapped(|ui| {
-                            let style = TextStyle::new();
-                            for child in &para.children {
-                                render_inline_node(
-                                    ui,
-                                    child,
-                                    source,
-                                    edit_state,
-                                    colors,
-                                    font_size,
-                                    editor_font,
-                                    style,
-                                );
-                            }
-                        })
-                        .response;
-
-                    // Make the display area interactive - enter edit mode on click
-                    let sense_response = ui.interact(
-                        display_response.rect,
-                        formatted_item_id.with("click_sense"),
-                        egui::Sense::click(),
+                    let raw_display = session
+                        .blocks
+                        .get(&block_ref)
+                        .map(|s| s.text.as_str())
+                        .unwrap_or("");
+                    let layout_wrap_w = ui.available_width();
+                    let display_response = show_formatted_block_galley_display(
+                        ui,
+                        raw_display,
+                        font_size,
+                        editor_font,
+                        colors,
+                        layout_wrap_w,
                     );
 
+                    let sense_id = block_ref.widget_id(ui).with("display_sense");
+                    let sense_response =
+                        ui.interact(display_response.rect, sense_id, egui::Sense::click());
+
                     if sense_response.clicked() {
-                        // Check if a link widget consumed this click
-                        let link_consumed = ui.memory(|mem| {
-                            mem.data
-                                .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
-                                .unwrap_or(false)
-                        });
-
-                        if !link_consumed {
-                            // DEBUG: Log click on structural key list item
-                            debug!(
-                                "[LIST_DEBUG] CLICK DETECTED (sk): para.start_line={}, item_index={}, \
-                                 display_rect={:?}",
-                                para.start_line, item_index, display_response.rect
-                            );
-
-                            // Enter edit mode
-                            item_edit_state.editing = true;
-                            item_edit_state.needs_focus = true;
-                            // Get raw markdown content from source
-                            item_edit_state.edit_text =
-                                extract_list_item_content(source, para.start_line);
-
-                            // Calculate cursor position from click location
-                            // Use the DISPLAYED text to calculate position, then use directly in raw text
-                            // (don't scale - scaling makes position drift worse)
-                            let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                                let rect = display_response.rect;
-                                let raw_len = item_edit_state.edit_text.len();
-                                // Get the displayed text (without formatting markers like **)
-                                let displayed_text = para.text_content();
-                                let displayed_len = displayed_text.len();
-                                if displayed_len > 0 && rect.width() > 0.0 {
-                                    let relative_x = ((click_pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-                                    // Map to displayed character position and use directly
-                                    // Don't scale to raw - that makes the drift worse
-                                    let char_pos = (relative_x * displayed_len as f32).round() as usize;
-                                    Some(char_pos.min(raw_len))
-                                } else {
-                                    Some(0)
-                                }
-                            } else {
-                                None
-                            };
-                            item_edit_state.pending_cursor_pos = cursor_pos;
-
-                            // DEBUG: Log edit mode entry
-                            debug!(
-                                "[LIST_DEBUG] EDIT MODE ENTERED (sk): para.start_line={}, item_index={}, content='{}', cursor_pos={:?}",
-                                para.start_line, item_index, item_edit_state.edit_text, cursor_pos
-                            );
-
-                            // Store the new state
-                            ui.memory_mut(|mem| {
-                                mem.data
-                                    .insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
-                            });
-                        }
+                        let displayed_plaintext = para.text_content();
+                        enter_formatted_edit_on_display_click(
+                            ui,
+                            block_ref,
+                            session,
+                            source,
+                            edit_state,
+                            display_response.rect,
+                            &displayed_plaintext,
+                            font_size,
+                            editor_font,
+                            layout_wrap_w,
+                        );
                     }
-
-                    // Show hover cursor to indicate clickability
                     if sense_response.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
                     }
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
-            // Simple text - editable with wrapping
-            if let Some(editable) = edit_state.get_node_mut(node_id) {
-                let widget_id = ui.id().with("list_item_text_sk").with(start_line);
-
-                let font_family_for_layout = font_family.clone();
-                let text_color = colors.text;
-                let mut layouter =
-                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                        let text = buf.as_str();
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            0.0,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts_mut(|f| f.layout_job(job))
-                    };
-                let text_edit = TextEdit::multiline(&mut editable.text)
-                    .id(widget_id)
-                    .font(FontId::new(font_size, font_family))
-                    .text_color(colors.text)
-                    .frame(egui::Frame::NONE)
-                    .desired_width(ui.available_width())
-                    .desired_rows(1)
-                    .layouter(&mut layouter);
-
-                let response = ui.add(text_edit);
-
-                // Strip newlines â€” list items should not contain literal newlines
-                if editable.text.contains('\n') {
-                    editable.text = editable.text.replace('\n', "");
-                }
-
-                let _ = structural_state;
-
-                if response.changed() {
-                    editable.modified = true;
-                    update_source_range(source, start_line, end_line, &editable.text);
-                }
+            // Simple text — session-backed buffer
+            let block_ref = BlockRef::ListItem {
+                line: start_line,
+                item: item_index as u32,
+            };
+            let cold_text = extract_list_item_content(source, start_line);
+            let (has_focus, selection) = render_session_plain_text_block(
+                ui,
+                block_ref,
+                session,
+                source,
+                edit_state,
+                end_line,
+                cold_text,
+                font_size,
+                font_family.clone(),
+                colors.text,
+                0.0,
+                editor_font,
+                true,
+            );
+            let _ = structural_state;
+            if has_focus {
+                edit_state.set_focus(node_id, selection);
             }
         }
     });
@@ -3390,6 +3846,7 @@ fn render_list_item_with_structural_keys(
                 nested_list,
                 source,
                 edit_state,
+                session,
                 structural_state,
                 colors,
                 font_size,
@@ -3407,6 +3864,7 @@ fn render_paragraph(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -3438,296 +3896,131 @@ fn render_paragraph(
     };
 
     if has_inline_elements {
-        // For formatted paragraphs, use hybrid click-to-edit approach
-        let formatted_para_id = ui.id().with("formatted_paragraph").with(node.start_line);
+        // Formatted paragraphs (non-structural): session-backed click-to-edit.
+        let block_ref = BlockRef::FormattedParagraph {
+            line: node.start_line,
+            structural: false,
+        };
+        let cold_text = extract_paragraph_content(source, node.start_line, node.end_line);
+        let node_id = edit_state.add_node(cold_text.clone(), node.start_line, node.end_line);
+        ensure_formatted_block_initialized(session, block_ref, cold_text);
 
-        // Get or create edit state for this formatted paragraph
-        let mut para_edit_state = ui.memory_mut(|mem| {
-            mem.data
-                .get_temp_mut_or_insert_with(
-                    formatted_para_id.with("edit_state"),
-                    FormattedItemEditState::default,
-                )
-                .clone()
-        });
+        let editing = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.formatted_editing)
+            .unwrap_or(false);
+        let base_indent = 4.0 + indent_level as f32 * 20.0;
+        let available_width = ui.available_width();
 
-        let widget_id = formatted_para_id.with("text_edit");
-
-        if para_edit_state.editing {
-            let available_width = ui.available_width();
-            ui.horizontal(|ui| {
-                ui.set_max_width(available_width);
-                ui.add_space(4.0 + indent_level as f32 * 20.0);
-
-                let font_family_clone = font_family.clone();
-                let text_color = colors.text;
-                let cjk_leading = cjk_indent;
-                let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                    let text = buf.as_str();
-                    let mut job = egui::text::LayoutJob::default();
-                    job.wrap.max_width = wrap_width;
-                    job.append(
-                        text,
-                        cjk_leading,
-                        egui::text::TextFormat {
-                            font_id: FontId::new(font_size, font_family_clone.clone()),
-                            color: text_color,
-                            ..Default::default()
-                        },
-                    );
-                    ui.fonts_mut(|f| f.layout_job(job))
-                };
-                let text_edit = TextEdit::multiline(&mut para_edit_state.edit_text)
-                    .id(widget_id)
-                    .font(FontId::new(font_size, font_family.clone()))
-                    .text_color(colors.text)
-                    .frame(egui::Frame::NONE)
-                    .margin(egui::vec2(0.0, 0.0))
-                    .desired_width(ui.available_width())
-                    .desired_rows(1)
-                    .layouter(&mut layouter);
-
-                let mut output = text_edit.show(ui);
-                let response = output.response.clone();
-
-                // Request focus if needed
-                if para_edit_state.needs_focus {
-                    response.request_focus();
-                    para_edit_state.needs_focus = false;
-
-                    // Apply pending cursor position if set
-                    if let Some(cursor_pos) = para_edit_state.pending_cursor_pos.take() {
-                        let ccursor = egui::text::CCursor::new(cursor_pos);
-                        let cursor_range = egui::text::CCursorRange::one(ccursor);
-                        output.state.cursor.set_char_range(Some(cursor_range));
-                        output.state.store(ui.ctx(), widget_id);
-                        debug!(
-                            "[PARA_DEBUG] Set cursor position to {} for paragraph (2)",
-                            cursor_pos
-                        );
-                    }
-                }
-
-                // Check for exit conditions
-                let enter_pressed = response.has_focus()
-                    && ui.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift);
-                let escape_pressed =
-                    response.has_focus() && ui.input(|i| i.key_pressed(Key::Escape));
-                let focus_lost = response.lost_focus() && !enter_pressed && !escape_pressed;
-
-                if enter_pressed || focus_lost {
-                    // Save changes and exit edit mode
-                    update_source_range(
-                        source,
-                        node.start_line,
-                        node.end_line,
-                        &para_edit_state.edit_text,
-                    );
-
-                    // Mark as modified
-                    let node_id = edit_state.add_node(
-                        para_edit_state.edit_text.clone(),
-                        node.start_line,
-                        node.end_line,
-                    );
-                    if let Some(editable) = edit_state.get_node_mut(node_id) {
-                        editable.modified = true;
-                    }
-
-                    para_edit_state.editing = false;
-                    debug!(
-                        "Saved and exiting edit mode for formatted paragraph at line {}",
-                        node.start_line
-                    );
-                } else if escape_pressed {
-                    // Cancel without saving
-                    para_edit_state.editing = false;
-                    debug!(
-                        "Cancelled edit mode for formatted paragraph at line {}",
-                        node.start_line
-                    );
-                }
-
-                // Always save the current state
-                ui.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                });
-            });
-        } else {
-            let base_indent = 4.0 + indent_level as f32 * 20.0;
-
-            let available_width_display = ui.available_width();
-            let display_response = ui
+        if editing {
+            let (has_focus, selection) = ui
                 .horizontal(|ui| {
-                    ui.set_max_width(available_width_display);
+                    ui.set_max_width(available_width);
+                    ui.add_space(base_indent);
+                    render_session_formatted_edit_text(
+                        ui,
+                        block_ref,
+                        session,
+                        source,
+                        edit_state,
+                        font_size,
+                        font_family.clone(),
+                        colors.text,
+                        cjk_indent,
+                        editor_font,
+                        false,
+                    )
+                })
+                .inner;
+            if has_focus {
+                edit_state.set_focus(node_id, selection);
+            }
+        } else {
+            let raw_display = session
+                .blocks
+                .get(&block_ref)
+                .map(|s| s.text.as_str())
+                .unwrap_or("");
+            let (display_response, layout_wrap_w) = ui
+                .horizontal(|ui| {
+                    ui.set_max_width(available_width);
                     ui.add_space(base_indent);
 
-                    ui.scope(|ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            // CJK first-line indent: spacer at start (first line only)
-                            if cjk_indent > 0.0 {
-                                ui.add_space(cjk_indent);
-                            }
-                            let style = TextStyle::new();
-                            for child in &node.children {
-                                render_inline_node(
-                                    ui,
-                                    child,
-                                    source,
-                                    edit_state,
-                                    colors,
-                                    font_size,
-                                    editor_font,
-                                    style,
-                                );
-                            }
-                        })
-                    })
-                    .response
+                    if cjk_indent > 0.0 {
+                        ui.add_space(cjk_indent);
+                    }
+                    let wrap_w = ui.available_width();
+                    (
+                        show_formatted_block_galley_display(
+                            ui,
+                            raw_display,
+                            font_size,
+                            editor_font,
+                            colors,
+                            wrap_w,
+                        ),
+                        wrap_w,
+                    )
                 })
                 .inner;
 
-            // Make the display area interactive
-            let sense_response = ui.interact(
-                display_response.rect,
-                formatted_para_id.with("click_sense"),
-                egui::Sense::click(),
-            );
+            let sense_id = block_ref.widget_id(ui).with("display_sense");
+            let sense_response =
+                ui.interact(display_response.rect, sense_id, egui::Sense::click());
 
             if sense_response.clicked() {
-                // Check if a link widget consumed this click
-                let link_consumed = ui.memory(|mem| {
-                    mem.data
-                        .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
-                        .unwrap_or(false)
-                });
-
-                if !link_consumed {
-                    // Enter edit mode
-                    para_edit_state.editing = true;
-                    para_edit_state.needs_focus = true;
-                    para_edit_state.edit_text =
-                        extract_paragraph_content(source, node.start_line, node.end_line);
-
-                    // Calculate cursor position from click location using Galley for accuracy
-                    // This maps screen position to character index in displayed text
-                    let cursor_pos =
-                        if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                            let displayed_text = node.text_content();
-                            let displayed_idx = compute_displayed_cursor_index(
-                                ui,
-                                &displayed_text,
-                                click_pos,
-                                display_response.rect,
-                                font_size,
-                                editor_font,
-                                &para_edit_state.edit_text,
-                            );
-                            // Map displayed position to raw position (accounting for formatting markers)
-                            let raw_idx =
-                                map_displayed_to_raw(displayed_idx, &para_edit_state.edit_text);
-                            Some(raw_idx.min(para_edit_state.edit_text.chars().count()))
-                        } else {
-                            None
-                        };
-                    para_edit_state.pending_cursor_pos = cursor_pos;
-
-                    debug!(
-                        "Entering edit mode for formatted paragraph at line {}, cursor_pos={:?}",
-                        node.start_line, cursor_pos
-                    );
-
-                    ui.memory_mut(|mem| {
-                        mem.data
-                            .insert_temp(formatted_para_id.with("edit_state"), para_edit_state);
-                    });
-                }
+                let displayed_plaintext = node.text_content();
+                enter_formatted_edit_on_display_click(
+                    ui,
+                    block_ref,
+                    session,
+                    source,
+                    edit_state,
+                    display_response.rect,
+                    &displayed_plaintext,
+                    font_size,
+                    editor_font,
+                    layout_wrap_w,
+                );
             }
-
             if sense_response.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
             }
         }
     } else {
-        // Simple text-only paragraph - use editable text directly
+        // Simple text-only paragraph — session-backed buffer.
         let text = node.text_content();
         let node_id = edit_state.add_node(text.clone(), node.start_line, node.end_line);
+        let block_ref = BlockRef::Paragraph {
+            line: node.start_line,
+        };
+        let source_text = extract_paragraph_content(source, node.start_line, node.end_line);
 
         let available_width = ui.available_width();
-        let (has_focus, selection, changed, new_text) = ui
+        let (has_focus, selection) = ui
             .horizontal(|ui| {
                 ui.set_max_width(available_width);
                 ui.add_space(4.0 + indent_level as f32 * 20.0);
 
-                if let Some(editable) = edit_state.get_node_mut(node_id) {
-                    let font_family_clone = font_family.clone();
-                    let text_color = colors.text;
-                    let cjk_leading = cjk_indent;
-                    let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                        let text = buf.as_str();
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            cjk_leading,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_clone.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts_mut(|f| f.layout_job(job))
-                    };
-                    let text_edit = TextEdit::multiline(&mut editable.text)
-                        .font(FontId::new(font_size, font_family.clone()))
-                        .text_color(colors.text)
-                        .frame(egui::Frame::NONE)
-                        .margin(egui::vec2(0.0, 0.0))
-                        .desired_width(ui.available_width())
-                        .desired_rows(1)
-                        .layouter(&mut layouter);
-
-                    let output = text_edit.show(ui);
-
-                    let changed = output.response.changed();
-                    let has_focus = output.response.has_focus();
-                    let selection = if has_focus {
-                        output.cursor_range.map(|range| {
-                            let primary = range.primary.index;
-                            let secondary = range.secondary.index;
-                            if primary < secondary {
-                                (primary, secondary)
-                            } else {
-                                (secondary, primary)
-                            }
-                        })
-                    } else {
-                        None
-                    };
-
-                    let new_text = if changed {
-                        editable.modified = true;
-                        Some(editable.text.clone())
-                    } else {
-                        None
-                    };
-
-                    (has_focus, selection, changed, new_text)
-                } else {
-                    (false, None, false, None)
-                }
+                render_session_plain_text_block(
+                    ui,
+                    block_ref,
+                    session,
+                    source,
+                    edit_state,
+                    node.end_line,
+                    source_text,
+                    font_size,
+                    font_family.clone(),
+                    colors.text,
+                    cjk_indent,
+                    editor_font,
+                    false,
+                )
             })
             .inner;
 
-        // Update source if changed
-        if changed {
-            if let Some(text) = new_text {
-                update_source_range(source, node.start_line, node.end_line, &text);
-            }
-        }
-
-        // Track focus
         if has_focus {
             edit_state.set_focus(node_id, selection);
         }
@@ -3791,6 +4084,34 @@ impl TextStyle {
     }
 }
 
+/// Display formatted block content as a single galley (same layout path as click mapping).
+///
+/// Using one galley instead of per-span `ui.label()` widgets keeps painted widths aligned
+/// with `compute_displayed_cursor_index` / `build_inline_markdown_layout_job`.
+fn show_formatted_block_galley_display(
+    ui: &mut Ui,
+    raw_text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    colors: &EditorColors,
+    wrap_width: f32,
+) -> Response {
+    let job = build_inline_markdown_layout_job(
+        raw_text,
+        font_size,
+        editor_font,
+        colors.text,
+        colors.link,
+        colors.code_bg,
+        wrap_width.max(1.0),
+    );
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
+    let size = galley.size();
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    ui.painter().galley(rect.min, galley, colors.text);
+    response
+}
+
 /// Compute the character index in displayed text from a click position using egui's Galley.
 ///
 /// This function uses proper font metrics via Galley layout to accurately map a screen
@@ -3814,144 +4135,53 @@ fn compute_displayed_cursor_index(
     font_size: f32,
     editor_font: &EditorFont,
     raw_text: &str,
+    leading_indent: f32,
+    layout_wrap_width: f32,
 ) -> usize {
     if displayed_text.is_empty() {
         return 0;
     }
 
-    // Check if the raw text starts with bold markers - if so, use bold font for measurement
-    // This improves accuracy since formatted content (especially list items) often starts bold
-    let starts_with_bold = raw_text.starts_with("**") || raw_text.starts_with("__");
-    let font_family = fonts::get_styled_font_family(starts_with_bold, false, editor_font);
-    let font_id = FontId::new(font_size, font_family);
+    let wrap_width = if raw_text != displayed_text {
+        layout_wrap_width.max(1.0)
+    } else {
+        text_rect.width().max(1.0)
+    };
+    let local_pos = egui::Vec2::new(
+        (click_pos.x - text_rect.min.x - leading_indent).max(0.0),
+        click_pos.y - text_rect.min.y,
+    );
 
-    // Create a Galley for measuring the displayed text
-    // IMPORTANT: Use layout() with wrap_width to handle text wrapping correctly
-    // If we use layout_no_wrap(), clicks on wrapped lines will map to wrong positions
-    let galley = ui.fonts_mut(|f| {
-        f.layout(
-            displayed_text.to_owned(),
-            font_id,
-            Color32::PLACEHOLDER, // Color doesn't affect measurement
-            text_rect.width(),    // Use actual rendered width for proper wrapping
-        )
-    });
+    // Formatted blocks: build a LayoutJob from raw markdown so bold/italic/code
+    // sections use the same font metrics as the painted display (table cells use
+    // the same approach). Plain text (headings, etc.) keeps a single-font galley.
+    let galley = if raw_text != displayed_text {
+        let job = build_inline_markdown_layout_job(
+            raw_text,
+            font_size,
+            editor_font,
+            Color32::PLACEHOLDER,
+            Color32::PLACEHOLDER,
+            Color32::TRANSPARENT,
+            wrap_width,
+        );
+        ui.fonts_mut(|f| f.layout_job(job))
+    } else {
+        let starts_with_bold = raw_text.starts_with("**") || raw_text.starts_with("__");
+        let font_family = fonts::get_styled_font_family(starts_with_bold, false, editor_font);
+        let font_id = FontId::new(font_size, font_family);
+        ui.fonts_mut(|f| {
+            f.layout(
+                displayed_text.to_owned(),
+                font_id,
+                Color32::PLACEHOLDER,
+                wrap_width,
+            )
+        })
+    };
 
-    // Compute local click position relative to text_rect's top-left as Vec2
-    let local_pos = egui::Vec2::new(click_pos.x - text_rect.min.x, click_pos.y - text_rect.min.y);
-
-    // Use cursor_from_pos to get the exact character index
-    let cursor = galley.cursor_from_pos(local_pos);
-    let displayed_idx = cursor.index;
-
-    // Clamp to valid range (cursor_from_pos should already do this, but be safe)
+    let displayed_idx = galley.cursor_from_pos(local_pos).index;
     displayed_idx.min(displayed_text.chars().count())
-}
-
-/// Maps a cursor position in displayed text (without formatting markers) to the
-/// corresponding position in raw markdown text (with formatting markers).
-///
-/// # Arguments
-/// * `displayed_idx` - The cursor position in displayed text (character index)
-/// * `raw_text` - The raw markdown text containing formatting markers like `**`, `*`, etc.
-///
-/// # Returns
-/// The corresponding cursor position in raw text (character index)
-///
-/// # Algorithm
-/// Walks through raw text, skipping formatting markers while counting displayed characters.
-/// When the displayed character count reaches the target, returns the raw position.
-///
-/// Handles these markdown formatting markers:
-/// - Bold: `**` or `__`
-/// - Italic: `*` or `_` (single, not part of bold)
-/// - Code: backticks
-/// - Strikethrough: `~~`
-/// - Links: `[text](url)` - skips `[`, `](url)` but includes `text`
-fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
-    let chars: Vec<char> = raw_text.chars().collect();
-    let mut raw_pos = 0;
-    let mut displayed_pos = 0;
-
-    while raw_pos < chars.len() {
-        // Look at remaining characters from current position
-        let remaining: String = chars[raw_pos..].iter().collect();
-
-        // Check for double-character markers first (order matters)
-        // Skip these BEFORE checking if we've reached target position
-        if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~")
-        {
-            raw_pos += 2;
-            continue;
-        }
-
-        // Check for link structure: [text](url) or [text](url "title")
-        if chars[raw_pos] == '[' {
-            // Skip opening bracket, the text inside will be counted as displayed
-            raw_pos += 1;
-            continue;
-        }
-
-        // Check for link URL part: ](url) or ](url "title")
-        if remaining.starts_with("](") {
-            // Skip ]( and everything until closing )
-            raw_pos += 2; // skip "]("
-            let mut paren_depth = 1;
-            while raw_pos < chars.len() && paren_depth > 0 {
-                if chars[raw_pos] == '(' {
-                    paren_depth += 1;
-                } else if chars[raw_pos] == ')' {
-                    paren_depth -= 1;
-                }
-                raw_pos += 1;
-            }
-            continue;
-        }
-
-        // Check for single-character markers
-        // Note: Must check after ** and __ to avoid false positives
-        if chars[raw_pos] == '`' {
-            raw_pos += 1;
-            continue;
-        }
-
-        // Check for italic markers (* or _) that are NOT part of bold
-        // Only skip if it looks like a formatting marker (not standalone punctuation)
-        if (chars[raw_pos] == '*' || chars[raw_pos] == '_')
-            && !remaining.starts_with("**")
-            && !remaining.starts_with("__")
-        {
-            // Check context: is this likely a formatting marker?
-            // A marker is usually at word boundaries or paired
-            let prev_is_space = raw_pos == 0 || chars[raw_pos - 1].is_whitespace();
-            let next_is_space = raw_pos + 1 >= chars.len() || chars[raw_pos + 1].is_whitespace();
-            let next_is_same = raw_pos + 1 < chars.len() && chars[raw_pos + 1] == chars[raw_pos];
-
-            // Skip if it looks like a formatting marker (at boundary or paired)
-            if prev_is_space || next_is_space || !next_is_same {
-                // Check if there's a matching closing marker ahead
-                let marker = chars[raw_pos];
-                let has_closing = chars[raw_pos + 1..].iter().any(|&c| c == marker);
-                if has_closing {
-                    raw_pos += 1;
-                    continue;
-                }
-            }
-        }
-
-        // NOW check if we've reached the target displayed position
-        // This must be AFTER skipping all formatting markers
-        if displayed_pos >= displayed_idx {
-            return raw_pos;
-        }
-
-        // Regular content character - advance both positions
-        raw_pos += 1;
-        displayed_pos += 1;
-    }
-
-    // Return final position (may be at end of raw text)
-    raw_pos
 }
 
 /// Render inline content (text, links, bold, italic, etc.) with proper formatting.
@@ -4378,6 +4608,7 @@ fn render_blockquote(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -4413,6 +4644,7 @@ fn render_blockquote(
                             child,
                             source,
                             edit_state,
+                            session,
                             colors,
                             font_size,
                             editor_font,
@@ -4441,6 +4673,7 @@ fn render_callout(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -4461,6 +4694,7 @@ fn render_callout(
     // Scope all child widget IDs under a unique ID to prevent collisions
     let scope_id = ("callout_render", node.start_line, node.end_line);
 
+    let mut content_paint_rect = egui::Rect::NOTHING;
     let group_response = ui.push_id(scope_id, |ui| {
         let callout_id = ui.make_persistent_id("collapsed");
         let is_collapsed = ui.data_mut(|d| *d.get_persisted_mut_or(callout_id, default_collapsed));
@@ -4477,7 +4711,7 @@ fn render_callout(
             // scroll area shrinks to fit its content vertically and does not
             // monopolise the viewport height (which would push the next block
             // off-screen).
-            egui::ScrollArea::horizontal()
+            let scroll_out = egui::ScrollArea::horizontal()
                 .id_salt("scroll")
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
@@ -4490,7 +4724,11 @@ fn render_callout(
                                     .font(FontId::proportional(font_size)),
                             );
 
-                            let arrow = if is_collapsed { "â–¶" } else { "â–¼" };
+                            let arrow = if is_collapsed {
+                                CALLOUT_ARROW_COLLAPSED
+                            } else {
+                                CALLOUT_ARROW_EXPANDED
+                            };
                             ui.label(
                                 RichText::new(arrow)
                                     .color(title_color)
@@ -4527,6 +4765,7 @@ fn render_callout(
                                     child,
                                     source,
                                     edit_state,
+                                    session,
                                     colors,
                                     font_size,
                                     editor_font,
@@ -4537,24 +4776,22 @@ fn render_callout(
                             }
                         }
                     });
+                    ui.min_rect()
                 });
+            content_paint_rect = scroll_out.inner;
         });
         inner.response
     });
 
-    // Paint styled background and left border
-    let rect = group_response.response.rect;
-    let content_rect = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
-        Vec2::new(rect.width() - BASE_INDENT, rect.height()),
+    paint_callout_chrome(
+        group_response.response.rect,
+        content_paint_rect,
+        BASE_INDENT,
+        BORDER_WIDTH,
+        border_color,
+        bg_color,
+        ui.painter(),
     );
-    ui.painter().rect_filled(content_rect, 4.0, bg_color);
-
-    let border_rect = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + BASE_INDENT, rect.min.y),
-        Vec2::new(BORDER_WIDTH, rect.height()),
-    );
-    ui.painter().rect_filled(border_rect, 2.0, border_color);
 }
 
 /// Render a list (ordered or unordered).
@@ -4563,6 +4800,7 @@ fn render_list(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -4590,18 +4828,19 @@ fn render_list(
         );
 
         if should_render {
-            let _ = child_idx; // Suppress unused warning
             render_list_item(
                 ui,
                 child,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
                 indent_level,
                 list_type,
                 item_number,
+                child_idx,
             );
             item_number += 1;
         }
@@ -4611,19 +4850,6 @@ fn render_list(
     if indent_level == 0 {
         ui.add_space(4.0);
     }
-}
-
-/// State for tracking click-to-edit mode on formatted list items.
-#[derive(Debug, Clone, Default)]
-struct FormattedItemEditState {
-    /// Whether the item is currently being edited
-    editing: bool,
-    /// The raw markdown content being edited
-    edit_text: String,
-    /// Flag to request focus on the next frame
-    needs_focus: bool,
-    /// Pending cursor position to set after entering edit mode (character index)
-    pending_cursor_pos: Option<usize>,
 }
 
 /// Extract the raw content text from a source line (removes list marker prefix).
@@ -4659,12 +4885,14 @@ fn render_list_item(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
     indent_level: usize,
     list_type: &ListType,
     item_number: u32,
+    item_index: usize,
 ) {
     // Check if this node IS a TaskItem (direct child of List) or CONTAINS a TaskItem child
     let (is_task, task_checked) = if let MarkdownNodeType::TaskItem { checked } = &node.node_type {
@@ -4830,278 +5058,102 @@ fn render_list_item(
         // Render item content
         if has_inline_formatting {
             if let Some(para) = para_node {
-                // Create unique ID using para.start_line (matches content extraction)
-                // AND item_number for additional uniqueness guarantee
-                // FIX: Previously used node.start_line which could differ from para.start_line
-                let formatted_item_id = ui
-                    .id()
-                    .with("formatted_list_item")
-                    .with(para.start_line)
-                    .with(item_number);
+                // Formatted list items (non-structural): session-backed click-to-edit.
+                let block_ref = BlockRef::FormattedListItem {
+                    line: para.start_line,
+                    item: item_number,
+                    structural: false,
+                };
+                let cold_text = extract_list_item_content(source, para.start_line);
+                let node_id = edit_state.add_node(cold_text.clone(), para.start_line, para.end_line);
+                ensure_formatted_block_initialized(session, block_ref, cold_text);
 
-                // Get or create edit state for this formatted item
-                let mut item_edit_state = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp_mut_or_insert_with(formatted_item_id.with("edit_state"), FormattedItemEditState::default)
-                        .clone()
-                });
+                let editing = session
+                    .blocks
+                    .get(&block_ref)
+                    .map(|s| s.formatted_editing)
+                    .unwrap_or(false);
 
-                let widget_id = formatted_item_id.with("text_edit");
-
-                if item_edit_state.editing {
-                    // EDIT MODE: Show multiline TextEdit with wrapping for raw markdown
-                    let font_family_for_layout = font_family.clone();
-                    let text_color = colors.text;
-                    let mut layouter =
-                        move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                            let text = buf.as_str();
-                            let mut job = egui::text::LayoutJob::default();
-                            job.wrap.max_width = wrap_width;
-                            job.append(
-                                text,
-                                0.0,
-                                egui::text::TextFormat {
-                                    font_id: FontId::new(font_size, font_family_for_layout.clone()),
-                                    color: text_color,
-                                    ..Default::default()
-                                },
-                            );
-                            ui.fonts_mut(|f| f.layout_job(job))
-                        };
-                    let text_edit = TextEdit::multiline(&mut item_edit_state.edit_text)
-                        .id(widget_id)
-                        .font(FontId::new(font_size, font_family.clone()))
-                        .text_color(colors.text)
-                        .frame(egui::Frame::NONE)
-                        .desired_width(ui.available_width())
-                        .desired_rows(1)
-                        .margin(egui::vec2(0.0, 2.0))
-                        .layouter(&mut layouter);
-
-                    // Use show() to get TextEditOutput for cursor manipulation
-                    let mut output = text_edit.show(ui);
-                    let response = output.response.clone();
-
-                    // Strip newlines that multiline TextEdit inserts on Enter
-                    if item_edit_state.edit_text.contains('\n') {
-                        item_edit_state.edit_text = item_edit_state.edit_text.replace('\n', "");
+                if editing {
+                    let (has_focus, selection) = render_session_formatted_edit_text(
+                        ui,
+                        block_ref,
+                        session,
+                        source,
+                        edit_state,
+                        font_size,
+                        font_family.clone(),
+                        colors.text,
+                        0.0,
+                        editor_font,
+                        true,
+                    );
+                    if has_focus {
+                        edit_state.set_focus(node_id, selection);
                     }
-
-                    // Request focus if needed (first frame after entering edit mode)
-                    if item_edit_state.needs_focus {
-                        response.request_focus();
-                        item_edit_state.needs_focus = false;
-
-                        // Apply pending cursor position if set
-                        if let Some(cursor_pos) = item_edit_state.pending_cursor_pos.take() {
-                            let ccursor = egui::text::CCursor::new(cursor_pos);
-                            let cursor_range = egui::text::CCursorRange::one(ccursor);
-                            output.state.cursor.set_char_range(Some(cursor_range));
-                            output.state.store(ui.ctx(), widget_id);
-                            debug!("[LIST_DEBUG] Set cursor position to {} for list item", cursor_pos);
-                        }
-                    }
-
-                    // Check for exit conditions:
-                    // 1. Focus lost (clicked elsewhere)
-                    // 2. Enter key pressed
-                    // 3. Escape key pressed (cancel without saving)
-                    let enter_pressed = response.has_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    let escape_pressed = response.has_focus() && ui.input(|i| i.key_pressed(Key::Escape));
-                    let focus_lost = response.lost_focus() && !enter_pressed && !escape_pressed;
-
-                    if enter_pressed || focus_lost {
-                        // Save changes and exit edit mode
-                        update_source_range(source, para.start_line, para.end_line, &item_edit_state.edit_text);
-
-                        // Mark as modified
-                        let node_id = edit_state.add_node(item_edit_state.edit_text.clone(), para.start_line, para.end_line);
-                        if let Some(editable) = edit_state.get_node_mut(node_id) {
-                            editable.modified = true;
-                        }
-
-                        item_edit_state.editing = false;
-                        debug!("Saved and exiting edit mode for formatted list item at line {}", para.start_line);
-                    } else if escape_pressed {
-                        // Cancel without saving
-                        item_edit_state.editing = false;
-                        debug!("Cancelled edit mode for formatted list item at line {}", para.start_line);
-                    }
-
-                    // Always save the current state (including text edits)
-                    ui.memory_mut(|mem| {
-                        mem.data.insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
-                    });
                 } else {
-                    // DISPLAY MODE: Show formatted text, click to edit
-                    let display_response = ui.horizontal_wrapped(|ui| {
-                        let style = TextStyle::new();
-                        for child in &para.children {
-                            render_inline_node(ui, child, source, edit_state, colors, font_size, editor_font, style);
-                        }
-                    }).response;
-
-                    // Make the display area interactive - enter edit mode on click
-                    let sense_response = ui.interact(
-                        display_response.rect,
-                        formatted_item_id.with("click_sense"),
-                        egui::Sense::click(),
+                    let raw_display = session
+                        .blocks
+                        .get(&block_ref)
+                        .map(|s| s.text.as_str())
+                        .unwrap_or("");
+                    let layout_wrap_w = ui.available_width();
+                    let display_response = show_formatted_block_galley_display(
+                        ui,
+                        raw_display,
+                        font_size,
+                        editor_font,
+                        colors,
+                        layout_wrap_w,
                     );
 
+                    let sense_id = block_ref.widget_id(ui).with("display_sense");
+                    let sense_response =
+                        ui.interact(display_response.rect, sense_id, egui::Sense::click());
+
                     if sense_response.clicked() {
-                        // Check if a link widget consumed this click
-                        let link_consumed = ui.memory(|mem| {
-                            mem.data
-                                .get_temp::<bool>(egui::Id::new("link_click_consumed_this_frame"))
-                                .unwrap_or(false)
-                        });
-
-                        if !link_consumed {
-                            // DEBUG: Log detailed click information
-                            debug!(
-                                "[LIST_DEBUG] CLICK DETECTED on list item: node.start_line={}, para.start_line={}, \
-                                 display_rect={:?}, item_number={}",
-                                node.start_line, para.start_line, display_response.rect, item_number
-                            );
-
-                            // Enter edit mode
-                            item_edit_state.editing = true;
-                            item_edit_state.needs_focus = true;
-                            // Get raw markdown content from source
-                            item_edit_state.edit_text = extract_list_item_content(source, para.start_line);
-
-                            // Calculate cursor position from click location using Galley for accuracy
-                            // This maps screen position to character index in displayed text
-                            let cursor_pos = if let Some(click_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                                let displayed_text = para.text_content();
-                                let displayed_idx = compute_displayed_cursor_index(
-                                    ui,
-                                    &displayed_text,
-                                    click_pos,
-                                    display_response.rect,
-                                    font_size,
-                                    editor_font,
-                                    &item_edit_state.edit_text,
-                                );
-                                // Map displayed position to raw position (accounting for formatting markers)
-                                let raw_idx = map_displayed_to_raw(displayed_idx, &item_edit_state.edit_text);
-                                Some(raw_idx.min(item_edit_state.edit_text.chars().count()))
-                            } else {
-                                None
-                            };
-                            item_edit_state.pending_cursor_pos = cursor_pos;
-
-                            // DEBUG: Log the edit state being set
-                            debug!(
-                                "[LIST_DEBUG] EDIT MODE ENTERED: formatted_item_id uses node.start_line={}, \
-                                 extracting content from para.start_line={}, content='{}', cursor_pos={:?}",
-                                node.start_line, para.start_line, item_edit_state.edit_text, cursor_pos
-                            );
-
-                            // Store the new state
-                            ui.memory_mut(|mem| {
-                                mem.data.insert_temp(formatted_item_id.with("edit_state"), item_edit_state);
-                            });
-                        }
+                        let displayed_plaintext = para.text_content();
+                        enter_formatted_edit_on_display_click(
+                            ui,
+                            block_ref,
+                            session,
+                            source,
+                            edit_state,
+                            display_response.rect,
+                            &displayed_plaintext,
+                            font_size,
+                            editor_font,
+                            layout_wrap_w,
+                        );
                     }
-
-                    // Show hover cursor to indicate clickability
                     if sense_response.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
                     }
                 }
             }
         } else if let Some((node_id, start_line, end_line)) = simple_text_node_id {
-            // Simple text - editable
-            // Use egui memory to store the edit buffer so it persists across frames
-            let edit_buffer_id = ui.id().with("list_item_edit_buffer").with(start_line);
-            let edit_tracking_id = ui.id().with("list_item_edit_tracking").with(start_line);
-            
-            // Track whether this item was previously focused (to detect focus loss)
-            let was_editing = ui.memory(|mem| {
-                mem.data.get_temp::<bool>(edit_tracking_id).unwrap_or(false)
-            });
-            
-            if let Some(editable) = edit_state.get_node_mut(node_id) {
-                // Get or initialize the edit buffer from egui memory
-                // If not editing yet, initialize from current text
-                let mut edit_buffer = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp_mut_or_insert_with(edit_buffer_id, || editable.text.clone())
-                        .clone()
-                });
-                
-                let widget_id = ui.id().with("list_item_text").with(start_line);
-
-                let font_family_for_layout = font_family.clone();
-                let text_color = colors.text;
-                let mut layouter =
-                    move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                        let text = buf.as_str();
-                        let mut job = egui::text::LayoutJob::default();
-                        job.wrap.max_width = wrap_width;
-                        job.append(
-                            text,
-                            0.0,
-                            egui::text::TextFormat {
-                                font_id: FontId::new(font_size, font_family_for_layout.clone()),
-                                color: text_color,
-                                ..Default::default()
-                            },
-                        );
-                        ui.fonts_mut(|f| f.layout_job(job))
-                    };
-                let text_edit = TextEdit::multiline(&mut edit_buffer)
-                    .id(widget_id)
-                    .font(FontId::new(font_size, font_family))
-                    .text_color(colors.text)
-                    .frame(egui::Frame::NONE)
-                    .desired_width(ui.available_width())
-                    .desired_rows(1)
-                    .layouter(&mut layouter);
-
-                let output = text_edit.show(ui);
-
-                // Strip newlines â€” list items should not contain literal newlines
-                if edit_buffer.contains('\n') {
-                    edit_buffer = edit_buffer.replace('\n', "");
-                }
-
-                let has_focus = output.response.has_focus();
-                let selection = if has_focus {
-                    output.cursor_range.map(|range| {
-                        let primary = range.primary.index;
-                        let secondary = range.secondary.index;
-                        if primary < secondary {
-                            (primary, secondary)
-                        } else {
-                            (secondary, primary)
-                        }
-                    })
-                } else {
-                    None
-                };
-
-                ui.memory_mut(|mem| {
-                    mem.data.insert_temp(edit_buffer_id, edit_buffer.clone());
-                    mem.data.insert_temp(edit_tracking_id, has_focus);
-                });
-
-                // Only commit changes when focus is LOST (was editing, now not)
-                // This prevents rebuild during active editing
-                if was_editing && !has_focus {
-                    // Commit the edit buffer to source
-                    editable.modified = true;
-                    update_source_range(source, start_line, end_line, &edit_buffer);
-                    // Clear the edit buffer so next edit starts fresh
-                    ui.memory_mut(|mem| {
-                        mem.data.remove::<String>(edit_buffer_id);
-                    });
-                }
-
-                // Return focus info for tracking
-                return (has_focus, selection, Some(node_id));
-            }
+            // Simple text — session-backed buffer
+            let block_ref = BlockRef::ListItem {
+                line: start_line,
+                item: item_index as u32,
+            };
+            let cold_text = extract_list_item_content(source, start_line);
+            let (has_focus, selection) = render_session_plain_text_block(
+                ui,
+                block_ref,
+                session,
+                source,
+                edit_state,
+                end_line,
+                cold_text,
+                font_size,
+                font_family.clone(),
+                colors.text,
+                0.0,
+                editor_font,
+                true,
+            );
+            return (has_focus, selection, Some(node_id));
         } else {
             // Neither inline formatting path nor simple text path was taken.
             // This can happen with unusual list structures (e.g., list items containing
@@ -5152,6 +5204,7 @@ fn render_list_item(
                 nested_list,
                 source,
                 edit_state,
+                session,
                 colors,
                 font_size,
                 editor_font,
@@ -5183,6 +5236,7 @@ fn render_table(
     node: &MarkdownNode,
     source: &mut String,
     edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
     colors: &EditorColors,
     font_size: f32,
     editor_font: &EditorFont,
@@ -5218,14 +5272,30 @@ fn render_table(
         .with_controls(true)
         .with_alignment_controls(true)
         .id(table_id)
+        .source_line(node.start_line)
         .max_width(table_avail_width)
         .editor_font(editor_font.clone())
         .show(ui);
 
+    // Sync RenderedEditSession.active with cell focus so cross-block switches commit
+    // the table (via the force-commit signal written by commit_session_block) and
+    // intra-table movement stays in the table without firing per-cell commits.
+    sync_table_cell_session_active(
+        ui,
+        node.start_line,
+        session,
+        source,
+        edit_state,
+        &output,
+    );
+
     // Update stored data if changed
     if output.changed {
-        // Update the source with the new markdown
-        update_table_in_source(source, node.start_line, node.end_line, &output.markdown);
+        let ctx = ui.ctx().clone();
+        let markdown = output.markdown.clone();
+        rendered_commit_undo::record_source_commit(&ctx, source, |source| {
+            update_table_in_source(source, node.start_line, node.end_line, &markdown);
+        });
 
         // Update the stored table data
         ui.memory_mut(|mem| {
@@ -5243,6 +5313,95 @@ fn render_table(
         // Still update stored data to keep cell edits
         ui.memory_mut(|mem| {
             mem.data.insert_temp(table_id.with("data"), table_data);
+        });
+    }
+}
+
+/// Reconcile `RenderedEditSession.active` with the cell the user is interacting with.
+///
+/// Behaviour matrix (target cell = `BlockRef::TableCell { table_line, row, col }`):
+///
+/// | Previous `session.active`                      | New focused cell | Action                                              |
+/// |------------------------------------------------|------------------|-----------------------------------------------------|
+/// | `Some(target)` (same cell)                     | `Some(target)`   | No-op                                               |
+/// | `Some(TableCell{table_line, …})` (intra-table) | `Some(other)`    | Direct assign (no commit; preserves deferred table) |
+/// | `Some(other block)` or `None`                  | `Some(cell)`     | `switch_to_ui` (commits previous block via callback)|
+/// | any                                            | `None`           | Leave session.active untouched; existing widget-level focus-loss + dismiss path handles commit + clear |
+fn sync_table_cell_session_active(
+    ui: &mut Ui,
+    table_line: usize,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+    output: &crate::markdown::widgets::WidgetOutput,
+) {
+    let Some((row, col)) = output.focused_cell else {
+        return;
+    };
+
+    let target = BlockRef::TableCell {
+        table_line,
+        row,
+        col,
+    };
+
+    if session.active == Some(target) {
+        // No transition; keep dismiss flag honest so the table's own click doesn't
+        // get treated as an outside click.
+        mark_session_active_clicked_if_clicked(ui);
+        return;
+    }
+
+    let intra_table = matches!(
+        session.active,
+        Some(BlockRef::TableCell {
+            table_line: t,
+            ..
+        }) if t == table_line
+    );
+
+    if intra_table {
+        // Movement between cells of the same table — do not run commit_fn for the
+        // previous cell (which would set the force-commit signal and falsely flush
+        // the whole table mid-navigation). Just update the active pointer.
+        log::trace!(
+            "session table: intra-table move {:?} -> {:?}",
+            session.active,
+            target
+        );
+        session.active = Some(target);
+        mark_session_active_clicked_if_clicked(ui);
+        return;
+    }
+
+    // Cross-block (or cross-table) entry into a table cell. Use switch_to_ui so the
+    // previous block (heading, paragraph, …, or a cell of a different table) commits
+    // through `commit_session_block`. PendingActivation::default skips focus/cursor
+    // requests because EditableTable already manages cell focus.
+    log::trace!(
+        "session table: cross-block enter {:?} -> {:?}",
+        session.active,
+        target
+    );
+    session_switch_to_ui(
+        ui,
+        session,
+        target,
+        PendingActivation::default(),
+        source,
+        edit_state,
+    );
+    mark_session_active_clicked_if_clicked(ui);
+}
+
+/// Record that the active session block was "clicked" this frame so
+/// `session_dismiss_if_clicked_outside` does not falsely dismiss while the user is
+/// still interacting with the table.
+fn mark_session_active_clicked_if_clicked(ui: &mut Ui) {
+    if ui.input(|i| i.pointer.any_click()) {
+        let key = session_active_clicked_key(ui);
+        ui.memory_mut(|mem| {
+            mem.data.insert_temp(key, true);
         });
     }
 }
@@ -6152,12 +6311,14 @@ fn line_to_char_index(text: &str, target_line: usize) -> usize {
 /// until the application exits.
 ///
 /// # Types Cleaned
-/// - `FormattedItemEditState` - Click-to-edit state for paragraphs and list items
 /// - `CodeBlockData` - Code block content and edit state
 /// - `MermaidBlockData` - Mermaid diagram source and render state
 /// - `TableData` - Table cell contents and structure
 /// - `TableEditState` - Table cell focus and navigation state
 /// - `RenderedLinkState` - Link edit popup state
+///
+/// Headings, paragraphs, list items, and formatted variants use the per-tab
+/// `RenderedEditSession` and are cleared when the editor's egui id is dropped.
 ///
 /// # Note
 /// This performs a blanket cleanup of ALL entries for these types. When multiple tabs
@@ -6176,7 +6337,6 @@ fn line_to_char_index(text: &str, target_line: usize) -> usize {
 pub fn cleanup_rendered_editor_memory(ctx: &egui::Context) {
     ctx.memory_mut(|mem| {
         // Clean up rendered editor widget temp data
-        mem.data.remove_by_type::<FormattedItemEditState>();
         mem.data.remove_by_type::<CodeBlockData>();
         mem.data.remove_by_type::<MermaidBlockData>();
         mem.data.remove_by_type::<TableData>();
@@ -6520,6 +6680,89 @@ mod tests {
     }
 
     #[test]
+    fn test_markdown_editor_source_epoch_default() {
+        let mut content = String::new();
+        let editor = MarkdownEditor::new(&mut content);
+        assert_eq!(editor.source_epoch, 0);
+    }
+
+    #[test]
+    fn test_markdown_editor_source_epoch_builder() {
+        let mut content = String::new();
+        let editor = MarkdownEditor::new(&mut content).source_epoch(7);
+        assert_eq!(editor.source_epoch, 7);
+    }
+
+    #[test]
+    fn test_heading_level_from_source() {
+        let source = "# One\n## Two\n### Three\n";
+        assert_eq!(heading_level_from_source(source, 1), HeadingLevel::H1);
+        assert_eq!(heading_level_from_source(source, 2), HeadingLevel::H2);
+        assert_eq!(heading_level_from_source(source, 3), HeadingLevel::H3);
+    }
+
+    #[test]
+    fn test_rendered_heading_widget_id_stable_under_push_id_epoch_scope() {
+        use crate::markdown::rendered_session::{rendered_editor_id, BlockRef};
+        use eframe::egui;
+
+        let ctx = egui::Context::default();
+        let editor_id = rendered_editor_id(42);
+        let mut captured: Vec<egui::Id> = Vec::new();
+
+        for _content in ["# Alpha\n", "# Alpha edited\n"] {
+            ctx.run_ui(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
+                    ui.push_id(editor_id, |ui| {
+                        ui.push_id(0u64, |ui| {
+                            captured.push(
+                                BlockRef::Heading {
+                                    line: 1,
+                                    structural: false,
+                                }
+                                .widget_id(ui),
+                            );
+                        });
+                    });
+                });
+            });
+        }
+
+        assert_eq!(captured.len(), 2);
+        assert_eq!(captured[0], captured[1]);
+    }
+
+    #[test]
+    fn test_rendered_heading_widget_id_changes_on_epoch_bump() {
+        use crate::markdown::rendered_session::{rendered_editor_id, BlockRef};
+        use eframe::egui;
+
+        let ctx = egui::Context::default();
+        let editor_id = rendered_editor_id(1);
+        let mut ids = Vec::new();
+
+        for epoch in [0u64, 1u64] {
+            ctx.run_ui(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
+                    ui.push_id(editor_id, |ui| {
+                        ui.push_id(epoch, |ui| {
+                            ids.push(
+                                BlockRef::Heading {
+                                    line: 1,
+                                    structural: false,
+                                }
+                                .widget_id(ui),
+                            );
+                        });
+                    });
+                });
+            });
+        }
+
+        assert_ne!(ids[0], ids[1]);
+    }
+
+    #[test]
     fn test_markdown_editor_default_values() {
         let mut content = String::new();
         let editor = MarkdownEditor::new(&mut content);
@@ -6699,8 +6942,7 @@ mod tests {
 
     #[test]
     fn consecutive_fenced_blocks_parse_as_separate_ast_nodes() {
-        let doc = cache::get_or_parse(consecutive_fenced_doc())
-            .expect("markdown parses");
+        let doc = cache::get_or_parse(consecutive_fenced_doc()).expect("markdown parses");
         let code_blocks: Vec<_> = doc
             .root
             .children
@@ -6753,8 +6995,7 @@ mod tests {
 
     #[test]
     fn estimate_block_height_is_finite_and_positive_for_each_block() {
-        let doc = cache::get_or_parse(consecutive_fenced_doc())
-            .expect("markdown parses");
+        let doc = cache::get_or_parse(consecutive_fenced_doc()).expect("markdown parses");
         for b in &doc.root.children {
             let h = estimate_block_height(b.start_line, b.end_line);
             assert!(

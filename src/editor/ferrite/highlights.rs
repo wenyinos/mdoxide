@@ -20,6 +20,7 @@ use crate::editor::matching::DelimiterMatcher;
 /// This matches VS Code's behavior.
 pub(crate) const MAX_DISPLAYED_MATCHES: usize = 1000;
 
+#[allow(dead_code)] // Bracket/highlight configuration on FerriteEditor
 impl FerriteEditor {
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Search Highlight Rendering

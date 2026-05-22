@@ -8,11 +8,11 @@ use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
 use crate::theme::accent;
 use crate::ui::backlinks_panel::BacklinksPanel;
-use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
+use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::phosphor_icons::{
-    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, LINK, LIST,
-    LIST_CHECKS, NOTE_PENCIL, TEXT_T, TIMER, X,
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, LINK, LIST, LIST_CHECKS,
+    NOTE_PENCIL, TEXT_T, TIMER, X,
 };
 use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, FontId, Response, RichText, ScrollArea, Sense, Ui, Vec2};
@@ -181,7 +181,7 @@ impl OutlinePanel {
     /// Render the outline panel.
     pub fn show(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         outline: &DocumentOutline,
         doc_stats: Option<&DocumentStats>,
         is_dark: bool,
@@ -236,8 +236,8 @@ impl OutlinePanel {
         // slow animation as `default_width` and `min_width` recalculated).
         // The new card-based Hub layout adapts cleanly down to MIN_PANEL_WIDTH.
         let panel = match self.side {
-            OutlinePanelSide::Left => egui::SidePanel::left("outline_panel"),
-            OutlinePanelSide::Right => egui::SidePanel::right("outline_panel"),
+            OutlinePanelSide::Left => egui::Panel::left("outline_panel"),
+            OutlinePanelSide::Right => egui::Panel::right("outline_panel"),
         };
 
         let sidebar_edge = match self.side {
@@ -247,10 +247,10 @@ impl OutlinePanel {
 
         panel
             .resizable(true)
-            .default_width(self.width)
-            .width_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
+            .default_size(self.width)
+            .size_range(MIN_PANEL_WIDTH..=MAX_PANEL_WIDTH)
             .frame(docked_sidebar::frame(panel_bg))
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // Update width if resized
                 let current_width = ui.available_width();
                 if (current_width - self.width).abs() > 1.0 {
@@ -386,10 +386,10 @@ impl OutlinePanel {
                             Sense::hover(),
                         );
 
-                        let mut child_ui = ui.child_ui(
-                            content_rect,
-                            egui::Layout::top_down(egui::Align::Min),
-                            None,
+                        let mut child_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(content_rect)
+                                .layout(egui::Layout::top_down(egui::Align::Min)),
                         );
                         child_ui.set_clip_rect(content_rect);
                         child_ui.set_max_width(avail_w);
@@ -402,7 +402,8 @@ impl OutlinePanel {
                                     .inner_margin(egui::Margin::symmetric(6, 4))
                                     .show(ui, |ui| {
                                         ui.set_max_width(avail_w - 12.0);
-                                        let repaint = panel.show_content(ui, ctx, ui_accent);
+                                        let panel_ctx = ui.ctx().clone();
+                                        let repaint = panel.show_content(ui, &panel_ctx, ui_accent);
                                         output.needs_repaint = repaint;
                                     });
                             });
@@ -678,7 +679,11 @@ impl OutlinePanel {
         // Values section
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            ui.label(phosphor_rich_text(CHART_BAR, 11.0).strong().color(text_color));
+            ui.label(
+                phosphor_rich_text(CHART_BAR, 11.0)
+                    .strong()
+                    .color(text_color),
+            );
             ui.label(
                 RichText::new(t!("outline.json_values").to_string())
                     .size(11.0)
@@ -935,7 +940,11 @@ impl OutlinePanel {
         // ─────────────────────────────────────────────────────────────────────
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            ui.label(phosphor_rich_text(NOTE_PENCIL, 11.0).strong().color(text_color));
+            ui.label(
+                phosphor_rich_text(NOTE_PENCIL, 11.0)
+                    .strong()
+                    .color(text_color),
+            );
             ui.label(
                 RichText::new(t!("stats.text_stats").to_string())
                     .size(11.0)

@@ -13,9 +13,7 @@
 #![allow(clippy::needless_late_init)]
 #![allow(clippy::collapsible_else_if)]
 
-use crate::ui::phosphor_icons::{
-    file_icon_for_path, phosphor_rich_text, FILE_TEXT, FOLDER, TRASH,
-};
+use crate::ui::phosphor_icons::{file_icon_for_path, phosphor_rich_text, FILE_TEXT, FOLDER, TRASH};
 use eframe::egui::{self, Color32, Key, RichText};
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -206,10 +204,10 @@ fn show_create_dialog(
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .order(egui::Order::Foreground)
         .frame(
-            egui::Frame::window(&ctx.style())
+            egui::Frame::window(&ctx.global_style())
                 .fill(bg_color)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(8.0),
+                .corner_radius(8.0),
         )
         .show(ctx, |ui| {
             ui.set_min_width(350.0);
@@ -316,7 +314,11 @@ fn show_rename_dialog(
     }
 
     let is_dir = target_path.is_dir();
-    let icon = if is_dir { FOLDER } else { file_icon_for_path(target_path) };
+    let icon = if is_dir {
+        FOLDER
+    } else {
+        file_icon_for_path(target_path)
+    };
 
     egui::Window::new(t!("dialog.file.rename").to_string())
         .collapsible(false)
@@ -324,10 +326,10 @@ fn show_rename_dialog(
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .order(egui::Order::Foreground)
         .frame(
-            egui::Frame::window(&ctx.style())
+            egui::Frame::window(&ctx.global_style())
                 .fill(bg_color)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(8.0),
+                .corner_radius(8.0),
         )
         .show(ctx, |ui| {
             ui.set_min_width(350.0);
@@ -438,10 +440,10 @@ fn show_delete_dialog(
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .order(egui::Order::Foreground)
         .frame(
-            egui::Frame::window(&ctx.style())
+            egui::Frame::window(&ctx.global_style())
                 .fill(bg_color)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(8.0),
+                .corner_radius(8.0),
         )
         .show(ctx, |ui| {
             ui.set_min_width(350.0);
@@ -450,12 +452,10 @@ fn show_delete_dialog(
 
             ui.horizontal(|ui| {
                 ui.label(phosphor_rich_text(TRASH, 16.0).color(Color32::from_rgb(200, 60, 60)));
-                ui.label(
-                    t!(
-                        "dialog.file.delete_confirm",
-                        item_type = item_type.to_string()
-                    ),
-                );
+                ui.label(t!(
+                    "dialog.file.delete_confirm",
+                    item_type = item_type.to_string()
+                ));
             });
 
             ui.add_space(8.0);
@@ -580,10 +580,10 @@ impl GoToLineDialog {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .order(egui::Order::Foreground)
             .frame(
-                egui::Frame::window(&ctx.style())
+                egui::Frame::window(&ctx.global_style())
                     .fill(bg_color)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(8.0),
+                    .corner_radius(8.0),
             )
             .show(ctx, |ui| {
                 ui.set_min_width(280.0);

@@ -29,17 +29,6 @@ pub(crate) enum FontStyle {
     BoldItalic,
 }
 
-impl FontStyle {
-    pub fn from_flags(bold: bool, italic: bool) -> Self {
-        match (bold, italic) {
-            (false, false) => Self::Regular,
-            (true, false) => Self::Bold,
-            (false, true) => Self::Italic,
-            (true, true) => Self::BoldItalic,
-        }
-    }
-}
-
 /// All four variants of a single font family (regular, bold, italic, bold-italic).
 #[derive(Clone)]
 pub(crate) struct FontFamily {

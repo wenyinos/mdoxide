@@ -83,15 +83,9 @@ fn damerau_levenshtein_at_most(a: &str, b: &str, max: usize) -> bool {
 
         for j in 1..=lb {
             let cost = usize::from(a[i - 1] != b[j - 1]);
-            let mut dist = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            let mut dist = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
 
-            if i > 1
-                && j > 1
-                && a[i - 1] == b[j - 2]
-                && a[i - 2] == b[j - 1]
-            {
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
                 dist = dist.min(prev_prev[j - 2] + 1);
             }
 
@@ -500,7 +494,8 @@ impl QuickSwitcher {
     /// Paths to search: indexed tree files plus recent files (may include unexpanded folders).
     fn search_paths(all_files: &[PathBuf], recent_files: &[PathBuf]) -> Vec<PathBuf> {
         use std::collections::HashSet;
-        let mut seen: HashSet<&PathBuf> = HashSet::with_capacity(all_files.len() + recent_files.len());
+        let mut seen: HashSet<&PathBuf> =
+            HashSet::with_capacity(all_files.len() + recent_files.len());
         let mut paths: Vec<PathBuf> = Vec::with_capacity(all_files.len() + recent_files.len());
         for path in all_files {
             if seen.insert(path) {
@@ -737,7 +732,8 @@ mod tests {
         let matcher = SkimMatcherV2::default();
         let box_drawing = score_path_match("test_md\\test_box_drawing.md", "box", &matcher);
         let tables = score_path_match("test_md\\test_tables.md", "box", &matcher);
-        let code_blocks = score_path_match("test_md\\test_consecutive_code_blocks.md", "box", &matcher);
+        let code_blocks =
+            score_path_match("test_md\\test_consecutive_code_blocks.md", "box", &matcher);
         let readme = score_path_match("README.md", "box", &matcher);
 
         assert!(box_drawing.is_some());

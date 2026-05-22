@@ -47,6 +47,10 @@ pub struct WidgetOutput {
     pub markdown: String,
     /// Whether any cell currently has focus (for tables)
     pub has_focus: bool,
+    /// For tables: which cell is currently being interacted with (focus or pending focus).
+    /// Lets callers synchronize external state (e.g. [`crate::markdown::rendered_session::RenderedEditSession`])
+    /// with the user's effective edit target without parsing widget internals.
+    pub focused_cell: Option<(usize, usize)>,
 }
 
 impl WidgetOutput {
@@ -56,6 +60,7 @@ impl WidgetOutput {
             changed: false,
             markdown,
             has_focus: false,
+            focused_cell: None,
         }
     }
 
@@ -65,12 +70,19 @@ impl WidgetOutput {
             changed: true,
             markdown,
             has_focus: false,
+            focused_cell: None,
         }
     }
 
     /// Set the focus state.
     pub fn with_focus(mut self, has_focus: bool) -> Self {
         self.has_focus = has_focus;
+        self
+    }
+
+    /// Set the focused cell coordinates (tables only).
+    pub fn with_focused_cell(mut self, cell: Option<(usize, usize)>) -> Self {
+        self.focused_cell = cell;
         self
     }
 }
@@ -988,12 +1000,13 @@ fn serialize_table(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Build an egui `LayoutJob` that renders inline markdown formatting
-/// (bold, italic, strikethrough, inline code) from raw cell text.
-fn build_cell_layout_job(
+/// (bold, italic, strikethrough, inline code) from raw markdown text.
+pub(crate) fn build_inline_markdown_layout_job(
     text: &str,
     font_size: f32,
     editor_font: &EditorFont,
     text_color: Color32,
+    link_color: Color32,
     code_bg: Color32,
     wrap_width: f32,
 ) -> egui::text::LayoutJob {
@@ -1008,6 +1021,7 @@ fn build_cell_layout_job(
         font_size,
         editor_font,
         text_color,
+        link_color,
         code_bg,
     );
     if job.sections.is_empty() {
@@ -1026,6 +1040,149 @@ fn build_cell_layout_job(
 }
 
 /// Build a LayoutJob for header cells (base bold, with inline formatting on top).
+/// Map a display-mode click to a raw `cell.text` caret index (same galley as painted cell).
+fn table_cell_raw_cursor_at_click(
+    ui: &Ui,
+    click_pos: egui::Pos2,
+    cell_rect: egui::Rect,
+    raw_text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+    code_bg: Color32,
+    inner_w: f32,
+    display_bold: bool,
+) -> usize {
+    if raw_text.is_empty() {
+        return 0;
+    }
+    let job = if display_bold {
+        build_cell_layout_job_with_base_bold(
+            raw_text,
+            font_size,
+            editor_font,
+            text_color,
+            code_bg,
+            inner_w,
+        )
+    } else {
+        build_inline_markdown_layout_job(
+            raw_text,
+            font_size,
+            editor_font,
+            text_color,
+            text_color,
+            code_bg,
+            inner_w,
+        )
+    };
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
+    let local_pos = egui::Vec2::new(
+        click_pos.x - cell_rect.min.x,
+        click_pos.y - cell_rect.min.y,
+    );
+    let displayed_idx = galley.cursor_from_pos(local_pos).index;
+    map_displayed_to_raw(displayed_idx, raw_text).min(raw_text.chars().count())
+}
+
+/// Maps a cursor position in displayed text (without formatting markers) to the
+/// corresponding position in raw markdown text (with formatting markers).
+pub(crate) fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
+    let chars: Vec<char> = raw_text.chars().collect();
+    let mut raw_pos = 0;
+    let mut displayed_pos = 0;
+
+    while raw_pos < chars.len() {
+        let remaining: String = chars[raw_pos..].iter().collect();
+
+        if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~")
+        {
+            raw_pos += 2;
+            continue;
+        }
+
+        if chars[raw_pos] == '[' && raw_pos + 1 < chars.len() && chars[raw_pos + 1] == '[' {
+            // Wikilink: [[target]] or [[target|display]] — count only visible text.
+            raw_pos += 2;
+            let content_start = raw_pos;
+            while raw_pos + 1 < chars.len() {
+                if chars[raw_pos] == ']' && chars[raw_pos + 1] == ']' {
+                    let content: String = chars[content_start..raw_pos].iter().collect();
+                    let visible = content
+                        .split_once('|')
+                        .map(|(_, display)| display)
+                        .unwrap_or(content.as_str());
+                    for (byte_off, _) in visible.char_indices() {
+                        if displayed_pos >= displayed_idx {
+                            return content_start
+                                + content
+                                    .find('|')
+                                    .map(|pipe| pipe + 1 + byte_off)
+                                    .unwrap_or(byte_off);
+                        }
+                        displayed_pos += 1;
+                    }
+                    raw_pos += 2;
+                    break;
+                }
+                raw_pos += 1;
+            }
+            continue;
+        }
+
+        if chars[raw_pos] == '[' {
+            raw_pos += 1;
+            continue;
+        }
+
+        if remaining.starts_with("](") {
+            raw_pos += 2;
+            let mut paren_depth = 1;
+            while raw_pos < chars.len() && paren_depth > 0 {
+                if chars[raw_pos] == '(' {
+                    paren_depth += 1;
+                } else if chars[raw_pos] == ')' {
+                    paren_depth -= 1;
+                }
+                raw_pos += 1;
+            }
+            continue;
+        }
+
+        if chars[raw_pos] == '`' {
+            raw_pos += 1;
+            continue;
+        }
+
+        if (chars[raw_pos] == '*' || chars[raw_pos] == '_')
+            && !remaining.starts_with("**")
+            && !remaining.starts_with("__")
+        {
+            let prev_is_space = raw_pos == 0 || chars[raw_pos - 1].is_whitespace();
+            let next_is_space = raw_pos + 1 >= chars.len() || chars[raw_pos + 1].is_whitespace();
+            let next_is_same = raw_pos + 1 < chars.len() && chars[raw_pos + 1] == chars[raw_pos];
+
+            if prev_is_space || next_is_space || !next_is_same {
+                let marker = chars[raw_pos];
+                let has_closing = chars[raw_pos + 1..].iter().any(|&c| c == marker);
+                if has_closing {
+                    raw_pos += 1;
+                    continue;
+                }
+            }
+        }
+
+        if displayed_pos >= displayed_idx {
+            return raw_pos;
+        }
+
+        raw_pos += 1;
+        displayed_pos += 1;
+    }
+
+    raw_pos
+}
+
 fn build_cell_layout_job_with_base_bold(
     text: &str,
     font_size: f32,
@@ -1045,6 +1202,7 @@ fn build_cell_layout_job_with_base_bold(
         font_size,
         editor_font,
         text_color,
+        text_color,
         code_bg,
     );
     if job.sections.is_empty() {
@@ -1062,6 +1220,79 @@ fn build_cell_layout_job_with_base_bold(
     job
 }
 
+/// Parse `[text](url)` at the start of `s`; returns link text and bytes consumed.
+fn parse_markdown_link_span(s: &str) -> Option<(&str, usize)> {
+    if s.starts_with("[[") || !s.starts_with('[') {
+        return None;
+    }
+    let rest = &s[1..];
+    let close_bracket = rest.find(']')?;
+    if !rest[close_bracket..].starts_with("](") {
+        return None;
+    }
+    let link_text = &rest[..close_bracket];
+    let url = &rest[close_bracket + 2..];
+    let mut depth = 1usize;
+    for (idx, ch) in url.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    let consumed = 1 + close_bracket + 2 + idx + ch.len_utf8();
+                    return Some((link_text, consumed));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse `[[target]]` / `[[target|display]]`; returns visible text and bytes consumed.
+fn parse_wikilink_span(s: &str) -> Option<(&str, usize)> {
+    if !s.starts_with("[[") {
+        return None;
+    }
+    let inner = &s[2..];
+    let close = inner.find("]]")?;
+    let content = &inner[..close];
+    let visible = content
+        .split_once('|')
+        .map(|(_, display)| display)
+        .unwrap_or(content);
+    Some((visible, 2 + close + 2))
+}
+
+fn append_link_span(
+    job: &mut egui::text::LayoutJob,
+    text: &str,
+    bold: bool,
+    italic: bool,
+    strike: bool,
+    font_size: f32,
+    editor_font: &EditorFont,
+    link_color: Color32,
+) {
+    if text.is_empty() {
+        return;
+    }
+    let family = get_styled_font_family(bold, italic, editor_font);
+    let mut fmt = egui::text::TextFormat {
+        font_id: FontId::new(font_size, family),
+        color: link_color,
+        underline: egui::Stroke::new(1.0, link_color),
+        ..Default::default()
+    };
+    if italic {
+        fmt.italics = true;
+    }
+    if strike {
+        fmt.strikethrough = egui::Stroke::new(1.0, link_color);
+    }
+    job.append(text, 0.0, fmt);
+}
+
 /// Recursively parse inline markdown and append formatted sections to a LayoutJob.
 fn parse_inline_markdown(
     text: &str,
@@ -1072,6 +1303,7 @@ fn parse_inline_markdown(
     font_size: f32,
     editor_font: &EditorFont,
     text_color: Color32,
+    link_color: Color32,
     code_bg: Color32,
 ) {
     let bytes = text.as_bytes();
@@ -1080,6 +1312,64 @@ fn parse_inline_markdown(
     let mut plain_start = 0;
 
     while i < len {
+        if i + 1 < len && bytes[i] == b'[' && bytes[i + 1] == b'[' {
+            if let Some((visible, consumed)) = parse_wikilink_span(&text[i..]) {
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
+                append_link_span(
+                    job,
+                    visible,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    link_color,
+                );
+                i += consumed;
+                plain_start = i;
+                continue;
+            }
+        } else if bytes[i] == b'[' {
+            if let Some((link_text, consumed)) = parse_markdown_link_span(&text[i..]) {
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
+                append_link_span(
+                    job,
+                    link_text,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    link_color,
+                );
+                i += consumed;
+                plain_start = i;
+                continue;
+            }
+        }
+
         if i + 2 < len && bytes[i] == b'*' && bytes[i + 1] == b'*' && bytes[i + 2] == b'*' {
             // *** bold+italic delimiter (must be checked before **)
             if let Some(close) = find_closing_delimiter(&text[i + 3..], "***") {
@@ -1104,6 +1394,7 @@ fn parse_inline_markdown(
                     font_size,
                     editor_font,
                     text_color,
+                    link_color,
                     code_bg,
                 );
                 i = i + 3 + close + 3;
@@ -1135,6 +1426,7 @@ fn parse_inline_markdown(
                     font_size,
                     editor_font,
                     text_color,
+                    link_color,
                     code_bg,
                 );
                 i = i + 2 + close + 2;
@@ -1166,6 +1458,7 @@ fn parse_inline_markdown(
                     font_size,
                     editor_font,
                     text_color,
+                    link_color,
                     code_bg,
                 );
                 i = i + 2 + close + 2;
@@ -1228,6 +1521,7 @@ fn parse_inline_markdown(
                     font_size,
                     editor_font,
                     text_color,
+                    link_color,
                     code_bg,
                 );
                 i = i + 1 + close + 1;
@@ -1331,6 +1625,36 @@ fn table_global_focus_id() -> egui::Id {
     egui::Id::new("ferrite_table_global_focus")
 }
 
+/// Force-commit signal egui id for the table starting at `table_line`.
+///
+/// Written by [`RenderedEditSession`] commit callbacks when the session switches away
+/// from a [`BlockRef::TableCell`](crate::markdown::rendered_session::BlockRef::TableCell);
+/// read by [`EditableTable::show`] on its next frame.
+fn table_force_commit_id(table_line: usize) -> egui::Id {
+    egui::Id::new("ferrite_table_force_commit").with(table_line)
+}
+
+/// Request that the next render of the table starting at `table_line` commit dirty edits
+/// to source immediately (regardless of focus state).
+///
+/// Used by `RenderedEditSession` when switching from a table cell to a non-table block,
+/// so the table writes back without waiting for the existing focus-loss defer cycle.
+pub fn signal_table_force_commit(ctx: &egui::Context, table_line: usize) {
+    ctx.data_mut(|d| d.insert_temp(table_force_commit_id(table_line), true));
+}
+
+/// Consume the force-commit signal for `table_line` (one-shot).
+fn take_table_force_commit(ui: &mut Ui, table_line: usize) -> bool {
+    let id = table_force_commit_id(table_line);
+    let v = ui
+        .memory(|m| m.data.get_temp::<bool>(id))
+        .unwrap_or(false);
+    if v {
+        ui.memory_mut(|m| m.data.remove::<bool>(id));
+    }
+    v
+}
+
 fn load_table_global_focus(ui: &Ui) -> TableGlobalFocus {
     ui.memory(|mem| {
         mem.data
@@ -1350,8 +1674,10 @@ fn request_table_cell_focus(
     global: &mut TableGlobalFocus,
     ui: &mut Ui,
     table_id: egui::Id,
+    _table_line: usize,
     row: usize,
     col: usize,
+    cursor_char: Option<usize>,
 ) {
     if let Some((fr, fc)) = edit_state.focused_cell {
         if fr != row || fc != col {
@@ -1367,7 +1693,10 @@ fn request_table_cell_focus(
             }
         }
     }
+    let cell_id = table_id.with("cell").with(row).with(col);
+    ui.memory_mut(|m| m.request_focus(cell_id));
     edit_state.pending_focus = Some((row, col));
+    edit_state.pending_cursor_char = cursor_char;
     global.pending_cell = Some((table_id, row, col));
 }
 
@@ -1378,6 +1707,8 @@ pub struct TableEditState {
     pub focused_cell: Option<(usize, usize)>,
     /// Cell that should receive focus on the next frame.
     pub pending_focus: Option<(usize, usize)>,
+    /// Caret index in raw cell text when entering edit mode from a display click.
+    pub pending_cursor_char: Option<usize>,
     /// Whether any cell had focus in the previous frame.
     /// Used to detect when focus leaves the table entirely.
     pub had_focus_last_frame: bool,
@@ -1403,17 +1734,20 @@ impl TableEditState {
     /// Request focus on a specific cell.
     pub fn focus_cell(&mut self, row: usize, col: usize) {
         self.pending_focus = Some((row, col));
+        self.pending_cursor_char = None;
     }
 
     /// Clear focus from all cells.
     pub fn clear_focus(&mut self) {
         self.focused_cell = None;
         self.pending_focus = None;
+        self.pending_cursor_char = None;
     }
 
     /// Move to the next cell (right, then down to next row).
     pub fn move_next(&mut self, num_rows: usize, num_cols: usize) {
         if let Some((row, col)) = self.focused_cell {
+            self.pending_cursor_char = None;
             if col + 1 < num_cols {
                 // Move right
                 self.pending_focus = Some((row, col + 1));
@@ -1428,6 +1762,7 @@ impl TableEditState {
     /// Move to the previous cell (left, then up to previous row).
     pub fn move_prev(&mut self, num_cols: usize) {
         if let Some((row, col)) = self.focused_cell {
+            self.pending_cursor_char = None;
             if col > 0 {
                 // Move left
                 self.pending_focus = Some((row, col - 1));
@@ -1442,6 +1777,7 @@ impl TableEditState {
     /// Move to the cell in the next row (same column).
     pub fn move_down(&mut self, num_rows: usize) {
         if let Some((row, col)) = self.focused_cell {
+            self.pending_cursor_char = None;
             if row + 1 < num_rows {
                 self.pending_focus = Some((row + 1, col));
             }
@@ -1452,6 +1788,7 @@ impl TableEditState {
     /// Move to the cell in the previous row (same column).
     pub fn move_up(&mut self) {
         if let Some((row, col)) = self.focused_cell {
+            self.pending_cursor_char = None;
             if row > 0 {
                 self.pending_focus = Some((row - 1, col));
             }
@@ -1757,6 +2094,8 @@ pub struct EditableTable<'a> {
     show_alignment_controls: bool,
     /// Unique ID for the table
     id: Option<egui::Id>,
+    /// Source line number (for stable cross-widget focus).
+    source_line: Option<usize>,
     /// Hard maximum width for the table (overrides available_width)
     max_width: Option<f32>,
     /// Editor font for styled text rendering (bold/italic variants)
@@ -1773,6 +2112,7 @@ impl<'a> EditableTable<'a> {
             show_controls: true,
             show_alignment_controls: true,
             id: None,
+            source_line: None,
             max_width: None,
             editor_font: None,
         }
@@ -1815,6 +2155,13 @@ impl<'a> EditableTable<'a> {
         self
     }
 
+    /// Set the markdown source line for this table (used for focus switching).
+    #[must_use]
+    pub fn source_line(mut self, line: usize) -> Self {
+        self.source_line = Some(line);
+        self
+    }
+
     /// Set a hard maximum width for the table.
     #[must_use]
     pub fn max_width(mut self, width: f32) -> Self {
@@ -1838,6 +2185,7 @@ impl<'a> EditableTable<'a> {
             .unwrap_or_else(|| WidgetColors::resolved(ui, Theme::System));
 
         let table_id = self.id.unwrap_or_else(|| ui.id().with("editable_table"));
+        let table_line = self.source_line.unwrap_or(0);
 
         // Get or create the table edit state
         let mut edit_state: TableEditState = ui.memory_mut(|mem| {
@@ -1851,10 +2199,16 @@ impl<'a> EditableTable<'a> {
         // Track if we should signal a change to the source
         let mut changed = false;
 
+        // External (session-driven) force-commit: e.g. user switched from this cell to a
+        // heading; the session's commit callback wrote a one-shot flag for this table.
+        // Honor it by treating the existing buffered edits as committable on this frame.
+        let force_commit_requested = take_table_force_commit(ui, table_line);
+
         // Cross-table pending focus from a table rendered earlier this frame.
         if let Some((tid, row, col)) = global.pending_cell {
             if tid == table_id && edit_state.pending_focus.is_none() {
                 edit_state.pending_focus = Some((row, col));
+                edit_state.pending_cursor_char = None;
                 global.pending_cell = None;
             }
         }
@@ -1912,7 +2266,7 @@ impl<'a> EditableTable<'a> {
 
         let num_cols = self.data.num_columns.max(1);
         let min_col_width = 40.0_f32;
-        let char_width = self.font_size * 0.6;
+        let _char_width = self.font_size * 0.6;
         let cell_h_pad = 8.0_f32;
         let cell_v_pad = 6.0_f32;
         let line_height = self.font_size * 1.4;
@@ -2167,7 +2521,7 @@ impl<'a> EditableTable<'a> {
                                                                 .fonts_mut(|f| f.layout_job(job))
                                                         };
 
-                                                    let output =
+                                                    let mut output =
                                                         TextEdit::multiline(&mut cell.text)
                                                             .id(cell_id)
                                                             .font(font)
@@ -2189,6 +2543,22 @@ impl<'a> EditableTable<'a> {
                                                     let response = output.response;
                                                     if wants_focus {
                                                         response.request_focus();
+                                                        if let Some(pos) =
+                                                            edit_state.pending_cursor_char.take()
+                                                        {
+                                                            let ccursor =
+                                                                egui::text::CCursor::new(pos);
+                                                            output.state.cursor.set_char_range(
+                                                                Some(
+                                                                    egui::text::CCursorRange::one(
+                                                                        ccursor,
+                                                                    ),
+                                                                ),
+                                                            );
+                                                            output
+                                                                .state
+                                                                .store(ui.ctx(), cell_id);
+                                                        }
                                                     }
                                                     if response.has_focus() {
                                                         edit_state.focused_cell =
@@ -2232,10 +2602,11 @@ impl<'a> EditableTable<'a> {
                                                             inner_w,
                                                         )
                                                     } else {
-                                                        build_cell_layout_job(
+                                                        build_inline_markdown_layout_job(
                                                             &cell.text,
                                                             self.font_size,
                                                             &ef,
+                                                            text_color,
                                                             text_color,
                                                             colors.code_bg,
                                                             inner_w,
@@ -2245,8 +2616,8 @@ impl<'a> EditableTable<'a> {
                                                         ui.fonts_mut(|f| f.layout_job(job));
                                                     // Full inner rect: empty cells need a non-zero hit
                                                     // target (Label + empty galley was zero-sized).
-                                                    let inner_h = (row_h - cell_v_pad * 2.0)
-                                                        .max(line_height);
+                                                    let inner_h =
+                                                        (row_h - cell_v_pad * 2.0).max(line_height);
                                                     let (_, response) = ui.allocate_exact_size(
                                                         egui::vec2(inner_w, inner_h),
                                                         egui::Sense::click(),
@@ -2268,9 +2639,9 @@ impl<'a> EditableTable<'a> {
                                                         .is_some_and(|(fr, fc)| {
                                                             fr != row_idx || fc != col_idx
                                                         })
-                                                        || global.active_table.is_some_and(
-                                                            |t| t != table_id,
-                                                        );
+                                                        || global
+                                                            .active_table
+                                                            .is_some_and(|t| t != table_id);
                                                     let activate_cell = response.clicked()
                                                         || response.double_clicked()
                                                         || (switching_from_other
@@ -2279,18 +2650,40 @@ impl<'a> EditableTable<'a> {
                                                                 i.pointer.primary_pressed()
                                                             }));
                                                     if activate_cell {
+                                                        let cursor_char = ui
+                                                            .ctx()
+                                                            .input(|i| {
+                                                                i.pointer.interact_pos()
+                                                            })
+                                                            .map(|click_pos| {
+                                                                table_cell_raw_cursor_at_click(
+                                                                    ui,
+                                                                    click_pos,
+                                                                    response.rect,
+                                                                    &cell.text,
+                                                                    self.font_size,
+                                                                    &ef,
+                                                                    text_color,
+                                                                    colors.code_bg,
+                                                                    inner_w,
+                                                                    display_bold,
+                                                                )
+                                                            });
                                                         request_table_cell_focus(
                                                             &mut edit_state,
                                                             &mut global,
                                                             ui,
                                                             table_id,
+                                                            table_line,
                                                             row_idx,
                                                             col_idx,
+                                                            cursor_char,
                                                         );
                                                     }
                                                     if response.hovered() {
-                                                        ui.ctx()
-                                                            .set_cursor_icon(egui::CursorIcon::Text);
+                                                        ui.ctx().set_cursor_icon(
+                                                            egui::CursorIcon::Text,
+                                                        );
                                                     }
                                                 }
                                             }
@@ -2349,7 +2742,8 @@ impl<'a> EditableTable<'a> {
                 }
 
                 // Fallback when defocus-only click did not set pending_focus above.
-                let cross_table_edit = global.active_table.is_some_and(|t| t != table_id);
+                let cross_table_edit =
+                    global.active_table.is_some_and(|t| t != table_id);
                 if edit_state.pending_focus.is_none()
                     && (edit_state.had_focus_last_frame || cross_table_edit)
                 {
@@ -2361,20 +2755,57 @@ impl<'a> EditableTable<'a> {
                     });
                     if pointer_down {
                         if let Some(pos) = pointer_pos {
-                            if let Some((row, col)) = cell_click_targets
+                            if let Some(((row, col), cell_rect)) = cell_click_targets
                                 .iter()
                                 .rev()
                                 .find(|(_, rect)| rect.contains(pos))
-                                .map(|((r, c), _)| (*r, *c))
                             {
+                                let row = *row;
+                                let col = *col;
                                 if edit_state.focused_cell != Some((row, col)) {
+                                    let ef = self
+                                        .editor_font
+                                        .as_ref()
+                                        .cloned()
+                                        .unwrap_or(EditorFont::Inter);
+                                    let cw = col_widths
+                                        .get(col)
+                                        .copied()
+                                        .unwrap_or(table_width / num_cols as f32);
+                                    let inner_w = (cw - cell_h_pad * 2.0).max(20.0);
+                                    let text_color = if row == 0 {
+                                        colors.heading
+                                    } else {
+                                        colors.text
+                                    };
+                                    let cursor_char = self
+                                        .data
+                                        .rows
+                                        .get(row)
+                                        .and_then(|r| r.get(col))
+                                        .map(|cell| {
+                                            table_cell_raw_cursor_at_click(
+                                                ui,
+                                                pos,
+                                                *cell_rect,
+                                                &cell.text,
+                                                self.font_size,
+                                                &ef,
+                                                text_color,
+                                                colors.code_bg,
+                                                inner_w,
+                                                row == 0,
+                                            )
+                                        });
                                     request_table_cell_focus(
                                         &mut edit_state,
                                         &mut global,
                                         ui,
                                         table_id,
+                                        table_line,
                                         row,
                                         col,
+                                        cursor_char,
                                     );
                                 }
                             }
@@ -2593,9 +3024,8 @@ impl<'a> EditableTable<'a> {
                                                 .color(control_color)
                                         };
 
-                                        let align_btn = ui.add(
-                                            egui::Button::new(align_label).frame(false),
-                                        );
+                                        let align_btn =
+                                            ui.add(egui::Button::new(align_label).frame(false));
                                         if align_btn
                                             .on_hover_text(format!("{} (click to cycle)", tooltip))
                                             .clicked()
@@ -2651,6 +3081,28 @@ impl<'a> EditableTable<'a> {
             edit_state.defer_commit_age = 0;
         }
 
+        // RenderedEditSession asked us to flush now (user moved to a non-table block).
+        // Bypass the focus-loss defer cycle so source updates on this frame.
+        if force_commit_requested && edit_state.content_modified {
+            changed = true;
+            edit_state.content_modified = false;
+            edit_state.defer_commit = false;
+            edit_state.defer_commit_age = 0;
+            if global.active_table == Some(table_id) {
+                global.active_table = None;
+                global.active_cell = None;
+            }
+            crate::diag::event(
+                "table_force_commit",
+                format!("table {:?} committed via session signal", table_id),
+            );
+        } else if force_commit_requested {
+            // Signal arrived but no dirty edits to flush; clear defer bookkeeping anyway
+            // so a previously-deferred commit does not linger as a phantom write.
+            edit_state.defer_commit = false;
+            edit_state.defer_commit_age = 0;
+        }
+
         // Update focus tracking for next frame
         edit_state.had_focus_last_frame = any_cell_has_focus;
 
@@ -2696,6 +3148,22 @@ impl<'a> EditableTable<'a> {
         // Check if any cell has focus (for output)
         let has_focus = any_cell_has_focus;
 
+        // Effective interaction target — prefer next-frame intent (clicks/Tab navigation)
+        // over current focus so callers (RenderedEditSession) can update active block
+        // without a one-frame lag.
+        //
+        // `edit_state.focused_cell` is sticky inside the widget (only assigned when a
+        // cell reports `response.has_focus()`, never cleared on focus loss). Reporting
+        // it unconditionally would falsely re-activate the cell to the session the
+        // frame AFTER the user clicked a heading/paragraph, ping-ponging focus.
+        // Gate on actual current focus or in-flight focus intent.
+        let focused_cell_out =
+            if any_cell_has_focus || edit_state.pending_focus.is_some() {
+                edit_state.pending_focus.or(edit_state.focused_cell)
+            } else {
+                None
+            };
+
         let pending_focus_dbg = edit_state.pending_focus;
         let pending_cell_dbg = global.pending_cell;
         let defer_commit_dbg = edit_state.defer_commit;
@@ -2730,17 +3198,19 @@ impl<'a> EditableTable<'a> {
                 "table_defer_commit",
                 format!(
                     "table {:?} age={} pending_cell={:?}",
-                    table_id,
-                    defer_commit_age_dbg,
-                    pending_cell_dbg
+                    table_id, defer_commit_age_dbg, pending_cell_dbg
                 ),
             );
         }
 
         if changed {
-            WidgetOutput::modified(markdown).with_focus(has_focus)
+            WidgetOutput::modified(markdown)
+                .with_focus(has_focus)
+                .with_focused_cell(focused_cell_out)
         } else {
-            WidgetOutput::unchanged(markdown).with_focus(has_focus)
+            WidgetOutput::unchanged(markdown)
+                .with_focus(has_focus)
+                .with_focused_cell(focused_cell_out)
         }
     }
 }
@@ -3397,7 +3867,7 @@ impl<'a> EditableCodeBlock<'a> {
                 // `inner_size.max(content_size)` rule) and stretch a single code block
                 // over the entire viewport, hiding subsequent fenced blocks (issue #129).
                 egui::ScrollArea::horizontal()
-                    .id_source(block_id.with("scroll"))
+                    .id_salt(block_id.with("scroll"))
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
                         if self.data.is_editing {
@@ -3679,12 +4149,7 @@ fn render_run_output_panel(
                             .italics()
                             .font(FontId::monospace(font_size)),
                     );
-                    if matches!(
-                        &snap.status,
-                        RunStatus::Completed {
-                            exit_code: Some(0),
-                        }
-                    ) {
+                    if matches!(&snap.status, RunStatus::Completed { exit_code: Some(0) }) {
                         ui.label(
                             RichText::new(t!("widgets.code_block.run_no_output_hint").to_string())
                                 .color(muted)
@@ -5190,6 +5655,51 @@ mod tests {
         let output = WidgetOutput::modified("test".to_string());
         assert!(output.changed);
         assert_eq!(output.markdown, "test");
+    }
+
+    #[test]
+    fn test_widget_output_with_focused_cell() {
+        let none = WidgetOutput::unchanged(String::new());
+        assert_eq!(none.focused_cell, None);
+
+        let some = WidgetOutput::modified(String::new()).with_focused_cell(Some((2, 3)));
+        assert_eq!(some.focused_cell, Some((2, 3)));
+    }
+
+    #[test]
+    fn test_table_force_commit_signal_roundtrip() {
+        let ctx = egui::Context::default();
+        signal_table_force_commit(&ctx, 5);
+        // Stored via ctx.data_mut, readable via ctx.data
+        let stored: bool = ctx
+            .data(|d| d.get_temp::<bool>(table_force_commit_id(5)))
+            .unwrap_or(false);
+        assert!(stored, "signal should be persisted in egui temp data");
+
+        // Different table_line — independent slot
+        let other: bool = ctx
+            .data(|d| d.get_temp::<bool>(table_force_commit_id(6)))
+            .unwrap_or(false);
+        assert!(!other);
+    }
+
+    #[test]
+    fn test_table_force_commit_take_is_one_shot() {
+        let ctx = egui::Context::default();
+        signal_table_force_commit(&ctx, 9);
+
+        ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                assert!(
+                    take_table_force_commit(ui, 9),
+                    "first take should observe the signal"
+                );
+                assert!(
+                    !take_table_force_commit(ui, 9),
+                    "second take should be cleared"
+                );
+            });
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────

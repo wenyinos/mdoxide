@@ -133,24 +133,16 @@ pub struct EditorOutput {
     // ─────────────────────────────────────────────────────────────────────────
     // Scroll Metrics (for sync scrolling)
     // ─────────────────────────────────────────────────────────────────────────
-    /// First visible line (0-indexed) for sync scrolling.
-    pub first_visible_line: usize,
-    /// Vertical scroll offset within the first visible line (pixels).
-    pub scroll_offset_y: f32,
     /// Total scroll offset in pixels (wrap-aware absolute Y from ViewState).
     pub scroll_offset: f32,
     /// Top-of-viewport source line (1-indexed) for scroll sync anchors.
     pub scroll_anchor_line: usize,
     /// Fraction within the anchor line (0..1) for sub-line alignment.
     pub scroll_anchor_fraction: f32,
-    /// Line height in pixels.
-    pub line_height: f32,
     /// Viewport height in pixels.
     pub viewport_height: f32,
     /// Total content height in pixels.
     pub content_height: f32,
-    /// Total number of lines in the document.
-    pub total_lines: usize,
     /// Current Vim mode label (None when Vim mode is disabled).
     pub vim_mode_label: Option<&'static str>,
 }
@@ -191,8 +183,6 @@ pub struct EditorWidget<'a> {
     tab: &'a mut Tab,
     /// Font size for the editor.
     font_size: f32,
-    /// Whether to show a frame around the editor.
-    frame: bool,
     /// Whether word wrap is enabled.
     word_wrap: bool,
     /// ID for the editor (for state persistence).
@@ -247,7 +237,6 @@ impl<'a> EditorWidget<'a> {
         Self {
             tab,
             font_size: 14.0,
-            frame: false,
             word_wrap: true,
             id: None,
             show_line_numbers: true,
@@ -581,7 +570,11 @@ impl<'a> EditorWidget<'a> {
                 // Hash collision (extremely rare) — strings match, skip sync.
                 crate::diag::event(
                     "editor_hash_collision",
-                    format!("tab {} DefaultHasher collision at len {}", tab_id, self.tab.content.len()),
+                    format!(
+                        "tab {} DefaultHasher collision at len {}",
+                        tab_id,
+                        self.tab.content.len()
+                    ),
                 );
             } else {
                 // Content actually differs - perform sync
@@ -754,9 +747,7 @@ impl<'a> EditorWidget<'a> {
             let line_start = editor.view().get_line_y_offset(line_0);
             let line_h = editor.view().get_line_height(line_0);
             let target_y = line_start + fraction.clamp(0.0, 1.0) * line_h;
-            editor
-                .view_mut()
-                .scroll_to_absolute(target_y, total_lines);
+            editor.view_mut().scroll_to_absolute(target_y, total_lines);
             debug!(
                 "EditorWidget: sync anchor scroll line {} frac {:.2} → {:.1}px",
                 line, fraction, target_y
@@ -803,31 +794,14 @@ impl<'a> EditorWidget<'a> {
         // Update Tab's scroll metrics from FerriteEditor
         // These are used by the minimap and outline panel for position sync
         // Capture all scroll metrics at once to avoid borrow conflicts later
-        let (
-            line_height,
-            first_visible,
-            total_lines,
-            scroll_offset_y_val,
-            viewport_height_val,
-            content_height_val,
-            absolute_scroll_y,
-        ) = {
+        let (line_height, viewport_height_val, content_height_val, absolute_scroll_y) = {
             let view = editor.view();
-            let line_height = view.line_height();
-            let first_visible = view.first_visible_line();
             let total_lines = editor.buffer().line_count();
-            let scroll_offset_y = view.scroll_offset_y();
-            let viewport_height = view.viewport_height();
-            let content_height = view.total_content_height(total_lines);
-            let absolute_scroll_y = view.current_scroll_y();
             (
-                line_height,
-                first_visible,
-                total_lines,
-                scroll_offset_y,
-                viewport_height,
-                content_height,
-                absolute_scroll_y,
+                view.line_height(),
+                view.viewport_height(),
+                view.total_content_height(total_lines),
+                view.current_scroll_y(),
             )
         };
         self.tab.scroll_offset = absolute_scroll_y;
@@ -856,7 +830,7 @@ impl<'a> EditorWidget<'a> {
             //      on-close save prompt and auto-save all notice the
             //      edit.
             // Hotfix for v0.2.8 undo-broken / data-loss regression.
-            self.tab.record_edit_from_snapshot();
+            self.tab.record_external_edit_from_snapshot();
             self.tab.mark_content_edited();
         }
 
@@ -935,16 +909,11 @@ impl<'a> EditorWidget<'a> {
             ctrl_click_pos: None, // Multi-cursor handled internally by FerriteEditor
             fold_toggle_line,
             ime_committed_text,
-            // Scroll metrics for sync scrolling
-            first_visible_line: first_visible,
-            scroll_offset_y: scroll_offset_y_val,
             scroll_offset: scroll_total_offset,
             scroll_anchor_line,
             scroll_anchor_fraction,
-            line_height,
             viewport_height: viewport_height_val,
             content_height: content_height_val,
-            total_lines,
             vim_mode_label,
         }
     }

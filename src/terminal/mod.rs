@@ -51,8 +51,8 @@ pub struct Terminal {
     parser: vte::Parser,
     /// Terminal title (from OSC sequences)
     title: String,
-    /// Unique ID for this terminal
-    id: usize,
+    /// Unique ID for this terminal (session key in manager maps).
+    _id: usize,
     /// Shell type used to launch this terminal
     shell_type: ShellType,
     /// Initial working directory
@@ -87,6 +87,7 @@ pub struct Terminal {
     _stop_tx: Sender<()>,
 }
 
+#[allow(dead_code)] // Terminal session API (PTY lifecycle, sizing, macros)
 impl Terminal {
     /// Create a new terminal instance with the given ID, shell type, optional working directory, and scrollback limit.
     pub fn new(
@@ -172,7 +173,7 @@ impl Terminal {
             screen,
             parser: vte::Parser::new(),
             title: format!("Terminal {}", id),
-            id,
+            _id: id,
             shell_type,
             working_dir,
             running: true,
@@ -229,7 +230,7 @@ impl Terminal {
 
     /// Get the terminal ID.
     pub fn id(&self) -> usize {
-        self.id
+        self._id
     }
 
     /// Get the terminal title.
@@ -631,6 +632,7 @@ impl Default for TerminalManager {
     }
 }
 
+#[allow(dead_code)] // TerminalManager layout and multi-session API
 impl TerminalManager {
     /// Create a new terminal manager.
     pub fn new() -> Self {

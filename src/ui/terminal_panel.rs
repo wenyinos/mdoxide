@@ -7,8 +7,8 @@ use crate::terminal::{
     MoveDirection, SoundNotifier, TerminalLayout, TerminalManager, TerminalWidget,
 };
 use crate::ui::phosphor_icons::{
-    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_LEFT, CARET_RIGHT, CARET_UP, FLASK,
-    GEAR, HOURGLASS, PLAY, PLUS, WARNING, X,
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_LEFT, CARET_RIGHT, CARET_UP, FLASK, GEAR,
+    HOURGLASS, PLAY, PLUS, WARNING, X,
 };
 use eframe::egui::{self, Color32, Id, StrokeKind, Ui};
 use rust_i18n::t;
@@ -33,8 +33,6 @@ pub enum DropZone {
 pub struct TerminalPanelOutput {
     /// Whether the panel was closed by the user
     pub closed: bool,
-    /// Whether the panel visibility was toggled
-    pub toggled: bool,
 }
 
 /// Per-terminal view state.
@@ -155,14 +153,6 @@ impl TerminalPanelState {
         }
     }
 
-    /// Show the panel.
-    pub fn show(&mut self) {
-        self.visible = true;
-        if !self.initialized {
-            self.initialize();
-        }
-    }
-
     /// Hide the panel.
     pub fn hide(&mut self) {
         self.visible = false;
@@ -244,16 +234,6 @@ impl TerminalPanelState {
                 }
             }
         }
-    }
-
-    /// Set the panel height.
-    pub fn set_height(&mut self, height: f32) {
-        self.height = height.clamp(100.0, 3000.0);
-    }
-
-    /// Get the panel height.
-    pub fn height(&self) -> f32 {
-        self.height
     }
 
     /// Get the directory where terminal layouts are saved.
@@ -492,23 +472,6 @@ impl TerminalPanelState {
         false
     }
 
-    /// Auto-save workspace layout if enough time has passed (debounced)
-    pub fn maybe_auto_save_layout(&mut self, settings: &crate::config::Settings) {
-        if !settings.terminal_auto_save_layout {
-            return;
-        }
-
-        // Debounce: only save if 5 seconds have passed since last save
-        let should_save = match self.last_auto_save {
-            Some(last) => last.elapsed().as_secs() >= 5,
-            None => true,
-        };
-
-        if should_save && self.initialized {
-            self.save_workspace_layout();
-        }
-    }
-
     /// Reset workspace layout loaded flag (call when working_dir changes)
     pub fn reset_workspace_layout_state(&mut self) {
         self.workspace_layout_loaded = false;
@@ -606,6 +569,18 @@ impl TerminalPanel {
                 }
 
                 if !widget_output.input.is_empty() {
+                    if let Ok(text) = std::str::from_utf8(&widget_output.input) {
+                        if crate::fonts::needs_cjk(text) {
+                            let custom_font = settings.font_family.custom_name();
+                            let _ = crate::fonts::load_cjk_for_text(
+                                text,
+                                ui.ctx(),
+                                custom_font,
+                                settings.cjk_font_preference,
+                                Some(&settings.complex_script_font_preferences),
+                            );
+                        }
+                    }
                     if let Some(terminal) = manager.terminal_mut_by_id(*id) {
                         terminal.write_input(&widget_output.input);
                     }
@@ -662,10 +637,10 @@ impl TerminalPanel {
 
                 // Render children
                 for i in 0..num_splits {
-                    let mut child_ui = ui.child_ui(
-                        rects[i],
-                        egui::Layout::left_to_right(egui::Align::Min),
-                        None,
+                    let mut child_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(rects[i])
+                            .layout(egui::Layout::left_to_right(egui::Align::Min)),
                     );
                     if self.render_recursive(
                         &mut child_ui,
@@ -725,8 +700,11 @@ impl TerminalPanel {
 
                 // Render children
                 for i in 0..num_splits {
-                    let mut child_ui =
-                        ui.child_ui(rects[i], egui::Layout::top_down(egui::Align::Min), None);
+                    let mut child_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(rects[i])
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
                     if self.render_recursive(
                         &mut child_ui,
                         &mut splits[i],
@@ -752,7 +730,7 @@ impl TerminalPanel {
         terminal_has_focus: bool,
         maximized_terminal_id: &mut Option<usize>,
         pop_out_request: &mut Option<(usize, Option<egui::Pos2>)>,
-        settings: &crate::config::Settings,
+        _settings: &crate::config::Settings,
         floating_windows: &[FloatingWindow],
     ) {
         if !terminal_has_focus {
@@ -1510,7 +1488,7 @@ impl TerminalPanel {
                                             state.report_error("Failed to create terminal", &e)
                                         }
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 ui.separator();
                                 if ui
@@ -1520,11 +1498,11 @@ impl TerminalPanel {
                                     if let Some(active_id) = state.manager.focused_terminal_id() {
                                         state.maximized_terminal_id = Some(active_id);
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 if ui.button(t!("terminal.pop_out").to_string()).clicked() {
                                     state.pop_out_request = Some((*idx, None));
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 ui.separator();
                                 if ui
@@ -1541,7 +1519,7 @@ impl TerminalPanel {
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 if ui
                                     .button(t!("terminal.split_vertical").to_string())
@@ -1557,21 +1535,21 @@ impl TerminalPanel {
                                     } else {
                                         state.terminal_has_focus = true;
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 ui.separator();
                                 if ui.button(t!("terminal.rename").to_string()).clicked() {
                                     state.renaming_index = Some(*idx);
                                     state.rename_buffer = title.to_string();
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 if ui.button(t!("terminal.close").to_string()).clicked() {
                                     state.close_tab_request = Some(*idx);
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 if ui.button(t!("terminal.close_pane").to_string()).clicked() {
                                     state.manager.close_focused_pane();
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 if ui.button(t!("terminal.close_others").to_string()).clicked() {
                                     for i in (0..state.manager.terminal_count()).rev() {
@@ -1579,7 +1557,7 @@ impl TerminalPanel {
                                             state.manager.close_terminal(i);
                                         }
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 ui.separator();
                                 if ui
@@ -1637,7 +1615,7 @@ impl TerminalPanel {
                                             });
                                         }
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                                 ui.separator();
                                 ui.menu_button(t!("terminal.menu.watch_mode").to_string(), |ui| {
@@ -1655,7 +1633,7 @@ impl TerminalPanel {
                                                 .clicked()
                                             {
                                                 terminal.set_watch(None, None);
-                                                ui.close_menu();
+                                                ui.close();
                                             }
                                         } else {
                                             if ui
@@ -1675,7 +1653,7 @@ impl TerminalPanel {
                                                     };
                                                     terminal.set_watch(Some(root), Some(cmd));
                                                 }
-                                                ui.close_menu();
+                                                ui.close();
                                             }
                                         }
                                     }
@@ -1693,13 +1671,15 @@ impl TerminalPanel {
                                             }
                                         }
                                     }
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             });
 
                             if *is_active || tab_response.hovered() {
                                 let close_response = ui.add(
-                                    egui::Button::new(phosphor_rich_text(X, 14.0).color(text_color))
+                                    egui::Button::new(
+                                        phosphor_rich_text(X, 14.0).color(text_color),
+                                    )
                                     .frame(false)
                                     .min_size(egui::vec2(16.0, 16.0)),
                                 );
@@ -1830,7 +1810,7 @@ impl TerminalPanel {
                                 state.report_error("Failed to create PowerShell terminal", &e)
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button(t!("terminal.shell.cmd").to_string()).clicked() {
                         match state
@@ -1848,7 +1828,7 @@ impl TerminalPanel {
                             }
                             Err(e) => state.report_error("Failed to create CMD terminal", &e),
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button(t!("terminal.shell.wsl").to_string()).clicked() {
                         match state
@@ -1866,7 +1846,7 @@ impl TerminalPanel {
                             }
                             Err(e) => state.report_error("Failed to create WSL terminal", &e),
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     ui.menu_button(t!("terminal.menu.layouts").to_string(), |ui| {
@@ -1884,7 +1864,7 @@ impl TerminalPanel {
                             } else {
                                 state.terminal_has_focus = true;
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(t!("terminal.layout.rows_2").to_string())
@@ -1900,7 +1880,7 @@ impl TerminalPanel {
                             } else {
                                 state.terminal_has_focus = true;
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(t!("terminal.layout.grid_2x2").to_string())
@@ -1916,7 +1896,7 @@ impl TerminalPanel {
                             } else {
                                 state.terminal_has_focus = true;
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         if ui
@@ -1940,7 +1920,7 @@ impl TerminalPanel {
                                     }
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(t!("terminal.layout.load_layout").to_string())
@@ -1966,7 +1946,7 @@ impl TerminalPanel {
                                     }
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         ui.menu_button(t!("terminal.menu.workspaces").to_string(), |ui| {
@@ -2012,7 +1992,7 @@ impl TerminalPanel {
                                         });
                                     }
                                 }
-                                ui.close_menu();
+                                ui.close();
                             }
 
                             // Save to .ferrite/terminal-layout.json in workspace root
@@ -2033,7 +2013,7 @@ impl TerminalPanel {
                                         "Saved workspace layout to .ferrite/terminal-layout.json"
                                     );
                                 }
-                                ui.close_menu();
+                                ui.close();
                             }
                             if !can_save_workspace {
                                 ui.label(t!("terminal.no_workspace_root").to_string());
@@ -2090,7 +2070,7 @@ impl TerminalPanel {
                                         let _ = std::fs::write(path, json);
                                     }
                                 }
-                                ui.close_menu();
+                                ui.close();
                             }
 
                             if ui
@@ -2144,7 +2124,7 @@ impl TerminalPanel {
                                         }
                                     }
                                 }
-                                ui.close_menu();
+                                ui.close();
                             }
                         });
                         ui.menu_button(t!("terminal.menu.macros").to_string(), |ui| {
@@ -2156,7 +2136,7 @@ impl TerminalPanel {
                                 for name in names {
                                     if ui.button(name).clicked() {
                                         let _ = state.manager.play_macro(name);
-                                        ui.close_menu();
+                                        ui.close();
                                     }
                                 }
                             }
@@ -2226,8 +2206,11 @@ impl TerminalPanel {
                 // Create a child UI for the content area to ensure max_rect()
                 // inside render_recursive doesn't include the tab bar.
                 let content_rect = ui.available_rect_before_wrap();
-                let mut content_ui =
-                    ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::Min), None);
+                let mut content_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(content_rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
 
                 let interacted = self.render_recursive(
                     &mut content_ui,
@@ -2255,7 +2238,7 @@ impl TerminalPanel {
                     let btn_pos = content_rect.right_top() + egui::vec2(-btn_size.x - 8.0, 8.0);
                     let btn_rect = egui::Rect::from_min_size(btn_pos, btn_size);
 
-                    ui.allocate_ui_at_rect(btn_rect, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(btn_rect), |ui| {
                         ui.visuals_mut().widgets.inactive.weak_bg_fill =
                             Color32::from_rgba_premultiplied(0, 0, 0, 200);
                         if ui
@@ -2343,7 +2326,7 @@ impl TerminalPanel {
         }
 
         // Render floating windows (Phase 4)
-        let mut floating_windows = std::mem::take(&mut state.floating_windows);
+        let floating_windows = std::mem::take(&mut state.floating_windows);
         let mut re_dock = Vec::new();
         let mut kept_windows = Vec::new();
 
@@ -2382,7 +2365,17 @@ impl TerminalPanel {
                     }
                     size_clone.set(crate::ui::window::viewport_window_rect(ctx).size());
 
-                    egui::CentralPanel::default().show(ctx, |ui| {
+                    let panel_id = egui::Id::new((ctx.viewport_id(), "terminal_popout_central_panel"));
+                    let mut panel_ui = egui::Ui::new(
+                        ctx.clone(),
+                        panel_id,
+                        egui::UiBuilder::new()
+                            .layer_id(egui::LayerId::background())
+                            .max_rect(ctx.content_rect()),
+                    );
+                    panel_ui.set_clip_rect(ctx.content_rect());
+
+                    egui::CentralPanel::default().show_inside(&mut panel_ui, |ui| {
                         // Handle shortcuts in this viewport
                         let TerminalPanelState {
                             ref mut manager,
@@ -2423,8 +2416,11 @@ impl TerminalPanel {
                         } = state;
 
                         let rect = ui.available_rect_before_wrap();
-                        let mut child_ui =
-                            ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min), None);
+                        let mut child_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(rect)
+                                .layout(egui::Layout::top_down(egui::Align::Min)),
+                        );
 
                         self.render_recursive(
                             &mut child_ui,

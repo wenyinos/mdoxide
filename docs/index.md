@@ -29,7 +29,7 @@
 | [Multi-Encoding Support](./technical/config/multi-encoding.md) | Character encoding detection (chardetng), manual selection, save in original encoding |
 | [Snippets System](./technical/config/snippets-system.md) | Text expansion system with built-in date/time snippets and custom user snippets |
 | [New File Save Prompt](./technical/config/new-file-save-prompt.md) | Skip save prompt for unmodified untitled files, `should_prompt_to_save(&Settings)` logic |
-| [Quick note workflow](./technical/config/quick-note-workflow.md) | Ephemeral untitled tabs: optional no-prompt close/quit; session recovery; rename |
+| [Quick note workflow](./technical/config/quick-note-workflow.md) | Ephemeral untitled tabs: on by default (no-prompt quit; tab close still prompts); turn off in Settings; session recovery; rename |
 | [Default View Mode](./technical/config/default-view-mode.md) | Per-file-type default view mode configuration |
 | [Code execution settings](./technical/config/code-execution-settings.md) | Opt-in prefs for markdown code-block runners (timeout, shell/Python gates) |
 
@@ -127,7 +127,17 @@
 | [Editable Links](./technical/markdown/editable-links.md) | Hover-based link editing with popup menu, autolink support |
 | [Editable Tables](./technical/markdown/editable-tables.md) | GFM table editing, deferred commits, toolbar, markdown sync |
 | [Table cell focus & navigation](./technical/markdown/table-cell-focus-navigation.md) | Empty-cell hit targets, Tab / Shift+Tab in-table (`lock_focus`, consume order) |
-| [Click-to-Edit Formatting](./technical/markdown/click-to-edit-formatting.md) | Hybrid editing for formatted list items and paragraphs |
+| [Click-to-Edit Formatting](./technical/markdown/click-to-edit-formatting.md) | Hybrid editing for formatted list items and paragraphs (superseded — see Rendered edit session: formatted blocks) |
+| [Rendered edit session (overview)](./technical/markdown/rendered-edit-session.md) | Architecture hub: motivation, `source_epoch`, `BlockRef`, session API, commit policy, RS-1…RS-7 / TBLE matrix, design decisions |
+| [Rendered edit session (Phase 0)](./technical/markdown/rendered-edit-session-phase0.md) | Formatted blur hotfix + `Tab::source_epoch`; foundation before full session coordinator |
+| [Rendered edit session (core types)](./technical/markdown/rendered-edit-session-core.md) | `BlockRef`, `RenderedEditSession` state machine and tab-scoped egui storage |
+| [Rendered edit session (headings)](./technical/markdown/rendered-edit-session-headings.md) | Headings wired to session: switch_to_ui, buffer commit, one-click cross-heading switch |
+| [Rendered edit session (paragraphs & lists)](./technical/markdown/rendered-edit-session-paragraphs-lists.md) | Plain paragraphs and simple list items on session; epoch invalidation; cross-block switch with headings |
+| [Rendered edit session (formatted blocks)](./technical/markdown/rendered-edit-session-formatted.md) | Formatted paragraphs and list items on session: click-to-edit, display→raw cursor mapping, Enter/Escape; replaces `FormattedItemEditState` and `formatted_exit_should_save` |
+| [Rendered edit session (tables)](./technical/markdown/rendered-edit-session-tables.md) | `BlockRef::TableCell` activation + `signal_table_force_commit` one-shot signal: cross-block exit commits the table; intra-table Tab navigation preserves deferred commits |
+| [Rendered edit session (split view)](./technical/markdown/rendered-edit-session-split-view.md) | `rendered_editor_id(tab.id)` shared by rendered-only and split preview; raw-pane epoch bumps invalidate session buffers (RS-6) |
+| [Rendered edit session (undo)](./technical/markdown/rendered-edit-session-undo.md) | One logical undo step per block commit; session keystrokes stay off the undo stack until close/switch |
+| [Rendered widget identity](./technical/markdown/rendered-widget-identity.md) | `ui.push_id(editor_id + source_epoch)` for stable TextEdit ids; `content_hash` for culling only |
 | [Formatting Toolbar](./technical/markdown/formatting-toolbar.md) | Markdown formatting toolbar, keyboard shortcuts, selection handling |
 | [Emphasis Rendering](./technical/markdown/emphasis-rendering.md) | Bold, italic, strikethrough rendering in WYSIWYG |
 | [Table of Contents](./technical/markdown/table-of-contents.md) | TOC generation from headings, anchor links, update/insert modes |
@@ -135,7 +145,7 @@
 | [Mermaid syntax help](./technical/mermaid/mermaid-syntax-help.md) | About / Help (F1) tab: per-diagram descriptions and snippets aligned with Insert → Mermaid… |
 | [List Editing Fixes](./technical/markdown/list-editing-fixes.md) | Frontmatter offset fix, edit buffer persistence, deferred commits, rendered-mode undo/redo |
 | [List Editing Debug](./technical/markdown/list-editing-debug.md) | Debugging list editing issues and fixes |
-| [Task List Checkbox](./technical/markdown/task-list-checkbox.md) | Interactive task list checkboxes in rendered view, click-to-toggle with source sync |
+| [Task List Checkbox](./technical/markdown/task-list-checkbox.md) | Interactive task list checkboxes in rendered view; click-to-toggle with source sync; scroll-stable via structure-preserving culling |
 | [Table Editing Focus](./technical/markdown/table-editing-focus.md) | Fix cursor loss during table cell editing, deferred source updates |
 | [Smart Paste](./technical/markdown/smart-paste.md) | URL detection, markdown link creation with selection, image markdown insertion |
 | [Image Drag & Drop](./technical/markdown/image-drag-drop.md) | Drag images into editor, auto-save to assets/, insert markdown link |
@@ -324,7 +334,7 @@
 | [View Mode Persistence](./technical/view-mode-persistence.md) | Per-tab view mode storage, session restoration, backward compatibility |
 | [Document Statistics](./technical/document-statistics.md) | Statistics panel tab with word count, reading time, heading/link/image counts |
 | [Text Statistics](./technical/text-statistics.md) | Word, character, line counting for status bar |
-| [Sync Scrolling](./technical/sync-scrolling.md) | Split-view live sync (minimap **Sync** / **2-way**), Ctrl+E mode-toggle preservation, content anchors |
+| [Sync Scrolling](./technical/sync-scrolling.md) | Split-view live sync (minimap **Sync** / **2-way**), per-pane scroll delivery, Ctrl+E mode-toggle preservation, content anchors |
 | [Configurable Line Width](./technical/configurable-line-width.md) | MaxLineWidth setting (Off/80/100/120/Custom), text centering in all views |
 | [Branding](./branding.md) | Icon design, asset generation, platform integration guidelines |
 
@@ -340,3 +350,4 @@
 | [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n, for Weblate extraction |
 | [v0.2.6 Test Suite](./v0.2.6-manual-test-suite.md) | Manual testing checklist for FerriteEditor release |
 | [v0.2.8 Test Suite](./v0.2.8-manual-test-suite.md) | Manual testing checklist for v0.2.8 release |
+| [v0.3.0 Test Suite](./v0.3.0-manual-test-suite.md) | Pre-merge manual checklist for v0.3.0 (Tasks 90–106, rendered session, session recovery) |

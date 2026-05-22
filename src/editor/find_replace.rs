@@ -16,8 +16,8 @@ use regex::Regex;
 use rust_i18n::t;
 
 use crate::ui::phosphor_icons::{
-    phosphor_rich_text, ARROWS_DOWN_UP, ARROWS_LEFT_RIGHT, CARET_LEFT, CARET_RIGHT, MAGNIFYING_GLASS,
-    X,
+    phosphor_rich_text, ARROWS_DOWN_UP, ARROWS_LEFT_RIGHT, CARET_LEFT, CARET_RIGHT,
+    MAGNIFYING_GLASS, X,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -673,7 +673,7 @@ impl PipelinePanel {
         }
 
         // Main panel frame
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(panel_bg)
             .stroke(egui::Stroke::new(1.0, border_color))
             .inner_margin(8.0)
@@ -814,7 +814,7 @@ impl PipelinePanel {
                 // History dropdown
                 if self.show_history_dropdown && !self.recent_commands.is_empty() {
                     ui.add_space(2.0);
-                    egui::Frame::none()
+                    egui::Frame::NONE
                         .fill(if is_dark {
                             Color32::from_rgb(40, 40, 40)
                         } else {
@@ -860,7 +860,7 @@ impl PipelinePanel {
                         let half_width = (ui.available_width() - 8.0) / 2.0;
 
                         // Stdout panel
-                        egui::Frame::none()
+                        egui::Frame::NONE
                             .fill(if is_dark {
                                 Color32::from_rgb(25, 25, 25)
                             } else {
@@ -877,7 +877,7 @@ impl PipelinePanel {
                                         .color(secondary_text),
                                 );
                                 ScrollArea::vertical()
-                                    .id_source("stdout_scroll")
+                                    .id_salt("stdout_scroll")
                                     .show(ui, |ui| {
                                         if tab_state.stdout.is_empty() {
                                             ui.label(
@@ -899,7 +899,7 @@ impl PipelinePanel {
                         ui.add_space(8.0);
 
                         // Stderr panel
-                        egui::Frame::none()
+                        egui::Frame::NONE
                             .fill(if is_dark {
                                 Color32::from_rgb(35, 25, 25)
                             } else {
@@ -916,7 +916,7 @@ impl PipelinePanel {
                                         .color(error_color),
                                 );
                                 ScrollArea::vertical()
-                                    .id_source("stderr_scroll")
+                                    .id_salt("stderr_scroll")
                                     .show(ui, |ui| {
                                         ui.add(
                                             TextEdit::multiline(&mut tab_state.stderr.as_str())
@@ -930,7 +930,7 @@ impl PipelinePanel {
                     });
                 } else {
                     // Single stdout panel (full width)
-                    egui::Frame::none()
+                    egui::Frame::NONE
                         .fill(if is_dark {
                             Color32::from_rgb(25, 25, 25)
                         } else {
@@ -941,7 +941,7 @@ impl PipelinePanel {
                         .show(ui, |ui| {
                             ui.set_min_height(output_height);
                             ScrollArea::vertical()
-                                .id_source("output_scroll")
+                                .id_salt("output_scroll")
                                 .show(ui, |ui| {
                                     if tab_state.stdout.is_empty() {
                                         // Show hint when no output

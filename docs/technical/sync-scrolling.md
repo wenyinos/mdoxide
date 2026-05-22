@@ -95,8 +95,22 @@ Sync OFF
 
 `sync_scroll_bidirectional` (default `true`):
 
-- **On:** scrolling preview can move raw (`pending_scroll_anchor` → `scroll_to_absolute`).
-- **Off:** only raw → preview (`tab.pending_scroll_offset`).
+- **On:** scrolling preview can move raw (see **Split-view scroll delivery** below).
+- **Off:** only raw → preview (`tab.pending_scroll_offset`). Preview-only scroll sets `ScrollOrigin::Rendered` and clears any stale raw anchor so idle snap does **not** re-align the preview to an old raw position.
+
+### Split-view scroll delivery
+
+Each pane has its own programmatic scroll channel. Using the wrong field causes visible jumps (e.g. applying raw max scroll to the preview snaps the preview upward on code-block-heavy docs).
+
+| Direction | Region | Mechanism | Applied by |
+|-----------|--------|-----------|------------|
+| Raw → preview | top / bottom / middle | `tab.pending_scroll_offset` | `MarkdownEditor::pending_scroll_offset` (start of next frame) |
+| Preview → raw | top / bottom | `SyncScrollState::set_raw_target(y)` | `EditorWidget::pending_sync_scroll_offset` via `get_animated_raw_offset()` |
+| Preview → raw | middle | `tab.pending_scroll_anchor` `(line, fraction)` | `EditorWidget` → `scroll_to_absolute` on anchor line |
+
+**Implementation:** idle snap in `src/app/central_panel.rs` after both panes render; constants and helpers in `src/preview/sync_scroll.rs`.
+
+**Regression:** with **Sync** + **2-way** on, scroll the preview to the bottom — preview stays at bottom and raw follows; raw → preview bottom unchanged.
 
 ## Rendered-only mode with sync off
 
@@ -110,7 +124,11 @@ When sync is disabled, rendered mode must **not** apply stale `pending_scroll_*`
 
 Rendered preview uses **viewport culling** (`ViewportCullingState` in `src/markdown/editor.rs`). Block heights (especially code blocks) are measured as they enter view; `total_height` can change after scroll stops.
 
-**Height fixup** (sync-independent): when `total_height` changes by >1px and the user is not actively scrolling, the next frame preserves scroll **ratio** (`cur/max_old → ratio*max_new`) via temp memory `rendered_height_fixup` so the viewport does not jump when egui keeps a fixed pixel offset.
+**Height fixup** (sync-independent): when `total_height` changes by >1px and the user is not actively scrolling, the next frame preserves scroll **ratio** (`cur/max_old → ratio*max_new`) via temp memory `rendered_height_fixup` so the viewport does not jump when egui keeps a fixed pixel offset. Fixup is suppressed for **200ms** after user scroll input so stopping a wheel/scrollbar drag does not immediately nudge the viewport.
+
+**Active scroll input** is detected via `is_active_scroll_input()` — mouse wheel (`smooth_scroll_delta`) or a decided pointer **drag** (scrollbar thumb). Simple clicks (e.g. task list checkboxes, links) do **not** count as scrolling and do not start the cooldown.
+
+**Inline-only content edits** (task checkbox `[ ]` ↔ `[x]`, etc.) reuse existing culling layout when top-level block `(start_line, end_line)` ranges are unchanged, even if `content_hash` differs. That avoids a bootstrap remeasure frame that would change `total_height` and shift scroll. See [`rendered-view-viewport-culling.md`](./rendered-view-viewport-culling.md) and [`task-list-checkbox.md`](./task-list-checkbox.md).
 
 This is separate from sync; it fixes layout remeasure “nudges” mid-document.
 
@@ -130,7 +148,7 @@ This is separate from sync; it fixes layout remeasure “nudges” mid-document.
 | `src/app/mod.rs` | Ribbon toggle, `sync_scroll_states` cleanup on tab close |
 | `src/preview/sync_scroll.rs` | `SyncScrollState`, anchors, boundaries, idle/programmatic |
 | `src/editor/minimap.rs` | `show_split_sync_footer`, `SPLIT_SYNC_FOOTER_HEIGHT` |
-| `src/editor/widget.rs` | `pending_scroll_anchor`, `EditorOutput` scroll metrics |
+| `src/editor/widget.rs` | `pending_scroll_anchor`, `pending_sync_scroll_offset`, `EditorOutput` scroll metrics |
 | `src/markdown/editor.rs` | Rendered scroll, culling, height fixup |
 | `src/state.rs` | Tab pending fields, `clear_sync_pending_scroll()` |
 
@@ -150,11 +168,14 @@ This is separate from sync; it fixes layout remeasure “nudges” mid-document.
 ### Split live sync
 
 1. Enable **Sync** in minimap footer; scroll raw with wheel and scrollbar — preview follows after brief idle.
-2. **2-way** on: scroll preview — raw follows.
-3. **2-way** off: preview scroll does not move raw.
-4. Top/bottom of either pane — both panes align to edges.
-5. Turn **Sync** off while scrolling preview — no post-scroll snap; no ghost jumps from earlier sync state.
-6. Code-block-heavy doc, sync off — scroll rendered only; verify no repeated small jumps (height fixup should be minimal).
+2. **2-way** on: scroll preview — raw follows (middle of document).
+3. **2-way** on: scroll preview to **bottom** — preview stays at bottom; raw scrolls to its bottom (no upward jump).
+4. **2-way** on: scroll preview to **top** — both panes at top.
+5. **2-way** off: preview scroll does not move raw.
+6. Top/bottom of either pane — both panes align to edges (raw → preview and preview → raw).
+7. Turn **Sync** off while scrolling preview — no post-scroll snap; no ghost jumps from earlier sync state.
+8. Code-block-heavy doc, sync off — scroll rendered only; verify no repeated small jumps (height fixup should be minimal).
+9. Long task list, scroll to middle — toggle several checkboxes; scroll position must stay fixed (no up/down nudge).
 
 ## Related docs
 

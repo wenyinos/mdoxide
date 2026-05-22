@@ -744,6 +744,12 @@ recovery:
     start_fresh: "Start Fresh"
     restore_tooltip: "Restore all tabs from the previous session"
     start_fresh_tooltip: "Discard the previous session and start with an empty editor"
+  conflict:
+    banner_text: "Recovered content differs from this file on disk."
+    keep_recovered: "Keep Recovered"
+    keep_recovered_tooltip: "Dismiss this notice and keep the recovered buffer. The tab stays modified so you can save manually."
+    reload_disk: "Reload from Disk"
+    reload_disk_tooltip: "Replace the buffer with the current file on disk and discard the recovered changes."
   untitled: "Untitled document"
 
 # Common buttons and actions
@@ -919,6 +925,8 @@ welcome:
     accent_color: "Ferrite accent color"
     language: "Language"
   line_width_hint: "Limits how wide text lines can grow. Set a value for centered text in Zen Mode (F11)."
+  show_on_empty_launch: "Show welcome on empty launch"
+  show_on_empty_launch_hint: "Open this page when Ferrite starts with no documents loaded. Uncheck to start with a blank tab instead."
 
 # Terminal panel
 terminal:

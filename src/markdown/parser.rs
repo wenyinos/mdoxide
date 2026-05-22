@@ -1938,6 +1938,54 @@ mod tests {
         assert!(text.contains("Line 3"), "Should have Line 3");
     }
 
+    #[test]
+    fn test_adjacent_callouts_separated_by_paragraph() {
+        let markdown = "> [!WARNING]-\n> HEI\n\nas\n\n> [!TIP] Test\n> Hvor er jeg?\n\n- list item";
+        let doc = parse_markdown(markdown).unwrap();
+
+        assert_eq!(
+            doc.root.children.len(),
+            4,
+            "Expected heading-less doc with warning callout, paragraph, tip callout, list; got {} nodes",
+            doc.root.children.len()
+        );
+
+        assert!(
+            matches!(
+                doc.root.children[0].node_type,
+                MarkdownNodeType::Callout {
+                    callout_type: CalloutType::Warning,
+                    ..
+                }
+            ),
+            "First node should be WARNING callout"
+        );
+        assert!(
+            matches!(doc.root.children[1].node_type, MarkdownNodeType::Paragraph),
+            "Second node should be plain paragraph 'as'"
+        );
+        assert!(
+            matches!(
+                doc.root.children[2].node_type,
+                MarkdownNodeType::Callout {
+                    callout_type: CalloutType::Tip,
+                    ..
+                }
+            ),
+            "Third node should be TIP callout"
+        );
+        assert!(
+            matches!(doc.root.children[3].node_type, MarkdownNodeType::List { .. }),
+            "Fourth node should be a list"
+        );
+
+        let warning = &doc.root.children[0];
+        assert!(
+            !warning.text_content().contains("Hvor er jeg"),
+            "Warning callout must not swallow the tip callout body"
+        );
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Wikilink Tests
     // ─────────────────────────────────────────────────────────────────────────

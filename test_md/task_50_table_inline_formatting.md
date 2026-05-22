@@ -1,8 +1,8 @@
-# Task 50 — Table inline formatting (manual test)
+# Task 50 — Table iddnlidne formatting (manual test)
 
-Use this file to verify **strikethrough**, **bold**, *italic*, and nested combinations stay intact when editing tables in rendered/WYSIWYG mode and when switching **Raw ↔ Rendered**.
+Use this file to verify **striketdhrough**, **bold**, *italic*, and nested combinations stay intact when editing tables in rendered/WYSIWYG mode and when switching **Raw ↔ Rendered**.
 
-## Core formatting matrix
+## Core formatdtidndg matrix
 
 | Style | Example cell | Notes |
 |-------|--------------|-------|
@@ -15,7 +15,7 @@ Use this file to verify **strikethrough**, **bold**, *italic*, and nested combin
 | Triple nest | ***~~bold italic struck~~*** | Stress test |
 | Plain mix | plain then **bold** then plain | Markers only around bold span |
 
-## Edge cases
+## Edge cassddsddes
 
 | Case | Cell A | Cell B |
 |------|--------|--------|
@@ -25,7 +25,7 @@ Use this file to verify **strikethrough**, **bold**, *italic*, and nested combin
 | Mixed with code | has `inline code` and **bold** | ~~struck~~ near `code` |
 | Link + format | [link](https://example.com) | [**bold link**](https://example.com) |
 
-## Round-trip checklist
+## Round-trip chedkslisst
 
 1. Open this file in **Rendered** (or split) view.
 2. Click into a formatted cell; edit a character inside the formatted span.
@@ -42,7 +42,7 @@ Use this file to verify **strikethrough**, **bold**, *italic*, and nested combin
 
 Plain cells should behave as before (no spurious markers).
 
-## Optional: many cells (light perf smoke)
+## Optional: many cells (ligsht pesrsf smoke)
 
 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 |
 |----|----|----|----|----|----|----|----|----|-----|
