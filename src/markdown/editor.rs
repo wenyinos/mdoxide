@@ -1116,6 +1116,46 @@ impl<'a> MarkdownEditor<'a> {
             });
         }
 
+        // Ctrl+Home / Ctrl+End: jump to document start/end in Rendered view.
+        // Inline TextEdits would otherwise consume these keys and only navigate
+        // within the focused block, which is not what users expect.
+        let (doc_jump_home, doc_jump_end) = ui.input(|i| {
+            if !i.modifiers.command {
+                return (false, false);
+            }
+            (i.key_pressed(Key::Home), i.key_pressed(Key::End))
+        });
+        let doc_edge_scroll: Option<f32> = if doc_jump_home {
+            Some(0.0)
+        } else if doc_jump_end {
+            // Use cached content height from the prior frame's culling state so we
+            // land precisely at the bottom. f32::INFINITY breaks egui's scrollbar
+            // math; a finite fallback gets clamped to the real max by egui.
+            let total_h: Option<f32> = ui.memory(|mem| {
+                mem.data
+                    .get_temp::<ViewportCullingState>(id.with("viewport_culling"))
+                    .map(|s| s.total_height)
+            });
+            Some(total_h.unwrap_or(1.0e9))
+        } else {
+            None
+        };
+        if doc_edge_scroll.is_some() {
+            ui.input_mut(|i| {
+                i.events.retain(|e| {
+                    !matches!(
+                        e,
+                        egui::Event::Key {
+                            key: Key::Home | Key::End,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.command
+                    )
+                });
+            });
+        }
+
         // Render the document in a scroll area
         let mut scroll_area = ScrollArea::vertical()
             .id_salt(id.with("rendered_scroll"))
@@ -1138,10 +1178,13 @@ impl<'a> MarkdownEditor<'a> {
             .is_some_and(|t| t.elapsed() < Duration::from_millis(200));
 
         // Priority order for scroll offset:
+        // 0. Ctrl+Home / Ctrl+End (highest — explicit user navigation)
         // 1. Nav button scroll (from previous frame)
         // 2. Pending scroll offset from mode switch
         // 3. Target scroll offset from outline navigation
-        if let Some(offset) = pending_nav_scroll {
+        if let Some(offset) = doc_edge_scroll {
+            scroll_area = scroll_area.vertical_scroll_offset(offset);
+        } else if let Some(offset) = pending_nav_scroll {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
             log::debug!(
                 "Applied nav button scroll offset in rendered mode: {}",
