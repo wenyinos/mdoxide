@@ -172,47 +172,11 @@ impl TerminalPty {
         shell_type: ShellType,
         working_dir: Option<std::path::PathBuf>,
     ) -> CommandBuilder {
-        let mut cmd = if cfg!(windows) {
-            let (mut cmd, win_shell) = match shell_type {
-                ShellType::PowerShell => (
-                    CommandBuilder::new("powershell.exe"),
-                    WindowsLaunchShell::PowerShell,
-                ),
-                ShellType::Cmd => {
-                    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-                    (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
-                }
-                ShellType::Wsl => (
-                    CommandBuilder::new("wsl.exe"),
-                    WindowsLaunchShell::Wsl,
-                ),
-                ShellType::Default => {
-                    if is_windows_powershell_available() {
-                        (
-                            CommandBuilder::new("powershell.exe"),
-                            WindowsLaunchShell::PowerShell,
-                        )
-                    } else {
-                        let shell =
-                            std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-                        (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
-                    }
-                }
-            };
-            apply_windows_utf8_init(&mut cmd, win_shell);
-            cmd
-        } else {
-            // On Unix, use SHELL environment variable or fall back to /bin/sh
-            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-            let mut cmd = CommandBuilder::new(&shell);
+        #[cfg(windows)]
+        let mut cmd = Self::build_windows_shell_command(shell_type);
 
-            // Add -l flag for login shell behavior (loads profile)
-            if shell.contains("bash") || shell.contains("zsh") {
-                cmd.arg("-l");
-            }
-
-            cmd
-        };
+        #[cfg(not(windows))]
+        let mut cmd = Self::build_unix_shell_command();
 
         // Set working directory: use provided path, fall back to current dir, then home
         if let Some(dir) = working_dir {
@@ -228,6 +192,51 @@ impl TerminalPty {
 
         // Set COLORTERM for true color support
         cmd.env("COLORTERM", "truecolor");
+
+        cmd
+    }
+
+    #[cfg(windows)]
+    fn build_windows_shell_command(shell_type: ShellType) -> CommandBuilder {
+        let (mut cmd, win_shell) = match shell_type {
+            ShellType::PowerShell => (
+                CommandBuilder::new("powershell.exe"),
+                WindowsLaunchShell::PowerShell,
+            ),
+            ShellType::Cmd => {
+                let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+                (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
+            }
+            ShellType::Wsl => (
+                CommandBuilder::new("wsl.exe"),
+                WindowsLaunchShell::Wsl,
+            ),
+            ShellType::Default => {
+                if is_windows_powershell_available() {
+                    (
+                        CommandBuilder::new("powershell.exe"),
+                        WindowsLaunchShell::PowerShell,
+                    )
+                } else {
+                    let shell =
+                        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+                    (CommandBuilder::new(shell), WindowsLaunchShell::Cmd)
+                }
+            }
+        };
+        apply_windows_utf8_init(&mut cmd, win_shell);
+        cmd
+    }
+
+    #[cfg(not(windows))]
+    fn build_unix_shell_command() -> CommandBuilder {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        let mut cmd = CommandBuilder::new(&shell);
+
+        // Add -l flag for login shell behavior (loads profile)
+        if shell.contains("bash") || shell.contains("zsh") {
+            cmd.arg("-l");
+        }
 
         cmd
     }
