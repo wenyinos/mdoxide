@@ -2,12 +2,13 @@
 
 ## Next Up (Immediate Focus)
 
-### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
-**Status:** Feature scope for v0.3.0 is **implemented** on `egui-0.34-upgrade` (egui **0.34.2** stack, export, code run, Mermaid wave, **rendered edit session**, accent, hub polish, quick-note workflow, and listed bugfixes). **Remaining before tag:** final QA on macOS / Linux (especially Wayland [#106](https://github.com/OlaProeis/Ferrite/issues/106) and macOS Sonoma [#111](https://github.com/OlaProeis/Ferrite/issues/111) on real hardware), GitHub issue housekeeping, release artifacts, and `git tag v0.3.0`. Windows 0.34 delta regression passed — see [`v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md) §0.34 delta.
+### v0.3.1 - LSP, Embeds, GitHub HTML Parity, Mermaid (Heavy), FerriteEditor Crate & CSV Editing
 
-**Headline features (shipped in-tree):** PDF + themed HTML export, executable fenced code blocks (opt-in with consent + settings), **quick note workflow** (on by default; turn off in **Settings → Files**) for ephemeral untitled tabs, the first wave of Mermaid improvements ([#4](https://github.com/OlaProeis/Ferrite/issues/4)), **rendered edit session** (consolidated WYSIWYG block switching — Tasks 94–105), **split-view scroll sync** (content-based anchors, optional 2-way), **user-configurable Ferrite accent**, **Phosphor icons**, **full-workspace file index** for Ctrl+P / Ctrl+Shift+F, **hardened session recovery** (path + disk-hash identity, non-blocking conflict banner, disk-anchored restore — Tasks 106 / 106.6), **eframe / egui 0.34.2** (skrifa text backend, Popup/Tooltip APIs, HarfRust validation), and **zero `cargo build` warnings** (Tasks 90–93: ~268 → 0). See [detailed plan](#v030---platform-refresh-publish-run-and-better-diagrams-1) below.
+**Status:** **Next up** after **v0.3.0** (May 22, 2026). See [v0.3.1 plan](#v031---lsp-embeds-github-html-parity-mermaid-heavy-ferriteeditor-crate--csv-editing) below.
 
-> **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-). Remaining work that didn't fit v0.3.0 was split into v0.3.1 / v0.3.2.
+> **v0.3.0 (May 22, 2026)** — shipped: egui **0.34.2**, **Rust 1.92** MSRV, PDF + themed HTML export + print preview, executable code blocks, Mermaid first wave + FC-83a, **rendered edit session** (Tasks 94–105), split-view scroll sync, Ferrite accent, **Phosphor 0.12**, workspace file index, session recovery (Tasks 106 / 106.6), quick note workflow, Spanish UI, zero build warnings (Tasks 90–93). Full list: [CHANGELOG.md](CHANGELOG.md) § 0.3.0 and [Recently Completed](#v030-may-22-2026--platform-export-run-diagrams). Post-tag checklist: [release checklist](docs/github-release-checklist.md) (GitHub Release CI, macOS Gatekeeper blurb, Flathub PR). Open release gates: Wayland ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) and Sonoma ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) on real hardware.
+
+> **v0.2.9 (Apr 2026)** was a hotfix release for four critical v0.2.8 regressions — see [Recently Completed](#recently-completed-).
 
 ---
 
@@ -29,7 +30,7 @@ With the v0.2.6 custom editor, most previous egui TextEdit limitations are resol
 - [ ] **macOS 15.x Gatekeeper on unsigned GitHub releases** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)) - **v0.3.0** `.app` artifacts lack Developer ID signing / notarization; users may need quarantine removal or **Open Anyway**. Documented: [`docs/install/macos.md`](docs/install/macos.md). **Fix: v0.3.1** — signing & notarization in CI.
 - [ ] **Wayland keyboard input on Ubuntu 24.04** ([#106](https://github.com/OlaProeis/Ferrite/issues/106)) - **v0.3.0** ships **egui 0.34 / winit 0.31+**. **Release gate:** confirm on real Ubuntu 24.04 Wayland before closing #106; until then the workaround remains `WAYLAND_DISPLAY= ferrite` for 0.2.x builds.
 - [ ] **macOS Sonoma keyboard input** ([#111](https://github.com/OlaProeis/Ferrite/issues/111)) - **v0.3.0** ships the 0.34 stack; **release gate:** verify on Sonoma hardware before closing #111.
-- [x] **Windows 11 borderless window offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Fixed in v0.2.8 with `.with_transparent(true)` DWM workaround. Full fix via eframe/egui 0.31+ expected in v0.3.0 (Tasks 38 & 46).
+- [x] **Windows 11 borderless window offset** ([#112](https://github.com/OlaProeis/Ferrite/issues/112)) - Fixed in v0.2.8 with `.with_transparent(true)` DWM workaround. v0.3.0 ships **egui 0.34.2** / winit 0.31+ stack (Task 38); close #112 after verification on target hardware.
 
 ### Terminal
 - [x] **CJK double-width character overlap in terminal** ([#110](https://github.com/OlaProeis/Ferrite/issues/110)) - Fixed in v0.2.8. Added `unicode-width` crate, 2-column cursor advancement, wide char rendering spanning 2 cells.
@@ -48,22 +49,24 @@ Core Run (shell + Python, inline output, timeout, **Stop**) works for typical us
 
 ## Planned Features
 
-### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams
+### v0.3.0 - Platform Refresh, Publish, Run, and Better Diagrams *(shipped May 22, 2026)*
 
-**Theme:** Modernize the platform stack, ship first-class export, give code blocks a Run button, and finally deliver the long-promised Mermaid improvements.
+**Theme:** Modernize the platform stack, ship first-class export, give code blocks a Run button, and finally deliver the long-promised Mermaid improvements. Full user-facing notes: [CHANGELOG.md](CHANGELOG.md) § 0.3.0.
 
 **Four legs:**
-1. **eframe / egui 0.31+ migration** (Task 38) — closes [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111), [#112](https://github.com/OlaProeis/Ferrite/issues/112).
+1. **eframe / egui 0.34.2 migration** (Tasks 38, 57, 89) — 0.28 → 0.31 → 0.34; **MSRV Rust 1.92**; intended to address [#106](https://github.com/OlaProeis/Ferrite/issues/106), [#111](https://github.com/OlaProeis/Ferrite/issues/111), [#112](https://github.com/OlaProeis/Ferrite/issues/112) (confirm on target OS before closing).
 2. **PDF + HTML export** — markdown becomes shareable, complementing the v0.2.8 PDF *viewer*.
 3. **Executable code blocks** — **Run** for shell and Python, opt-in with security dialog.
 4. **Mermaid improvements (first wave)** — diagram insertion toolbar, syntax hints, authoring validation, flowchart shapes, state diagram fork/join + history states.
 
-*Scope discipline:* LSP, YouTube/video embeds, GitHub HTML parity, the heavier Mermaid items (Git Graph rewrite, mmdr integration, manual layout), and **FerriteEditor crate extraction** are scheduled for **v0.3.1**. The Mermaid crate extraction and additional file-format viewers are **v0.3.2**. RTL/BiDi and LaTeX math are **v0.4.0**. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until v0.3.0 ships.
+*Scope discipline:* LSP, YouTube/video embeds, GitHub HTML parity, the heavier Mermaid items (Git Graph rewrite, mmdr integration, manual layout), and **FerriteEditor crate extraction** are scheduled for **v0.3.1**. The Mermaid crate extraction and additional file-format viewers are **v0.3.2**. RTL/BiDi and LaTeX math are **v0.4.0**. Workarounds (e.g. `WAYLAND_DISPLAY=` on Ubuntu Wayland) remain documented until #106 / #111 are verified on the 0.34 stack.
 
-#### Platform & Dependency Upgrade (Task 38)
-- [x] **Bump eframe / egui** to 0.31.1 (Task 57) — `cargo update`; breaking API changes fixed across `main.rs`, editor input, themes, terminal, markdown UI, etc. See [`docs/technical/platform/eframe-egui-031-upgrade.md`](docs/technical/platform/eframe-egui-031-upgrade.md).
-- [x] **Regression pass** (Task 58) — matrix in [`docs/technical/platform/v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md); executed on Win10 as Win11 proxy (I-3 smart-paste crash fixed; I-1 WIN-5 and I-2 TRM-3 resolved). macOS-AS / macOS-Intel / Linux-X11 / Linux-Wayland rows **deferred to CI / community**; **KBD-8 (Wayland)** and **KBD-9 (macOS Sonoma)** remain release gates before tagging.
-- [ ] **Close or update** GitHub issues #106, #111, #112 once verified on the new stack.
+#### Platform & Dependency Upgrade (Tasks 38, 57, 89)
+- [x] **Bump eframe / egui to 0.31.1** (Task 57) — First step of the 0.28 → 0.34 path; breaking API changes fixed across `main.rs`, editor input, themes, terminal, markdown UI, etc. See [`docs/technical/platform/eframe-egui-031-upgrade.md`](docs/technical/platform/eframe-egui-031-upgrade.md).
+- [x] **Bump eframe / egui to 0.34.2** (Task 89) — skrifa + vello_cpu default text backend; **Phosphor 0.12**; viewport rects (`screen_rect` → `viewport_rect` / `content_rect`); **Popup** / **Tooltip** API migrations; ScrollArea edge-fade disabled globally; HarfRust validation under 0.34; mutex/deadlock audit on cross-thread paths. See [`docs/technical/platform/eframe-egui-034-upgrade.md`](docs/technical/platform/eframe-egui-034-upgrade.md).
+- [x] **MSRV raised to Rust 1.92** — `rust-toolchain.toml`, `package.rust-version`, CI workflows read pinned toolchain (required by egui 0.34).
+- [x] **Regression pass** (Task 58) — matrix in [`docs/technical/platform/v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md); Windows manual pass complete including 0.34 delta (Tasks 89.3–89.7; I-3 smart-paste crash fixed; I-1 WIN-5 and I-2 TRM-3 resolved). macOS-AS / macOS-Intel / Linux-X11 / Linux-Wayland rows **deferred to CI / community**; **KBD-8 (Wayland)** and **KBD-9 (macOS Sonoma)** remain open until verified on real hardware.
+- [ ] **Close or update** GitHub issues #106, #111, #112 once verified on the 0.34 stack.
 
 #### Build hygiene — rustc warning cleanup (Tasks 90–93)
 - [x] **Phase 1 — unused imports (Task 90)** — `cargo fix` plus manual pass in `app/`, `editor/ferrite/mod.rs`, `ui/mod.rs`; ~55 warnings cleared.
@@ -134,6 +137,7 @@ Consolidated WYSIWYG editing: one active block at a time, explicit `switch_to_ui
 - [x] **Docs & RS regression matrix (Task 105)** — RS-1…RS-7 + TBLE-1…TBLE-3 in [`v0.3.0-regression-matrix.md`](docs/technical/platform/v0.3.0-regression-matrix.md) §3.12; related docs updated (`wysiwyg-editor.md`, `click-to-edit-formatting.md`, table focus docs).
 
 #### Bugfixes & polish (v0.3.0 bucket)
+- [x] **Smart-paste mixed-script crash** (I-3) — Pasting text whose first colon precedes a multi-byte UTF-8 codepoint no longer aborts via `is_url` non-char-boundary slice; `s.get(colon_pos..colon_pos + 3)` guard. See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
 - [x] **Consecutive fenced code blocks** ([#129](https://github.com/OlaProeis/Ferrite/issues/129)) — Split/rendered view visibility; see [`docs/technical/markdown/consecutive-fenced-blocks-fix.md`](docs/technical/markdown/consecutive-fenced-blocks-fix.md).
 - [x] **Empty table cells: click-to-edit & tab focus** ([#131](https://github.com/OlaProeis/Ferrite/issues/131)) — Hit targets and focus; see [`docs/technical/markdown/table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md).
 - [x] **Table cell focus after editing (same table & cross-table)** — One-click move to another cell in rendered/split view after typing; session-integrated `BlockRef::TableCell` + `signal_table_force_commit` on cross-block exit (supersedes earlier `TableGlobalFocus` defer). See [`table-cell-focus-navigation.md`](docs/technical/markdown/table-cell-focus-navigation.md), [`rendered-edit-session-tables.md`](docs/technical/markdown/rendered-edit-session-tables.md).
@@ -141,6 +145,8 @@ Consolidated WYSIWYG editing: one active block at a time, explicit `switch_to_ui
 - [x] **Custom font picker error on Intel macOS** ([#133](https://github.com/OlaProeis/Ferrite/issues/133)) — Deferred load / toast fix; see [`docs/technical/fonts/custom-font-picker-deferred-load.md`](docs/technical/fonts/custom-font-picker-deferred-load.md).
 - [x] **Frontmatter panel stale on tab switch** — Per-frame cache regression introduced during v0.3.0 perf pass. `update_from_content_versioned` keyed on `content_version` alone, which collides across tabs (each tab's counter starts at `0`); the panel showed "No frontmatter detected" on files that had it, kept the previous tab's fields visible after switching, and could splice the previous tab's body into the active file when **Add frontmatter** was clicked. Fixed by keying the cache on `(tab_id, content_version)`; regression tests added. See [`docs/technical/ui/frontmatter-panel.md`](docs/technical/ui/frontmatter-panel.md) (*Caching*).
 - [x] **Ribbon toolbar icon-only** — Removed collapse/expand toggle and section labels; fixed 28px icon bar. Save/Export menus unchanged. See [`src/ui/ribbon.rs`](src/ui/ribbon.rs).
+- [x] **Export menu double icons** — Locale strings still contained emoji while the ribbon already prefixed Phosphor icons (PDF, Print preview); stripped duplicate glyphs from export menu labels in all locale files. See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
+- [x] **Outline panel tab selector hit-testing** — Phosphor icons in tab labels broke click targets when allocated via nested `allocate_ui_at_rect`; fixed with painter-based dual-font tab labels (`paint_tab_label`). See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
 - [x] **Undo granularity (raw typing)** — Removed 500 ms time-merge in `EditHistory`; each recorded diff is its own undo step so Ctrl+Z no longer reverts an entire fast-typing burst. Rendered mode: one undo step per block commit (Task 103). See [`docs/technical/editor/undo-redo.md`](docs/technical/editor/undo-redo.md), [`rendered-edit-session-undo.md`](docs/technical/markdown/rendered-edit-session-undo.md), [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Changed.
 - [x] **Quick file switcher (Ctrl+P) search** — Token-based matching on `-` / `_` / path separators; search pool = **full workspace index** + recent files; match quality no longer drowned by recent-file boost or full-path subsequence noise. See [`src/ui/quick_switcher.rs`](src/ui/quick_switcher.rs), [`docs/technical/files/workspace-file-index.md`](docs/technical/files/workspace-file-index.md).
 - [x] **Quick note: save prompt on tab close** — Modified untitled tabs with content again show the unsaved-changes dialog when closed (× / Ctrl+W); app exit still skips the dialog when quick-note workflow is on. `SavePromptContext` splits tab-close vs quit logic in `Tab::should_prompt_to_save`. See [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
@@ -155,7 +161,7 @@ Consolidated WYSIWYG editing: one active block at a time, explicit `switch_to_ui
 - [x] **Task list checkbox scroll jump** — Toggling checkboxes in rendered/split view no longer nudges scroll when the user has not scrolled. See [`docs/technical/markdown/task-list-checkbox.md`](docs/technical/markdown/task-list-checkbox.md), [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
 
 #### UI iconography — Phosphor Icons
-- [x] **Phosphor icon font integration** — Added `egui-phosphor = "0.9.0"` (pinned for egui 0.31); font registration in [`src/fonts.rs`](src/fonts.rs); helpers in [`src/ui/icons.rs`](src/ui/icons.rs) and re-exports in [`src/ui/phosphor_icons.rs`](src/ui/phosphor_icons.rs).
+- [x] **Phosphor icon font integration** — Added `egui-phosphor = "0.12.0"` (egui 0.34); font registration in [`src/fonts.rs`](src/fonts.rs); helpers in [`src/ui/icons.rs`](src/ui/icons.rs) and re-exports in [`src/ui/phosphor_icons.rs`](src/ui/phosphor_icons.rs).
 - [x] **App chrome migration** — Replaced emoji / ad-hoc Unicode glyphs with Phosphor across ribbon, format toolbar, outline & productivity panels, terminal, settings, about, command palette, quick switcher, file tree, status bar, dialogs, nav buttons, title bar, and tab close controls.
 - [x] **Preview & data viewers** — Markdown widgets (tables, code **Run** / **Stop**, mermaid headers & warnings), tree viewer (expand/collapse, copy path), CSV row-count info, Gantt done markers, ER diagram PK/FK markers, editor gutter fold carets.
 - [x] **Locale deduplication** — Removed emoji prefixes from strings where the UI now renders icons separately (`en`, `de`, `es`, `ja`, `zh_Hans` for tree viewer, outline stats, CSV headers).
@@ -431,9 +437,10 @@ Docs: add `docs/technical/editor/raw-table-alignment.md` when implemented; link 
 
 ## Recently Completed ✅
 
-### v0.3.0 (target: May 2026) — platform, export, run, diagrams *(pending version tag)*
-Work listed here is **implemented on `main`**; see **[0.3.0]** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list. Highlights:
-- **eframe / egui 0.31.1** platform bump (Tasks 57–58; regression matrix doc; Windows proxy pass complete).
+### v0.3.0 (May 22, 2026) — platform, export, run, diagrams
+See **[0.3.0]** in [CHANGELOG.md](CHANGELOG.md) for the full user-facing list. Highlights:
+- **eframe / egui 0.34.2** platform bump (Tasks 57–58, **89**; 0.31 → 0.34; **MSRV Rust 1.92**; skrifa text backend, Popup/Tooltip APIs, HarfRust validation; Windows 0.34 delta regression complete). See [`eframe-egui-034-upgrade.md`](docs/technical/platform/eframe-egui-034-upgrade.md).
+- **Zero `cargo build` warnings** (Tasks 90–93: ~268 → 0).
 - **PDF export** (krilla + krilla-svg) and **print preview** (temp PDF → viewer tab).
 - **Themed HTML export** with options dialog and Mermaid as SVG.
 - **Executable fenced code blocks** — Run, shell/Python, ANSI output, timeout + Stop, first-run consent, Settings (opt-in).
@@ -445,11 +452,11 @@ Work listed here is **implemented on `main`**; see **[0.3.0]** in [CHANGELOG.md]
 - **Ferrite accent color** (Settings + Welcome) and **Productivity Hub** UI polish (dock/resize/scrollbar, snappy detached window).
 - **Search in Files** — fixed-height panel; no content-driven vertical growth.
 - **Workspace file index** — Ctrl+P and Ctrl+Shift+F search all files under the open folder (background walk + progress on large trees); see [`workspace-file-index.md`](docs/technical/files/workspace-file-index.md).
-- **Phosphor Icons** — unified icon font across app chrome, preview widgets, and data viewers; locale strings deduplicated where icons are rendered in code.
+- **Phosphor Icons** (`egui-phosphor` **0.12.0**) — unified icon font across app chrome, preview widgets, and data viewers; locale strings deduplicated where icons are rendered in code.
 - **Ribbon toolbar** — always icon-only (collapse toggle and section labels removed).
 - **Undo granularity (raw mode)** — per-keystroke Ctrl+Z steps (500 ms merge removed); rendered mode one undo step per block commit (Task 103).
 - **CSV rendered view** — pixel-width cell truncation so long values stay inside fixed columns (v0.3.0 fix).
-- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), rendered WYSIWYG double-click / stuck edit (Tasks 94–105), table cell focus after typing (session model), **split 2-way sync bottom jump** (rendered→raw top/bottom delivery path), **task list checkbox scroll jump** (structure-preserving viewport culling), frontmatter panel stale on tab switch, crash recovery + cold-start file open, **hardened session recovery** (Task 106 — identity gating + non-blocking conflict banner closes cross-tab data-loss hazard), **disk-hash anchoring across recovery cycles** (Task 106.6 — restored tabs anchor `original_content` to disk so the second restore no longer reverts to pre-first-edit), **workspace file index** (Ctrl+P / search in collapsed folders), quick file switcher (Ctrl+P) token/recent-file search, quick note save prompt on untitled tab close, per-document view mode restore on reopen, document nav buttons above modal overlays, status-bar Help vs resize corner (I-1), terminal CJK paste/input local-echo with spawn-time UTF-8 init (I-2), Search in Files / detached Productivity Hub panel growth & resize snap, multi-cursor copy/cut, CSV rendered view cell overflow, Mermaid flowchart horizontal alignment (FC-83a), Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)). Full list: [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
+- **Notable fixes:** smart-paste UTF-8 `is_url` panic (I-3), consecutive fenced blocks ([#129](https://github.com/OlaProeis/Ferrite/issues/129)), empty table cell hit-testing ([#131](https://github.com/OlaProeis/Ferrite/issues/131)), rendered WYSIWYG double-click / stuck edit (Tasks 94–105), table cell focus after typing (session model), **split 2-way sync bottom jump** (rendered→raw top/bottom delivery path), **task list checkbox scroll jump** (structure-preserving viewport culling), frontmatter panel stale on tab switch, export menu double icons, outline panel tab hit-testing, crash recovery + cold-start file open, **hardened session recovery** (Task 106 — identity gating + non-blocking conflict banner closes cross-tab data-loss hazard), **disk-hash anchoring across recovery cycles** (Task 106.6 — restored tabs anchor `original_content` to disk so the second restore no longer reverts to pre-first-edit), **workspace file index** (Ctrl+P / search in collapsed folders), quick file switcher (Ctrl+P) token/recent-file search, quick note save prompt on untitled tab close, per-document view mode restore on reopen, document nav buttons above modal overlays, status-bar Help vs resize corner (I-1), terminal CJK paste/input local-echo with spawn-time UTF-8 init (I-2), Search in Files / detached Productivity Hub panel growth & resize snap, multi-cursor copy/cut, CSV rendered view cell overflow, Mermaid flowchart horizontal alignment (FC-83a), Intel macOS font picker ([#133](https://github.com/OlaProeis/Ferrite/issues/133)), macOS Gatekeeper doc path ([#130](https://github.com/OlaProeis/Ferrite/issues/130)). Full list: [CHANGELOG.md](CHANGELOG.md) § 0.3.0 Fixed.
 
 ### v0.2.9 (Apr 2026) - Hotfix Release
 Hotfix for four critical v0.2.8 regressions. No new features.

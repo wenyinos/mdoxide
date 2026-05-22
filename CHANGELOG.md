@@ -5,7 +5,7 @@ All notable changes to Ferrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-05-22
 
 Platform refresh: export, code run, Mermaid first wave, **rendered edit session** (WYSIWYG block switching), accent, quick-note workflow, Phosphor icons — on **eframe / egui 0.34.2** with **Rust 1.92** MSRV. See [`docs/technical/platform/eframe-egui-034-upgrade.md`](docs/technical/platform/eframe-egui-034-upgrade.md) and the [v0.3.0 regression matrix](docs/technical/platform/v0.3.0-regression-matrix.md) (includes 0.34 delta, Task 89; rendered editing RS-1…RS-7, Tasks 94–105).
 
@@ -957,6 +957,8 @@ Complete ground-up reimplementation of the text editor:
 - **0.2.0** - Major feature release (Split View, Mermaid, Minimap, Git integration, and more)
 - **0.1.0** - Initial public release
 
+[0.3.0]: https://github.com/OlaProeis/Ferrite/compare/v0.2.9...v0.3.0
+[0.2.9]: https://github.com/OlaProeis/Ferrite/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/OlaProeis/Ferrite/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6.1...v0.2.7
 [0.2.6.1]: https://github.com/OlaProeis/Ferrite/compare/v0.2.6...v0.2.6.1

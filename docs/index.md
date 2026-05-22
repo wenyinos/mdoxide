@@ -345,7 +345,7 @@
 | Guide | Description |
 |-------|-------------|
 | [macOS install & Gatekeeper](./install/macos.md) | Unsigned CI bundles, macOS 15.x / Sequoia, `xattr` quarantine removal, temporary workarounds until v0.3.1 signing |
-| [GitHub Release checklist](./github-release-checklist.md) | Maintainer steps; macOS Gatekeeper blurb to paste into release notes (#130) |
+| [GitHub Release checklist](./github-release-checklist.md) | Pre-tag, GitHub Release, Flathub, and Nix steps; macOS Gatekeeper blurb (#130) |
 | [Adding Languages](./adding-languages.md) | How to add new translations, translation portal setup, contributor workflow |
 | [Translation Status Assessment](./translation-status-assessment.md) | List of user-facing strings not yet using i18n, for Weblate extraction |
 | [v0.2.6 Test Suite](./v0.2.6-manual-test-suite.md) | Manual testing checklist for FerriteEditor release |

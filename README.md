@@ -121,9 +121,9 @@ This transparency is intentional — I want others to learn from (and improve up
 |------------|------------|----------|
 | ![Raw Editor](assets/screenshots/raw-dark.png) | ![Split View](assets/screenshots/split-dark.png) | ![Zen Mode](assets/screenshots/zen-dark.png) |
 
-> ✨ **v0.2.8 (Latest):** **Command Palette** (Alt+Space). **HarfRust text shaping** for complex scripts. **Image & PDF viewer tabs**. Rendered view **performance overhaul** (AST caching, viewport culling). **Background file loading** for large files. **Strict line breaks**. **Middle-click close tabs**. 13 bug fixes. See [CHANGELOG.md](CHANGELOG.md) for full details.
+> ✨ **v0.3.0 (Latest):** **eframe / egui 0.34.2** platform refresh. **PDF + themed HTML export**. **Executable code blocks** (`▶ Run`). **Rendered edit session** (one-click WYSIWYG block switching). **Split-view scroll sync**. **User accent color**. **Mermaid** insert toolbar + validation + flowchart polish. **Phosphor icons**. **Session recovery** hardening. **Quick note workflow**. See [CHANGELOG.md](CHANGELOG.md) for full details.
 
-> 🛠️ **Coming in v0.3.0:** **eframe / egui 0.31+** platform refresh (fixes Wayland keyboard, macOS Sonoma, Windows 11 borderless), **PDF + themed HTML export**, **executable code blocks** (`▶ Run` for shell + Python), and the **first wave of Mermaid improvements** (insertion toolbar, syntax hints, authoring validation, more flowchart shapes, state diagram fork/join). LSP, video embeds, GitHub HTML parity, and heavier Mermaid work (Git Graph rewrite, manual layout) follow in **v0.3.1**. See [ROADMAP.md](ROADMAP.md) for the full plan.
+> 🛠️ **Coming in v0.3.1:** macOS **Developer ID signing + notarization** ([#130](https://github.com/OlaProeis/Ferrite/issues/130)), LSP diagnostics panel, executable code block hardening, and remaining Mermaid parity. See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 > 📦 **v0.2.6 Highlights:** Custom Editor Engine with virtual scrolling (80MB file uses ~80MB RAM), Multi-Cursor Editing, Code Folding, IME/CJK input improvements.
 
