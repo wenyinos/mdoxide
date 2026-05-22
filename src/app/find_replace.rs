@@ -4,9 +4,8 @@
 //! navigating matches, selecting occurrences, and replacing text.
 
 use super::FerriteApp;
-use crate::state::Selection;
 use eframe::egui;
-use log::{debug, warn};
+use log::debug;
 use rust_i18n::t;
 
 impl FerriteApp {
@@ -152,6 +151,7 @@ impl FerriteApp {
                 // Update Tab content
                 if let Some(tab) = self.state.active_tab_mut() {
                     tab.content = new_content.clone();
+                    tab.notify_external_content_change();
                 }
 
                 // Re-search to update match positions
@@ -198,6 +198,7 @@ impl FerriteApp {
                     // Update Tab content
                     if let Some(tab) = self.state.active_tab_mut() {
                         tab.content = new_content.clone();
+                        tab.notify_external_content_change();
                     }
 
                     // Re-search (will find 0 matches since all were replaced)

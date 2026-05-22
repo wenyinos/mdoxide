@@ -2,87 +2,84 @@
 
 ## Overview
 
-Ferrite integrates **[harfrust](https://crates.io/crates/harfrust) 0.5.2** (pure-Rust HarfBuzz) for OpenType shaping: GSUB/GPOS, Arabic contextual forms, Indic clusters, etc. The pipeline produces glyph runs with cluster mapping and advances in points. For lines containing complex-script characters, shaped cluster positions replace egui's default per-character `ab_glyph` layout as the authoritative text positioning.
+Ferrite integrates **[harfrust](https://crates.io/crates/harfrust) 0.5.2** (pure-Rust HarfBuzz) for OpenType shaping: GSUB/GPOS, Arabic contextual forms, Indic clusters, etc. The pipeline produces glyph runs with cluster mapping and advances in points.
+
+**egui 0.34:** Text is rasterized via epaint's **skrifa** / **vello_cpu** backend. HarfRust does **not** replace that stack — it supplies **horizontal advances and cluster boundaries** for complex-script lines while egui still builds per-cluster mini-galleys for drawing.
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `src/editor/ferrite/shaping.rs` | `shape_text`, `ShapedGlyph`, `ShapedCluster`, `group_clusters`, `shaped_width`, `ShapeError`; position-mapping: `column_to_x_offset`, `x_to_column`, `shaped_column_to_x`, `shaped_x_to_column` |
-| `src/fonts.rs` | `ttf_bytes_for_font_id_shaping`, `needs_complex_script_fonts` |
-| `src/editor/ferrite/line_cache.rs` | `get_shaped_line` — shaped-line LRU cache; `ShapedLine`, `ClusterGalley` types; legacy `preshape_complex_script_line` for non-shaped paths |
-| `src/editor/ferrite/editor.rs` | Rendering loop: tries `get_shaped_line` before standard `render_line`; `calculate_cursor_x` uses shaped advances for complex scripts |
-| `src/editor/ferrite/rendering/cursor.rs` | `calculate_unwrapped_cursor_position` uses shaped advances for complex-script cursor placement |
-| `src/editor/ferrite/mouse.rs` | `calculate_column_from_pos` uses `shaped_x_to_column` for complex-script click-to-cursor |
-| `src/editor/ferrite/selection.rs` | `render_line_selection` uses `column_to_x_offset` for complex-script selection rectangles |
+| `src/editor/ferrite/shaping.rs` | `shape_text`, `shape_line_clusters`, `validate_cluster_byte_ranges`, `ShapedCluster`, position-mapping helpers |
+| `src/fonts.rs` | `ttf_bytes_for_font_id_shaping`, `row_height_for_font`, `needs_complex_script_fonts` |
+| `src/editor/ferrite/line_cache.rs` | `get_shaped_line` — shaped-line LRU cache; `ShapedLine`, `ClusterGalley` |
+| `src/editor/ferrite/editor.rs` | Rendering: `get_shaped_line` before `render_line`; IME cursor x via shaped advances |
+| `src/editor/ferrite/rendering/cursor.rs` | Unwrapped cursor x for complex scripts |
+| `src/editor/ferrite/mouse.rs` | Click-to-column via `shaped_x_to_column` (non-wrapped) |
+| `src/editor/ferrite/selection.rs` | Selection rects via `column_to_x_offset` (non-wrapped) |
 | `src/editor/ferrite/mod.rs` | `mod shaping`; re-exports `ClusterGalley`, `ShapedLine` |
 
 ## Architecture
 
-### Rendering pipeline (complex-script lines)
+### Rendering pipeline (complex-script lines, word wrap **off**)
 
 ```
 line text
-  → fonts::needs_complex_script_fonts()   [guard: skip shaping for Latin/CJK]
-  → shaping::shape_text()                 [harfrust: glyphs + cluster byte offsets + advances]
-  → shaping::group_clusters()             [merge same-cluster glyphs → ShapedCluster vec]
-  → per-cluster mini-galley               [painter.layout_no_wrap per cluster]
-  → paint at cumulative x_offset          [painter.galley per cluster]
+  → fonts::needs_complex_script_fonts()
+  → shaping::shape_line_clusters()          [harfrust → ShapedCluster vec]
+  → per-cluster mini-galley                 [egui/skrifa layout_no_wrap per substring]
+  → paint at cumulative HarfRust advance    [painter.galley at x_offset]
 ```
+
+**Index conventions:** HarfRust `cluster` = UTF-8 **byte** offset. egui `CCursor::index` = **character** index. Never pass byte indices to `cursor_from_pos` / `pos_from_cursor`.
 
 ### Caching
 
-`LineCache` maintains a separate `shaped_cache: HashMap<CacheKey, ShapedCacheEntry>` with LRU eviction (max 100 entries). Cache key is content + font + color. Both `invalidate()` (full clear) and `invalidate_line()` (per-line) clear shaped entries alongside standard galley entries. `shaped_len()` exposes the current shaped cache size for debugging.
+`LineCache` maintains `shaped_cache` (LRU, min 100 entries). Keys: content + font + color. Invalidated with standard galley cache on content/font changes.
 
 ### Fallback
 
-If any step fails — `needs_complex_script_fonts` returns false, `shape_text` errors, or glyph list is empty — the standard `get_galley` / `render_line` path runs unchanged. Failures are logged at `debug` level (`ferrite::shaping` target).
+If shaping is skipped or fails, the standard `get_galley` / `render_line` path runs. Log at `debug` (`ferrite::shaping`).
 
 ## Implementation Details
 
-- **`shape_text(text, font_bytes, font_size_pt)`** — `FontRef::new` → `ShaperData` → `shape`. **Cluster** = UTF-8 **byte** index into `text`; advances/offsets scaled by `font_size_pt / units_per_em`.
-- **Script/direction:** `UnicodeBuffer::guess_segment_properties()`; if script stays unknown, first strong character via `unicode_script::UnicodeScript` + `harfrust::Script::from_str(short_name)`.
-- **`group_clusters(glyphs, text_byte_len)`** — Merges consecutive glyphs sharing the same cluster value. Byte-range boundaries derived from sorted unique cluster offsets. Returns clusters in visual order (left-to-right regardless of text direction).
-- **Per-cluster galleys:** Each `ShapedCluster` becomes a mini-galley (`painter.layout_no_wrap`) painted at the cumulative shaped advance. This positions clusters according to OTL-shaped advances rather than `ab_glyph`'s per-codepoint widths.
+- **`shape_line_clusters(text, font_bytes, font_size_pt)`** — `shape_text` + `group_clusters`.
+- **`validate_cluster_byte_ranges`** — test/debug helper; asserts clusters tile the UTF-8 buffer.
+- **Per-cluster galleys:** Left-aligned at HarfRust `x_offset`. Cursor/selection use **advances**, not galley widths. If skrifa lays out wider than the shaped advance, a `trace` log is emitted (ligature/cluster mismatch indicator).
+- **Script/direction:** `UnicodeBuffer::guess_segment_properties()` + first strong char hint when script is unknown. Clusters are in **visual order** (LTR on screen).
 
-## Dependencies Used
+## Dependencies
 
-- **harfrust** — OTL shaping engine (pinned 0.5.2).
-- **unicode-script** — Script hints when HarfRust reports unknown script.
+- **harfrust** 0.5.2 — OTL shaping
+- **unicode-script** — script hints
 
 ## Usage
 
-- **From code:** `crate::editor::ferrite::shaping::shape_text(...)` with bytes from `crate::fonts::ttf_bytes_for_font_id_shaping(&font_id)`.
-- **Tests:** `cargo test shaping::` (14 tests including cluster grouping)
-- **Debug:** `RUST_LOG=ferrite::shaping=trace` (or `debug`).
+```bash
+cargo test shaping::          # 31+ unit tests (shape, clusters, roundtrips, validate)
+RUST_LOG=ferrite::shaping=trace cargo run
+```
 
-## Position-Mapping Helpers (Task 22)
-
-`shaping.rs` provides four helpers that translate between character columns and pixel x-offsets using shaped cluster advances:
-
-- **`column_to_x_offset(text, clusters, char_column)`** — walks clusters, accumulating advances; linearly interpolates within multi-character clusters (ligatures).
-- **`x_to_column(text, clusters, x)`** — inverse: snaps to nearest character boundary (midpoint for single-glyph, interpolation for multi-char).
-- **`shaped_column_to_x(text, font_bytes, font_size, col)`** — convenience wrapper: shapes + groups + maps.
-- **`shaped_x_to_column(text, font_bytes, font_size, x)`** — convenience wrapper for the inverse.
-
-These are used by cursor rendering, IME positioning, mouse click-to-cursor, and selection rendering for complex-script lines. For Latin-only text, the standard egui galley measurement path remains unchanged.
-
-## Current scope and trade-offs
+## Current scope (post egui 0.34 / task 89.6)
 
 | Aspect | Status |
 |--------|--------|
-| Cluster-level positioning | ✅ Shaped advances used for x-offset |
-| Cursor alignment | ✅ Cursor x uses shaped advances for complex scripts (non-wrapped) |
-| Click-to-cursor | ✅ Mouse click maps to correct grapheme using shaped x-to-column |
-| Selection rendering | ✅ Selection rectangles use shaped widths for complex scripts |
-| IME positioning | ✅ IME candidate window uses shaped cursor x |
-| Horizontal scrollbar | ✅ `shaped.total_width` already used for content width |
-| Intra-cluster glyph forms | ⚠️ ab_glyph still rasterizes individual codepoints (no OTL glyph ID rendering) |
-| Wrapped lines | ❌ Shaped path only active for non-wrapped mode |
-| Syntax-highlighted lines | ❌ Shaped path only active for plain text (no syntax highlighting) |
+| Cluster-level positioning (HarfRust advances) | ✅ |
+| Cursor / click / selection (non-wrapped) | ✅ HarfRust advances |
+| IME cursor x (non-wrapped complex script) | ✅ |
+| Horizontal scrollbar width | ✅ `shaped.total_width` |
+| Line height | ✅ `row_height_for_font` (89.5) |
+| OTL glyph forms in atlas | ⚠️ skrifa rasterizes substring codepoints, not HarfRust glyph IDs |
+| Word wrap + complex script | ❌ egui wrapped galley only (cursor/selection differ from shaped path) |
+| Syntax-highlighted complex script | ❌ plain `get_shaped_line` path only |
 
-## Risks and follow-up
+## Known limitations
 
-- Pin version; malformed fonts return `ShapeError`.
-- **Follow-up — glyph ID rendering:** Bridge HarfRust glyph IDs into egui's font atlas (or custom mesh) for true OTL glyph forms (contextual Arabic, Indic ligatures). Requires custom rasterization or ab_glyph GID access.
-- **Follow-up — broader integration:** Extend shaped path to wrapped lines and syntax-highlighted lines.
+1. **Wrap + complex script:** With word wrap on, cursor/selection use egui's wrapped galley, not HarfRust — expect weaker Arabic/Indic caret accuracy until wrap integration lands.
+2. **Draw vs cursor:** Mini-galley width can differ slightly from HarfRust advance; cursor remains advance-based (correct for OTL).
+3. **RTL:** Visual-order clusters are painted LTR; full bidi parity is not implemented.
+
+## Follow-up
+
+- Glyph-ID rendering through egui's atlas (true contextual forms without substring fallback).
+- Shaped path for wrapped and syntax-highlighted lines.

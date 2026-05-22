@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-pub use crate::ui::icons::{phosphor_font, phosphor_rich_text, RIBBON_ICON_SIZE};
+pub use crate::ui::icons::{phosphor_font, phosphor_rich_text};
 
 // Full regular-weight set — import specific icons at call sites or via this re-export.
 pub use egui_phosphor::regular::*;

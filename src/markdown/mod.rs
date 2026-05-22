@@ -53,6 +53,8 @@ mod editor;
 pub mod formatting;
 pub mod mermaid;
 mod parser;
+pub mod rendered_commit_undo;
+pub mod rendered_session;
 pub mod syntax;
 pub mod toc;
 pub mod tree_viewer;
@@ -60,9 +62,7 @@ mod widgets;
 
 // Only export what's actually used by the app
 pub use code_execution::{
-    classify_language, drain_code_execution_toasts, push_code_execution_toast,
-    push_pending_code_execution_consent, run_button_visible, spawn_run,
-    take_pending_code_execution_consent, CodeExecutionUi, RunnableKind,
+    drain_code_execution_toasts, spawn_run, take_pending_code_execution_consent, CodeExecutionUi,
 };
 pub use csv_viewer::{
     delimiter_display_name, delimiter_symbol, get_tabular_file_type, CsvViewer, CsvViewerState,
@@ -71,10 +71,11 @@ pub use csv_viewer::{
 pub use editor::{
     cleanup_rendered_editor_memory, EditorMode, LineMapping, MarkdownEditor, WikilinkContext,
 };
+pub use rendered_session::rendered_editor_id;
 pub use formatting::{
     apply_raw_format, detect_raw_formatting_state, FormattingState, MarkdownFormatCommand,
 };
-pub use mermaid::{compute_mermaid_diagnostics, MermaidTemplateKind};
+pub use mermaid::compute_mermaid_diagnostics;
 pub use toc::{insert_or_update_toc, TocOptions};
 pub use tree_viewer::{get_structured_file_type, TreeViewer, TreeViewerState};
 pub use widgets::{detect_mermaid_diagram_type, MermaidDiagramType};

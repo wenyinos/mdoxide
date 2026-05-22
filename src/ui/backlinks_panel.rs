@@ -56,11 +56,6 @@ impl BacklinksPanel {
         self.cached_for_file.as_deref()
     }
 
-    /// Get the number of cached backlinks.
-    pub fn backlink_count(&self) -> usize {
-        self.cached_backlinks.len()
-    }
-
     /// Clear cached backlinks.
     pub fn clear(&mut self) {
         self.cached_backlinks.clear();

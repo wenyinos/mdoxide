@@ -3,7 +3,6 @@
 //! This module detects keyboard shortcuts and dispatches them to the
 //! appropriate handler methods.
 
-use super::helpers::modifier_symbol;
 use super::types::KeyboardAction;
 use super::FerriteApp;
 use crate::config::ShortcutCommand;
@@ -200,7 +199,6 @@ impl FerriteApp {
             );
 
             // Other
-            // Note: CommandPalette is consumed pre-render in input_handling.rs
             check_shortcut!(ShortcutCommand::OpenSettings, KeyboardAction::OpenSettings);
             check_shortcut!(ShortcutCommand::OpenAbout, KeyboardAction::OpenAbout);
             check_shortcut!(ShortcutCommand::ExportHtml, KeyboardAction::ExportHtml);
@@ -400,10 +398,6 @@ impl FerriteApp {
                 self.outline_panel
                     .set_active_tab(crate::ui::OutlinePanelTab::Frontmatter);
                 self.state.mark_settings_dirty();
-            }
-            KeyboardAction::CommandPalette => {
-                // Handled pre-render in consume_command_palette_key()
-                self.command_palette.toggle();
             }
             KeyboardAction::ZoomIn => {
                 egui::gui_zoom::zoom_in(ctx);

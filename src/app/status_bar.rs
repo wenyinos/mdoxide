@@ -3,16 +3,12 @@
 //! This module renders the bottom status bar with file path, encoding selector,
 //! line/column info, word count, CSV controls, and toast messages.
 
-use super::helpers::modifier_symbol;
 use super::FerriteApp;
-use crate::config::{Theme, ViewMode};
+use crate::config::ViewMode;
 use crate::markdown::{
-    delimiter_display_name, delimiter_symbol, get_structured_file_type, get_tabular_file_type,
-    DELIMITERS,
+    delimiter_display_name, delimiter_symbol, get_tabular_file_type, DELIMITERS,
 };
-use crate::state::FileType;
 use crate::theme::accent;
-use crate::theme::ThemeColors;
 use crate::ui::phosphor_icons::{phosphor_rich_text, CHECK, FILE_TEXT, FOLDER};
 use eframe::egui;
 use log::{debug, warn};
@@ -24,13 +20,14 @@ impl FerriteApp {
     /// Returns (toggle_rainbow_columns, pending_encoding_change).
     pub(crate) fn render_status_bar(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         is_dark: bool,
     ) -> (bool, Option<&'static str>) {
+        let ctx = ui.ctx().clone();
         let mut toggle_rainbow_columns = false;
         let mut pending_encoding_change: Option<&'static str> = None;
 
-        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+        egui::Panel::bottom("status_bar").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 let ferrite_accent = self.state.settings.ferrite_accent_rgb();
                 let status_accent = if is_dark {
@@ -69,13 +66,10 @@ impl FerriteApp {
                         .on_hover_text(t!("tooltip.recent_items").to_string());
                 }
 
-                // Toggle popup on click
-                let just_opened = if button_response.clicked() && has_recent_items {
+                // Toggle popup on click (Popup::open_bool keeps it alive each frame while open).
+                if button_response.clicked() && has_recent_items {
                     self.state.ui.show_recent_files_popup = !self.state.ui.show_recent_files_popup;
-                    self.state.ui.show_recent_files_popup // true if we just opened it
-                } else {
-                    false
-                };
+                }
 
                 // Show recent items popup (files and folders)
                 if self.state.ui.show_recent_files_popup && has_recent_items {
@@ -103,12 +97,19 @@ impl FerriteApp {
                         button_response.rect.left(),
                         button_response.rect.top() - 8.0, // Small gap above button
                     );
-                    let popup_response = egui::Area::new(popup_id)
-                        .order(egui::Order::Foreground)
-                        .fixed_pos(popup_pos)
-                        .pivot(egui::Align2::LEFT_BOTTOM) // Anchor at bottom-left so it grows upward
-                        .show(ctx, |ui| {
-                            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    // egui 0.34: Popup API replaces Area + manual click-outside (CloseOnClickOutside).
+                    let popup_response = egui::Popup::new(
+                        popup_id,
+                        ctx.clone(),
+                        egui::PopupAnchor::Position(popup_pos),
+                        button_response.layer_id,
+                    )
+                    .open_bool(&mut self.state.ui.show_recent_files_popup)
+                    .align(egui::emath::RectAlign::BOTTOM_START)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
+                        egui::Frame::popup(ui.style())
+                            .show(ui, |ui| {
                                 // Use two-column layout if we have both files and folders
                                 let show_both_columns =
                                     !recent_files.is_empty() && !recent_folders.is_empty();
@@ -363,78 +364,82 @@ impl FerriteApp {
 
                                 action
                             })
-                        });
+                            .inner
+                    });
 
                     // Handle action after UI is done
-                    if let Some((path, is_file, focus)) = popup_response.inner.inner {
-                        if is_file {
-                            // Only close popup on normal click (focus=true)
-                            // Keep open on shift+click to allow opening multiple files
-                            if focus {
-                                self.state.ui.show_recent_files_popup = false;
-                            }
-                            let time = self.get_app_time();
-                            match self.open_file_smart(path.clone(), focus, Some(time)) {
-                                Ok(_) => {
-                                    self.pending_cjk_check = true;
-                                    if focus {
-                                        debug!("Opened recent file with focus: {}", path.display());
-                                    } else {
-                                        let time = self.get_app_time();
-                                        self.state.show_toast(
-                                            t!(
-                                                "notification.opened_background",
-                                                name = path
-                                                    .file_name()
-                                                    .and_then(|n| n.to_str())
-                                                    .unwrap_or("file")
-                                            )
-                                            .to_string(),
-                                            time,
-                                            2.0,
+                    if let Some(popup_inner) = popup_response {
+                        if let Some((path, is_file, focus)) = popup_inner.inner {
+                            if is_file {
+                                // Only close popup on normal click (focus=true)
+                                // Keep open on shift+click to allow opening multiple files
+                                if focus {
+                                    self.state.ui.show_recent_files_popup = false;
+                                }
+                                let time = self.get_app_time();
+                                match self.open_file_smart(path.clone(), focus, Some(time)) {
+                                    Ok(_) => {
+                                        self.pending_cjk_check = true;
+                                        if focus {
+                                            debug!(
+                                                "Opened recent file with focus: {}",
+                                                path.display()
+                                            );
+                                        } else {
+                                            let time = self.get_app_time();
+                                            self.state.show_toast(
+                                                t!(
+                                                    "notification.opened_background",
+                                                    name = path
+                                                        .file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or("file")
+                                                )
+                                                .to_string(),
+                                                time,
+                                                2.0,
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to open recent file: {}", e);
+                                        self.state.show_error(
+                                            t!("error.open_file_failed", error = e.to_string())
+                                                .to_string(),
                                         );
                                     }
                                 }
-                                Err(e) => {
-                                    warn!("Failed to open recent file: {}", e);
-                                    self.state.show_error(
-                                        t!("error.open_file_failed", error = e.to_string())
+                            } else {
+                                // Open folder as workspace
+                                self.state.ui.show_recent_files_popup = false;
+                                match self.state.open_workspace(path.clone()) {
+                                    Ok(_) => {
+                                        let time = self.get_app_time();
+                                        let folder_name = path
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("folder");
+                                        self.state.show_toast(
+                                            t!("notification.opened_workspace", name = folder_name)
+                                                .to_string(),
+                                            time,
+                                            2.5,
+                                        );
+                                        debug!("Opened recent workspace: {}", path.display());
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to open recent workspace: {}", e);
+                                        self.state.show_error(
+                                            t!(
+                                                "error.open_workspace_failed",
+                                                error = e.to_string()
+                                            )
                                             .to_string(),
-                                    );
-                                }
-                            }
-                        } else {
-                            // Open folder as workspace
-                            self.state.ui.show_recent_files_popup = false;
-                            match self.state.open_workspace(path.clone()) {
-                                Ok(_) => {
-                                    let time = self.get_app_time();
-                                    let folder_name = path
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                        .unwrap_or("folder");
-                                    self.state.show_toast(
-                                        t!("notification.opened_workspace", name = folder_name)
-                                            .to_string(),
-                                        time,
-                                        2.5,
-                                    );
-                                    debug!("Opened recent workspace: {}", path.display());
-                                }
-                                Err(e) => {
-                                    warn!("Failed to open recent workspace: {}", e);
-                                    self.state.show_error(
-                                        t!("error.open_workspace_failed", error = e.to_string())
-                                            .to_string(),
-                                    );
+                                        );
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    // Close popup when clicking outside (but not on the same frame we opened it)
-                    if popup_response.response.clicked_elsewhere() && !just_opened {
-                        self.state.ui.show_recent_files_popup = false;
                     }
                 }
 
@@ -483,13 +488,11 @@ impl FerriteApp {
                 // Center: Toast message (temporary notifications) - shown inline, not expanding
                 if let Some(toast) = &self.state.ui.toast_message {
                     ui.horizontal(|ui| {
-                        ui.label(
-                            phosphor_rich_text(CHECK, 12.0).italics().color(if is_dark {
-                                egui::Color32::from_rgb(120, 200, 120)
-                            } else {
-                                egui::Color32::from_rgb(40, 140, 40)
-                            }),
-                        );
+                        ui.label(phosphor_rich_text(CHECK, 12.0).italics().color(if is_dark {
+                            egui::Color32::from_rgb(120, 200, 120)
+                        } else {
+                            egui::Color32::from_rgb(40, 140, 40)
+                        }));
                         ui.label(egui::RichText::new(toast).italics().color(if is_dark {
                             egui::Color32::from_rgb(120, 200, 120)
                         } else {
@@ -606,17 +609,11 @@ impl FerriteApp {
                                     }
                                 ));
 
-                                if button_response.clicked() {
-                                    ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-                                }
-
-                                // Delimiter picker popup
-                                egui::popup_below_widget(
-                                    ui,
-                                    popup_id,
-                                    &button_response,
-                                    egui::PopupCloseBehavior::CloseOnClickOutside,
-                                    |ui| {
+                                // Delimiter picker popup (egui 0.34 Popup API)
+                                egui::Popup::from_toggle_button_response(&button_response)
+                                    .id(popup_id)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                                    .show(|ui| {
                                         ui.set_min_width(120.0);
                                         ui.label(
                                             egui::RichText::new(
@@ -640,7 +637,6 @@ impl FerriteApp {
                                             {
                                                 state.clear_delimiter_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
                                         }
 
                                         ui.separator();
@@ -660,11 +656,9 @@ impl FerriteApp {
                                                 {
                                                     state.set_delimiter(delim);
                                                 }
-                                                ui.memory_mut(|mem| mem.close_popup());
                                             }
                                         }
-                                    },
-                                );
+                                    });
 
                                 ui.separator();
 
@@ -692,17 +686,11 @@ impl FerriteApp {
                                     }
                                 ));
 
-                                if header_button_response.clicked() {
-                                    ui.memory_mut(|mem| mem.toggle_popup(header_popup_id));
-                                }
-
-                                // Header picker popup
-                                egui::popup_below_widget(
-                                    ui,
-                                    header_popup_id,
-                                    &header_button_response,
-                                    egui::PopupCloseBehavior::CloseOnClickOutside,
-                                    |ui| {
+                                // Header picker popup (egui 0.34 Popup API)
+                                egui::Popup::from_toggle_button_response(&header_button_response)
+                                    .id(header_popup_id)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                                    .show(|ui| {
                                         ui.set_min_width(120.0);
                                         ui.label(
                                             egui::RichText::new(t!("csv.header_row").to_string())
@@ -724,7 +712,6 @@ impl FerriteApp {
                                             {
                                                 state.clear_header_override();
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
                                         }
 
                                         ui.separator();
@@ -742,7 +729,6 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(true);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
                                         }
 
                                         if ui
@@ -757,10 +743,8 @@ impl FerriteApp {
                                             {
                                                 state.set_header_override(false);
                                             }
-                                            ui.memory_mut(|mem| mem.close_popup());
                                         }
-                                    },
-                                );
+                                    });
 
                                 ui.separator();
 
@@ -808,17 +792,11 @@ impl FerriteApp {
                             }
                         ));
 
-                        if encoding_button_response.clicked() {
-                            ui.memory_mut(|mem| mem.toggle_popup(encoding_popup_id));
-                        }
-
-                        // Encoding picker popup
-                        egui::popup_below_widget(
-                            ui,
-                            encoding_popup_id,
-                            &encoding_button_response,
-                            egui::PopupCloseBehavior::CloseOnClickOutside,
-                            |ui| {
+                        // Encoding picker popup (egui 0.34 Popup API)
+                        egui::Popup::from_toggle_button_response(&encoding_button_response)
+                            .id(encoding_popup_id)
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                            .show(|ui| {
                                 ui.set_min_width(150.0);
                                 ui.label(
                                     egui::RichText::new(t!("status.encoding_heading").to_string())
@@ -832,11 +810,9 @@ impl FerriteApp {
                                     let label = enc.to_uppercase();
                                     if ui.selectable_label(selected, label).clicked() {
                                         pending_encoding_change = Some(enc);
-                                        ui.memory_mut(|mem| mem.close_popup());
                                     }
                                 }
-                            },
-                        );
+                            });
 
                         ui.separator();
 

@@ -233,13 +233,18 @@ impl FerriteApp {
                 }
                 FileLoadMsg::Complete { tab_id, bytes } => {
                     let auto_save = self.state.settings.auto_save_enabled_default;
-                    let view_mode = self.state.settings.default_view_mode;
+                    let file_path = self.state.tab_by_id(tab_id).and_then(|t| t.path.clone());
+                    let (view_mode, split_ratio) = file_path
+                        .as_ref()
+                        .map(|p| self.state.opening_view_prefs_for_path(p))
+                        .unwrap_or((self.state.settings.default_view_mode, 0.5));
 
                     if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
                         let file_size = bytes.len() as f64 / (1024.0 * 1024.0);
                         tab.finish_loading(bytes, auto_save, view_mode);
+                        tab.split_ratio = split_ratio;
 
-                        if view_mode == crate::config::ViewMode::Split
+                        if tab.view_mode == crate::config::ViewMode::Split
                             && !tab.file_type().supports_split()
                         {
                             tab.view_mode = crate::config::ViewMode::Raw;
@@ -997,7 +1002,7 @@ impl FerriteApp {
             // Trigger search if panel is now open
             if self.search_panel.is_open() {
                 if let Some(workspace) = &self.state.workspace {
-                    let files = workspace.all_files();
+                    let files = self.workspace_files_for_search(workspace);
                     self.search_panel.search(&files, &workspace.hidden_patterns);
                 }
             }
@@ -1069,6 +1074,41 @@ impl FerriteApp {
         }
     }
 
+    /// Refresh the sidebar file tree and schedule a full file-index rebuild.
+    pub(crate) fn refresh_workspace_tree(&mut self) {
+        self.state.refresh_workspace();
+        self.workspace_file_index.invalidate();
+    }
+
+    /// Keep the workspace file index in sync with the open folder.
+    pub(crate) fn sync_workspace_file_index(&mut self) {
+        if let Some(workspace) = self.state.workspace() {
+            self.workspace_file_index
+                .sync(&workspace.root_path, &workspace.hidden_patterns);
+        } else {
+            self.workspace_file_index.reset();
+        }
+    }
+
+    /// Files for quick switcher / search: full index when available, tree fallback while starting.
+    pub(crate) fn workspace_files_for_search(
+        &self,
+        workspace: &crate::workspaces::Workspace,
+    ) -> Vec<PathBuf> {
+        let indexed = self.workspace_file_index.files();
+        if self.workspace_file_index.is_indexing() {
+            if indexed.is_empty() {
+                workspace.all_files()
+            } else {
+                indexed.to_vec()
+            }
+        } else if !indexed.is_empty() {
+            indexed.to_vec()
+        } else {
+            workspace.all_files()
+        }
+    }
+
     /// Handle file watcher events from the workspace.
     pub(crate) fn handle_file_watcher_events(&mut self) {
         use crate::workspaces::WorkspaceEvent;
@@ -1134,7 +1174,7 @@ impl FerriteApp {
 
         // Refresh file tree if needed
         if need_tree_refresh {
-            self.state.refresh_workspace();
+            self.refresh_workspace_tree();
             // Also request git refresh since files changed
             self.request_git_refresh();
         }
@@ -1169,6 +1209,7 @@ impl FerriteApp {
                             if should_reload {
                                 if let Some(tab) = self.state.tab_mut(idx) {
                                     tab.content = new_content.clone();
+                                    tab.notify_external_content_change();
                                     // Clamp cursor to new content length
                                     let max_chars = tab.content.chars().count();
                                     let current_cursor = tab.cursors.primary().head.min(max_chars);
@@ -1711,7 +1752,7 @@ impl FerriteApp {
                 }
             }
             FileTreeContextAction::Refresh => {
-                self.state.refresh_workspace();
+                self.refresh_workspace_tree();
                 let time = self.get_app_time();
                 self.state.show_toast(
                     t!("notification.file_tree_refreshed").to_string(),
@@ -1754,7 +1795,7 @@ impl FerriteApp {
                 );
 
                 // Refresh file tree
-                self.state.refresh_workspace();
+                self.refresh_workspace_tree();
 
                 // Open the new file in a tab
                 let time = self.get_app_time();
@@ -1792,7 +1833,7 @@ impl FerriteApp {
                 );
 
                 // Refresh file tree
-                self.state.refresh_workspace();
+                self.refresh_workspace_tree();
             }
             Err(e) => {
                 warn!("Failed to create folder: {}", e);
@@ -1834,7 +1875,7 @@ impl FerriteApp {
                 }
 
                 // Refresh file tree
-                self.state.refresh_workspace();
+                self.refresh_workspace_tree();
             }
             Err(e) => {
                 warn!("Failed to rename: {}", e);
@@ -1896,7 +1937,7 @@ impl FerriteApp {
                 }
 
                 // Refresh file tree
-                self.state.refresh_workspace();
+                self.refresh_workspace_tree();
             }
             Err(e) => {
                 warn!("Failed to delete: {}", e);

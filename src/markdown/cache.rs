@@ -320,32 +320,39 @@ mod tests {
 
     #[test]
     fn block_height_cache_hit() {
+        const SRC: &str = "block-height-cache-hit\n";
+        clear_block_height_cache();
         let rp = render_params_hash(800.0, 14.0);
-        insert_block_height("# Hello\n", rp, 42.0);
-        assert_eq!(get_block_height("# Hello\n", rp), Some(42.0));
+        insert_block_height(SRC, rp, 42.0);
+        assert_eq!(get_block_height(SRC, rp), Some(42.0));
     }
 
     #[test]
     fn block_height_cache_miss_different_content() {
+        clear_block_height_cache();
         let rp = render_params_hash(800.0, 14.0);
-        insert_block_height("# Hello\n", rp, 42.0);
-        assert_eq!(get_block_height("# World\n", rp), None);
+        insert_block_height("block-height-miss-a\n", rp, 42.0);
+        assert_eq!(get_block_height("block-height-miss-b\n", rp), None);
     }
 
     #[test]
     fn block_height_cache_miss_different_width() {
+        const SRC: &str = "block-height-miss-width\n";
+        clear_block_height_cache();
         let rp1 = render_params_hash(800.0, 14.0);
         let rp2 = render_params_hash(600.0, 14.0);
-        insert_block_height("# Hello\n", rp1, 42.0);
-        assert_eq!(get_block_height("# Hello\n", rp2), None);
+        insert_block_height(SRC, rp1, 42.0);
+        assert_eq!(get_block_height(SRC, rp2), None);
     }
 
     #[test]
     fn block_height_cache_miss_different_font_size() {
+        const SRC: &str = "block-height-miss-font-size\n";
+        clear_block_height_cache();
         let rp1 = render_params_hash(800.0, 14.0);
         let rp2 = render_params_hash(800.0, 18.0);
-        insert_block_height("# Hello\n", rp1, 42.0);
-        assert_eq!(get_block_height("# Hello\n", rp2), None);
+        insert_block_height(SRC, rp1, 42.0);
+        assert_eq!(get_block_height(SRC, rp2), None);
     }
 
     #[test]
@@ -363,9 +370,11 @@ mod tests {
 
     #[test]
     fn clear_block_height_cache_works() {
-        let rp = render_params_hash(800.0, 14.0);
-        insert_block_height("# clear test\n", rp, 10.0);
+        const SRC: &str = "block-height-clear-test\n";
         clear_block_height_cache();
-        assert_eq!(get_block_height("# clear test\n", rp), None);
+        let rp = render_params_hash(800.0, 14.0);
+        insert_block_height(SRC, rp, 10.0);
+        clear_block_height_cache();
+        assert_eq!(get_block_height(SRC, rp), None);
     }
 }

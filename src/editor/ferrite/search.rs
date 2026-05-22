@@ -8,6 +8,7 @@
 use super::editor::{FerriteEditor, SearchMatch};
 use super::highlights::MAX_DISPLAYED_MATCHES;
 
+#[allow(dead_code)] // Search match accessors on FerriteEditor
 impl FerriteEditor {
     // ─────────────────────────────────────────────────────────────────────────────
     // Search Highlights (Phase 2)

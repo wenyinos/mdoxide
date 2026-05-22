@@ -78,7 +78,7 @@ In raw mode, the editor displays a plain text editor for markdown source:
 
 ### Rendered Mode
 
-In rendered mode, markdown elements are displayed as styled widgets:
+In rendered mode, markdown elements are displayed as styled widgets. **Block editing is coordinated by [`RenderedEditSession`](./rendered-edit-session.md)** — at most one block (heading, paragraph, list item, formatted block, or table cell) is active; switching commits the previous buffer in one click. Widget ids are stable under `source_epoch` (not content hash). See also [`rendered-widget-identity.md`](./rendered-widget-identity.md).
 
 | Markdown Element | Widget Type | Features |
 |------------------|-------------|----------|
@@ -251,6 +251,7 @@ Potential improvements for future tasks:
 
 ## Related Documentation
 
+- [Rendered edit session (overview)](rendered-edit-session.md) - Session coordinator, stable widget ids, regression matrix
 - [Markdown Parser](markdown-parser.md) - AST types and parsing (Task 19)
 - [Editor Widget](editor-widget.md) - Raw text editor patterns
 - [Settings Config](settings-config.md) - Theme and font settings

@@ -14,7 +14,7 @@ use crate::ui::icons::{phosphor_font, phosphor_rich_text, RIBBON_ICON_SIZE};
 use eframe::egui::{self, Color32, Response, RichText, Ui, Vec2};
 use egui_phosphor::regular::{
     CHECK, CLIPBOARD, EXPORT, FILE_MAGNIFYING_GLASS, FILE_PDF, FILE_PLUS, FILE_TEXT, FLOPPY_DISK,
-    FOLDER_SIMPLE_MINUS, FOLDERS, GLOBE, LIGHTNING, MAGNIFYING_GLASS, PRINTER, SPARKLE,
+    FOLDERS, FOLDER_SIMPLE_MINUS, GLOBE, LIGHTNING, MAGNIFYING_GLASS, PRINTER, SPARKLE,
     TERMINAL_WINDOW,
 };
 use rust_i18n::t;
@@ -281,7 +281,7 @@ impl Ribbon {
             }
 
             // Save Dropdown - replaces separate Save and SaveAs buttons
-            egui::ComboBox::from_id_source("save_dropdown")
+            egui::ComboBox::from_id_salt("save_dropdown")
                 .selected_text(phosphor_rich_text(FLOPPY_DISK, 14.0))
                 .width(40.0)
                 .show_ui(ui, |ui| {
@@ -385,7 +385,7 @@ impl Ribbon {
                     vertical_separator(ui, separator_color, self.height() - 8.0);
                     ui.add_space(4.0);
 
-                    egui::ComboBox::from_id_source("export_dropdown")
+                    egui::ComboBox::from_id_salt("export_dropdown")
                         .selected_text(phosphor_rich_text(EXPORT, 14.0))
                         .width(40.0)
                         .show_ui(ui, |ui| {

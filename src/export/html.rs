@@ -109,7 +109,7 @@ pub fn syntax_dark_mode_for_export(
         crate::export::HtmlExportThemeChoice::FollowEditor => theme_mgr.is_dark(ctx),
         crate::export::HtmlExportThemeChoice::Light => false,
         crate::export::HtmlExportThemeChoice::Dark => true,
-        crate::export::HtmlExportThemeChoice::Auto => ctx.style().visuals.dark_mode,
+        crate::export::HtmlExportThemeChoice::Auto => ctx.global_style().visuals.dark_mode,
     }
 }
 

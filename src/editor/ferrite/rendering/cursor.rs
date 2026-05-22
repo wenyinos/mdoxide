@@ -197,8 +197,7 @@ fn calculate_wrapped_cursor_position(
         // each character is on, and pos_from_cursor returns a rect whose
         // min.y accounts for the row offset within the galley.
         let ccursor = egui::text::CCursor::new(cursor_col);
-        let galley_cursor = galley.from_ccursor(ccursor);
-        let cursor_rect = galley.pos_from_cursor(&galley_cursor);
+        let cursor_rect = galley.pos_from_cursor(ccursor);
 
         // cursor_rect.min is relative to galley origin:
         // - min.x: X offset within the current visual row

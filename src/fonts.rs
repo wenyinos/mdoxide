@@ -970,6 +970,15 @@ pub fn ttf_bytes_monospace_regular() -> &'static [u8] {
     JETBRAINS_REGULAR
 }
 
+/// Vertical line height in **points** for `font_id`, from egui's loaded font metrics.
+///
+/// Prefer this over laying out an empty string: with egui 0.34's skrifa backend an
+/// empty galley can report zero height while [`Fonts::row_height`] stays correct.
+#[must_use]
+pub fn row_height_for_font(ctx: &egui::Context, font_id: &FontId) -> f32 {
+    ctx.fonts_mut(|fonts| fonts.row_height(font_id))
+}
+
 /// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::ferrite::shaping).
 ///
 /// Named Inter/JetBrains families resolve to the matching weight/style TTF.
@@ -2229,7 +2238,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
     let font_id = FontId::new(14.0, FontFamily::Proportional);
 
     // Pre-warm by querying glyph widths - this forces rasterization
-    ctx.fonts(|fonts| {
+    ctx.fonts_mut(|fonts| {
         for c in BOX_DRAWING_CHARS.chars() {
             let _ = fonts.glyph_width(&font_id, c);
         }
@@ -2240,7 +2249,7 @@ fn prewarm_font_atlas(ctx: &egui::Context) {
 
     // Also pre-warm monospace font for code blocks
     let mono_font_id = FontId::new(14.0, FontFamily::Monospace);
-    ctx.fonts(|fonts| {
+    ctx.fonts_mut(|fonts| {
         for c in BOX_DRAWING_CHARS.chars() {
             let _ = fonts.glyph_width(&mono_font_id, c);
         }
@@ -2358,7 +2367,7 @@ fn configure_text_styles(ctx: &egui::Context) {
     ]
     .into();
 
-    ctx.style_mut(|style| {
+    ctx.global_style_mut(|style| {
         style.text_styles = text_styles.clone();
     });
 }

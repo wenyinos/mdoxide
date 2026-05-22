@@ -573,11 +573,7 @@ impl SugiyamaLayout {
         for (layer_idx, layer) in self.layers.iter().enumerate() {
             let layer_cross_size = layer_cross_sizes[layer_idx];
 
-            let start_cross = if is_horizontal {
-                margin + (max_cross_size - layer_cross_size) / 2.0
-            } else {
-                (self.available_width - layer_cross_size).max(margin * 2.0) / 2.0
-            };
+            let start_cross = margin + (max_cross_size - layer_cross_size) / 2.0;
 
             let mut current_cross = start_cross;
 
@@ -810,9 +806,7 @@ impl SugiyamaLayout {
                 continue;
             }
 
-            entries.sort_by(|a, b| {
-                a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
             // Iterative relaxation. Each pass resolves the largest local
             // violation; converges in O(layer.len()) passes in practice.

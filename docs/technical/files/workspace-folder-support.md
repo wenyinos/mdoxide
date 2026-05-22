@@ -7,7 +7,8 @@ Comprehensive folder/workspace management system that enables project-based edit
 ## Key Files
 
 - `src/workspaces/mod.rs` - Core workspace types (`AppMode`, `Workspace`) and module re-exports
-- `src/workspaces/file_tree.rs` - File tree data structure and directory scanning
+- `src/workspaces/file_tree.rs` - File tree data structure and lazy directory scanning
+- `src/workspaces/file_index.rs` - Background full-workspace file index (quick switcher, search)
 - `src/workspaces/settings.rs` - Workspace-specific settings and persistence
 - `src/workspaces/persistence.rs` - Workspace state persistence (expanded folders, recent files)
 - `src/workspaces/watcher.rs` - File system watcher for detecting external changes
@@ -15,8 +16,9 @@ Comprehensive folder/workspace management system that enables project-based edit
 - `src/ui/quick_switcher.rs` - Quick file switcher overlay (Ctrl+P)
 - `src/ui/search.rs` - Search in files panel (Ctrl+Shift+F)
 - `src/ui/dialogs.rs` - File operation dialogs (New File, New Folder, Rename, Delete)
+- `src/ui/file_index_progress.rs` - Indexing progress bar (quick switcher, search panel)
 - `src/state.rs` - AppState integration for workspace mode
-- `src/app.rs` - Main application integration
+- `src/app/` - Main application integration (`file_ops.rs`, `central_panel.rs`, `mod.rs`)
 
 ## Implementation Details
 
@@ -52,21 +54,27 @@ pub struct Workspace {
 
 ### File Tree
 
-Recursive data structure representing the directory hierarchy:
+Lazy-loaded hierarchy for the sidebar (fast open on large repos):
 
 ```rust
-pub struct FileTreeNode {
-    pub path: PathBuf,
-    pub name: String,
-    pub kind: FileTreeNodeKind,
-    pub expanded: bool,
-}
-
 pub enum FileTreeNodeKind {
     File,
     Directory { children: Vec<FileTreeNode> },
+    DirectoryNotLoaded,  // scanned when user expands the folder
 }
 ```
+
+Subdirectories start as `DirectoryNotLoaded` and are scanned on expand. This does **not** limit quick switcher or search — see [Workspace File Index](./workspace-file-index.md).
+
+### Workspace File Index
+
+Background `walkdir` index of **all** workspace files for Ctrl+P and Ctrl+Shift+F:
+
+- Starts when a folder is opened; rebuilds on file create/delete/rename or tree refresh
+- Incremental batches + progress bar on large folders (“Indexing… N files found”)
+- Same hidden-folder rules as the tree
+
+See [workspace-file-index.md](./workspace-file-index.md).
 
 ### File Watcher
 
@@ -88,18 +96,22 @@ Events are polled each frame and used to:
 
 ### Quick File Switcher
 
-Fuzzy search across all workspace files:
+Fuzzy search across **all indexed workspace files** (not only expanded tree folders):
+
 - Opens with **Ctrl+P**
 - Uses `fuzzy-matcher` crate for scoring
 - Prioritizes recently opened files
+- Shows indexing progress on large folders until the background walk completes
 - Keyboard navigation with arrow keys
 
 ### Search in Files
 
-Full-text search across workspace:
+Full-text search across the **full workspace index**:
+
 - Opens with **Ctrl+Shift+F**
 - Supports plain text and regex
 - Case-sensitive toggle
+- Indexing progress bar while the background walk runs
 - Results grouped by file with highlighted matches
 - Click result to open file
 
@@ -114,6 +126,7 @@ Modal dialogs for file operations:
 ## Dependencies Used
 
 - `notify = "6"` - Cross-platform file system watching
+- `walkdir` - Full-workspace file index (background thread)
 - `fuzzy-matcher = "0.3"` - Fuzzy string matching for quick switcher
 - `regex` - Regular expression support for search
 
@@ -195,6 +208,7 @@ Workspace state is saved to `.ferrite/` directory within the workspace root:
 Run workspace-related tests:
 
 ```bash
+cargo test workspaces::file_index::
 cargo test workspaces::
 cargo test ui::file_tree::
 cargo test ui::quick_switcher::

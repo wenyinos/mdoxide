@@ -17,15 +17,15 @@ mod stats;
 mod widget;
 
 // Re-export Ferrite editor types
-pub use ferrite::{
-    compute_edit_ops, Cursor, EditHistory, EditOperation, FerriteEditor, LineCache, Selection,
-    TextBuffer, ViewState,
-};
+pub use ferrite::{compute_edit_ops, EditHistory};
 
 // Re-export other editor types
 pub use find_replace::{FindReplacePanel, FindState};
 pub use line_numbers::count_lines;
-pub use minimap::{Minimap, SemanticMinimap};
+pub use minimap::{
+    show_split_sync_footer, Minimap, SemanticMinimap, SplitSyncFooterOutput,
+    SPLIT_SYNC_FOOTER_HEIGHT,
+};
 pub use outline::{
     extract_outline, extract_outline_for_file, ContentType, DocumentOutline, OutlineItem,
     OutlineType, StructuredStats,

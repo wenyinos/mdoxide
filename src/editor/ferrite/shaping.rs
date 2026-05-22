@@ -3,12 +3,17 @@
 //! Converts `&str` into a glyph run with per-glyph advances and cluster mapping
 //! (UTF-8 byte indices), using the same font bytes egui loads for the editor.
 //!
-//! **Rendering:** egui 0.28 still builds [`egui::Galley`] via `ab_glyph` without
-//! full OTL shaping. This module is the foundation for a follow-up task that will
-//! cache shaped runs and align cursor/hit-testing with harfrust output.
-//! [`crate::editor::ferrite::line_cache::LineCache`] calls [`shape_text`] on
-//! complex-script lines before galley creation to exercise the pipeline and surface
-//! parse/shaping failures early (see `RUST_LOG=ferrite::shaping`).
+//! **egui 0.34 text layout:** [`egui::Galley`] is built by epaint via **skrifa** /
+//! **vello_cpu** (default in egui 0.34; no Ferrite Cargo feature flags). Galleys
+//! do not apply full OTL shaping for complex scripts — cursor/selection for those
+//! lines use HarfRust advances from this module; drawing uses per-cluster mini-
+//! galleys positioned at shaped offsets ([`crate::editor::ferrite::line_cache::ShapedLine`]).
+//!
+//! **Index conventions:** HarfRust `cluster` fields are UTF-8 **byte** offsets.
+//! [`egui::Galley::cursor_from_pos`] / [`egui::Galley::pos_from_cursor`] use
+//! [`egui::text::CCursor`] **character** indices — do not mix with byte indices.
+//!
+//! Deeper visual validation lives in task **89.6** (`RUST_LOG=ferrite::shaping`).
 
 use harfrust::{BufferFlags, FontRef, ShaperData, UnicodeBuffer};
 use std::fmt;
@@ -96,6 +101,7 @@ pub fn shape_text(
 
 /// Sum of horizontal advances (points), useful for width estimates.
 #[must_use]
+#[allow(dead_code)]
 pub fn shaped_width(glyphs: &[ShapedGlyph]) -> f32 {
     glyphs.iter().map(|g| g.x_advance).sum()
 }
@@ -144,7 +150,7 @@ pub fn group_clusters(glyphs: &[ShapedGlyph], text_byte_len: usize) -> Vec<Shape
         }
     };
 
-    groups
+    let mut clusters: Vec<ShapedCluster> = groups
         .iter()
         .map(|(cluster_byte, advance)| {
             let byte_start = *cluster_byte as usize;
@@ -154,7 +160,66 @@ pub fn group_clusters(glyphs: &[ShapedGlyph], text_byte_len: usize) -> Vec<Shape
                 advance: *advance,
             }
         })
-        .collect()
+        .collect();
+
+    // Logical byte order for cursor/selection (may differ from glyph visual order).
+    clusters.sort_by_key(|c| c.byte_start);
+    normalize_cluster_byte_coverage(text_byte_len, &mut clusters);
+    clusters
+}
+
+/// Force clusters to tile `[0..text_byte_len)` without gaps (HarfRust may omit cluster 0 on ligatures).
+fn normalize_cluster_byte_coverage(text_byte_len: usize, clusters: &mut [ShapedCluster]) {
+    if clusters.is_empty() {
+        return;
+    }
+    clusters[0].byte_start = 0;
+    for i in 0..clusters.len().saturating_sub(1) {
+        let next_start = clusters[i + 1].byte_start;
+        clusters[i].byte_end = next_start;
+    }
+    if let Some(last) = clusters.last_mut() {
+        last.byte_end = text_byte_len;
+    }
+}
+
+/// Shape `text` and return visual-order clusters (convenience for cache + tests).
+///
+/// Returns an empty vector for empty input or `font_size_pt <= 0.0` (same as [`shape_text`]).
+pub fn shape_line_clusters(
+    text: &str,
+    font_bytes: &[u8],
+    font_size_pt: f32,
+) -> Result<Vec<ShapedCluster>, ShapeError> {
+    let glyphs = shape_text(text, font_bytes, font_size_pt)?;
+    Ok(group_clusters(&glyphs, text.len()))
+}
+
+/// Returns true when cluster byte ranges are monotonic, non-overlapping, and cover `text`.
+///
+/// Invariants expected by cursor/selection helpers and [`super::line_cache::LineCache`]:
+/// - `byte_start < byte_end` (except empty text → no clusters)
+/// - ranges tile `[0..text.len())` without gaps or overlaps
+/// - `advance > 0` for non-empty clusters (HarfRust should not emit zero-width runs)
+#[must_use]
+pub fn validate_cluster_byte_ranges(text: &str, clusters: &[ShapedCluster]) -> bool {
+    if text.is_empty() {
+        return clusters.is_empty();
+    }
+    if clusters.is_empty() {
+        return false;
+    }
+    let mut pos = 0usize;
+    for c in clusters {
+        if c.byte_start != pos || c.byte_end <= c.byte_start || c.byte_end > text.len() {
+            return false;
+        }
+        if c.advance <= 0.0 {
+            return false;
+        }
+        pos = c.byte_end;
+    }
+    pos == text.len()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,11 +313,10 @@ pub fn shaped_column_to_x(
     font_size: f32,
     char_column: usize,
 ) -> Option<f32> {
-    let glyphs = shape_text(text, font_bytes, font_size).ok()?;
-    if glyphs.is_empty() {
+    let clusters = shape_line_clusters(text, font_bytes, font_size).ok()?;
+    if clusters.is_empty() {
         return None;
     }
-    let clusters = group_clusters(&glyphs, text.len());
     Some(column_to_x_offset(text, &clusters, char_column))
 }
 
@@ -260,11 +324,10 @@ pub fn shaped_column_to_x(
 ///
 /// Returns `None` when the text is empty, shaping fails, or font_size is <= 0.
 pub fn shaped_x_to_column(text: &str, font_bytes: &[u8], font_size: f32, x: f32) -> Option<usize> {
-    let glyphs = shape_text(text, font_bytes, font_size).ok()?;
-    if glyphs.is_empty() {
+    let clusters = shape_line_clusters(text, font_bytes, font_size).ok()?;
+    if clusters.is_empty() {
         return None;
     }
-    let clusters = group_clusters(&glyphs, text.len());
     Some(x_to_column(text, &clusters, x))
 }
 
@@ -533,5 +596,90 @@ mod tests {
             (x_end - total).abs() < 0.5,
             "Arabic full width: x_end={x_end}, total={total}"
         );
+    }
+
+    // ── egui 0.34 integration invariants (task 89.6) ───────────────────────
+
+    #[test]
+    fn shape_line_clusters_convenience_matches_manual() {
+        let text = "Hello";
+        let bytes = inter_bytes();
+        let manual = group_clusters(&shape_text(text, bytes, 14.0).unwrap(), text.len());
+        let via = shape_line_clusters(text, bytes, 14.0).unwrap();
+        assert_eq!(manual.len(), via.len());
+        for (a, b) in manual.iter().zip(via.iter()) {
+            assert_eq!(a.byte_start, b.byte_start);
+            assert_eq!(a.byte_end, b.byte_end);
+            assert!((a.advance - b.advance).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn validate_cluster_byte_ranges_latin_and_arabic() {
+        for text in [
+            "Hello",
+            "\u{0644}\u{0627}",
+            "\u{0633}\u{0644}\u{0627}\u{0645}",
+        ] {
+            let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+            assert!(
+                validate_cluster_byte_ranges(text, &cs),
+                "invalid clusters for {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_cluster_byte_ranges_rejects_gaps() {
+        let bad = vec![ShapedCluster {
+            byte_start: 0,
+            byte_end: 1,
+            advance: 8.0,
+        }];
+        assert!(!validate_cluster_byte_ranges("ab", &bad));
+    }
+
+    #[test]
+    fn arabic_ligature_fewer_clusters_than_chars() {
+        let text = "\u{0644}\u{0627}"; // lam + alef → often one cluster
+        let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+        assert!(validate_cluster_byte_ranges(text, &cs));
+        assert!(cs.len() <= text.chars().count());
+    }
+
+    #[test]
+    fn arabic_x_column_roundtrip() {
+        let text = "\u{0645}\u{0631}\u{062D}\u{0628}\u{0627}"; // marhaba
+        let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+        for col in 0..=text.chars().count() {
+            let x = column_to_x_offset(text, &cs, col);
+            let back = x_to_column(text, &cs, x);
+            assert_eq!(back, col, "roundtrip at col {col}");
+        }
+    }
+
+    #[test]
+    fn bengali_conjunct_validate_and_width() {
+        let text = "\u{0995}\u{09CD}\u{09B7}"; // kssa
+        let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+        assert!(validate_cluster_byte_ranges(text, &cs));
+        let total: f32 = cs.iter().map(|c| c.advance).sum();
+        assert!(total > 0.0);
+        assert!(cs.len() <= text.chars().count());
+    }
+
+    #[test]
+    fn mixed_latin_arabic_validate() {
+        let text = "Hi \u{0645}\u{0631}\u{062D}\u{0628}\u{0627}";
+        let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+        assert!(validate_cluster_byte_ranges(text, &cs));
+        assert!(shaped_column_to_x(text, inter_bytes(), 14.0, 0).unwrap() == 0.0);
+    }
+
+    #[test]
+    fn devanagari_shape_and_validate() {
+        let text = "\u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"; // Hindi "Hindi"
+        let cs = shape_line_clusters(text, inter_bytes(), 14.0).unwrap();
+        assert!(validate_cluster_byte_ranges(text, &cs));
     }
 }

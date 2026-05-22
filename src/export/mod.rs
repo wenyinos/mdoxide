@@ -23,8 +23,7 @@ pub mod pdf;
 
 pub use clipboard::copy_html_to_clipboard;
 pub use html::{
-    generate_html_document, generate_html_document_export, resolve_html_theme_for_export,
-    syntax_dark_mode_for_export, HtmlThemeResolution,
+    generate_html_document_export, resolve_html_theme_for_export, syntax_dark_mode_for_export,
 };
 pub use html_options::{HtmlExportOptions, HtmlExportThemeChoice};
 pub use pdf::{render_markdown_to_pdf, PdfExportOptions, PdfMarginPreset, PdfPageSize, PdfTheme};

@@ -49,6 +49,14 @@ const TITLE_BAR_BUTTON_RIGHT_MARGIN: f32 = 12.0;
 /// status-bar controls) extends further inward than the resize cursor zone.
 const EDGE_CLICK_BLOCK_WIDTH: f32 = 24.0;
 
+/// Full window bounds in local coordinates (origin at top-left of the window).
+///
+/// Use for borderless resize hit-testing and full-window modal overlays.
+/// For UI laid out inside panels, prefer [`egui::Context::content_rect`].
+pub fn viewport_window_rect(ctx: &egui::Context) -> Rect {
+    ctx.viewport_rect()
+}
+
 /// State for tracking window resize operations.
 #[derive(Debug, Clone, Default)]
 pub struct WindowResizeState {
@@ -89,19 +97,12 @@ impl WindowResizeState {
         self.block_clicks_in_resize_zone = false;
     }
 
-    /// True when foreground click guards should eat pointer events.
-    pub fn ui_interaction_blocked(&self, _ctx: &egui::Context) -> bool {
-        self.blocks_widget_clicks()
-    }
-
     /// Whether widgets near window edges should ignore clicks.
     ///
     /// True while the resize cursor is shown, during an active resize, or for one
     /// frame after release over a grab zone (so release does not activate buttons).
     pub fn blocks_widget_clicks(&self) -> bool {
-        self.resize_cursor_active()
-            || self.is_resizing
-            || self.block_clicks_in_resize_zone
+        self.resize_cursor_active() || self.is_resizing || self.block_clicks_in_resize_zone
     }
 
     /// Whether the resize cursor is showing (hover over a grab zone or dragging).
@@ -144,9 +145,8 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
         (pos, pressed, down)
     });
 
-    // Use screen_rect() which gives us the local coordinate rect of the window
-    // This is (0,0) to (width, height) in window-local coordinates
-    let window_rect = ctx.screen_rect();
+    // Full window in local coordinates (0,0) → (width, height) for edge hit-testing.
+    let window_rect = viewport_window_rect(ctx);
 
     let Some(pointer_pos) = pointer_pos else {
         if !primary_down {
@@ -368,7 +368,7 @@ pub fn consume_clicks_in_resize_zones(ctx: &egui::Context, state: &WindowResizeS
         return;
     }
 
-    let window_rect = ctx.screen_rect();
+    let window_rect = viewport_window_rect(ctx);
     let pointer = ctx.input(|i| i.pointer.hover_pos());
 
     let mut directions = Vec::new();
@@ -528,7 +528,7 @@ pub struct ConstrainedPanel {
 /// # Arguments
 ///
 /// * `desired_rect` - The desired position and size of the panel
-/// * `viewport` - The available viewport bounds (typically `ctx.screen_rect()`)
+/// * `viewport` - The available viewport bounds (typically [`viewport_window_rect`])
 /// * `constraints` - Size constraints and margin settings
 ///
 /// # Returns
@@ -538,7 +538,7 @@ pub struct ConstrainedPanel {
 /// # Example
 ///
 /// ```ignore
-/// let viewport = ctx.screen_rect();
+/// let viewport = viewport_window_rect(ctx);
 /// let desired = Rect::from_min_size(Pos2::new(100.0, 100.0), Vec2::new(500.0, 400.0));
 /// let result = constrain_rect_to_viewport(desired, viewport, &PanelConstraints::default());
 /// // Use result.pos and result.size to position the window
@@ -675,7 +675,7 @@ pub fn search_panel_constraints() -> PanelConstraints {
         min_width: 350.0,  // Minimum to show search field + buttons
         max_width: 700.0,  // Don't get too wide
         min_height: 200.0, // Show at least search field + a few results
-        max_height: 600.0, // Don't take up entire screen
+        max_height: 480.0, // Cap height — results scroll inside; no full-screen growth
         margin: 16.0,      // Keep some padding from edges
     }
 }

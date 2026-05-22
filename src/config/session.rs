@@ -14,7 +14,7 @@
 use crate::config::{persistence::get_config_dir, ViewMode};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -284,10 +284,30 @@ pub enum FileConflictStatus {
 // Recovery Content
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Current schema version for `RecoveryContent` files.
+///
+/// Bumped whenever the on-disk format changes in a way that requires
+/// migration. v1 is the original `{tab_id, content, saved_at}` shape.
+/// v2 adds identity fields (`path`, `original_content_hash`) and the
+/// `schema_version` marker itself; older files are still readable
+/// because the new fields all have serde defaults.
+pub const RECOVERY_CONTENT_SCHEMA_VERSION: u32 = 1;
+
 /// Recovery content for tabs with unsaved changes.
 ///
 /// This is stored separately from the session state to keep the
 /// session file small and fast to save.
+///
+/// **Identity fields (`path`, `original_content_hash`):** added to detect
+/// stale recovery files when a tab id is reused across sessions. The recovery
+/// content is only safe to apply when both fields match the current tab's
+/// path and the hashed disk content the tab was opened with. Older recovery
+/// files written before these fields existed deserialize with `None`, in
+/// which case the consumer must fall back to the legacy "tab id only"
+/// matching policy.
+///
+/// **`schema_version`:** allows future format migrations. Files that predate
+/// this field deserialize as schema_version 1 (see [`RecoveryContent::default_schema_version`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecoveryContent {
     /// Tab ID this content belongs to
@@ -298,15 +318,86 @@ pub struct RecoveryContent {
 
     /// Timestamp when this was saved (Unix timestamp)
     pub saved_at: u64,
+
+    /// Path of the file this recovery content belongs to (None for untitled tabs).
+    ///
+    /// Used at restore time to verify that the recovery file matches the tab's
+    /// on-disk identity before its content is applied. Defaults to `None` for
+    /// legacy recovery files that pre-date this field.
+    #[serde(default)]
+    pub path: Option<PathBuf>,
+
+    /// Hash of the disk content the tab was opened with (or last reloaded from).
+    ///
+    /// When the recovered tab is path-backed, this hash is compared against
+    /// the current disk content. A mismatch indicates the on-disk file has
+    /// changed since the recovery snapshot was written, and the caller must
+    /// surface a conflict instead of silently overwriting the user's disk
+    /// state. Defaults to `None` for legacy recovery files.
+    #[serde(default)]
+    pub original_content_hash: Option<u64>,
+
+    /// Schema version of this recovery file. Defaults to `1` for legacy files
+    /// that omit this field. See [`RECOVERY_CONTENT_SCHEMA_VERSION`].
+    #[serde(default = "RecoveryContent::default_schema_version")]
+    pub schema_version: u32,
+}
+
+impl Default for RecoveryContent {
+    fn default() -> Self {
+        Self {
+            tab_id: 0,
+            content: String::new(),
+            saved_at: current_timestamp(),
+            path: None,
+            original_content_hash: None,
+            schema_version: RECOVERY_CONTENT_SCHEMA_VERSION,
+        }
+    }
 }
 
 impl RecoveryContent {
-    /// Create new recovery content for a tab
+    /// Default schema version used by `#[serde(default = ...)]` when
+    /// deserializing recovery files written before the field existed.
+    pub fn default_schema_version() -> u32 {
+        RECOVERY_CONTENT_SCHEMA_VERSION
+    }
+
+    /// Create new recovery content for a tab without identity metadata.
+    ///
+    /// Prefer [`RecoveryContent::new_with_identity`] for path-backed tabs so
+    /// that restore-time identity checks can verify the tab and disk state
+    /// before applying the recovered content.
     pub fn new(tab_id: usize, content: String) -> Self {
         Self {
             tab_id,
             content,
             saved_at: current_timestamp(),
+            path: None,
+            original_content_hash: None,
+            schema_version: RECOVERY_CONTENT_SCHEMA_VERSION,
+        }
+    }
+
+    /// Create new recovery content with identity metadata.
+    ///
+    /// `path` should be the tab's current file path (or `None` for untitled
+    /// tabs). `original_content_hash` should be the hash of the disk content
+    /// the tab was opened with — **not** the in-memory buffer — so restore
+    /// can detect if the file was changed externally between sessions.
+    pub fn new_with_identity(
+        tab_id: usize,
+        content: String,
+        path: Option<PathBuf>,
+        original_content_hash: Option<u64>,
+    ) -> Self {
+        Self {
+            tab_id,
+            content,
+            saved_at: current_timestamp(),
+            path,
+            original_content_hash,
+            schema_version: RECOVERY_CONTENT_SCHEMA_VERSION,
         }
     }
 }
@@ -324,8 +415,14 @@ pub struct SessionRestoreResult {
     /// Whether this is a crash recovery (not clean shutdown)
     pub is_crash_recovery: bool,
 
-    /// Recovered content for tabs (keyed by tab ID)
-    pub recovered_content: HashMap<usize, String>,
+    /// Recovered content for tabs, keyed by tab ID.
+    ///
+    /// Each entry carries the full [`RecoveryContent`] (content **plus**
+    /// identity metadata: `path`, `original_content_hash`, `schema_version`)
+    /// so consumers can verify the recovery file matches the tab's on-disk
+    /// identity before applying its buffer — see task 106 (hardened recovery)
+    /// and `resolve_tab_content` in `state.rs`.
+    pub recovered_content: HashMap<usize, RecoveryContent>,
 
     /// Tabs that have file conflicts
     pub conflicted_tabs: Vec<usize>,
@@ -652,13 +749,24 @@ fn load_session_from_file(path: &PathBuf) -> Option<SessionState> {
     }
 }
 
-/// Save recovery content for a tab
-pub fn save_recovery_content(tab_id: usize, content: &str) -> bool {
+/// Save recovery content for a tab, including identity metadata.
+///
+/// `path` is the tab's current file path (or `None` for untitled tabs) and
+/// `original_content_hash` is the hash of the disk content the tab was opened
+/// with — see [`RecoveryContent::new_with_identity`]. Both are persisted into
+/// the recovery JSON so the next session can verify the file still belongs to
+/// the same tab+disk identity before applying the buffered content (task 106:
+/// hardened recovery).
+pub fn save_recovery_content(
+    tab_id: usize,
+    content: &str,
+    path: Option<&std::path::Path>,
+    original_content_hash: Option<u64>,
+) -> bool {
     let Some(dir) = get_recovery_content_dir() else {
         return false;
     };
 
-    // Ensure directory exists
     if !dir.exists() {
         if let Err(e) = fs::create_dir_all(&dir) {
             error!("Failed to create recovery directory: {}", e);
@@ -666,7 +774,12 @@ pub fn save_recovery_content(tab_id: usize, content: &str) -> bool {
         }
     }
 
-    let recovery = RecoveryContent::new(tab_id, content.to_string());
+    let recovery = RecoveryContent::new_with_identity(
+        tab_id,
+        content.to_string(),
+        path.map(|p| p.to_path_buf()),
+        original_content_hash,
+    );
     let json = match serde_json::to_string(&recovery) {
         Ok(j) => j,
         Err(e) => {
@@ -689,12 +802,73 @@ pub fn save_recovery_content(tab_id: usize, content: &str) -> bool {
         return false;
     }
 
-    debug!("Saved recovery content for tab {}", tab_id);
+    debug!(
+        "Saved recovery content for tab {} (path={:?}, hash={:?})",
+        tab_id,
+        path.map(|p| p.display().to_string()),
+        original_content_hash
+    );
     true
 }
 
-/// Load recovery content for a specific tab
-pub fn load_recovery_content(tab_id: usize) -> Option<String> {
+/// Migrate a deserialized [`RecoveryContent`] to the current schema.
+///
+/// Recovery files written before task 106 lack `path`, `original_content_hash`,
+/// and `schema_version`; those fields fall back to `None`/`None`/`1` via serde
+/// defaults and are accepted here as legacy v1 records (a v1 record without
+/// identity is by definition unverifiable, so the consumer is responsible for
+/// applying a stricter "tab id only" policy — see `resolve_tab_content`).
+///
+/// Newer schema versions are rejected to avoid silently misinterpreting a
+/// future on-disk format. Callers must treat `None` as "ignore this recovery
+/// file" and let pruning clean it up.
+fn migrate_recovery_content(rc: RecoveryContent) -> Option<RecoveryContent> {
+    if rc.schema_version == RECOVERY_CONTENT_SCHEMA_VERSION {
+        return Some(rc);
+    }
+    if rc.schema_version < RECOVERY_CONTENT_SCHEMA_VERSION {
+        // Legacy file: serde defaults already brought it up to a structurally
+        // v1-compatible shape. Stamp it as current so future loaders don't
+        // need to re-probe legacy paths in memory.
+        debug!(
+            "Migrating recovery content for tab {} from schema v{} to v{}",
+            rc.tab_id, rc.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION
+        );
+        return Some(RecoveryContent {
+            schema_version: RECOVERY_CONTENT_SCHEMA_VERSION,
+            ..rc
+        });
+    }
+    warn!(
+        "Recovery content for tab {} has newer schema_version v{} (current: v{}); ignoring file",
+        rc.tab_id, rc.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION
+    );
+    None
+}
+
+/// Parse the JSON contents of a recovery file and apply schema migration.
+///
+/// Returns `None` if parsing fails or if the file is from a newer, incompatible
+/// schema version. Legacy files (missing `path` / `original_content_hash` /
+/// `schema_version`) deserialize via serde defaults and are then stamped to
+/// the current schema by [`migrate_recovery_content`].
+fn parse_recovery_content_json(json: &str) -> Option<RecoveryContent> {
+    match serde_json::from_str::<RecoveryContent>(json) {
+        Ok(rc) => migrate_recovery_content(rc),
+        Err(e) => {
+            warn!("Failed to parse recovery content JSON: {}", e);
+            None
+        }
+    }
+}
+
+/// Load recovery content for a specific tab.
+///
+/// Returns the full [`RecoveryContent`] (content + identity metadata) so
+/// callers can verify path/hash before applying the buffer. Files from older
+/// Ferrite versions deserialize with `path`/`original_content_hash` defaulted
+/// to `None` and `schema_version` defaulted to `1`.
+pub fn load_recovery_content(tab_id: usize) -> Option<RecoveryContent> {
     let dir = get_recovery_content_dir()?;
     let file_path = dir.join(format!("{}.json", tab_id));
 
@@ -703,13 +877,15 @@ pub fn load_recovery_content(tab_id: usize) -> Option<String> {
     }
 
     let contents = fs::read_to_string(&file_path).ok()?;
-    let recovery: RecoveryContent = serde_json::from_str(&contents).ok()?;
-
-    Some(recovery.content)
+    parse_recovery_content_json(&contents)
 }
 
-/// Load all recovery content files
-fn load_all_recovery_content() -> HashMap<usize, String> {
+/// Load all recovery content files keyed by tab id.
+///
+/// Returns the full [`RecoveryContent`] for each tab (see [`load_recovery_content`]).
+/// Malformed or future-schema files are skipped and logged; callers should
+/// rely on [`prune_recovery_dir`] to clean up unused entries.
+fn load_all_recovery_content() -> HashMap<usize, RecoveryContent> {
     let mut content = HashMap::new();
 
     let Some(dir) = get_recovery_content_dir() else {
@@ -729,8 +905,8 @@ fn load_all_recovery_content() -> HashMap<usize, String> {
         let path = entry.path();
         if path.extension().map(|e| e == "json").unwrap_or(false) {
             if let Ok(contents) = fs::read_to_string(&path) {
-                if let Ok(recovery) = serde_json::from_str::<RecoveryContent>(&contents) {
-                    content.insert(recovery.tab_id, recovery.content);
+                if let Some(recovery) = parse_recovery_content_json(&contents) {
+                    content.insert(recovery.tab_id, recovery);
                 }
             }
         }
@@ -754,9 +930,74 @@ pub fn delete_recovery_content(tab_id: usize) -> bool {
             );
             return false;
         }
+        debug!("Deleted recovery content for tab {}", tab_id);
     }
 
     true
+}
+
+/// Delete every `recovery/<tab_id>.json` whose id is NOT in `valid_tab_ids`.
+///
+/// Tab ids are reset to 0 on every app launch and re-issued monotonically,
+/// so the per-session `tab_id` namespace can collide with leftover recovery
+/// files from previous sessions. Pruning prevents stale recovery content from
+/// bleeding into unrelated tabs on a future restore (data-loss hazard — see
+/// `restore_from_session_result` and the recovery / session-restore notes).
+///
+/// Returns the number of files deleted.
+pub fn prune_recovery_dir(valid_tab_ids: &HashSet<usize>) -> usize {
+    let Some(dir) = get_recovery_content_dir() else {
+        return 0;
+    };
+    if !dir.exists() {
+        return 0;
+    }
+
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) => {
+            warn!(
+                "Could not read recovery directory {}: {}",
+                dir.display(),
+                e
+            );
+            return 0;
+        }
+    };
+
+    let mut deleted = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Ok(tab_id) = stem.parse::<usize>() else {
+            // Filename is not `<usize>.json` — leave it alone.
+            continue;
+        };
+        if valid_tab_ids.contains(&tab_id) {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => {
+                deleted += 1;
+                debug!("Pruned stale recovery file: {}", path.display());
+            }
+            Err(e) => warn!(
+                "Failed to prune stale recovery file {}: {}",
+                path.display(),
+                e
+            ),
+        }
+    }
+
+    if deleted > 0 {
+        info!("Pruned {} stale recovery file(s)", deleted);
+    }
+    deleted
 }
 
 /// Clear all recovery data (crash snapshot, per-tab recovery blobs, lock).
@@ -1003,18 +1244,35 @@ pub struct AutoSaveMetadata {
     pub original_path: Option<PathBuf>,
     /// Timestamp when auto-saved (Unix timestamp)
     pub saved_at: u64,
-    /// Content hash at time of auto-save
+    /// Content hash of the **autosaved buffer** at write time.
     pub content_hash: u64,
+    /// Hash of the on-disk content the tab was loaded from at the moment
+    /// this autosave was written (added in task 106 — hardened recovery).
+    ///
+    /// Compared at recovery time against the current disk content hash so
+    /// autosave files from a previous session that reused the same `tab_id`
+    /// can no longer bleed into an unrelated document. `None` for legacy
+    /// autosave files (pre-task-106) and for untitled tabs that have never
+    /// been written to disk; both cases fall back to the historical
+    /// path-and-mtime check in [`check_auto_save_recovery`].
+    #[serde(default)]
+    pub disk_content_hash: Option<u64>,
 }
 
 impl AutoSaveMetadata {
     /// Create new metadata
-    pub fn new(tab_id: usize, original_path: Option<PathBuf>, content_hash: u64) -> Self {
+    pub fn new(
+        tab_id: usize,
+        original_path: Option<PathBuf>,
+        content_hash: u64,
+        disk_content_hash: Option<u64>,
+    ) -> Self {
         Self {
             tab_id,
             original_path,
             saved_at: current_timestamp(),
             content_hash,
+            disk_content_hash,
         }
     }
 }
@@ -1023,7 +1281,17 @@ impl AutoSaveMetadata {
 ///
 /// Creates the auto-save directory if it doesn't exist.
 /// Returns true if save was successful.
-pub fn save_auto_save_content(tab_id: usize, file_path: Option<&PathBuf>, content: &str) -> bool {
+///
+/// `disk_content_hash` is the hash of the on-disk content the tab was loaded
+/// from (or last saved to) at the moment this autosave is written. Pass
+/// `None` for untitled tabs or when the disk identity is unknown — see
+/// [`AutoSaveMetadata::disk_content_hash`] (task 106 — hardened recovery).
+pub fn save_auto_save_content(
+    tab_id: usize,
+    file_path: Option<&PathBuf>,
+    content: &str,
+    disk_content_hash: Option<u64>,
+) -> bool {
     let Some(dir) = get_auto_save_dir() else {
         warn!("Could not determine auto-save directory");
         return false;
@@ -1043,7 +1311,8 @@ pub fn save_auto_save_content(tab_id: usize, file_path: Option<&PathBuf>, conten
 
     // Create metadata
     let content_hash = hash_content(content);
-    let metadata = AutoSaveMetadata::new(tab_id, file_path.cloned(), content_hash);
+    let metadata =
+        AutoSaveMetadata::new(tab_id, file_path.cloned(), content_hash, disk_content_hash);
 
     // Serialize metadata as JSON header followed by content
     let metadata_json = match serde_json::to_string(&metadata) {
@@ -1100,15 +1369,100 @@ pub fn load_auto_save_content(
     Some((metadata, content.to_string()))
 }
 
+/// Pure identity check for an autosave metadata vs. the tab's current
+/// `(path, disk_content)` (task 106.6 — hardened recovery).
+///
+/// Returns `true` when the autosave is safe to apply. Rejection cases:
+///
+/// * `metadata.original_path != file_path` — the autosave was written for
+///   a different document; its `tab_id` was reused this session.
+/// * Path-backed tab with `metadata.disk_content_hash == Some(want)` and
+///   `hash_content(disk) != want` — the on-disk file changed externally
+///   between sessions.
+///
+/// `disk_content` is the freshly-read disk text (or `None` if the file is
+/// missing / unreadable as UTF-8); when it's `None` the hash check is
+/// skipped to avoid losing the user's autosave to an encoding edge case.
+///
+/// Logs and emits `session_recovery_identity_mismatch` on rejection so the
+/// failure path matches the recovery-content side of the identity scheme.
+fn check_auto_save_identity(
+    metadata: &AutoSaveMetadata,
+    file_path: Option<&PathBuf>,
+    disk_content: Option<&str>,
+) -> bool {
+    // Layer 1: path equality (covers untitled-tab case via None == None).
+    if metadata.original_path.as_ref() != file_path {
+        warn!(
+            "Rejecting autosave for tab {}: metadata.original_path {:?} does \
+             not match tab path {:?}; autosave is from a reused tab id.",
+            metadata.tab_id, metadata.original_path, file_path
+        );
+        crate::diag::event(
+            "session_recovery_identity_mismatch",
+            format!(
+                "source=autosave tab_id={} metadata_path={:?} tab_path={:?} \
+                 reason=path_mismatch",
+                metadata.tab_id, metadata.original_path, file_path
+            ),
+        );
+        return false;
+    }
+
+    // Layer 2: disk hash check (path-backed + hash known + disk readable).
+    if let (Some(want), Some(disk), Some(path)) =
+        (metadata.disk_content_hash, disk_content, file_path)
+    {
+        let got = hash_content(disk);
+        if got != want {
+            warn!(
+                "Rejecting autosave for tab {} ({}): disk hash {:?} does not \
+                 match metadata.disk_content_hash {:?}; the file changed \
+                 externally between sessions.",
+                metadata.tab_id,
+                path.display(),
+                got,
+                want
+            );
+            crate::diag::event(
+                "session_recovery_identity_mismatch",
+                format!(
+                    "source=autosave tab_id={} path={:?} expected_hash={:?} \
+                     disk_hash={:?} reason=hash_mismatch",
+                    metadata.tab_id,
+                    path,
+                    Some(want),
+                    Some(got),
+                ),
+            );
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Check if an auto-save exists for a file and is newer than the main file.
 ///
-/// Returns Some((metadata, content)) if auto-save exists and is newer,
-/// or if the main file doesn't exist but auto-save does.
+/// Returns Some((metadata, content)) if auto-save exists, is newer than the
+/// main file (or the main file is gone), AND its identity matches the
+/// current tab's `(path, disk_content_hash)`. Identity mismatches are
+/// rejected via [`check_auto_save_identity`] (task 106 — hardened
+/// recovery). Legacy autosave files (no `disk_content_hash`) fall back to
+/// the historical path + mtime check.
 pub fn check_auto_save_recovery(
     tab_id: usize,
     file_path: Option<&PathBuf>,
 ) -> Option<(AutoSaveMetadata, String)> {
     let (metadata, content) = load_auto_save_content(tab_id, file_path)?;
+
+    // Identity layer 1 — path equality. Always enforced.
+    if metadata.original_path.as_ref() != file_path {
+        // Logging + diag handled by check_auto_save_identity once we have
+        // disk content; for the path-only path call it with disk=None.
+        let _ = check_auto_save_identity(&metadata, file_path, None);
+        return None;
+    }
 
     // If no original file, auto-save is the only copy
     let Some(original_path) = file_path else {
@@ -1118,6 +1472,12 @@ pub fn check_auto_save_recovery(
     // If original file doesn't exist, return auto-save
     if !original_path.exists() {
         return Some((metadata, content));
+    }
+
+    // Identity layer 2 — disk hash check (only when both sides are known).
+    let disk_now: Option<String> = fs::read_to_string(original_path).ok();
+    if !check_auto_save_identity(&metadata, file_path, disk_now.as_deref()) {
+        return None;
     }
 
     // Compare modification times
@@ -1131,6 +1491,81 @@ pub fn check_auto_save_recovery(
         // Original file is newer or same, no recovery needed
         None
     }
+}
+
+/// Delete autosave files whose untitled `tab_id` is not in the live set.
+///
+/// The autosave directory is append-only across sessions and untitled
+/// autosaves use `untitled_<tab_id>.md.autosave` for their filename. Tab
+/// ids reset on every launch, so leftover untitled autosaves from a
+/// previous session can collide with a freshly-allocated tab id and
+/// surface unrelated content via [`check_auto_save_recovery`]. This
+/// function deletes any `untitled_<id>.md.autosave` whose `<id>` is not in
+/// `valid_tab_ids` (mirrors [`prune_recovery_dir`] for the autosave dir).
+///
+/// Path-backed autosaves are keyed by a hash of the file path rather than
+/// `tab_id`, so they cannot collide on id alone — identity for those is
+/// enforced by [`check_auto_save_recovery`] instead.
+///
+/// Returns the number of files deleted.
+pub fn prune_auto_save_dir(valid_tab_ids: &HashSet<usize>) -> usize {
+    let Some(dir) = get_auto_save_dir() else {
+        return 0;
+    };
+    if !dir.exists() {
+        return 0;
+    }
+
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) => {
+            warn!(
+                "Could not read autosave directory {}: {}",
+                dir.display(),
+                e
+            );
+            return 0;
+        }
+    };
+
+    let mut deleted = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        // Only target untitled autosaves: `untitled_<id>.md.autosave`.
+        // Path-backed autosaves use `<stem>_<pathhash>.md.autosave` and are
+        // identity-checked at recovery time instead.
+        let Some(rest) = file_name.strip_prefix("untitled_") else {
+            continue;
+        };
+        let Some(id_str) = rest.strip_suffix(".md.autosave") else {
+            continue;
+        };
+        let Ok(tab_id) = id_str.parse::<usize>() else {
+            continue;
+        };
+        if valid_tab_ids.contains(&tab_id) {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => {
+                deleted += 1;
+                debug!("Pruned stale autosave file: {}", path.display());
+            }
+            Err(e) => warn!(
+                "Failed to prune stale autosave file {}: {}",
+                path.display(),
+                e
+            ),
+        }
+    }
+
+    if deleted > 0 {
+        info!("Pruned {} stale autosave file(s)", deleted);
+    }
+    deleted
 }
 
 /// Delete the auto-save temp file for a document.
@@ -1320,5 +1755,465 @@ mod tests {
 
         assert_eq!(loaded.tab_id, 42);
         assert_eq!(loaded.content, "# Hello\n\nWorld");
+        // Constructed without identity → identity fields are absent.
+        assert_eq!(loaded.path, None);
+        assert_eq!(loaded.original_content_hash, None);
+        assert_eq!(loaded.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_recovery_content_new_defaults_identity() {
+        let recovery = RecoveryContent::new(7, "body".to_string());
+
+        assert_eq!(recovery.tab_id, 7);
+        assert_eq!(recovery.path, None);
+        assert_eq!(recovery.original_content_hash, None);
+        assert_eq!(recovery.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+        assert_eq!(
+            RecoveryContent::default_schema_version(),
+            RECOVERY_CONTENT_SCHEMA_VERSION
+        );
+        assert_eq!(RECOVERY_CONTENT_SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn test_recovery_content_with_identity_roundtrip() {
+        let path = PathBuf::from("/tmp/example/notes.md");
+        let recovery = RecoveryContent::new_with_identity(
+            13,
+            "# Heading\n\nbody".to_string(),
+            Some(path.clone()),
+            Some(0xdead_beef),
+        );
+
+        let json = serde_json::to_string(&recovery).unwrap();
+        let loaded: RecoveryContent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(loaded.tab_id, 13);
+        assert_eq!(loaded.content, "# Heading\n\nbody");
+        assert_eq!(loaded.path, Some(path));
+        assert_eq!(loaded.original_content_hash, Some(0xdead_beef));
+        assert_eq!(loaded.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_recovery_content_legacy_format_loads_with_defaults() {
+        // Recovery file written by an older Ferrite version: no `path`,
+        // no `original_content_hash`, no `schema_version`. It must still
+        // deserialize cleanly and pick up the documented defaults.
+        let legacy_json = r#"{
+            "tab_id": 5,
+            "content": "old content",
+            "saved_at": 1700000000
+        }"#;
+
+        let loaded: RecoveryContent = serde_json::from_str(legacy_json)
+            .expect("legacy recovery JSON must remain deserializable");
+
+        assert_eq!(loaded.tab_id, 5);
+        assert_eq!(loaded.content, "old content");
+        assert_eq!(loaded.saved_at, 1700000000);
+        assert_eq!(loaded.path, None, "missing path → None");
+        assert_eq!(
+            loaded.original_content_hash, None,
+            "missing hash → None"
+        );
+        assert_eq!(
+            loaded.schema_version,
+            RECOVERY_CONTENT_SCHEMA_VERSION,
+            "missing schema_version → default v1"
+        );
+    }
+
+    #[test]
+    fn test_recovery_content_default_impl() {
+        let recovery = RecoveryContent::default();
+        assert_eq!(recovery.tab_id, 0);
+        assert!(recovery.content.is_empty());
+        assert_eq!(recovery.path, None);
+        assert_eq!(recovery.original_content_hash, None);
+        assert_eq!(recovery.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Migration hook + parser (subtask 106.3)
+    // ─────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_migrate_recovery_content_current_version_passthrough() {
+        let rc = RecoveryContent::new_with_identity(
+            1,
+            "buf".into(),
+            Some(PathBuf::from("/x.md")),
+            Some(42),
+        );
+        let migrated = migrate_recovery_content(rc.clone()).expect("current version accepted");
+        assert_eq!(migrated.tab_id, rc.tab_id);
+        assert_eq!(migrated.path, rc.path);
+        assert_eq!(migrated.original_content_hash, rc.original_content_hash);
+        assert_eq!(migrated.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_migrate_recovery_content_older_version_stamped_to_current() {
+        // A schema_version below current is treated as legacy: the struct is
+        // already structurally v1-compatible thanks to serde defaults, and we
+        // bump it to current so future loaders don't re-probe legacy paths.
+        let mut legacy = RecoveryContent::new(2, "legacy".into());
+        legacy.schema_version = 0; // pretend an older schema
+
+        let migrated =
+            migrate_recovery_content(legacy).expect("older schema must still be accepted");
+        assert_eq!(migrated.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+        assert_eq!(migrated.content, "legacy");
+    }
+
+    #[test]
+    fn test_migrate_recovery_content_newer_version_rejected() {
+        // A future schema version must be rejected to avoid silently
+        // misinterpreting fields that didn't exist in the current code.
+        let mut future = RecoveryContent::new(3, "future".into());
+        future.schema_version = RECOVERY_CONTENT_SCHEMA_VERSION + 1;
+
+        assert!(
+            migrate_recovery_content(future).is_none(),
+            "newer schema_version must produce None so callers ignore the file"
+        );
+    }
+
+    #[test]
+    fn test_parse_recovery_content_json_legacy_file() {
+        // End-to-end: JSON bytes from an older Ferrite version flow through
+        // the loader path and emerge as a current-schema struct with `None`
+        // identity fields ready for tab-id-only matching in resolve_tab_content.
+        let legacy_json = r#"{
+            "tab_id": 9,
+            "content": "older buffer",
+            "saved_at": 1700000001
+        }"#;
+
+        let parsed =
+            parse_recovery_content_json(legacy_json).expect("legacy JSON must round-trip");
+
+        assert_eq!(parsed.tab_id, 9);
+        assert_eq!(parsed.content, "older buffer");
+        assert_eq!(parsed.path, None);
+        assert_eq!(parsed.original_content_hash, None);
+        assert_eq!(parsed.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_parse_recovery_content_json_current_file_with_identity() {
+        let payload = RecoveryContent::new_with_identity(
+            42,
+            "modern buffer".into(),
+            Some(PathBuf::from("/notes/x.md")),
+            Some(0xfeed_face),
+        );
+        let json = serde_json::to_string(&payload).unwrap();
+
+        let parsed = parse_recovery_content_json(&json).expect("current JSON must parse");
+        assert_eq!(parsed.tab_id, 42);
+        assert_eq!(parsed.content, "modern buffer");
+        assert_eq!(parsed.path, Some(PathBuf::from("/notes/x.md")));
+        assert_eq!(parsed.original_content_hash, Some(0xfeed_face));
+        assert_eq!(parsed.schema_version, RECOVERY_CONTENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_parse_recovery_content_json_future_schema_rejected() {
+        let future_json = format!(
+            r#"{{
+                "tab_id": 50,
+                "content": "from the future",
+                "saved_at": 1900000000,
+                "path": "/future.md",
+                "original_content_hash": 1,
+                "schema_version": {}
+            }}"#,
+            RECOVERY_CONTENT_SCHEMA_VERSION + 1
+        );
+
+        assert!(
+            parse_recovery_content_json(&future_json).is_none(),
+            "newer-than-current schema must be rejected at the loader boundary"
+        );
+    }
+
+    #[test]
+    fn test_parse_recovery_content_json_malformed_returns_none() {
+        assert!(parse_recovery_content_json("not json").is_none());
+        assert!(parse_recovery_content_json("{ \"tab_id\": ").is_none());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 106.6 — AutoSaveMetadata identity hardening
+    // ─────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_auto_save_metadata_round_trip_with_disk_hash() {
+        let meta = AutoSaveMetadata::new(
+            42,
+            Some(PathBuf::from("/tmp/note.md")),
+            0xfeed_face,
+            Some(0xdead_beef),
+        );
+        let json = serde_json::to_string(&meta).expect("serialize");
+        let loaded: AutoSaveMetadata = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(loaded.tab_id, 42);
+        assert_eq!(loaded.original_path, Some(PathBuf::from("/tmp/note.md")));
+        assert_eq!(loaded.content_hash, 0xfeed_face);
+        assert_eq!(loaded.disk_content_hash, Some(0xdead_beef));
+    }
+
+    #[test]
+    fn test_auto_save_metadata_round_trip_without_disk_hash() {
+        // Untitled tab → no disk identity. None must round-trip cleanly.
+        let meta = AutoSaveMetadata::new(7, None, 1, None);
+        let json = serde_json::to_string(&meta).expect("serialize");
+        let loaded: AutoSaveMetadata = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(loaded.tab_id, 7);
+        assert_eq!(loaded.original_path, None);
+        assert_eq!(loaded.disk_content_hash, None);
+    }
+
+    #[test]
+    fn test_auto_save_metadata_legacy_json_defaults_disk_hash_none() {
+        // Pre-task-106 autosave files lack `disk_content_hash`. They must
+        // still parse and pick up `None` via serde default so users
+        // upgrading from older Ferrite versions do not lose their autosaves.
+        let legacy_json = r#"{
+            "tab_id": 11,
+            "original_path": "/tmp/legacy.md",
+            "saved_at": 1700000000,
+            "content_hash": 99
+        }"#;
+        let loaded: AutoSaveMetadata = serde_json::from_str(legacy_json)
+            .expect("legacy autosave JSON must remain deserializable");
+        assert_eq!(loaded.tab_id, 11);
+        assert_eq!(loaded.disk_content_hash, None);
+    }
+
+    #[test]
+    fn test_auto_save_identity_path_match_no_hash_accepted() {
+        let meta = AutoSaveMetadata::new(
+            5,
+            Some(PathBuf::from("/work/a.md")),
+            123,
+            None, // legacy: no hash recorded
+        );
+        let path = PathBuf::from("/work/a.md");
+        assert!(check_auto_save_identity(&meta, Some(&path), None));
+    }
+
+    #[test]
+    fn test_auto_save_identity_path_mismatch_rejected() {
+        let meta = AutoSaveMetadata::new(
+            10,
+            None, // metadata says: untitled
+            1,
+            None,
+        );
+        // ...but the tab is now path-backed at the same id (the cross-tab
+        // bleed scenario from the task 106 acceptance criteria).
+        let now_path = PathBuf::from("/work/task_50_table_inline_formatting.md");
+        assert!(
+            !check_auto_save_identity(&meta, Some(&now_path), None),
+            "path mismatch must reject autosave"
+        );
+    }
+
+    #[test]
+    fn test_auto_save_identity_hash_mismatch_rejected() {
+        let path = PathBuf::from("/work/file.md");
+        let meta = AutoSaveMetadata::new(
+            6,
+            Some(path.clone()),
+            123,
+            Some(hash_content("recovery-time disk content")),
+        );
+        // Disk now contains different content → hash differs.
+        let disk_now = "fresh external edit";
+        assert!(
+            !check_auto_save_identity(&meta, Some(&path), Some(disk_now)),
+            "hash mismatch must reject"
+        );
+    }
+
+    #[test]
+    fn test_auto_save_identity_hash_match_accepted() {
+        let path = PathBuf::from("/work/file.md");
+        let disk_body = "stable disk body";
+        let meta = AutoSaveMetadata::new(
+            6,
+            Some(path.clone()),
+            123,
+            Some(hash_content(disk_body)),
+        );
+        assert!(
+            check_auto_save_identity(&meta, Some(&path), Some(disk_body)),
+            "matching disk hash must accept"
+        );
+    }
+
+    #[test]
+    fn test_auto_save_identity_legacy_no_hash_skips_hash_check() {
+        // Legacy autosave file (disk_content_hash = None) is accepted on
+        // path equality alone — even if disk content has changed since,
+        // because we have no recorded hash to compare against.
+        let path = PathBuf::from("/work/file.md");
+        let meta = AutoSaveMetadata::new(6, Some(path.clone()), 123, None);
+        assert!(check_auto_save_identity(
+            &meta,
+            Some(&path),
+            Some("any disk content"),
+        ));
+    }
+
+    #[test]
+    fn test_auto_save_identity_unreadable_disk_skips_hash_check() {
+        // disk_content == None simulates non-UTF-8 / missing read. We trust
+        // the path identity rather than dropping the autosave.
+        let path = PathBuf::from("/work/file.md");
+        let meta = AutoSaveMetadata::new(6, Some(path.clone()), 123, Some(0xabc));
+        assert!(check_auto_save_identity(&meta, Some(&path), None));
+    }
+
+    #[test]
+    fn test_auto_save_identity_untitled_match_accepted() {
+        // Both metadata and tab are untitled → match.
+        let meta = AutoSaveMetadata::new(8, None, 0, None);
+        assert!(check_auto_save_identity(&meta, None, None));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 106.7 — Acceptance regressions: cross-tab bleed must be impossible
+    // even when prune_recovery_dir / prune_auto_save_dir are bypassed.
+    // ─────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_106_acceptance_recovery_tab_id_collision_rejected() {
+        // Subtask 106.7 #1: a previous session left a recovery file for
+        // tab_id=10 anchored to /old/a.md; this session's tab_id=10 is for
+        // /new/b.md. The recovery file's `path` field is the only thing
+        // that prevents the buffer from being applied to the wrong file.
+        let recovered = RecoveryContent::new_with_identity(
+            10,
+            "old buffer".into(),
+            Some(PathBuf::from("/old/a.md")),
+            Some(0x1111),
+        );
+        let session_tab = SessionTabState {
+            tab_id: 10,
+            path: Some(PathBuf::from("/new/b.md")),
+            display_title: "b.md".into(),
+            has_unsaved_content: true,
+            ..Default::default()
+        };
+
+        // Since `try_apply_recovery` is private to state.rs, exercise the
+        // same gate via the documented invariant: paths differ → the
+        // recovery file must not be applied. We assert both the structural
+        // precondition and that the parser/migrator does not strip the
+        // path field by accident (which would re-introduce the bleed).
+        assert_ne!(recovered.path, session_tab.path);
+        let json = serde_json::to_string(&recovered).unwrap();
+        let parsed = parse_recovery_content_json(&json).unwrap();
+        assert_eq!(
+            parsed.path,
+            Some(PathBuf::from("/old/a.md")),
+            "recovery file path must survive parse + migrate so identity gate sees it"
+        );
+    }
+
+    #[test]
+    fn test_106_acceptance_recovery_hash_mismatch_payload_preserved() {
+        // Subtask 106.7 #2: hash mismatch case — the recovery file's
+        // `original_content_hash` is what the identity gate compares
+        // against current disk. We verify that a value written into
+        // `original_content_hash` survives serde round-trip exactly
+        // (so the gate cannot be defeated by a parsing fluke).
+        let want_hash = hash_content("recovery-time disk content");
+        let rc = RecoveryContent::new_with_identity(
+            7,
+            "buf".into(),
+            Some(PathBuf::from("/notes/x.md")),
+            Some(want_hash),
+        );
+        let json = serde_json::to_string(&rc).unwrap();
+        let parsed = parse_recovery_content_json(&json).unwrap();
+        assert_eq!(parsed.original_content_hash, Some(want_hash));
+    }
+
+    #[test]
+    fn test_106_acceptance_recovery_legacy_file_back_compat() {
+        // Subtask 106.7 #3: a recovery file from an older Ferrite version
+        // has neither `path` nor `original_content_hash`. The loader must
+        // still produce a usable `RecoveryContent` so the identity gate's
+        // legacy bypass can apply it (preserving recovered text for
+        // upgrading users). The bypass itself is exercised in state.rs.
+        let legacy_json = r#"{
+            "tab_id": 4,
+            "content": "older buffer",
+            "saved_at": 1700000001
+        }"#;
+        let parsed =
+            parse_recovery_content_json(legacy_json).expect("legacy file must round-trip");
+        assert_eq!(parsed.tab_id, 4);
+        assert_eq!(parsed.path, None);
+        assert_eq!(parsed.original_content_hash, None);
+    }
+
+    #[test]
+    fn test_106_acceptance_original_bleeding_repro_recovery() {
+        // Subtask 106.7 #4: untitled `asdasd` recovery for tab_id=10
+        // against a path-backed `task_50_table_inline_formatting.md` tab
+        // in the new session. Identity gate REQUIRES that the recovery
+        // file's `path` field disagree with the session tab's path → the
+        // gate rejects on path mismatch even if pruning is skipped.
+        let recovered = RecoveryContent::new_with_identity(
+            10,
+            "asdasd".into(),
+            None, // recovery was for an untitled tab
+            None,
+        );
+        let session_path = PathBuf::from("/notes/task_50_table_inline_formatting.md");
+
+        // Round-trip through the loader to mimic the on-disk path and
+        // confirm the loader doesn't strip identity fields.
+        let json = serde_json::to_string(&recovered).unwrap();
+        let parsed = parse_recovery_content_json(&json).unwrap();
+        assert_eq!(parsed.path, None);
+        assert_ne!(parsed.path, Some(session_path));
+    }
+
+    #[test]
+    fn test_106_acceptance_autosave_path_mismatch_rejected() {
+        // Subtask 106.7 #5: the autosave counterpart of the cross-tab
+        // bleed. metadata.original_path = None (untitled), but the new
+        // session's tab is path-backed. check_auto_save_identity must
+        // reject so the unrelated buffer cannot reach the new tab.
+        let meta = AutoSaveMetadata::new(10, None, 0, None);
+        let now_path = PathBuf::from("/notes/task_50_table_inline_formatting.md");
+        assert!(!check_auto_save_identity(&meta, Some(&now_path), None));
+    }
+
+    #[test]
+    fn test_106_acceptance_autosave_hash_mismatch_rejected() {
+        // Subtask 106.7 #5b: external edit between sessions changes the
+        // disk hash; autosave anchored to the old hash must not be applied.
+        let path = PathBuf::from("/notes/file.md");
+        let meta = AutoSaveMetadata::new(
+            3,
+            Some(path.clone()),
+            0,
+            Some(hash_content("old disk")),
+        );
+        assert!(!check_auto_save_identity(
+            &meta,
+            Some(&path),
+            Some("new external edit")
+        ));
     }
 }

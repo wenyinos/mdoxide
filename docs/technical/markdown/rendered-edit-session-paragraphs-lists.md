@@ -1,0 +1,69 @@
+# Rendered Edit Session — Plain Paragraphs & List Items
+
+Plain (non-formatted) paragraphs and simple list items in rendered mode use [`RenderedEditSession`](../../../src/markdown/rendered_session.rs) for buffer ownership, one-click cross-block switching, and commit-on-switch — the same model as [headings](./rendered-edit-session-headings.md).
+
+**PRD:** [Rendered Edit Session](../../../ai-workflow/prds/prd-rendered-edit-session.md)  
+**Foundation:** [Core types](./rendered-edit-session-core.md), [Widget identity](./rendered-widget-identity.md)
+
+## Behaviour
+
+| Action | Result |
+|--------|--------|
+| Edit paragraph P, click list item L | P commits to source, L activates with one click |
+| Edit heading H, click paragraph P | H commits, P activates (shared session) |
+| Focus leaves active block (no other session block) | `close_active_ui(SaveIfDirty)` commits buffer |
+| Click outside active widget (empty space, label, formatted display, culled gap) | End-of-frame dismiss when active block did not receive `response.clicked()` |
+| Click formatted display while session block active | Formatted display click goes through `switch_to_ui`, which commits the previous active block automatically (no separate bridge) |
+| Raw-mode edit bumps `source_epoch` | Session buffers cleared on next rendered frame |
+
+Formatted paragraphs/list items and table cells share this model — see [`rendered-edit-session-formatted.md`](./rendered-edit-session-formatted.md) and [`rendered-edit-session-tables.md`](./rendered-edit-session-tables.md).
+
+## Block identity
+
+| Block | `BlockRef` | Widget id key |
+|-------|------------|---------------|
+| Plain paragraph | `Paragraph { line }` | `para_text` + line |
+| Simple list item | `ListItem { line, item }` | `list_item_text` + line (`item` is HashMap key only) |
+
+Cold buffer init:
+
+- **Paragraph:** `extract_paragraph_content(source, start_line, end_line)` — preserves trailing spaces vs AST round-trip.
+- **List item:** `extract_list_item_content(source, start_line)` — content without marker; newlines stripped on edit/commit.
+
+## Implementation map
+
+| Concern | Location |
+|---------|----------|
+| Shared TextEdit + session wiring | `render_session_plain_text_block` in `src/markdown/editor.rs` |
+| Paragraph render | `render_paragraph`, `render_paragraph_with_structural_keys` (simple branch only) |
+| List item render | `render_list_item`, `render_list_item_with_structural_keys` (simple branch only) |
+| Session load/save | `load_for_epoch` / `save_for_epoch` in `rendered_session.rs` |
+| Commit | `commit_session_block`, `update_source_range` — list markers preserved via `extract_line_prefix` |
+| Click-away dismiss | `session_dismiss_if_clicked_outside` — end of frame if active block did not receive `response.clicked()` |
+| Formatted display click | Handled natively by `switch_to_ui` (see [`rendered-edit-session-formatted.md`](./rendered-edit-session-formatted.md)) |
+
+## Epoch invalidation
+
+Session state is stored in egui temp memory keyed by editor id. A companion key `rendered_edit_session_epoch` records the last seen `Tab::source_epoch`.
+
+When `load_for_epoch` sees a mismatched epoch (raw edit, reload, external mutation), it calls `invalidate_buffers()` so all block buffers reload from source on next interaction.
+
+Rendered commits do **not** bump `source_epoch` — only external/raw edits do.
+
+## Removed (plain paragraph + simple list item only)
+
+- Temp egui buffers: `para_edit_buffer`, `list_item_edit_buffer`, tracking ids
+- `rendered_focus::after_text_edit` for these paths
+- `rendered_focus::focus_loss_should_commit` for these paths
+- Per-frame immediate source writes on `TextEdit::changed()` (non-structural paragraph path)
+
+## Manual verification
+
+1. Document: `# Title`, plain paragraph, bullet list with one simple item.
+2. Edit each block; single-click switch Title → paragraph → list item → Title; confirm edits persist at leave time.
+3. Switch to raw mode, change a line, return to rendered; confirm session buffers match updated source.
+
+## Tests
+
+- `cargo test rendered_session::` — includes `load_for_epoch_invalidates_when_epoch_changes`, widget id parity for paragraph/list
+- Existing list commit tests: `test_update_source_range_preserves_bullet_list` in `editor.rs`

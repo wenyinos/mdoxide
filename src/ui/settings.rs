@@ -3,11 +3,6 @@
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
 
-use crate::ui::icons::phosphor_rich_text;
-use crate::ui::phosphor_icons::{
-    ARROWS_COUNTER_CLOCKWISE, CHECK, CONFETTI, DESKTOP, GEAR, GLOBE, MAGNIFYING_GLASS, MOON,
-    PACKAGE, SUN, WARNING, X,
-};
 use crate::config::{
     CjkFontPreference, EditorFont, HeaderSpacing, KeyBinding, KeyCode, KeyModifiers,
     KeyboardShortcuts, Language, MaxLineWidth, MinimapMode, Settings, ShortcutCommand, Theme,
@@ -16,6 +11,11 @@ use crate::config::{
 use crate::fonts;
 use crate::markdown::syntax::get_available_themes;
 use crate::terminal::MonitorInfo;
+use crate::ui::icons::phosphor_rich_text;
+use crate::ui::phosphor_icons::{
+    ARROWS_COUNTER_CLOCKWISE, CHECK, CONFETTI, DESKTOP, GEAR, GLOBE, MAGNIFYING_GLASS, MOON, SUN,
+    WARNING, X,
+};
 use crate::update::{self, UpdateCheckResult, UpdateState};
 use eframe::egui::{self, Color32, RichText, Ui};
 use rust_i18n::{set_locale, t};
@@ -149,7 +149,9 @@ impl SettingsSection {
 
     /// Get the icon for the section.
     pub fn icon(&self) -> &'static str {
-        use crate::ui::phosphor_icons::{FILES, INFO, KEYBOARD, NOTE_PENCIL, PALETTE, TERMINAL_WINDOW};
+        use crate::ui::phosphor_icons::{
+            FILES, INFO, KEYBOARD, NOTE_PENCIL, PALETTE, TERMINAL_WINDOW,
+        };
         match self {
             SettingsSection::Appearance => PALETTE,
             SettingsSection::Editor => NOTE_PENCIL,
@@ -166,8 +168,6 @@ impl SettingsSection {
 pub struct SettingsPanelOutput {
     /// Whether settings were modified.
     pub changed: bool,
-    /// Whether the panel should be closed.
-    pub close_requested: bool,
     /// Whether a reset to defaults was requested.
     pub reset_requested: bool,
 }
@@ -222,175 +222,6 @@ impl SettingsPanel {
         }
     }
 
-    /// Show the settings panel as a modal window.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The egui context
-    /// * `settings` - The current settings (mutable for live preview)
-    /// * `is_dark` - Whether the current theme is dark mode
-    ///
-    /// # Returns
-    ///
-    /// Output indicating what actions to take
-    pub fn show(
-        &mut self,
-        ctx: &egui::Context,
-        settings: &mut Settings,
-        is_dark: bool,
-        workspace_root: Option<&std::path::Path>,
-    ) -> SettingsPanelOutput {
-        let mut output = SettingsPanelOutput::default();
-
-        // Semi-transparent overlay
-        let screen_rect = ctx.screen_rect();
-        let overlay_color = if is_dark {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 180)
-        } else {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 120)
-        };
-
-        egui::Area::new(egui::Id::new("settings_overlay"))
-            .order(egui::Order::Middle)
-            .fixed_pos(screen_rect.min)
-            .show(ctx, |ui| {
-                let response = ui.allocate_response(screen_rect.size(), egui::Sense::click());
-                ui.painter().rect_filled(screen_rect, 0.0, overlay_color);
-
-                // Close on click outside
-                if response.clicked() {
-                    output.close_requested = true;
-                }
-            });
-
-        // Settings modal window - fixed size for consistent layout across tabs
-        const CONTENT_HEIGHT: f32 = 480.0;
-        const CONTENT_WIDTH: f32 = 420.0;
-        const SIDEBAR_WIDTH: f32 = 120.0;
-
-        egui::Window::new(t!("settings.title").to_string())
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .fixed_size([SIDEBAR_WIDTH + CONTENT_WIDTH + 32.0, CONTENT_HEIGHT + 80.0])
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                // Handle escape key to close
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    output.close_requested = true;
-                }
-
-                ui.horizontal(|ui| {
-                    // Left side: Section tabs (fixed width)
-                    ui.vertical(|ui| {
-                        ui.set_min_width(SIDEBAR_WIDTH);
-                        ui.set_max_width(SIDEBAR_WIDTH);
-                        ui.set_min_height(CONTENT_HEIGHT);
-
-                        for section in [
-                            SettingsSection::Appearance,
-                            SettingsSection::Editor,
-                            SettingsSection::Files,
-                            SettingsSection::Keyboard,
-                            SettingsSection::Terminal,
-                            SettingsSection::About,
-                        ] {
-                            let selected = self.active_section == section;
-                            let text = format!("{} {}", section.icon(), section.label());
-
-                            let btn = ui.add_sized(
-                                [SIDEBAR_WIDTH - 8.0, 32.0],
-                                egui::SelectableLabel::new(
-                                    selected,
-                                    RichText::new(text).size(14.0),
-                                ),
-                            );
-
-                            if btn.clicked() {
-                                self.active_section = section;
-                                // Clear keyboard capture state when switching sections
-                                if section != SettingsSection::Keyboard {
-                                    self.key_capture = None;
-                                    self.conflict_warning = None;
-                                }
-                            }
-                        }
-                    });
-
-                    ui.separator();
-
-                    // Right side: Section content (fixed size with scroll)
-                    ui.vertical(|ui| {
-                        ui.set_min_width(CONTENT_WIDTH);
-                        ui.set_max_width(CONTENT_WIDTH);
-                        ui.set_min_height(CONTENT_HEIGHT);
-                        ui.set_max_height(CONTENT_HEIGHT);
-
-                        egui::ScrollArea::vertical()
-                            .id_source(format!("settings_scroll_{:?}", self.active_section))
-                            .max_height(CONTENT_HEIGHT)
-                            .show(ui, |ui| {
-                                ui.set_min_width(CONTENT_WIDTH - 16.0); // Account for scrollbar
-
-                                match self.active_section {
-                                    SettingsSection::Appearance => {
-                                        if self.show_appearance_section(ui, settings, is_dark) {
-                                            output.changed = true;
-                                        }
-                                    }
-                                    SettingsSection::Editor => {
-                                        if self.show_editor_section(ui, settings, workspace_root) {
-                                            output.changed = true;
-                                        }
-                                    }
-                                    SettingsSection::Files => {
-                                        if self.show_files_section(ui, settings) {
-                                            output.changed = true;
-                                        }
-                                    }
-                                    SettingsSection::Keyboard => {
-                                        if self.show_keyboard_section(ui, settings) {
-                                            output.changed = true;
-                                        }
-                                    }
-                                    SettingsSection::Terminal => {
-                                        if self.show_terminal_section(ui, settings) {
-                                            output.changed = true;
-                                        }
-                                    }
-                                    SettingsSection::About => {
-                                        self.show_about_section(ui, ctx);
-                                    }
-                                }
-                            });
-                    });
-                });
-
-                ui.separator();
-
-                // Bottom buttons
-                ui.horizontal(|ui| {
-                    // Reset button on the left
-                    if ui
-                        .button(format!("↺ {}", t!("settings.reset_all")))
-                        .on_hover_text(t!("settings.reset_tooltip"))
-                        .clicked()
-                    {
-                        output.reset_requested = true;
-                    }
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(t!("dialog.confirm.close")).clicked() {
-                            output.close_requested = true;
-                        }
-                        ui.label(RichText::new(t!("settings.auto_save_hint")).small().weak());
-                    });
-                });
-            });
-
-        output
-    }
-
     /// Render the settings panel inline within a tab (not as a modal window).
     ///
     /// This is used when settings are displayed as a special tab in the main
@@ -417,11 +248,7 @@ impl SettingsPanel {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.label(phosphor_rich_text(GEAR, 16.0));
-                    ui.label(
-                        RichText::new(t!("settings.title"))
-                            .size(18.0)
-                            .strong(),
-                    );
+                    ui.label(RichText::new(t!("settings.title")).size(18.0).strong());
                 });
                 ui.add_space(12.0);
 
@@ -438,7 +265,7 @@ impl SettingsPanel {
 
                     let btn = ui.add_sized(
                         [sidebar_width - 16.0, 32.0],
-                        egui::SelectableLabel::new(selected, RichText::new(text).size(14.0)),
+                        egui::Button::selectable(selected, RichText::new(text).size(14.0)),
                     );
 
                     if btn.clicked() {
@@ -478,7 +305,7 @@ impl SettingsPanel {
                 ui.set_min_width(content_width);
 
                 egui::ScrollArea::vertical()
-                    .id_source(format!("settings_inline_scroll_{:?}", self.active_section))
+                    .id_salt(format!("settings_inline_scroll_{:?}", self.active_section))
                     .show(ui, |ui| {
                         ui.set_min_width(content_width - 16.0);
                         ui.add_space(8.0);
@@ -609,7 +436,7 @@ impl SettingsPanel {
         ui.label(RichText::new(t!("settings.terminal.theme").to_string()).strong());
         ui.add_space(4.0);
 
-        egui::ComboBox::from_id_source("terminal_theme_combo")
+        egui::ComboBox::from_id_salt("terminal_theme_combo")
             .selected_text(&settings.terminal_theme_name)
             .show_ui(ui, |ui| {
                 for theme in crate::terminal::TerminalTheme::all() {
@@ -686,9 +513,9 @@ impl SettingsPanel {
         }
         let monitors = self.cached_monitor_info.as_ref().unwrap();
 
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(ui.visuals().faint_bg_color)
-            .rounding(4.0)
+            .corner_radius(4.0)
             .inner_margin(8.0)
             .show(ui, |ui| {
                 for (i, m) in monitors.iter().enumerate() {
@@ -926,9 +753,7 @@ impl SettingsPanel {
                     Color32::from_rgb(40, 167, 69)
                 };
                 ui.horizontal(|ui| {
-                    ui.label(
-                        phosphor_rich_text(CHECK, 14.0).color(success_color),
-                    );
+                    ui.label(phosphor_rich_text(CHECK, 14.0).color(success_color));
                     ui.label(
                         RichText::new(t!("settings.about.up_to_date").to_string())
                             .color(success_color),
@@ -947,9 +772,9 @@ impl SettingsPanel {
                 let version = version.clone();
                 let url = release_url.clone();
 
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(ui.visuals().faint_bg_color)
-                    .rounding(6.0)
+                    .corner_radius(6.0)
                     .inner_margin(12.0)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -983,10 +808,7 @@ impl SettingsPanel {
             }
             UpdateState::Error(msg) => {
                 ui.horizontal(|ui| {
-                    ui.label(
-                        phosphor_rich_text(WARNING, 14.0)
-                            .color(ui.visuals().error_fg_color),
-                    );
+                    ui.label(phosphor_rich_text(WARNING, 14.0).color(ui.visuals().error_fg_color));
                     ui.label(
                         RichText::new(t!("settings.about.check_failed").to_string())
                             .color(ui.visuals().error_fg_color),
@@ -1124,7 +946,7 @@ impl SettingsPanel {
                 .unwrap_or_else(|| settings.syntax_theme.clone())
         };
 
-        egui::ComboBox::from_id_source("syntax_theme_combo")
+        egui::ComboBox::from_id_salt("syntax_theme_combo")
             .selected_text(&current_display)
             .width(200.0)
             .show_ui(ui, |ui| {
@@ -1177,8 +999,12 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         let current_lang = settings.language;
-        egui::ComboBox::from_id_source("language_combo")
-            .selected_text(format!("{} {}", GLOBE, current_lang.selector_display_name()))
+        egui::ComboBox::from_id_salt("language_combo")
+            .selected_text(format!(
+                "{} {}",
+                GLOBE,
+                current_lang.selector_display_name()
+            ))
             .show_ui(ui, |ui| {
                 for lang in Language::all() {
                     if ui
@@ -1286,13 +1112,12 @@ impl SettingsPanel {
                 ui.add_space(2.0);
 
                 let combo_label = if current_font_name.trim().is_empty() {
-                    t!("settings.editor.custom_font_pick_placeholder")
-                        .to_string()
+                    t!("settings.editor.custom_font_pick_placeholder").to_string()
                 } else {
                     current_font_name.clone()
                 };
 
-                egui::ComboBox::from_id_source("system_font_combo")
+                egui::ComboBox::from_id_salt("system_font_combo")
                     .selected_text(combo_label)
                     .width(200.0)
                     .show_ui(ui, |ui| {
@@ -1414,7 +1239,7 @@ impl SettingsPanel {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(*display_name).small());
                 ui.add_space(8.0);
-                egui::ComboBox::from_id_source(format!("complex_script_{}", key))
+                egui::ComboBox::from_id_salt(format!("complex_script_{}", key))
                     .selected_text(&display)
                     .width(180.0)
                     .show_ui(ui, |ui| {
@@ -1463,7 +1288,7 @@ impl SettingsPanel {
         );
         ui.add_space(4.0);
 
-        egui::ComboBox::from_id_source("cjk_preference_combo")
+        egui::ComboBox::from_id_salt("cjk_preference_combo")
             .selected_text(
                 settings
                     .cjk_font_preference
@@ -1786,7 +1611,7 @@ impl SettingsPanel {
                     .unwrap_or_else(|| settings.default_syntax_language.clone())
             };
 
-            egui::ComboBox::from_id_source("default_language_combo")
+            egui::ComboBox::from_id_salt("default_language_combo")
                 .selected_text(&current_display)
                 .width(200.0)
                 .show_ui(ui, |ui| {
@@ -1904,7 +1729,7 @@ impl SettingsPanel {
             ui.add_space(8.0);
 
             let current_display = settings.max_line_width.display_name();
-            egui::ComboBox::from_id_source("max_line_width_combo")
+            egui::ComboBox::from_id_salt("max_line_width_combo")
                 .selected_text(current_display)
                 .width(140.0)
                 .show_ui(ui, |ui| {
@@ -2102,7 +1927,7 @@ impl SettingsPanel {
 
             use crate::config::ParagraphIndent;
             let current_display = settings.paragraph_indent.display_name();
-            egui::ComboBox::from_id_source("paragraph_indent_combo")
+            egui::ComboBox::from_id_salt("paragraph_indent_combo")
                 .selected_text(current_display)
                 .width(100.0)
                 .show_ui(ui, |ui| {
@@ -2167,7 +1992,7 @@ impl SettingsPanel {
             ui.add_space(8.0);
 
             let current_display = settings.header_spacing.display_name();
-            egui::ComboBox::from_id_source("header_spacing_combo")
+            egui::ComboBox::from_id_salt("header_spacing_combo")
                 .selected_text(current_display)
                 .width(100.0)
                 .show_ui(ui, |ui| {
@@ -2350,10 +2175,7 @@ impl SettingsPanel {
                     .desired_width(200.0),
             );
             if !self.keyboard_filter.is_empty() {
-                if ui
-                    .small_button(phosphor_rich_text(X, 12.0))
-                    .clicked()
-                {
+                if ui.small_button(phosphor_rich_text(X, 12.0)).clicked() {
                     self.keyboard_filter.clear();
                 }
             }
@@ -2649,14 +2471,26 @@ mod tests {
 
     #[test]
     fn test_settings_section_icon() {
-        assert_eq!(SettingsSection::Appearance.icon(), crate::ui::phosphor_icons::PALETTE);
-        assert_eq!(SettingsSection::Editor.icon(), crate::ui::phosphor_icons::NOTE_PENCIL);
-        assert_eq!(SettingsSection::Files.icon(), crate::ui::phosphor_icons::FILES);
+        assert_eq!(
+            SettingsSection::Appearance.icon(),
+            crate::ui::phosphor_icons::PALETTE
+        );
+        assert_eq!(
+            SettingsSection::Editor.icon(),
+            crate::ui::phosphor_icons::NOTE_PENCIL
+        );
+        assert_eq!(
+            SettingsSection::Files.icon(),
+            crate::ui::phosphor_icons::FILES
+        );
         assert_eq!(
             SettingsSection::Terminal.icon(),
             crate::ui::phosphor_icons::TERMINAL_WINDOW
         );
-        assert_eq!(SettingsSection::About.icon(), crate::ui::phosphor_icons::INFO);
+        assert_eq!(
+            SettingsSection::About.icon(),
+            crate::ui::phosphor_icons::INFO
+        );
     }
 
     #[test]
@@ -2669,7 +2503,6 @@ mod tests {
     fn test_settings_panel_output_default() {
         let output = SettingsPanelOutput::default();
         assert!(!output.changed);
-        assert!(!output.close_requested);
         assert!(!output.reset_requested);
     }
 }

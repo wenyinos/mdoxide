@@ -1,188 +1,183 @@
-# Sync Scrolling Implementation
+# Sync Scrolling
 
-## Overview
+Ferrite keeps document position aligned between **Raw**, **Rendered**, and **Split** (raw + preview side-by-side) views. Two mechanisms share the same hybrid top/bottom/middle strategy but run at different times.
 
-Sync scrolling maintains the user's document position when switching between Raw and Rendered view modes. When toggling view modes (Ctrl+E), the scroll position is synchronized using a **hybrid approach**:
-- **Boundaries (top/bottom)**: Percentage-based to ensure you stay at document edges
-- **Middle content**: Line-based with interpolation to show the same content
+| Mechanism | When | Setting |
+|-----------|------|---------|
+| **Mode-toggle sync** | Ctrl+E (Raw ↔ Rendered, not involving Split) | `sync_scroll_enabled` |
+| **Split-view live sync** | While scrolling in Split on markdown files | Same setting + optional **2-way** |
 
-## Architecture
+Default: `sync_scroll_enabled = false`, `sync_scroll_bidirectional = true` (when sync is turned on).
 
-### Key Components
+## User controls
 
-1. **Tab State** (`src/state.rs`):
-   - `scroll_offset: f32` - Current scroll position in pixels
-   - `content_height: f32` - Total content height of scroll area
-   - `viewport_height: f32` - Visible viewport height
-   - `pending_scroll_offset: Option<f32>` - Target scroll offset to apply
-   - `pending_scroll_ratio: Option<f32>` - Target scroll ratio (0.0 to 1.0)
-   - `pending_scroll_to_line: Option<usize>` - Target line for line-based sync
-   - `raw_line_height: f32` - Actual line height in Raw mode
-   - `rendered_line_mappings: Vec<(usize, usize, f32)>` - Line-to-Y position mappings
+- **Settings → Preview → Sync scroll** — global preference (also ribbon **Sync Scroll** toggle).
+- **Split view** — footer under the **semantic minimap** (between editor and preview):
+  - **Sync** — master on/off for live split sync (persists to settings).
+  - **2-way** — when Sync is on: bidirectional (default) vs raw → rendered only.
 
-2. **Mode Toggle** (`src/app.rs`):
-   - `handle_toggle_view_mode()` - Determines sync strategy and stores target
-   - `find_rendered_y_for_line_interpolated()` - Precise line-to-Y lookup
-   - `find_source_line_for_rendered_y_interpolated()` - Y-to-line reverse lookup
+i18n keys: `settings.preview.sync_scroll`, `split_sync_scroll`, `split_sync_bidirectional` in `locales/en.yaml`.
 
-3. **Editors**:
-   - `EditorWidget` (`src/editor/widget.rs`) - Raw text editor, tracks `raw_line_height`
-   - `MarkdownEditor` (`src/markdown/editor.rs`) - Rendered WYSIWYG editor, builds line mappings
+## Hybrid algorithm (top / middle / bottom)
 
-### Settings
+Used for **mode toggle** and **split idle snap**:
 
-- `sync_scroll_enabled: bool` in `Settings` - User preference for sync scrolling
-- Toggled via ribbon button or settings panel
-
-## Hybrid Scroll Sync Algorithm
-
-### Decision Logic
-
-```rust
-if at_top {
-    // Within 5px of top - snap to top
-    pending_scroll_offset = Some(0.0);
-} else if at_bottom {
-    // Within 5px of max scroll - use ratio=1.0 to stay at bottom
-    pending_scroll_ratio = Some(1.0);
-} else {
-    // In the middle - use line-based mapping for content preservation
-    // Raw→Rendered: Store target line
-    // Rendered→Raw: Look up line from Y position, calculate raw offset
-}
+```text
+Within 5px of top     → scroll offset 0 (both panes / target mode)
+Within 5px of bottom  → max scroll (or ratio 1.0 on mode toggle)
+Otherwise (middle)    → content-based mapping (line + fraction), not %
 ```
 
-### Line-Based with Interpolation
+**Why not percentage-only?** Code blocks and Mermaid are much taller in preview than in raw line count; a 50% scroll ratio shows different content. Line-based mapping with **interpolation inside blocks** keeps the same source line visible across modes.
 
-The key innovation is **interpolating within elements** for sub-element precision:
+Constants: `SCROLL_BOUNDARY_PX = 5.0` in `src/preview/sync_scroll.rs`.
 
-```rust
-fn find_rendered_y_for_line_interpolated(mappings, target_line, content_height) {
-    // Find element containing target_line
-    for (i, (start, end, y)) in mappings {
-        if target_line in start..=end {
-            // Calculate element height
-            let element_height = next_mapping.y - y;
-            
-            // Interpolate within element
-            let progress = (target_line - start) / (end - start + 1);
-            return y + progress * element_height;
-        }
-    }
-}
+## Mode-toggle sync (Ctrl+E)
+
+**Entry:** `FerriteApp::handle_toggle_view_mode()` in `src/app/navigation.rs`.
+
+Only runs when `sync_scroll_enabled` and switching between **Raw** and **Rendered** (not Split).
+
+### Tab / app pending fields (`src/state.rs`)
+
+| Field | Purpose |
+|-------|---------|
+| `pending_scroll_offset` | Pixel offset to apply next frame |
+| `pending_scroll_ratio` | 0.0–1.0 (e.g. bottom = 1.0), converted after layout |
+| `pending_scroll_to_line` | 1-based line for Raw→Rendered lookup |
+| `pending_scroll_anchor` | `(line, fraction)` for split / rendered→raw |
+| `rendered_line_mappings` | `(start_line, end_line, rendered_y)` per block |
+| `raw_line_height` | From Ferrite editor for raw scroll math |
+
+`Tab::clear_sync_pending_scroll()` clears offset, anchor, ratio, and `pending_scroll_to_line` (not app-level outline `pending_scroll_to_line`).
+
+### Two-frame application (Rendered target)
+
+1. Render, build `rendered_line_mappings`, convert `pending_scroll_to_line` → `pending_scroll_offset` via interpolation.
+2. Apply `pending_scroll_offset` on `ScrollArea::vertical_scroll_offset`.
+
+### Interpolation
+
+`find_rendered_y_for_line_interpolated` / `find_source_line_for_rendered_y_interpolated` in `central_panel.rs` — within a block spanning lines 100–200, line 150 maps to ~50% of that block’s rendered height, not only the block top.
+
+## Split-view live sync
+
+**Entry:** `src/app/central_panel.rs` (markdown split layout).
+
+Gated: `settings.sync_scroll_enabled &&` markdown file in split.
+
+### Flow
+
+```text
+User scrolls (wheel, scrollbar drag, or keys)
+    → note_scroll_activity() detects offset delta (≥2px), not wheel-only
+    → master pane: Raw or Rendered (mouse hover + larger delta)
+    → store_raw_anchor(line, fraction) or store_preview_y(y)
+
+~120ms idle (SPLIT_SCROLL_IDLE)
+    → single programmatic snap to other pane
+    → top/bottom: snap to 0 or max scroll
+    → middle: source_anchor_to_preview_y / preview_y_to_source_anchor
+    → mark_programmatic() (~80ms) to ignore echo
+
+Sync OFF
+    → clear tab pending scroll fields each frame
+    → reset SyncScrollState on toggle off
+    → no idle snap loop
 ```
 
-This ensures that if you're looking at line 150 (which is 50% through a code block spanning lines 100-200), you'll see the same line 150 in the other mode, not just the start of the code block.
+### Anchors
 
-### Two-Frame Application
+- **Raw:** `EditorOutput.scroll_anchor_line` + `scroll_anchor_fraction` from Ferrite `ViewState` (wrap-aware).
+- **Preview:** `LineMapping` list from rendered pass; `SyncScrollState::source_anchor_to_preview_y` / `preview_y_to_source_anchor` in `src/preview/sync_scroll.rs`.
 
-```
-Frame 1: Render, build mappings, convert pending_scroll_to_line → pending_scroll_offset
-Frame 2: Apply pending_scroll_offset via ScrollArea
-```
+### Bidirectional
 
-## Flow Diagram
+`sync_scroll_bidirectional` (default `true`):
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     User Presses Ctrl+E                          │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ handle_toggle_view_mode()                                        │
-│   if at_top → pending_scroll_offset = 0                          │
-│   if at_bottom → pending_scroll_ratio = 1.0                      │
-│   else (middle):                                                 │
-│     Raw→Rendered: pending_scroll_to_line = topmost_line          │
-│     Rendered→Raw: pending_scroll_offset = line × line_height     │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Frame 1: Render New Mode                                         │
-│   1. Render content, build fresh line mappings                   │
-│   2. If pending_scroll_to_line:                                  │
-│      - Use interpolation to find exact Y position                │
-│      - Store as pending_scroll_offset                            │
-│   3. If pending_scroll_ratio:                                    │
-│      - Convert to offset using actual content_height             │
-│   4. Request repaint                                             │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Frame 2: Apply Scroll Position                                   │
-│   Apply pending_scroll_offset via vertical_scroll_offset()       │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **On:** scrolling preview can move raw (see **Split-view scroll delivery** below).
+- **Off:** only raw → preview (`tab.pending_scroll_offset`). Preview-only scroll sets `ScrollOrigin::Rendered` and clears any stale raw anchor so idle snap does **not** re-align the preview to an old raw position.
 
-## Why This Hybrid Approach?
+### Split-view scroll delivery
 
-| Scenario | Pure Percentage | Pure Line-Based | Hybrid |
-|----------|----------------|-----------------|--------|
-| At top | ✓ Stays at top | ✓ | ✓ |
-| At bottom | ✓ Stays at bottom | ✗ May be 75% down | ✓ |
-| In middle | ✗ Different content | ✓ Same content | ✓ |
+Each pane has its own programmatic scroll channel. Using the wrong field causes visible jumps (e.g. applying raw max scroll to the preview snaps the preview upward on code-block-heavy docs).
 
-The hybrid approach gives the best of both worlds:
-- **Boundary preservation**: Top/bottom stay at edges
-- **Content preservation**: Middle content stays visible
+| Direction | Region | Mechanism | Applied by |
+|-----------|--------|-----------|------------|
+| Raw → preview | top / bottom / middle | `tab.pending_scroll_offset` | `MarkdownEditor::pending_scroll_offset` (start of next frame) |
+| Preview → raw | top / bottom | `SyncScrollState::set_raw_target(y)` | `EditorWidget::pending_sync_scroll_offset` via `get_animated_raw_offset()` |
+| Preview → raw | middle | `tab.pending_scroll_anchor` `(line, fraction)` | `EditorWidget` → `scroll_to_absolute` on anchor line |
 
-## Edge Cases
+**Implementation:** idle snap in `src/app/central_panel.rs` after both panes render; constants and helpers in `src/preview/sync_scroll.rs`.
 
-### No Scrollable Content
-If `content_height <= viewport_height`, there's nothing to scroll, so sync is skipped.
+**Regression:** with **Sync** + **2-way** on, scroll the preview to the bottom — preview stays at bottom and raw follows; raw → preview bottom unchanged.
 
-### Boundary Detection
-- **Top boundary**: Within 5px of scroll=0 → snap to top
-- **Bottom boundary**: Within 5px of max_scroll → use ratio=1.0 to stay at bottom
+## Rendered-only mode with sync off
 
-### Empty or Missing Line Mappings
-On first toggle to Rendered mode, mappings may be empty. The system falls back to:
-1. Estimate line ratio: `target_line / total_lines`
-2. Convert to scroll offset: `line_ratio × max_scroll`
+When sync is disabled, rendered mode must **not** apply stale `pending_scroll_*` from a prior split session or mode switch:
 
-### Large Elements
-The interpolation handles large elements (like code blocks spanning 100+ lines) by calculating progress within the element, ensuring sub-element precision.
+- `sync_on` captured before `active_tab_mut()` in `central_panel.rs`.
+- Pending offset/ratio/line conversion only when `sync_on`.
+- Ribbon or minimap **Sync** off → `clear_sync_pending_scroll()` + `SyncScrollState::reset_on_disable()`.
 
-## Future Enhancements
+## Viewport culling and scroll stability
 
-The `SyncScrollState` infrastructure in `src/preview/sync_scroll.rs` is designed for future split-view support:
+Rendered preview uses **viewport culling** (`ViewportCullingState` in `src/markdown/editor.rs`). Block heights (especially code blocks) are measured as they enter view; `total_height` can change after scroll stops.
 
-1. **Split View**: Show Raw and Rendered side-by-side with real-time sync
-2. **Bidirectional Sync**: Scrolling either pane updates the other
-3. **Debouncing**: Prevent feedback loops in split-view
+**Height fixup** (sync-independent): when `total_height` changes by >1px and the user is not actively scrolling, the next frame preserves scroll **ratio** (`cur/max_old → ratio*max_new`) via temp memory `rendered_height_fixup` so the viewport does not jump when egui keeps a fixed pixel offset. Fixup is suppressed for **200ms** after user scroll input so stopping a wheel/scrollbar drag does not immediately nudge the viewport.
 
-## Testing
+**Active scroll input** is detected via `is_active_scroll_input()` — mouse wheel (`smooth_scroll_delta`) or a decided pointer **drag** (scrollbar thumb). Simple clicks (e.g. task list checkboxes, links) do **not** count as scrolling and do not start the cooldown.
 
-### Manual Test Scenarios
+**Inline-only content edits** (task checkbox `[ ]` ↔ `[x]`, etc.) reuse existing culling layout when top-level block `(start_line, end_line)` ranges are unchanged, even if `content_hash` differs. That avoids a bootstrap remeasure frame that would change `total_height` and shift scroll. See [`rendered-view-viewport-culling.md`](./rendered-view-viewport-culling.md) and [`task-list-checkbox.md`](./task-list-checkbox.md).
 
-1. **Basic Toggle**:
-   - Open a markdown file with 100+ lines
-   - Scroll to middle (50%)
-   - Toggle view mode (Ctrl+E)
-   - Verify position is approximately maintained
+This is separate from sync; it fixes layout remeasure “nudges” mid-document.
 
-2. **Edge Positions**:
-   - Test at top (0%), middle (50%), bottom (100%)
-   - Toggle back and forth
+## Settings (`src/config/settings.rs`)
 
-3. **Different Content Types**:
-   - Documents with many headings
-   - Documents with code blocks
-   - Documents with nested lists
+| Field | Default | Description |
+|-------|---------|-------------|
+| `sync_scroll_enabled` | `false` | Mode toggle + split live sync |
+| `sync_scroll_bidirectional` | `true` | Preview → raw when split sync on |
 
-4. **Sync Scrolling Disabled**:
-   - Disable sync scrolling in settings
-   - Toggle view mode
-   - Verify scroll position resets to 0
+## Key files
 
-## Related Files
+| File | Role |
+|------|------|
+| `src/app/central_panel.rs` | Split layout, idle sync, minimap footer, rendered pending guards |
+| `src/app/navigation.rs` | Mode-toggle hybrid sync |
+| `src/app/mod.rs` | Ribbon toggle, `sync_scroll_states` cleanup on tab close |
+| `src/preview/sync_scroll.rs` | `SyncScrollState`, anchors, boundaries, idle/programmatic |
+| `src/editor/minimap.rs` | `show_split_sync_footer`, `SPLIT_SYNC_FOOTER_HEIGHT` |
+| `src/editor/widget.rs` | `pending_scroll_anchor`, `pending_sync_scroll_offset`, `EditorOutput` scroll metrics |
+| `src/markdown/editor.rs` | Rendered scroll, culling, height fixup |
+| `src/state.rs` | Tab pending fields, `clear_sync_pending_scroll()` |
 
-- `src/state.rs` - Tab struct with scroll state
-- `src/app.rs` - View mode toggle logic
-- `src/editor/widget.rs` - Raw editor scroll handling
-- `src/markdown/editor.rs` - Rendered editor scroll handling
-- `src/preview/sync_scroll.rs` - Sync scroll infrastructure (future)
-- `src/config/settings.rs` - sync_scroll_enabled setting
+## Future enhancements
+
+1. **Soft follow** — optional lerp toward target during scroll (smoother than idle-only snap).
+2. **Mapping warmup** — delay split sync until all block heights measured (heavy Mermaid docs).
+
+## Manual test checklist (v0.3.0)
+
+### Mode toggle (`sync_scroll_enabled` on)
+
+1. Long markdown (100+ lines, code blocks): scroll to ~50%, Ctrl+E Raw↔Rendered — same content region visible.
+2. Top / bottom: within a few px of edge, toggle stays at edge.
+3. Sync off: toggle resets scroll to top (legacy behavior).
+
+### Split live sync
+
+1. Enable **Sync** in minimap footer; scroll raw with wheel and scrollbar — preview follows after brief idle.
+2. **2-way** on: scroll preview — raw follows (middle of document).
+3. **2-way** on: scroll preview to **bottom** — preview stays at bottom; raw scrolls to its bottom (no upward jump).
+4. **2-way** on: scroll preview to **top** — both panes at top.
+5. **2-way** off: preview scroll does not move raw.
+6. Top/bottom of either pane — both panes align to edges (raw → preview and preview → raw).
+7. Turn **Sync** off while scrolling preview — no post-scroll snap; no ghost jumps from earlier sync state.
+8. Code-block-heavy doc, sync off — scroll rendered only; verify no repeated small jumps (height fixup should be minimal).
+9. Long task list, scroll to middle — toggle several checkboxes; scroll position must stay fixed (no up/down nudge).
+
+## Related docs
+
+- [View mode persistence](./view-mode-persistence.md) — per-file Raw/Split/Rendered restore
+- [Rendered viewport culling](./markdown/rendered-view-viewport-culling.md) — block height cache and performance

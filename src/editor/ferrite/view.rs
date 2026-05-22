@@ -117,6 +117,7 @@ impl Default for ViewState {
     }
 }
 
+#[allow(dead_code)] // ViewState scroll/wrap mapping API
 impl ViewState {
     /// Creates a new `ViewState` with default values.
     ///

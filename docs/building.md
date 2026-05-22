@@ -6,7 +6,7 @@ This guide covers building Ferrite from source for Windows, Linux, and macOS.
 
 ### All Platforms
 
-- **Rust 1.70+** - Install from [rustup.rs](https://rustup.rs/)
+- **Rust 1.92+** - Install from [rustup.rs](https://rustup.rs/) (see `rust-toolchain.toml` in repo root)
 - **Git** - For cloning the repository
 
 ```bash

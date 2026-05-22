@@ -20,7 +20,7 @@
 //! use crate::config::Theme;
 //!
 //! // Get colors for the current theme
-//! let colors = ThemeColors::from_theme(Theme::Dark, &ctx.style().visuals);
+//! let colors = ThemeColors::from_theme(Theme::Dark, &ctx.global_style().visuals);
 //!
 //! // Use in egui
 //! ui.label(RichText::new("Hello").color(colors.text.primary));

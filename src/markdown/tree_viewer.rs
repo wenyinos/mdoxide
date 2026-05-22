@@ -1069,9 +1069,9 @@ impl<'a> TreeViewer<'a> {
                 .clicked()
             {
                 let json_path = self.path_to_jsonpath(path);
-                ui.output_mut(|o| o.copied_text = json_path);
+                ui.copy_text(json_path);
                 self.state.copied_path = Some(path.to_string());
-                ui.close_menu();
+                ui.close();
             }
         });
     }

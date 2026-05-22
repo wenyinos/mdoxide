@@ -87,6 +87,16 @@ We use `clippy` for linting. All warnings should be addressed:
 cargo clippy --all-targets -- -D warnings
 ```
 
+### `dead_code` warnings
+
+When `cargo build` reports `dead_code`, triage before silencing:
+
+1. **Remove** — Stale helpers, legacy modal `show()` methods superseded by special tabs, and other unreachable code with no callers.
+2. **Wire** — If the symbol is part of an incomplete feature (e.g. a shortcut variant with no `check_shortcut!` mapping), connect it or delete the dead path.
+3. **`#[allow(dead_code)]`** — Use only for intentional public API (FerriteEditor, `TextBuffer`, terminal VTE helpers, dialog result helpers). Prefer item- or `impl`-level allows with a one-line rationale; avoid crate-level allows except `#[cfg(test)]` helpers.
+
+Do not run bulk deletion tools; review each warning. See `docs/technical/build-warnings-0.2.7.md` for the v0.2.7 warning inventory context.
+
 ### Code Conventions
 
 - **Module organization:** Follow the existing module structure in `src/`

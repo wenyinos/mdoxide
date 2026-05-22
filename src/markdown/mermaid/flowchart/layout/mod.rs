@@ -187,19 +187,12 @@ fn compute_subgraph_layouts(
         max_y = max_y.max(sg_layout.pos.y + sg_layout.size.y);
     }
 
-    // If any content extends into negative coordinates, shift everything
-    let shift_x = if min_x < 0.0 {
-        -min_x + config.margin
-    } else {
-        0.0
-    };
-    let shift_y = if min_y < 0.0 {
-        -min_y + config.margin
-    } else {
-        0.0
-    };
+    // Shift so content starts at margin (handles negative coords and leftover
+    // slack from older layouts that centered layers in available_width).
+    let shift_x = config.margin - min_x;
+    let shift_y = config.margin - min_y;
 
-    if shift_x > 0.0 || shift_y > 0.0 {
+    if shift_x.abs() > 0.01 || shift_y.abs() > 0.01 {
         for node_layout in layout.nodes.values_mut() {
             node_layout.pos.x += shift_x;
             node_layout.pos.y += shift_y;
@@ -214,6 +207,6 @@ fn compute_subgraph_layouts(
         max_y += shift_y;
     }
 
-    layout.total_size.x = layout.total_size.x.max(max_x + config.margin);
-    layout.total_size.y = layout.total_size.y.max(max_y + config.margin);
+    layout.total_size.x = max_x + config.margin;
+    layout.total_size.y = max_y + config.margin;
 }

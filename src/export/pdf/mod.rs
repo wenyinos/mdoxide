@@ -31,7 +31,7 @@ pub mod options;
 pub mod render;
 pub mod theme;
 
-pub use options::{PdfExportOptions, PdfMarginPreset, PdfMargins, PdfPageSize};
+pub use options::{PdfExportOptions, PdfMarginPreset, PdfPageSize};
 // `PdfExportError` is part of the public PDF API surface so external callers
 // can pattern-match on it even though no in-tree caller does today.
 pub use render::render_markdown_to_pdf;

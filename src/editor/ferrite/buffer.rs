@@ -25,6 +25,7 @@ impl Default for TextBuffer {
     }
 }
 
+#[allow(dead_code)] // Intentional TextBuffer public API (rope/index helpers for editor and tests)
 impl TextBuffer {
     /// Creates a new empty `TextBuffer`.
     ///

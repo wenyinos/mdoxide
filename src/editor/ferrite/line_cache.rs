@@ -4,6 +4,14 @@
 //! (text layouts) keyed by content hash. This avoids expensive galley recreation
 //! on each frame for unchanged lines.
 //!
+//! ## Galley invariants (egui 0.34 / skrifa)
+//!
+//! - [`egui::Galley::cursor_from_pos`] and [`egui::Galley::pos_from_cursor`] use
+//!   [`egui::text::CCursor`] **character** indices, not UTF-8 byte offsets.
+//! - Wrapped layout must use the same `wrap_width` for measure and paint.
+//! - Complex-script lines may use [`ShapedLine`]: HarfRust cluster **advances** for
+//!   width/cursor math; each cluster is still a standard egui galley for drawing.
+//!
 //! # Features
 //! - Content-hash based keys (same content = cache hit)
 //! - LRU eviction when cache exceeds `MAX_CACHE_ENTRIES`
@@ -97,6 +105,7 @@ pub struct HighlightedSegment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CacheKey(u64);
 
+#[allow(dead_code)]
 impl CacheKey {
     /// Creates a new cache key from line content and styling.
     ///
@@ -268,7 +277,7 @@ pub struct ClusterGalley {
 pub struct ShapedLine {
     pub clusters: Vec<ClusterGalley>,
     pub total_width: f32,
-    pub height: f32,
+    pub _height: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -330,6 +339,7 @@ impl Default for LineCache {
     }
 }
 
+#[allow(dead_code)] // LineCache measurement and invalidation API
 impl LineCache {
     /// Creates a new empty `LineCache` with default minimum capacity.
     ///
@@ -653,24 +663,23 @@ impl LineCache {
         }
 
         let font_bytes = crate::fonts::ttf_bytes_for_font_id_shaping(&font_id);
-        let glyphs = match super::shaping::shape_text(line_content, font_bytes, font_id.size) {
-            Ok(g) if !g.is_empty() => g,
-            Ok(_) => return None,
-            Err(e) => {
-                log::debug!(target: "ferrite::shaping", "shaped-line: shape_text failed: {e}");
-                return None;
-            }
-        };
+        let clusters =
+            match super::shaping::shape_line_clusters(line_content, font_bytes, font_id.size) {
+                Ok(cs) if !cs.is_empty() => cs,
+                Ok(_) => return None,
+                Err(e) => {
+                    log::debug!(target: "ferrite::shaping", "shaped-line: shape failed: {e}");
+                    return None;
+                }
+            };
 
-        let clusters = super::shaping::group_clusters(&glyphs, line_content.len());
-        if clusters.is_empty() {
-            return None;
-        }
+        debug_assert!(super::shaping::validate_cluster_byte_ranges(
+            line_content,
+            &clusters
+        ));
 
-        let row_height = painter
-            .layout_no_wrap(String::new(), font_id.clone(), color)
-            .size()
-            .y;
+        // Use Fonts::row_height — empty galleys can report 0 height under skrifa (0.34).
+        let row_height = crate::fonts::row_height_for_font(painter.ctx(), &font_id);
 
         let mut cluster_galleys = Vec::with_capacity(clusters.len());
         let mut x_offset: f32 = 0.0;
@@ -680,6 +689,16 @@ impl LineCache {
             let start = c.byte_start.min(end);
             let cluster_text = &line_content[start..end];
             let galley = painter.layout_no_wrap(cluster_text.to_string(), font_id.clone(), color);
+            let galley_width = galley.size().x;
+            // Cursor/selection use HarfRust advances; egui (skrifa) lays out cluster substring.
+            if galley_width > c.advance * 1.15 {
+                log::trace!(
+                    target: "ferrite::shaping",
+                    "cluster galley wider than shaped advance: text={cluster_text:?} \
+                     galley_w={galley_width:.2} advance={:.2}",
+                    c.advance
+                );
+            }
 
             cluster_galleys.push(ClusterGalley { galley, x_offset });
             x_offset += c.advance;
@@ -688,7 +707,7 @@ impl LineCache {
         let shaped = Arc::new(ShapedLine {
             clusters: cluster_galleys,
             total_width: x_offset,
-            height: row_height,
+            _height: row_height,
         });
 
         self.insert_shaped(key, Arc::clone(&shaped));
@@ -993,18 +1012,33 @@ mod tests {
         assert!(cache.is_empty());
     }
 
+    fn dummy_galley() -> Arc<egui::Galley> {
+        use std::sync::OnceLock;
+
+        static GALLEY: OnceLock<Arc<egui::Galley>> = OnceLock::new();
+        GALLEY
+            .get_or_init(|| {
+                let ctx = egui::Context::default();
+                ctx.set_fonts(egui::FontDefinitions::default());
+                let mut galley = None;
+                ctx.run_ui(egui::RawInput::default(), |ui| {
+                    galley = Some(ui.ctx().fonts_mut(|fonts| {
+                        fonts.layout_job(LayoutJob::simple(
+                            " ".to_owned(),
+                            egui::FontId::default(),
+                            Color32::WHITE,
+                            100.0,
+                        ))
+                    }));
+                });
+                galley.expect("test galley layout")
+            })
+            .clone()
+    }
+
     fn dummy_entry(access: u64) -> CacheEntry {
         CacheEntry {
-            galley: Arc::new(egui::Galley {
-                job: Arc::new(LayoutJob::default()),
-                rows: vec![],
-                rect: egui::Rect::NOTHING,
-                mesh_bounds: egui::Rect::NOTHING,
-                num_vertices: 0,
-                num_indices: 0,
-                pixels_per_point: 1.0,
-                elided: false,
-            }),
+            galley: dummy_galley(),
             last_access: access,
         }
     }
@@ -1135,7 +1169,7 @@ mod tests {
             shaped: Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 0.0,
-                height: 14.0,
+                _height: 14.0,
             }),
             last_access: access,
         }
@@ -1152,7 +1186,7 @@ mod tests {
             Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 40.0,
-                height: 14.0,
+                _height: 14.0,
             }),
         );
 
@@ -1241,7 +1275,7 @@ mod tests {
             Arc::new(ShapedLine {
                 clusters: vec![],
                 total_width: 0.0,
-                height: 14.0,
+                _height: 14.0,
             }),
         );
 

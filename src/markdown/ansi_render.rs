@@ -44,6 +44,7 @@ pub struct AnsiLine {
     pub segments: Vec<AnsiSegment>,
 }
 
+#[cfg(test)]
 impl AnsiLine {
     /// Total visible character count (sum of segment text lengths).
     pub fn char_count(&self) -> usize {
@@ -100,7 +101,8 @@ fn normalize_crlf(bytes: &[u8]) -> Cow<'_, [u8]> {
     Cow::Owned(out)
 }
 
-/// Convert a UTF-8 string into styled lines.
+/// Convert a UTF-8 string into styled lines (tests).
+#[cfg(test)]
 pub fn parse_str(s: &str) -> Vec<AnsiLine> {
     parse(s.as_bytes())
 }

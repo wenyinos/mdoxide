@@ -12,12 +12,12 @@ use std::collections::HashMap;
 use egui::Vec2;
 
 pub use colors::FlowchartColors;
-use edges::{compute_back_edge_lanes, draw_edge, max_back_edge_lane_count, EdgeLabelInfo};
+use edges::{back_edge_horizontal_padding, compute_back_edge_lanes, draw_edge, EdgeLabelInfo};
 use nodes::draw_node;
 use subgraphs::{compute_subgraph_depths, draw_subgraph};
 
 use super::types::*;
-use super::utils::{layout_content_size, BACK_EDGE_LANE_SPACING, BACK_EDGE_LOOP_MARGIN, NODE_OBSTACLE_PADDING};
+use super::utils::layout_content_size;
 use crate::markdown::mermaid::text::{EguiTextMeasurer, TextMeasurer};
 
 /// Render a flowchart to the UI.
@@ -85,22 +85,15 @@ pub fn render_flowchart(
     // padding so back-edge loops are not clipped by the painter rect.
     const LAYOUT_MARGIN: f32 = 20.0;
     let content_size = layout_content_size(layout, LAYOUT_MARGIN);
-    let max_lanes = max_back_edge_lane_count(layout, flowchart.direction, Vec2::ZERO);
-    let side_pad = if layout.back_edges.is_empty() {
-        0.0
-    } else {
-        BACK_EDGE_LOOP_MARGIN
-            + NODE_OBSTACLE_PADDING
-            + (max_lanes.saturating_sub(1)) as f32 * BACK_EDGE_LANE_SPACING
-    };
+    let (left_pad, right_pad) = back_edge_horizontal_padding(layout, flowchart.direction);
     let alloc_size = Vec2::new(
-        content_size.x.max(layout.total_size.x) + side_pad * 2.0,
+        content_size.x.max(layout.total_size.x) + left_pad + right_pad,
         content_size.y.max(layout.total_size.y),
     );
 
     ui.set_min_size(alloc_size);
     let (rect, _response) = ui.allocate_exact_size(alloc_size, egui::Sense::hover());
-    let offset = rect.min.to_vec2() + Vec2::new(side_pad, 0.0);
+    let offset = rect.min.to_vec2() + Vec2::new(left_pad, 0.0);
     let painter = ui.painter_at(rect);
     let back_edge_lanes = compute_back_edge_lanes(layout, flowchart.direction, offset);
 

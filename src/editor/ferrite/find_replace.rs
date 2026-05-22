@@ -7,6 +7,7 @@
 
 use super::editor::FerriteEditor;
 
+#[allow(dead_code)] // Find/replace helpers on FerriteEditor
 impl FerriteEditor {
     /// Replaces the current search match with the given replacement text.
     ///

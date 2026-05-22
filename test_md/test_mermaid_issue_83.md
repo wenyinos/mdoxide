@@ -4,7 +4,7 @@ GitHub: [#83 — Mermaid rendering: lines cross boxes](https://github.com/OlaPro
 
 Open in **Rendered** or **Split** view and compare to [Mermaid Live Editor](https://mermaid.live).
 
-## FC-83a — Feedback loop (linkStyle interpolate)
+## FC-83a — Feedback loop (linkStyle interpolate)s
 
 ```mermaid
 graph TD

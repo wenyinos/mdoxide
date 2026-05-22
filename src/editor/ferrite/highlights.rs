@@ -20,6 +20,7 @@ use crate::editor::matching::DelimiterMatcher;
 /// This matches VS Code's behavior.
 pub(crate) const MAX_DISPLAYED_MATCHES: usize = 1000;
 
+#[allow(dead_code)] // Bracket/highlight configuration on FerriteEditor
 impl FerriteEditor {
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Search Highlight Rendering
@@ -271,15 +272,13 @@ impl FerriteEditor {
                     let start_ccursor = egui::text::CCursor::new(line_range_start);
                     let end_ccursor = egui::text::CCursor::new(line_range_end);
 
-                    let start_cursor = galley.from_ccursor(start_ccursor);
-                    let end_cursor = galley.from_ccursor(end_ccursor);
-                    let start_rcursor = start_cursor.rcursor;
-                    let end_rcursor = end_cursor.rcursor;
+                    let start_rcursor = galley.layout_from_cursor(start_ccursor);
+                    let end_rcursor = galley.layout_from_cursor(end_ccursor);
 
                     // Handle single-row or multi-row highlights
                     if start_rcursor.row == end_rcursor.row {
                         if let Some(row) = galley.rows.get(start_rcursor.row) {
-                            let row_rect = row.rect;
+                            let row_rect = row.rect();
                             let x_start = row.x_offset(start_rcursor.column);
                             let x_end = row.x_offset(end_rcursor.column);
 
@@ -301,7 +300,7 @@ impl FerriteEditor {
                         // Multi-row highlight
                         for row_idx in start_rcursor.row..=end_rcursor.row {
                             if let Some(row) = galley.rows.get(row_idx) {
-                                let row_rect = row.rect;
+                                let row_rect = row.rect();
 
                                 let x_start = if row_idx == start_rcursor.row {
                                     row.x_offset(start_rcursor.column)

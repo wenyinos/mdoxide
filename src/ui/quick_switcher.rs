@@ -11,6 +11,7 @@
 
 use crate::ui::icons::phosphor_rich_text;
 use crate::ui::phosphor_icons::{self, MAGNIFYING_GLASS, TIMER};
+use crate::workspaces::FileIndexProgress;
 use eframe::egui::{self, Color32, Key, LayerId, Order, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -82,15 +83,9 @@ fn damerau_levenshtein_at_most(a: &str, b: &str, max: usize) -> bool {
 
         for j in 1..=lb {
             let cost = usize::from(a[i - 1] != b[j - 1]);
-            let mut dist = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            let mut dist = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
 
-            if i > 1
-                && j > 1
-                && a[i - 1] == b[j - 2]
-                && a[i - 2] == b[j - 1]
-            {
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
                 dist = dist.min(prev_prev[j - 2] + 1);
             }
 
@@ -246,6 +241,7 @@ impl QuickSwitcher {
         recent_files: &[PathBuf],
         workspace_root: &PathBuf,
         is_dark: bool,
+        index_progress: Option<FileIndexProgress>,
     ) -> QuickSwitcherOutput {
         let mut output = QuickSwitcherOutput::default();
 
@@ -345,7 +341,7 @@ impl QuickSwitcher {
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.query)
                                     .hint_text(t!("quick_switcher.placeholder"))
-                                    .frame(false)
+                                    .frame(egui::Frame::NONE)
                                     .desired_width(450.0)
                                     .font(egui::TextStyle::Body),
                             );
@@ -364,6 +360,11 @@ impl QuickSwitcher {
                         ui.add_space(4.0);
                         ui.separator();
                         ui.add_space(4.0);
+
+                        if let Some(progress) = index_progress {
+                            crate::ui::file_index_progress_ui(ui, progress, secondary_color);
+                            ui.add_space(4.0);
+                        }
 
                         // Results list
                         if results.is_empty() {
@@ -493,7 +494,8 @@ impl QuickSwitcher {
     /// Paths to search: indexed tree files plus recent files (may include unexpanded folders).
     fn search_paths(all_files: &[PathBuf], recent_files: &[PathBuf]) -> Vec<PathBuf> {
         use std::collections::HashSet;
-        let mut seen: HashSet<&PathBuf> = HashSet::with_capacity(all_files.len() + recent_files.len());
+        let mut seen: HashSet<&PathBuf> =
+            HashSet::with_capacity(all_files.len() + recent_files.len());
         let mut paths: Vec<PathBuf> = Vec::with_capacity(all_files.len() + recent_files.len());
         for path in all_files {
             if seen.insert(path) {
@@ -730,7 +732,8 @@ mod tests {
         let matcher = SkimMatcherV2::default();
         let box_drawing = score_path_match("test_md\\test_box_drawing.md", "box", &matcher);
         let tables = score_path_match("test_md\\test_tables.md", "box", &matcher);
-        let code_blocks = score_path_match("test_md\\test_consecutive_code_blocks.md", "box", &matcher);
+        let code_blocks =
+            score_path_match("test_md\\test_consecutive_code_blocks.md", "box", &matcher);
         let readme = score_path_match("README.md", "box", &matcher);
 
         assert!(box_drawing.is_some());

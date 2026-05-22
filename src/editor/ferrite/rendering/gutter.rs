@@ -95,7 +95,7 @@ pub fn calculate_gutter_width(
 
     // Use a sample string to measure width
     let sample = "0".repeat(digits.max(GUTTER_CHARS));
-    let galley = ui.fonts(|f| f.layout_no_wrap(sample, font_id.clone(), Color32::WHITE));
+    let galley = ui.fonts_mut(|f| f.layout_no_wrap(sample, font_id.clone(), Color32::WHITE));
     let line_num_width = galley.size().x + 8.0; // Add padding
 
     // When fold indicators are also shown, add space for them on the left

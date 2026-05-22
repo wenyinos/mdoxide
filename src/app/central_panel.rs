@@ -4,29 +4,29 @@
 //! editor widget (raw/rendered/split views), CSV viewer, tree viewer,
 //! minimap, and navigation buttons.
 
-use super::helpers::{char_index_to_line_col, get_formatting_state_for, modifier_symbol};
+use super::helpers::{get_formatting_state_for, modifier_symbol};
 use super::types::{DeferredFormatAction, HeadingNavRequest};
 use super::FerriteApp;
-use crate::config::{ShortcutCommand, Theme, ViewMode};
+use crate::config::{ShortcutCommand, ViewMode};
 use crate::editor::{
-    cleanup_ferrite_editor, DocumentOutline, EditorWidget, FindReplacePanel, Minimap,
-    SearchHighlights, SemanticMinimap,
+    show_split_sync_footer, EditorWidget, Minimap, SearchHighlights, SemanticMinimap,
+    SplitSyncFooterOutput, SPLIT_SYNC_FOOTER_HEIGHT,
 };
 use crate::markdown::{
-    apply_raw_format, cleanup_rendered_editor_memory, get_structured_file_type,
-    get_tabular_file_type, CodeExecutionUi, CsvViewer, CsvViewerState, EditorMode, FormattingState,
-    MarkdownEditor, MarkdownFormatCommand, TreeViewer, TreeViewerState, WikilinkContext,
+    get_structured_file_type, get_tabular_file_type, rendered_editor_id, CodeExecutionUi,
+    CsvViewer, EditorMode, MarkdownEditor, TreeViewer, WikilinkContext,
 };
-#[allow(unused_imports)]
-use crate::preview::SyncScrollState;
-use crate::state::{FileType, PdfViewerState, PendingAction, Selection, SpecialTabKind, TabContent, TabKind};
+use crate::preview::{ScrollOrigin, SyncScrollState};
+use crate::state::{SpecialTabKind, TabContent, TabKind};
 use crate::theme::ThemeColors;
-use crate::ui::{FileOperationResult, FormatToolbar, GoToLineResult, RibbonAction};
-use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_RIGHT, X};
+use crate::ui::phosphor_icons::{phosphor_font, X};
+use crate::ui::{
+    set_overlay_blocks_nav_buttons, FileOperationResult, FormatToolbar, GoToLineResult,
+    RibbonAction,
+};
 use eframe::egui;
 use log::{debug, info, trace, warn};
 use rust_i18n::t;
-use std::collections::HashMap;
 use std::path::Path;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +54,7 @@ fn load_viewer_image(ctx: &egui::Context, path: &Path) -> Result<ImageViewerText
 
     let color_image = egui::ColorImage {
         size: [width as usize, height as usize],
+        source_size: egui::vec2(width as f32, height as f32),
         pixels,
     };
 
@@ -77,8 +78,9 @@ struct PdfPageTexture {
     texture: Option<egui::TextureHandle>,
     width: u32,
     height: u32,
-    page_index: usize,
-    zoom: f32,
+    /// Cache key fields (reserved for texture invalidation).
+    _page_index: usize,
+    _zoom: f32,
     error: Option<String>,
 }
 
@@ -99,8 +101,8 @@ fn render_pdf_page(
                 texture: None,
                 width: 0,
                 height: 0,
-                page_index,
-                zoom,
+                _page_index: page_index,
+                _zoom: zoom,
                 error: Some(format!("Failed to read file: {}", e)),
             }
         }
@@ -114,8 +116,8 @@ fn render_pdf_page(
                 texture: None,
                 width: 0,
                 height: 0,
-                page_index,
-                zoom,
+                _page_index: page_index,
+                _zoom: zoom,
                 error: Some(format!("Failed to parse PDF: {:?}", e)),
             }
         }
@@ -127,8 +129,8 @@ fn render_pdf_page(
             texture: None,
             width: 0,
             height: 0,
-            page_index,
-            zoom,
+            _page_index: page_index,
+            _zoom: zoom,
             error: Some(format!(
                 "Page {} out of range (total: {})",
                 page_index + 1,
@@ -161,6 +163,7 @@ fn render_pdf_page(
 
     let color_image = egui::ColorImage {
         size: [width as usize, height as usize],
+        source_size: egui::vec2(width as f32, height as f32),
         pixels,
     };
 
@@ -171,8 +174,8 @@ fn render_pdf_page(
         texture: Some(texture),
         width,
         height,
-        page_index,
-        zoom,
+        _page_index: page_index,
+        _zoom: zoom,
         error: None,
     }
 }
@@ -203,9 +206,8 @@ impl FerriteApp {
                 ui.label(t!("dialog.rename_untitled_tab.hint"));
                 ui.add_space(6.0);
 
-                let text_response = ui.add(
-                    egui::TextEdit::singleline(&mut buffer).desired_width(f32::INFINITY),
-                );
+                let text_response =
+                    ui.add(egui::TextEdit::singleline(&mut buffer).desired_width(f32::INFINITY));
                 text_response.request_focus();
 
                 if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -237,20 +239,26 @@ impl FerriteApp {
     /// Returns a deferred format action if one was requested.
     pub(crate) fn render_central_panel(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         is_dark: bool,
     ) -> Option<DeferredFormatAction> {
+        let ctx = ui.ctx().clone();
         let zen_mode = self.state.is_zen_mode();
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
         let mut pending_wikilink_target: Option<String> = None;
 
-        self.render_untitled_tab_rename_dialog(ctx);
+        let overlay_blocks_nav = self.quick_switcher.is_open()
+            || self.command_palette.is_open()
+            || self.search_panel.is_open();
+        set_overlay_blocks_nav_buttons(&ctx, overlay_blocks_nav);
+
+        self.render_untitled_tab_rename_dialog(&ctx);
 
         // Get the theme-appropriate fill color from the current visuals
-        let fill_color = ctx.style().visuals.panel_fill;
+        let fill_color = ctx.global_style().visuals.panel_fill;
         egui::CentralPanel::default()
             .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO).fill(fill_color))
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
             // Tab bar - uses custom wrapping layout for multi-line support
             // Hidden in Zen Mode for distraction-free editing
             let mut tab_to_close: Option<usize> = None;
@@ -279,7 +287,7 @@ impl FerriteApp {
                 let tab_widths: Vec<f32> = tab_titles
                     .iter()
                     .map(|(_, title, _)| {
-                        let text_galley = ui.fonts(|f| {
+                        let text_galley = ui.fonts_mut(|f| {
                             f.layout_no_wrap(
                                 title.clone(),
                                 egui::FontId::default(),
@@ -561,15 +569,21 @@ impl FerriteApp {
             if let TabKind::Special(special_kind) = active_tab_kind {
                 self.render_special_tab_content(ui, special_kind);
             } else if matches!(active_tab_kind, TabKind::ImageViewer(_)) {
-                self.render_image_viewer_tab(ui, ctx);
+                self.render_image_viewer_tab(ui, &ctx);
             } else if matches!(active_tab_kind, TabKind::PdfViewer(_)) {
-                self.render_pdf_viewer_tab(ui, ctx);
+                self.render_pdf_viewer_tab(ui, &ctx);
             } else if let Some(crate::state::TabContent::Loading(ref progress)) = active_tab_content {
                 self.render_loading_tab(ui, progress);
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             } else if let Some(crate::state::TabContent::Error(ref error)) = active_tab_content {
                 Self::render_load_error_tab(ui, error);
             } else {
+                // Recovery-vs-disk conflict banner (task 106.5).
+                // Rendered above the editor so the user can decide between
+                // `Keep Recovered` and `Reload from Disk` without it blocking
+                // input — they can keep typing while the banner is visible.
+                self.render_recovery_conflict_banner(ui);
+
                 // Editor widget - extract settings values to avoid borrow conflicts
                 let font_size = self.state.settings.font_size;
                 let font_family = self.state.settings.font_family.clone();
@@ -878,10 +892,10 @@ impl FerriteApp {
                                 ui.allocate_rect(total_rect, egui::Sense::hover());
 
                                 // Show editor in its region
-                                let mut editor_ui = ui.child_ui(
-                                    editor_rect,
-                                    egui::Layout::top_down(egui::Align::LEFT),
-                                    None
+                                let mut editor_ui = ui.new_child(
+                                    egui::UiBuilder::new()
+                                        .max_rect(editor_rect)
+                                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
                                 );
 
                                 let editor_widget_id = egui::Id::new("main_editor_raw").with(tab.id);
@@ -979,10 +993,10 @@ impl FerriteApp {
 
                                 // Show minimap if enabled
                                 if let Some(minimap_rect) = minimap_rect {
-                                    let mut minimap_ui = ui.child_ui(
-                                        minimap_rect,
-                                        egui::Layout::top_down(egui::Align::LEFT),
-                                        None
+                                    let mut minimap_ui = ui.new_child(
+                                        egui::UiBuilder::new()
+                                            .max_rect(minimap_rect)
+                                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
                                     );
 
                                     // Use semantic minimap for markdown files
@@ -1013,9 +1027,7 @@ impl FerriteApp {
                                         if let Some(target_line) = minimap_output.scroll_to_line {
                                             minimap_nav_request = Some(HeadingNavRequest {
                                                 line: target_line,
-                                                char_offset: minimap_output.scroll_to_char,
                                                 title: minimap_output.scroll_to_title,
-                                                level: minimap_output.scroll_to_level,
                                             });
                                         }
                                     } else if
@@ -1059,10 +1071,10 @@ impl FerriteApp {
 
                                 // Format toolbar at bottom of raw editor
                                 if let Some(bar_rect) = format_bar_rect {
-                                    let mut bar_ui = ui.child_ui(
-                                        bar_rect,
-                                        egui::Layout::top_down(egui::Align::LEFT),
-                                        None,
+                                    let mut bar_ui = ui.new_child(
+                                        egui::UiBuilder::new()
+                                            .max_rect(bar_rect)
+                                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
                                     );
                                     let toolbar_output = FormatToolbar::show(
                                         &mut bar_ui,
@@ -1110,7 +1122,7 @@ impl FerriteApp {
                                         use crate::editor::get_ferrite_editor_mut;
                                         let tab_id = self.state.active_tab().map(|t| t.id);
                                         let selection = tab_id.and_then(|id| {
-                                            get_ferrite_editor_mut(ctx, id, |editor| {
+                                            get_ferrite_editor_mut(&ctx, id, |editor| {
                                                 let sel = editor.selection();
                                                 let (start, end) = sel.ordered();
                                                 let line_count = editor.buffer().line_count();
@@ -1146,8 +1158,8 @@ impl FerriteApp {
 
                             // Load CJK / complex script fonts if IME committed text needs them
                             if let Some(ref ime_text) = ime_text_for_font_loading {
-                                let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
-                                let _ = self.load_complex_script_fonts_for_content(ctx, ime_text);
+                                let _ = self.load_cjk_fonts_for_content(&ctx, ime_text);
+                                let _ = self.load_complex_script_fonts_for_content(&ctx, ime_text);
                             }
                         }
                         ViewMode::Split => {
@@ -1348,19 +1360,18 @@ impl FerriteApp {
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Sync Scroll Setup (DISABLED - deferred to v0.3.0)
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-                                // Feature disabled until v0.3.0 - ignore settings value
-                                let sync_scroll_enabled = false; // was: self.state.settings.sync_scroll_enabled
+                                let sync_scroll_enabled = self.state.settings.sync_scroll_enabled
+                                    && is_markdown_file_split;
 
-                                // Get or create sync scroll state for this tab
-                                // Use longer debounce to prevent jitter (200ms instead of 16ms)
+                                if !sync_scroll_enabled {
+                                    if let Some(tab) = self.state.active_tab_mut() {
+                                        tab.clear_sync_pending_scroll();
+                                    }
+                                }
+
                                 let sync_state = self.sync_scroll_states
                                     .entry(tab_id)
-                                    .or_insert_with(|| {
-                                        let mut state = SyncScrollState::new();
-                                        // Disable smooth scrolling to reduce feedback loops
-                                        state.set_enabled(sync_scroll_enabled);
-                                        state
-                                    });
+                                    .or_insert_with(SyncScrollState::for_split_view);
                                 sync_state.set_enabled(sync_scroll_enabled);
 
                                 // Get pending scroll offsets for each pane (from previous frame's sync)
@@ -1384,14 +1395,15 @@ impl FerriteApp {
                                 // Track scroll outputs from both panes
                                 let mut editor_scroll_offset: Option<f32> = None;
                                 let mut editor_content_height: Option<f32> = None;
-                                let mut editor_first_visible_line: Option<usize> = None;
-                                let mut editor_line_height: Option<f32> = None;
                                 let mut editor_viewport_height: Option<f32> = None;
                                 let mut preview_scroll_offset: Option<f32> = None;
                                 let mut preview_content_height: Option<f32> = None;
                                 let mut preview_viewport_height: Option<f32> = None;
                                 let mut preview_line_mappings: Vec<crate::markdown::LineMapping> =
                                     Vec::new();
+                                let mut editor_scroll_anchor_line: usize = 1;
+                                let mut editor_scroll_anchor_fraction: f32 = 0.0;
+                                let mut split_sync_footer = SplitSyncFooterOutput::default();
 
                                 // Split left pane is Raw (FerriteEditor) — no
                                 // central-panel undo snapshot needed for it.
@@ -1474,11 +1486,11 @@ impl FerriteApp {
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Left pane: Raw editor
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-                                let mut left_ui = ui.child_ui_with_id_source(
-                                    left_rect,
-                                    egui::Layout::top_down(egui::Align::LEFT),
-                                    "split_left_pane",
-                                    None
+                                let mut left_ui = ui.new_child(
+                                    egui::UiBuilder::new()
+                                        .max_rect(left_rect)
+                                        .layout(egui::Layout::top_down(egui::Align::LEFT))
+                                        .id_salt("split_left_pane"),
                                 );
                                 if let Some(tab) = self.state.active_tab_mut() {
                                     // Update folds if dirty
@@ -1529,11 +1541,10 @@ impl FerriteApp {
                                     // Capture scroll metrics for sync scrolling
                                     editor_scroll_offset = Some(editor_output.scroll_offset);
                                     editor_content_height = Some(editor_output.content_height);
-                                    editor_first_visible_line = Some(
-                                        editor_output.first_visible_line
-                                    );
-                                    editor_line_height = Some(editor_output.line_height);
                                     editor_viewport_height = Some(editor_output.viewport_height);
+                                    editor_scroll_anchor_line = editor_output.scroll_anchor_line;
+                                    editor_scroll_anchor_fraction =
+                                        editor_output.scroll_anchor_fraction;
 
                                     // NOTE: Fold toggle is handled internally by FerriteEditor and synced
                                     // back to Tab in widget.rs. We just need to check if a fold was toggled
@@ -1578,10 +1589,21 @@ impl FerriteApp {
                                 // Uses semantic minimap for markdown, pixel minimap for others
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 if let Some(mm_rect) = minimap_rect {
-                                    let mut minimap_ui = ui.child_ui(
-                                        mm_rect,
-                                        egui::Layout::top_down(egui::Align::LEFT),
-                                        None
+                                    let sync_footer_h = if is_markdown_file_split {
+                                        SPLIT_SYNC_FOOTER_HEIGHT
+                                    } else {
+                                        0.0
+                                    };
+                                    let map_h = (mm_rect.height() - sync_footer_h).max(0.0);
+                                    let map_rect = egui::Rect::from_min_size(
+                                        mm_rect.min,
+                                        egui::vec2(mm_rect.width(), map_h),
+                                    );
+
+                                    let mut minimap_ui = ui.new_child(
+                                        egui::UiBuilder::new()
+                                            .max_rect(map_rect)
+                                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
                                     );
 
                                     // Semantic minimap for markdown files
@@ -1612,10 +1634,29 @@ impl FerriteApp {
                                         if let Some(target_line) = minimap_output.scroll_to_line {
                                             minimap_nav_request = Some(HeadingNavRequest {
                                                 line: target_line,
-                                                char_offset: minimap_output.scroll_to_char,
                                                 title: minimap_output.scroll_to_title,
-                                                level: minimap_output.scroll_to_level,
                                             });
+                                        }
+
+                                        if sync_footer_h > 0.0 {
+                                            let footer_rect = egui::Rect::from_min_size(
+                                                egui::pos2(mm_rect.min.x, mm_rect.min.y + map_h),
+                                                egui::vec2(mm_rect.width(), sync_footer_h),
+                                            );
+                                            let mut footer_ui = ui.new_child(
+                                                egui::UiBuilder::new()
+                                                    .max_rect(footer_rect)
+                                                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                                            );
+                                            split_sync_footer = show_split_sync_footer(
+                                                &mut footer_ui,
+                                                sync_scroll_enabled,
+                                                self.state.settings.sync_scroll_bidirectional,
+                                                &t!("settings.preview.split_sync_scroll"),
+                                                &t!("settings.preview.split_sync_scroll_tooltip"),
+                                                &t!("settings.preview.split_sync_bidirectional"),
+                                                &t!("settings.preview.split_sync_bidirectional_tooltip"),
+                                            );
                                         }
                                     } else if
                                         // Pixel minimap for non-markdown files
@@ -1657,10 +1698,10 @@ impl FerriteApp {
 
                                 // Format toolbar at bottom of left (raw) pane in split view
                                 if let Some(bar_rect) = split_format_bar_rect {
-                                    let mut bar_ui = ui.child_ui(
-                                        bar_rect,
-                                        egui::Layout::top_down(egui::Align::LEFT),
-                                        None,
+                                    let mut bar_ui = ui.new_child(
+                                        egui::UiBuilder::new()
+                                            .max_rect(bar_rect)
+                                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
                                     );
                                     let toolbar_output = FormatToolbar::show(
                                         &mut bar_ui,
@@ -1691,7 +1732,7 @@ impl FerriteApp {
                                             use crate::editor::get_ferrite_editor_mut;
                                             let tab_id = self.state.active_tab().map(|t| t.id);
                                             let selection = tab_id.and_then(|id| {
-                                                get_ferrite_editor_mut(ctx, id, |editor| {
+                                                get_ferrite_editor_mut(&ctx, id, |editor| {
                                                     let sel = editor.selection();
                                                     let (start, end) = sel.ordered();
                                                     let line_count = editor.buffer().line_count();
@@ -1780,6 +1821,9 @@ impl FerriteApp {
                                         }
                                     }
                                 }
+                                if splitter_response.drag_stopped() {
+                                    self.state.mark_settings_dirty();
+                                }
 
                                 // Set resize cursor
                                 if splitter_response.hovered() || splitter_response.dragged() {
@@ -1789,11 +1833,11 @@ impl FerriteApp {
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                                 // Right pane: Rendered preview (fully editable)
                                 // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-                                let mut right_ui = ui.child_ui_with_id_source(
-                                    right_rect,
-                                    egui::Layout::top_down(egui::Align::LEFT),
-                                    "split_right_pane",
-                                    None
+                                let mut right_ui = ui.new_child(
+                                    egui::UiBuilder::new()
+                                        .max_rect(right_rect)
+                                        .layout(egui::Layout::top_down(egui::Align::LEFT))
+                                        .id_salt("split_right_pane"),
                                 );
 
                                 // Check if this is a CSV/TSV file for the right pane
@@ -1839,6 +1883,7 @@ impl FerriteApp {
                                                 .and_then(|p| p.parent().map(|d| d.to_path_buf())),
                                             workspace_root: ws_root.clone(),
                                         };
+                                        let source_epoch = tab.source_epoch();
 
                                         let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                             .mode(EditorMode::Rendered)
@@ -1853,7 +1898,8 @@ impl FerriteApp {
                                             .header_spacing(header_spacing)
                                             .wikilink_context(wl_ctx)
                                             .code_execution(code_exec)
-                                            .id(egui::Id::new("split_preview_rendered").with(tab.id))
+                                            .source_epoch(source_epoch)
+                                            .id(rendered_editor_id(tab.id))
                                             .pending_scroll_offset(pending_preview_scroll);
                                         if let Some(ref sh) = search_highlights {
                                             md_editor = md_editor.search_highlights(
@@ -1862,6 +1908,12 @@ impl FerriteApp {
                                             );
                                         }
                                         let md_editor_output = md_editor.show(&mut right_ui);
+
+                                        tab.apply_rendered_commit_undo_entries(
+                                            crate::markdown::rendered_commit_undo::take_pending_commits(
+                                                right_ui.ctx(),
+                                            ),
+                                        );
 
                                         // Capture scroll metrics for sync scrolling
                                         preview_scroll_offset = Some(
@@ -1877,8 +1929,10 @@ impl FerriteApp {
                                             md_editor_output.line_mappings.clone();
 
                                         if md_editor_output.changed {
-                                            tab.record_edit_from_snapshot();
                                             tab.mark_content_edited();
+                                            if !md_editor_output.undo_recorded {
+                                                tab.record_edit_from_snapshot();
+                                            }
                                             split_content_changed = true;
                                             debug!(
                                                 "Content modified in split rendered pane, recorded for undo"
@@ -1926,16 +1980,36 @@ impl FerriteApp {
                                 // Viewport-Based Scroll Sync (Task 36)
                                 // Uses binary search + interpolation for smooth, accurate sync
                                 // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                if sync_scroll_enabled && !preview_line_mappings.is_empty() {
-                                    // Get scroll delta to detect active scrolling
-                                    let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
-                                    let is_scrolling = scroll_delta.y.abs() > 0.5;
+                                if split_sync_footer.sync_toggled {
+                                    self.state.settings.sync_scroll_enabled =
+                                        !self.state.settings.sync_scroll_enabled;
+                                    self.state.mark_settings_dirty();
+                                    if !self.state.settings.sync_scroll_enabled {
+                                        if let Some(tab) = self.state.active_tab_mut() {
+                                            tab.clear_sync_pending_scroll();
+                                        }
+                                        if let Some(state) =
+                                            self.sync_scroll_states.get_mut(&tab_id)
+                                        {
+                                            state.reset_on_disable();
+                                        }
+                                    }
+                                }
+                                if split_sync_footer.bidirectional_toggled {
+                                    self.state.settings.sync_scroll_bidirectional =
+                                        !self.state.settings.sync_scroll_bidirectional;
+                                    self.state.mark_settings_dirty();
+                                }
 
-                                    // Determine which pane the mouse is over
+                                if sync_scroll_enabled && !preview_line_mappings.is_empty() {
+                                    let sync_bidirectional =
+                                        self.state.settings.sync_scroll_bidirectional;
+                                    let wheel_delta_y =
+                                        ui.input(|i| i.smooth_scroll_delta.y);
                                     let mouse_pos = ui.input(|i| i.pointer.hover_pos());
                                     let editor_area = egui::Rect::from_min_max(
                                         left_rect.min,
-                                        egui::pos2(splitter_rect.min.x, left_rect.max.y)
+                                        egui::pos2(splitter_rect.min.x, left_rect.max.y),
                                     );
                                     let mouse_over_editor = mouse_pos
                                         .map(|p| editor_area.contains(p))
@@ -1944,65 +2018,114 @@ impl FerriteApp {
                                         .map(|p| right_rect.contains(p))
                                         .unwrap_or(false);
 
-                                    // Get sync state for this tab
+                                    let raw_off = editor_scroll_offset.unwrap_or(0.0);
+                                    let pv_off = preview_scroll_offset.unwrap_or(0.0);
+                                    let ed_ch = editor_content_height.unwrap_or(0.0);
+                                    let ed_vh = editor_viewport_height.unwrap_or(0.0);
+                                    let pv_ch = preview_content_height.unwrap_or(0.0);
+                                    let pv_vh = preview_viewport_height.unwrap_or(0.0);
+
                                     let sync_state = self.sync_scroll_states
                                         .entry(tab_id)
-                                        .or_insert_with(SyncScrollState::new);
+                                        .or_insert_with(SyncScrollState::for_split_view);
 
-                                    if is_scrolling {
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        // Active scrolling: record origin and offset, sync to other pane
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        if mouse_over_editor {
-                                            if let Some(ed_offset) = editor_scroll_offset {
-                                                // Record that editor is the scroll source
-                                                sync_state.mark_scroll(
-                                                    crate::preview::ScrollOrigin::Raw
+                                    if let Some(origin) = sync_state.note_scroll_activity(
+                                        raw_off,
+                                        pv_off,
+                                        wheel_delta_y,
+                                        mouse_over_editor,
+                                        mouse_over_preview,
+                                        sync_bidirectional,
+                                    ) {
+                                        match origin {
+                                            ScrollOrigin::Raw => {
+                                                sync_state.store_raw_anchor(
+                                                    editor_scroll_anchor_line,
+                                                    editor_scroll_anchor_fraction,
                                                 );
-                                                sync_state.update_raw_offset(ed_offset);
-
-                                                // Sync editor ΓåÆ preview (user scrolling editor)
-                                                if let Some(first_line) = editor_first_visible_line {
-                                                    let source_line = first_line.saturating_add(1);
-                                                    let target_y =
-                                                        SyncScrollState::source_line_to_preview_y(
-                                                            source_line,
-                                                            &preview_line_mappings
-                                                        );
-
-                                                    if let Some(tab) = self.state.active_tab_mut() {
-                                                        tab.pending_scroll_offset = Some(target_y);
-                                                    }
-                                                }
                                             }
-                                        } else if mouse_over_preview {
-                                            if let Some(pv_offset) = preview_scroll_offset {
-                                                // Record that preview is the scroll source
-                                                sync_state.mark_scroll(
-                                                    crate::preview::ScrollOrigin::Rendered
-                                                );
-                                                sync_state.update_rendered_offset(pv_offset);
-
-                                                // Sync preview ΓåÆ editor (user scrolling preview)
-                                                if let Some(ed_line_height) = editor_line_height {
-                                                    let source_line =
-                                                        SyncScrollState::preview_y_to_source_line(
-                                                            pv_offset,
-                                                            &preview_line_mappings
-                                                        );
-                                                    let editor_line = source_line.saturating_sub(1);
-                                                    let target_offset =
-                                                        (editor_line as f32) * ed_line_height;
-
-                                                    sync_state.set_raw_target(target_offset);
-                                                }
+                                            ScrollOrigin::Rendered => {
+                                                sync_state.store_preview_y(pv_off);
                                             }
+                                            _ => {}
                                         }
-                                    } else {
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        // Not scrolling: clear origin after debounce to allow next sync
-                                        // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-                                        sync_state.clear_origin();
+                                    }
+
+                                    sync_state.track_pane_offsets(raw_off, pv_off);
+
+                                    if !sync_state.is_programmatic()
+                                        && sync_state.is_scroll_idle()
+                                    {
+                                        let mut applied = false;
+                                        match sync_state.scroll_origin() {
+                                            ScrollOrigin::Raw => {
+                                                let target_y =
+                                                    if SyncScrollState::is_at_top(raw_off) {
+                                                        Some(0.0)
+                                                    } else if SyncScrollState::is_at_bottom(
+                                                        raw_off, ed_ch, ed_vh,
+                                                    ) {
+                                                        Some((pv_ch - pv_vh).max(0.0))
+                                                    } else if let Some((line, frac)) =
+                                                        sync_state.stored_raw_anchor()
+                                                    {
+                                                        Some(
+                                                            SyncScrollState::source_anchor_to_preview_y(
+                                                                line,
+                                                                frac,
+                                                                &preview_line_mappings,
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+                                                if let Some(y) = target_y {
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_offset = Some(y);
+                                                    }
+                                                    applied = true;
+                                                }
+                                            }
+                                            ScrollOrigin::Rendered if sync_bidirectional => {
+                                                // Top/bottom must target the raw editor via
+                                                // `set_raw_target` — `tab.pending_scroll_offset`
+                                                // is consumed by the preview pane next frame.
+                                                if SyncScrollState::is_at_top(pv_off) {
+                                                    sync_state.set_raw_target(0.0);
+                                                    applied = true;
+                                                } else if SyncScrollState::is_at_bottom(
+                                                    pv_off, pv_ch, pv_vh,
+                                                ) {
+                                                    sync_state.set_raw_target(
+                                                        (ed_ch - ed_vh).max(0.0),
+                                                    );
+                                                    applied = true;
+                                                } else if let Some(pv_y) =
+                                                    sync_state.stored_preview_y()
+                                                {
+                                                    let (line, frac) =
+                                                        SyncScrollState::preview_y_to_source_anchor(
+                                                            pv_y,
+                                                            &preview_line_mappings,
+                                                        );
+                                                    if let Some(tab) =
+                                                        self.state.active_tab_mut()
+                                                    {
+                                                        tab.pending_scroll_anchor =
+                                                            Some((line, frac));
+                                                    }
+                                                    applied = true;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        if applied {
+                                            sync_state.mark_programmatic();
+                                            sync_state.clear_stored_anchors();
+                                            ui.ctx().request_repaint();
+                                        }
                                     }
                                 }
 
@@ -2018,8 +2141,8 @@ impl FerriteApp {
 
                                 // Load CJK / complex script fonts if IME committed text needs them
                                 if let Some(ref ime_text) = ime_text_for_font_loading_split {
-                                    let _ = self.load_cjk_fonts_for_content(ctx, ime_text);
-                                    let _ = self.load_complex_script_fonts_for_content(ctx, ime_text);
+                                    let _ = self.load_cjk_fonts_for_content(&ctx, ime_text);
+                                    let _ = self.load_complex_script_fonts_for_content(&ctx, ime_text);
                                 }
                             }
                         }
@@ -2057,7 +2180,7 @@ impl FerriteApp {
                                         .show(ui);
 
                                     if output.changed {
-                                        tab.record_edit_from_snapshot();
+                                        tab.record_external_edit_from_snapshot();
                                         tab.mark_content_edited();
                                         debug!(
                                             "Content modified in tree viewer, recorded for undo"
@@ -2087,12 +2210,27 @@ impl FerriteApp {
                                             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                                     }),
                                 );
+                                let sync_on = self.state.settings.sync_scroll_enabled;
                                 if let Some(tab) = self.state.active_tab_mut() {
                                     tab.prepare_undo_snapshot_hashed();
 
+                                    if !sync_on {
+                                        tab.clear_sync_pending_scroll();
+                                    }
+
                                     // Handle scroll sync: check for pending scroll ratio or offset
-                                    let pending_offset = tab.pending_scroll_offset.take();
-                                    let pending_ratio = tab.pending_scroll_ratio.take();
+                                    let pending_offset = if sync_on {
+                                        tab.pending_scroll_offset.take()
+                                    } else {
+                                        tab.pending_scroll_offset = None;
+                                        None
+                                    };
+                                    let pending_ratio = if sync_on {
+                                        tab.pending_scroll_ratio.take()
+                                    } else {
+                                        tab.pending_scroll_ratio = None;
+                                        None
+                                    };
 
                                     // Build wikilink context from current file and workspace
                                     let wl_ctx = WikilinkContext {
@@ -2101,6 +2239,7 @@ impl FerriteApp {
                                             .and_then(|p| p.parent().map(|d| d.to_path_buf())),
                                         workspace_root: ws_root,
                                     };
+                                    let source_epoch = tab.source_epoch();
 
                                     let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
@@ -2115,7 +2254,8 @@ impl FerriteApp {
                                         .header_spacing(header_spacing)
                                         .wikilink_context(wl_ctx)
                                         .code_execution(code_exec)
-                                        .id(egui::Id::new("main_editor_rendered").with(tab.id))
+                                        .source_epoch(source_epoch)
+                                        .id(rendered_editor_id(tab.id))
                                         .scroll_to_line(scroll_to_line)
                                         .pending_scroll_offset(pending_offset);
                                     if let Some(ref sh) = search_highlights {
@@ -2126,9 +2266,17 @@ impl FerriteApp {
                                     }
                                     let editor_output = md_editor.show(ui);
 
+                                    tab.apply_rendered_commit_undo_entries(
+                                        crate::markdown::rendered_commit_undo::take_pending_commits(
+                                            ui.ctx(),
+                                        ),
+                                    );
+
                                     if editor_output.changed {
-                                        tab.record_edit_from_snapshot();
                                         tab.mark_content_edited();
+                                        if !editor_output.undo_recorded {
+                                            tab.record_edit_from_snapshot();
+                                        }
                                         rendered_content_changed = true;
                                         debug!(
                                             "Content modified in rendered editor, recorded for undo"
@@ -2151,7 +2299,8 @@ impl FerriteApp {
 
                                     // Handle pending scroll to line: convert to offset using FRESH line mappings
                                     // This provides accurate content-based sync using interpolation
-                                    if let Some(target_line) = tab.pending_scroll_to_line.take() {
+                                    if sync_on {
+                                        if let Some(target_line) = tab.pending_scroll_to_line.take() {
                                         if
                                             let Some(rendered_y) =
                                                 Self::find_rendered_y_for_line_interpolated(
@@ -2188,9 +2337,13 @@ impl FerriteApp {
                                             );
                                             ui.ctx().request_repaint();
                                         }
+                                        }
+                                    } else {
+                                        let _ = tab.pending_scroll_to_line.take();
                                     }
 
                                     // Handle pending scroll ratio: convert to offset now that we have content_height
+                                    if sync_on {
                                     if let Some(ratio) = pending_ratio {
                                         let max_scroll = (
                                             editor_output.content_height -
@@ -2209,6 +2362,7 @@ impl FerriteApp {
                                             // Request repaint to apply the offset on next frame
                                             ui.ctx().request_repaint();
                                         }
+                                    }
                                     }
 
                                     // Update selection from focused element (for rendered mode formatting)
@@ -2256,22 +2410,26 @@ impl FerriteApp {
         });
 
         // Render dialogs
-        self.render_dialogs(ctx);
+        self.render_dialogs(&ctx);
 
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         // Quick File Switcher Overlay (Ctrl+P)
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if self.quick_switcher.is_open() {
-            if let Some(workspace) = &self.state.workspace {
-                let all_files = workspace.all_files();
-                let recent_files = &workspace.recent_files;
+            let workspace = self.state.workspace.clone();
+            if let Some(workspace) = workspace {
+                let files = self.workspace_files_for_search(&workspace);
+                let recent_files = workspace.recent_files;
+                let root_path = workspace.root_path;
+                let index_progress = self.workspace_file_index.progress();
 
                 let output = self.quick_switcher.show(
-                    ctx,
-                    &all_files,
-                    recent_files,
-                    &workspace.root_path,
+                    &ctx,
+                    &files,
+                    &recent_files,
+                    &root_path,
                     is_dark,
+                    index_progress,
                 );
 
                 // Handle file selection
@@ -2301,7 +2459,7 @@ impl FerriteApp {
         // `pending_palette_command` and executed after render in update().
         if self.command_palette.is_open() {
             let shortcuts = self.state.settings.keyboard_shortcuts.clone();
-            let palette_output = self.command_palette.show(ctx, &shortcuts, is_dark);
+            let palette_output = self.command_palette.show(&ctx, &shortcuts, is_dark);
 
             if let Some(cmd) = palette_output.selected_command {
                 self.command_palette.record_recent(cmd);
@@ -2318,7 +2476,7 @@ impl FerriteApp {
 
         // File Operation Dialog (New File, Rename, Delete, etc.)
         if let Some(mut dialog) = self.file_operation_dialog.take() {
-            let result = dialog.show(ctx, is_dark);
+            let result = dialog.show(&ctx, is_dark);
 
             match result {
                 FileOperationResult::None => {
@@ -2339,7 +2497,7 @@ impl FerriteApp {
                     self.handle_rename_file(old, new);
                 }
                 FileOperationResult::Delete(path) => {
-                    self.handle_delete_file(path, Some(ctx));
+                    self.handle_delete_file(path, Some(&ctx));
                 }
             }
         }
@@ -2348,7 +2506,7 @@ impl FerriteApp {
         // Go to Line Dialog (Ctrl+G)
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if let Some(mut dialog) = self.state.ui.go_to_line_dialog.take() {
-            let result = dialog.show(ctx, is_dark);
+            let result = dialog.show(&ctx, is_dark);
 
             match result {
                 GoToLineResult::None => {
@@ -2370,16 +2528,20 @@ impl FerriteApp {
         // Search in Files Panel (Ctrl+Shift+F)
         // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         if self.search_panel.is_open() {
-            if let Some(workspace) = &self.state.workspace {
-                let workspace_root = workspace.root_path.clone();
-                let hidden_patterns = workspace.hidden_patterns.clone();
-                let all_files = workspace.all_files();
+            let workspace = self.state.workspace.clone();
+            if let Some(workspace) = workspace {
+                let files = self.workspace_files_for_search(&workspace);
+                let workspace_root = workspace.root_path;
+                let hidden_patterns = workspace.hidden_patterns;
+                let index_progress = self.workspace_file_index.progress();
 
-                let output = self.search_panel.show(ctx, &workspace_root, is_dark);
+                let output = self
+                    .search_panel
+                    .show(&ctx, &workspace_root, is_dark, index_progress);
 
                 // Trigger search when requested
                 if output.should_search {
-                    self.search_panel.search(&all_files, &hidden_patterns);
+                    self.search_panel.search(&files, &hidden_patterns);
                 }
 
                 // Handle navigation to file
@@ -2985,11 +3147,11 @@ impl FerriteApp {
     fn render_loading_tab(&self, ui: &mut egui::Ui, progress: &crate::state::LoadingProgress) {
         let avail = ui.available_size();
 
-        ui.allocate_ui_at_rect(
-            egui::Rect::from_min_size(
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
                 ui.min_rect().min + egui::vec2(0.0, avail.y * 0.35),
                 egui::vec2(avail.x, avail.y * 0.3),
-            ),
+            )),
             |ui| {
                 ui.vertical_centered(|ui| {
                     let file_name = progress
@@ -3028,11 +3190,11 @@ impl FerriteApp {
     fn render_load_error_tab(ui: &mut egui::Ui, error: &str) {
         let avail = ui.available_size();
 
-        ui.allocate_ui_at_rect(
-            egui::Rect::from_min_size(
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
                 ui.min_rect().min + egui::vec2(0.0, avail.y * 0.35),
                 egui::vec2(avail.x, avail.y * 0.3),
-            ),
+            )),
             |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(8.0);
@@ -3052,6 +3214,82 @@ impl FerriteApp {
                 });
             },
         );
+    }
+
+    /// Render the non-blocking recovery-vs-disk conflict banner above the
+    /// active tab's editor when [`AppState::recovery_conflicts`] has an
+    /// entry for it (task 106.5).
+    ///
+    /// The banner exposes two actions:
+    /// * **Keep Recovered** clears the conflict; the buffer stays modified.
+    /// * **Reload from Disk** replaces the buffer with the on-disk content
+    ///   captured at restore time and marks the tab saved.
+    ///
+    /// Editing is allowed while the banner is visible — clicking outside the
+    /// banner does not dismiss it; only the two action buttons do.
+    fn render_recovery_conflict_banner(&mut self, ui: &mut egui::Ui) {
+        let Some(tab_id) = self.state.active_tab().map(|t| t.id) else {
+            return;
+        };
+        if !self.state.has_recovery_conflict(tab_id) {
+            return;
+        }
+
+        // Use a warning-tinted frame so the banner is visually distinct from
+        // the editor without being modal.
+        let warn_color = ui.visuals().warn_fg_color;
+        let mut keep = false;
+        let mut reload = false;
+
+        egui::Frame::group(ui.style())
+            .stroke(egui::Stroke::new(1.0, warn_color))
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        egui::RichText::new("\u{26A0}")
+                            .size(16.0)
+                            .color(warn_color),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            t!("recovery.conflict.banner_text").to_string(),
+                        )
+                        .strong(),
+                    );
+
+                    // Push the buttons to the right edge of the frame.
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui
+                                .button(t!("recovery.conflict.reload_disk").to_string())
+                                .on_hover_text(
+                                    t!("recovery.conflict.reload_disk_tooltip").to_string(),
+                                )
+                                .clicked()
+                            {
+                                reload = true;
+                            }
+                            if ui
+                                .button(t!("recovery.conflict.keep_recovered").to_string())
+                                .on_hover_text(
+                                    t!("recovery.conflict.keep_recovered_tooltip")
+                                        .to_string(),
+                                )
+                                .clicked()
+                            {
+                                keep = true;
+                            }
+                        },
+                    );
+                });
+            });
+
+        if keep {
+            self.state.keep_recovered_buffer(tab_id);
+        } else if reload {
+            self.state.apply_reload_from_disk_for_conflict(tab_id);
+        }
     }
 
     /// Dispatch a command selected from the command palette.

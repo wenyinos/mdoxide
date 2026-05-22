@@ -28,21 +28,12 @@ mod status_bar;
 mod title_bar;
 mod types;
 
-use crate::config::{
-    apply_snippet, find_trigger_at_cursor, CjkFontPreference, Settings, ShortcutCommand,
-    SnippetManager, Theme, ViewMode, WindowSize,
-};
-use crate::editor::{
-    cleanup_ferrite_editor, extract_outline_for_file, DocumentOutline, DocumentStats, EditorWidget,
-    FindReplacePanel, Minimap, OutlineType, SearchHighlights, SemanticMinimap, TextStats,
-};
-use crate::export::copy_html_to_clipboard;
+use crate::config::{apply_snippet, find_trigger_at_cursor, SnippetManager, ViewMode, WindowSize};
+use crate::editor::{cleanup_ferrite_editor, DocumentOutline, DocumentStats, FindReplacePanel};
 use crate::fonts;
 use crate::markdown::{
-    apply_raw_format, cleanup_rendered_editor_memory, delimiter_display_name, delimiter_symbol,
-    drain_code_execution_toasts, get_structured_file_type, get_tabular_file_type,
-    insert_or_update_toc, CsvViewer, CsvViewerState, EditorMode, MarkdownEditor,
-    MarkdownFormatCommand, TocOptions, TreeViewer, TreeViewerState, DELIMITERS,
+    cleanup_rendered_editor_memory, delimiter_display_name, drain_code_execution_toasts,
+    CsvViewerState, TreeViewerState,
 };
 pub use helpers::modifier_symbol;
 use helpers::*;
@@ -50,16 +41,13 @@ use types::*;
 // Note: SyncScrollState is available for future split-view sync scrolling
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
-use crate::state::{AppState, FileType, PendingAction, Selection};
+use crate::state::{AppState, FileType, Selection};
 use crate::theme::{ThemeColors, ThemeManager};
 use crate::ui::{
     consume_clicks_in_resize_zones, handle_window_resize, load_app_logo_texture, AboutPanel,
-    BacklinksPanel, CommandPalette,
-    FileOperationDialog, FileOperationResult, FileTreeContextAction, FileTreePanel,
-    FrontmatterPanel, GoToLineResult, OutlinePanel, ProductivityPanel, QuickSwitcher, Ribbon,
-    RibbonAction, SearchNavigationTarget, SearchPanel, SettingsPanel, TerminalPanel,
-    TerminalPanelState, TitleBarButton, ViewModeSegment, ViewSegmentAction, WelcomePanel,
-    WindowResizeState,
+    BacklinksPanel, CommandPalette, FileOperationDialog, FileTreeContextAction, FileTreePanel,
+    FrontmatterPanel, OutlinePanel, ProductivityPanel, QuickSwitcher, Ribbon, RibbonAction,
+    SearchPanel, SettingsPanel, TerminalPanel, TerminalPanelState, WelcomePanel, WindowResizeState,
 };
 use crate::vcs::GitAutoRefresh;
 
@@ -67,7 +55,7 @@ use crate::vcs::GitAutoRefresh;
 use crate::workers::{echo_worker, WorkerCommand, WorkerHandle, WorkerResponse};
 
 use eframe::egui;
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 use rust_i18n::t;
 use std::collections::HashMap;
 
@@ -166,6 +154,8 @@ pub struct FerriteApp {
     show_recovery_dialog: bool,
     /// Pending session restore result (set on startup if crash recovery detected)
     pending_recovery: Option<crate::config::SessionRestoreResult>,
+    /// Paths from CLI / file association held until crash-recovery dialog is answered.
+    pending_startup_paths: Vec<std::path::PathBuf>,
     /// Pending auto-save recovery info (for showing recovery dialog)
     pending_auto_save_recovery: Option<AutoSaveRecoveryInfo>,
     /// Snippet manager for text expansion
@@ -214,6 +204,8 @@ pub struct FerriteApp {
     file_load_tx: std::sync::mpsc::Sender<FileLoadMsg>,
     /// Active background loading threads keyed by tab ID for cancellation on tab close.
     loading_tasks: HashMap<usize, std::thread::JoinHandle<()>>,
+    /// Full-workspace file index for quick switcher and search-in-files.
+    workspace_file_index: crate::workspaces::WorkspaceFileIndex,
 }
 
 impl FerriteApp {
@@ -235,7 +227,7 @@ impl FerriteApp {
         crate::log_memory("After fonts setup");
 
         // Set snappy/instant animations (default is ~83ms, we want instant)
-        let mut style = (*cc.egui_ctx.style()).clone();
+        let mut style = (*cc.egui_ctx.global_style()).clone();
         style.animation_time = 0.0; // Instant - no animations
 
         // Push scrollbars a few pixels in from the panel edge so they don't
@@ -246,8 +238,10 @@ impl FerriteApp {
         // 6 px of outer margin is enough to clear the default
         // `interaction.resize_grab_radius_side` (5 px).
         style.spacing.scroll.bar_outer_margin = 6.0;
+        // egui 0.34 adds scroll-edge fade gradients; disable to match pre-upgrade look.
+        style.spacing.scroll.fade.strength = 0.0;
 
-        cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_global_style(style);
 
         // Configure egui options to reduce unnecessary repaints
         cc.egui_ctx.options_mut(|options| {
@@ -289,6 +283,14 @@ impl FerriteApp {
             }
             crate::diag::trace("session restore done");
             crate::log_memory("After session restore");
+
+            // Drop any `recovery/<id>.json` whose id is not in the freshly
+            // restored tab set. Recovery files persist across launches but
+            // tab ids reset every launch — without pruning, a leftover file
+            // from a previous session can hijack an unrelated tab on a
+            // future restore (silent data-loss hazard, see
+            // `AppState::resolve_tab_content`).
+            state.prune_stale_recovery_files();
         }
 
         // Initialize theme manager with saved theme preference
@@ -465,6 +467,7 @@ impl FerriteApp {
             git_auto_refresh: GitAutoRefresh::new(),
             show_recovery_dialog,
             pending_recovery,
+            pending_startup_paths: Vec::new(),
             pending_auto_save_recovery: None,
             snippet_manager,
             terminal_panel,
@@ -490,6 +493,7 @@ impl FerriteApp {
             file_load_rx: file_load_rx_init,
             file_load_tx: file_load_tx_init,
             loading_tasks: HashMap::new(),
+            workspace_file_index: crate::workspaces::WorkspaceFileIndex::new(),
         };
 
         // Restore CSV delimiter overrides from session if available
@@ -523,6 +527,17 @@ impl FerriteApp {
         use log::warn;
 
         if paths.is_empty() {
+            return;
+        }
+
+        // Defer opening until the user chooses restore vs start fresh; restoring the
+        // session clears all tabs and would drop files opened from a double-click.
+        if self.show_recovery_dialog {
+            info!(
+                "Deferring {} startup path(s) until crash recovery dialog is answered",
+                paths.len()
+            );
+            self.pending_startup_paths.extend(paths);
             return;
         }
 
@@ -622,12 +637,10 @@ impl FerriteApp {
         );
     }
 
-    /// Open the welcome tab on startup, but only if no tabs are already open
-    /// (e.g., from session restore).
+    /// Open the welcome tab on startup when no documents are open and the user
+    /// has not disabled it (see `Settings::show_welcome_on_empty_launch`).
     pub fn open_welcome_on_startup(&mut self) {
-        if self.state.tab_count() == 0 {
-            self.state.show_welcome_tab();
-        }
+        self.state.open_welcome_on_empty_launch();
     }
     /// Set the single-instance listener for receiving file paths from secondary instances.
     ///
@@ -869,7 +882,7 @@ impl FerriteApp {
     /// - `tree_viewer_states` (JSON/YAML/TOML tree view state)
     /// - `csv_viewer_states` (CSV/TSV viewer state with delimiter overrides)
     /// - `sync_scroll_states` (split-view sync scroll state)
-    /// - egui memory temp data (rendered editor widget states like FormattedItemEditState,
+    /// - egui memory temp data (rendered editor widget states like
     ///   CodeBlockData, MermaidBlockData, TableData, TableEditState, RenderedLinkState)
     ///
     /// # Parameters
@@ -882,6 +895,13 @@ impl FerriteApp {
         self.tree_viewer_states.remove(&tab_id);
         self.csv_viewer_states.remove(&tab_id);
         self.sync_scroll_states.remove(&tab_id);
+
+        // Drop the per-tab crash-recovery file. Recovery files are persistent
+        // and keyed by `tab_id`, but tab ids reset every launch — leaving a
+        // file behind can cause it to bleed into an unrelated tab on a future
+        // restore (see `AppState::resolve_tab_content`). Always do this from
+        // every close path so it runs whether the tab was discarded or saved.
+        crate::config::delete_recovery_content(tab_id);
 
         // Cancel any in-progress background file loading for this tab.
         // Dropping the JoinHandle detaches the thread; it will notice the
@@ -1130,7 +1150,7 @@ impl FerriteApp {
                 return true;
             }
             // Check for scroll
-            if i.raw_scroll_delta != egui::Vec2::ZERO {
+            if i.smooth_scroll_delta() != egui::Vec2::ZERO {
                 return true;
             }
             // Check for any events (key, mouse, paste, etc.)
@@ -1153,21 +1173,37 @@ impl FerriteApp {
         let delay_ms = self.state.settings.auto_save_delay_ms;
         let tab_count = self.state.tab_count();
 
-        // Collect tabs that need auto-save (indices and info)
-        let mut tabs_to_save: Vec<(usize, usize, Option<std::path::PathBuf>, String)> = Vec::new();
+        // Collect tabs that need auto-save (indices and info). The
+        // `disk_content_hash` snapshot is captured at this moment so the
+        // autosave file records the disk identity it was anchored to —
+        // recovery uses this to detect external edits between sessions
+        // (task 106 — hardened recovery).
+        let mut tabs_to_save: Vec<(
+            usize,
+            usize,
+            Option<std::path::PathBuf>,
+            String,
+            Option<u64>,
+        )> = Vec::new();
 
         for i in 0..tab_count {
             if let Some(tab) = self.state.tab(i) {
                 if tab.should_auto_save(delay_ms) {
-                    tabs_to_save.push((i, tab.id, tab.path.clone(), tab.content.clone()));
+                    tabs_to_save.push((
+                        i,
+                        tab.id,
+                        tab.path.clone(),
+                        tab.content.clone(),
+                        tab.disk_content_hash(),
+                    ));
                 }
             }
         }
 
         // Process auto-saves
-        for (index, tab_id, path, content) in tabs_to_save {
+        for (index, tab_id, path, content, disk_hash) in tabs_to_save {
             // Save to temp file
-            if save_auto_save_content(tab_id, path.as_ref(), &content) {
+            if save_auto_save_content(tab_id, path.as_ref(), &content, disk_hash) {
                 // Mark as auto-saved to prevent repeated saves
                 if let Some(tab) = self.state.tab_mut(index) {
                     if tab.id == tab_id {
@@ -1283,17 +1319,17 @@ impl FerriteApp {
 
                 ui.horizontal(|ui| {
                     if ui
-                        .button(
-                            egui::RichText::new(t!("recovery.auto_save.restore").to_string()),
-                        )
+                        .button(egui::RichText::new(
+                            t!("recovery.auto_save.restore").to_string(),
+                        ))
                         .clicked()
                     {
                         should_restore = true;
                     }
                     if ui
-                        .button(
-                            egui::RichText::new(t!("recovery.auto_save.discard").to_string()),
-                        )
+                        .button(egui::RichText::new(
+                            t!("recovery.auto_save.discard").to_string(),
+                        ))
                         .clicked()
                     {
                         should_discard = true;
@@ -1430,19 +1466,35 @@ impl FerriteApp {
             // Clear recovery data after successful restore
             clear_all_recovery_data();
             self.show_recovery_dialog = false;
+            self.open_deferred_startup_paths();
         } else if discard {
             info!("User discarded crash recovery");
             clear_all_recovery_data();
             self.pending_recovery = None;
             self.show_recovery_dialog = false;
+            self.open_deferred_startup_paths();
         }
+    }
+
+    /// Open paths deferred while the crash recovery dialog was shown.
+    fn open_deferred_startup_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_startup_paths);
+        if paths.is_empty() {
+            return;
+        }
+        info!(
+            "Opening {} deferred startup path(s) after crash recovery choice",
+            paths.len()
+        );
+        self.open_initial_paths(paths);
     }
 
     /// Render the main UI content.
     /// Returns a deferred format action if one was requested from the ribbon.
-    fn render_ui(&mut self, ctx: &egui::Context) -> Option<DeferredFormatAction> {
-        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-        let is_dark = ctx.style().visuals.dark_mode;
+    fn render_ui(&mut self, ui: &mut egui::Ui) -> Option<DeferredFormatAction> {
+        let ctx = ui.ctx().clone();
+        let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
+        let is_dark = ctx.global_style().visuals.dark_mode;
         let zen_mode = self.state.is_zen_mode();
 
         // Title bar colors
@@ -1465,7 +1517,7 @@ impl FerriteApp {
 
         // Render custom title bar
         self.render_title_bar(
-            ctx,
+            ui,
             is_maximized,
             is_dark,
             zen_mode,
@@ -1495,7 +1547,7 @@ impl FerriteApp {
 
             let theme_colors = ThemeColors::from_theme(
                 theme,
-                &ctx.style().visuals,
+                &ctx.global_style().visuals,
                 self.state.settings.ferrite_accent_rgb(),
             );
 
@@ -1506,7 +1558,7 @@ impl FerriteApp {
             };
 
             let mut action = None;
-            egui::TopBottomPanel::top("ribbon")
+            egui::Panel::top("ribbon")
                 .frame(
                     egui::Frame::new()
                         .fill(ribbon_bg)
@@ -1514,7 +1566,7 @@ impl FerriteApp {
                         .inner_margin(egui::Margin::symmetric(4, 4)),
                 )
                 .show_separator_line(false)
-                .show(ctx, |ui| {
+                .show_inside(ui, |ui| {
                     // Get formatting state for active editor
                     let formatting_state = self.state.active_tab().map(|tab| {
                         get_formatting_state_for(
@@ -1569,7 +1621,7 @@ impl FerriteApp {
                     use crate::editor::get_ferrite_editor_mut;
                     let tab_id = self.state.active_tab().map(|t| t.id);
                     let selection = tab_id.and_then(|id| {
-                        get_ferrite_editor_mut(ctx, id, |editor| {
+                        get_ferrite_editor_mut(&ctx, id, |editor| {
                             let sel = editor.selection();
                             let (start, end) = sel.ordered();
 
@@ -1640,7 +1692,7 @@ impl FerriteApp {
                     Some(DeferredFormatAction { cmd, selection })
                 }
                 other => {
-                    self.handle_ribbon_action(other, ctx);
+                    self.handle_ribbon_action(other, &ctx);
                     None
                 }
             }
@@ -1650,7 +1702,7 @@ impl FerriteApp {
 
         // Status bar - hidden in Zen Mode
         if !zen_mode {
-            let (rainbow_toggle, encoding_change) = self.render_status_bar(ctx, is_dark);
+            let (rainbow_toggle, encoding_change) = self.render_status_bar(ui, is_dark);
             if rainbow_toggle {
                 self.state.settings.csv_rainbow_columns = !self.state.settings.csv_rainbow_columns;
                 self.state.mark_settings_dirty();
@@ -1677,7 +1729,7 @@ impl FerriteApp {
         // Side panel toggle strip (shown when outline panel is closed, hidden in Zen Mode)
         let blocks_resize_clicks = self.window_resize_state.blocks_widget_clicks();
         if !self.state.settings.outline_enabled && !zen_mode {
-            if crate::ui::side_panel_toggle_strip(ctx, is_dark, blocks_resize_clicks) {
+            if crate::ui::side_panel_toggle_strip(ui, is_dark, blocks_resize_clicks) {
                 self.state.settings.outline_enabled = true;
                 self.state.mark_settings_dirty();
             }
@@ -1730,7 +1782,7 @@ impl FerriteApp {
             self.outline_panel.set_current_section(current_section);
             let docked = self.state.settings.productivity_panel_docked;
             let outline_output = self.outline_panel.show(
-                ctx,
+                ui,
                 &self.cached_outline,
                 self.cached_doc_stats.as_ref(),
                 is_dark,
@@ -1752,9 +1804,7 @@ impl FerriteApp {
             if let Some(line) = outline_output.scroll_to_line {
                 outline_nav_request = Some(HeadingNavRequest {
                     line,
-                    char_offset: outline_output.scroll_to_char,
                     title: outline_output.scroll_to_title,
-                    level: outline_output.scroll_to_level,
                 });
             }
             outline_toggled_id = outline_output.toggled_id;
@@ -1767,6 +1817,7 @@ impl FerriteApp {
             if let Some(new_content) = outline_output.frontmatter_new_content {
                 if let Some(tab) = self.state.active_tab_mut() {
                     tab.content = new_content;
+                    tab.notify_external_content_change();
                 }
             }
 
@@ -1855,7 +1906,7 @@ impl FerriteApp {
                     .unwrap_or("Workspace");
 
                 let output = self.file_tree_panel.show(
-                    ctx,
+                    ui,
                     &workspace.file_tree,
                     workspace_name,
                     is_dark,
@@ -1938,10 +1989,10 @@ impl FerriteApp {
 
         if show_pipeline {
             let panel_height = self.pipeline_panel.height();
-            egui::TopBottomPanel::bottom("pipeline_panel")
+            egui::Panel::bottom("pipeline_panel")
                 .resizable(false) // We handle resize ourselves
-                .exact_height(panel_height)
-                .show(ctx, |ui| {
+                .exact_size(panel_height)
+                .show_inside(ui, |ui| {
                     // Custom resize handle at the top of the panel
                     let resize_response = ui.allocate_response(
                         egui::vec2(ui.available_width(), 6.0),
@@ -2029,10 +2080,10 @@ impl FerriteApp {
         // Similar to pipeline panel but for integrated terminal
         if self.terminal_panel_state.is_visible() && !zen_mode {
             let panel_height = self.terminal_panel_state.height;
-            egui::TopBottomPanel::bottom("terminal_panel")
+            egui::Panel::bottom("terminal_panel")
                 .resizable(false) // We handle resize ourselves
-                .exact_height(panel_height)
-                .show(ctx, |ui| {
+                .exact_size(panel_height)
+                .show_inside(ui, |ui| {
                     // Custom resize handle at the top of the panel
                     let resize_response = ui.allocate_response(
                         egui::vec2(ui.available_width(), 6.0),
@@ -2111,7 +2162,7 @@ impl FerriteApp {
                 .open(&mut self.state.settings.ai_panel_visible)
                 .default_width(400.0)
                 .default_height(300.0)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.label(t!("echo.prompt").to_string());
 
                     // Input field with state
@@ -2161,7 +2212,7 @@ impl FerriteApp {
             let dock_width = self.state.settings.outline_width;
             let ferrite_accent_panel = self.state.settings.ferrite_accent_rgb();
             self.productivity_panel.show(
-                ctx,
+                &ctx,
                 &mut self.state.settings.productivity_panel_visible,
                 dock_width,
                 ferrite_accent_panel,
@@ -2181,7 +2232,7 @@ impl FerriteApp {
         // Central panel for editor content
 
         // Central panel for editor content
-        let central_deferred = self.render_central_panel(ctx, is_dark);
+        let central_deferred = self.render_central_panel(ui, is_dark);
         if central_deferred.is_some() {
             deferred_format_action = central_deferred;
         }
@@ -2270,6 +2321,17 @@ impl FerriteApp {
                 debug!("Ribbon: Toggle sync scroll");
                 self.state.settings.sync_scroll_enabled = !self.state.settings.sync_scroll_enabled;
                 self.state.mark_settings_dirty();
+
+                if !self.state.settings.sync_scroll_enabled {
+                    if let Some(tab) = self.state.active_tab_mut() {
+                        tab.clear_sync_pending_scroll();
+                    }
+                    if let Some(tab_id) = self.state.active_tab().map(|t| t.id) {
+                        if let Some(state) = self.sync_scroll_states.get_mut(&tab_id) {
+                            state.reset_on_disable();
+                        }
+                    }
+                }
 
                 // Show toast message
                 let msg = if self.state.settings.sync_scroll_enabled {
@@ -2395,6 +2457,108 @@ impl FerriteApp {
 }
 
 impl eframe::App for FerriteApp {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+
+        // Consume command palette shortcut BEFORE render to suppress OS system menu
+        // (Alt+Space on Windows/Linux) and prevent TextEdit from eating the key.
+        self.consume_command_palette_key(&ctx);
+
+        // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
+        // built-in undo from processing them. Must happen before render_ui().
+        self.consume_undo_redo_keys(&ctx);
+
+        // NOTE: Event::Cut filter removed - FerriteEditor handles cut correctly
+        // The old filter checked Tab.cursors which isn't synced with FerriteEditor.selections
+        // FerriteEditor's cut handler already checks has_selection() before cutting
+
+        // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
+        // from processing the arrow keys and moving the cursor before we can handle the move.
+        // We save the direction and handle the move AFTER render so cursor updates stick.
+        let move_line_direction = self.consume_move_line_keys(&ctx);
+
+        // IMPORTANT: Handle smart paste BEFORE rendering to intercept paste events
+        // and transform them into markdown links/images when appropriate.
+        self.consume_smart_paste(&ctx);
+
+        // PERFORMANCE: Only capture pre-render state for auto-close if enabled AND file is small
+        // Cloning large content (5MB+) every frame is extremely expensive
+        let is_large_file = self
+            .state
+            .active_tab()
+            .map(|t| t.is_large_file())
+            .unwrap_or(false);
+        let auto_close_enabled = self.state.settings.auto_close_brackets && !is_large_file;
+
+        let (pre_render_content, pre_render_cursor) = if auto_close_enabled {
+            self.state
+                .active_tab()
+                .map(|tab| (tab.content.clone(), tab.cursors.primary().head))
+                .unwrap_or_default()
+        } else {
+            (String::new(), 0)
+        };
+
+        // IMPORTANT: Handle auto-close skip-over and selection wrapping BEFORE render
+        // This consumes events that would otherwise be processed by TextEdit
+        let auto_close_handled = if auto_close_enabled {
+            self.handle_auto_close_pre_render(&ctx)
+        } else {
+            false
+        };
+
+        // Ensure echo worker is spawned if AI panel is visible (lazy initialization)
+        #[cfg(feature = "async-workers")]
+        self.ensure_echo_worker();
+
+        // Render the main UI (this updates editor selection)
+        let deferred_format = self.render_ui(ui);
+
+        for msg in drain_code_execution_toasts(&ctx) {
+            self.state.show_toast(msg, self.get_app_time(), 5.0);
+        }
+
+        // Handle auto-close pair insertion AFTER render (if not already handled pre-render)
+        if auto_close_enabled && !auto_close_handled {
+            self.handle_auto_close_post_render(&pre_render_content, pre_render_cursor);
+        }
+
+        // Handle move line AFTER render so cursor position updates are preserved
+        if let Some(direction) = move_line_direction {
+            self.handle_move_line(direction);
+        }
+
+        // Handle keyboard shortcuts AFTER render so selection is up-to-date
+        // Note: Undo/redo is handled separately above, before render
+        self.handle_keyboard_shortcuts(&ctx);
+
+        // Dispatch any pending command palette action AFTER render
+        if let Some(cmd) = self.pending_palette_command.take() {
+            self.dispatch_palette_command(&ctx, cmd);
+        }
+
+        // Handle deferred format action from ribbon with pre-captured selection
+        if let Some(deferred) = deferred_format {
+            debug!(
+                "Applying deferred format command from ribbon: {:?} with selection {:?}",
+                deferred.cmd, deferred.selection
+            );
+            self.handle_format_command_with_selection(&ctx, deferred.cmd, deferred.selection);
+            // Restore focus to the editor after applying formatting
+            // This ensures the editor keeps focus even though the button click stole it
+            if let Some(tab) = self.state.active_tab_mut() {
+                tab.needs_focus = true;
+            }
+        }
+
+        // Try to expand snippets if enabled
+        // This checks if a space/tab was just typed and expands any trigger word
+        if self.state.settings.snippets_enabled && self.state.tab_count() > 0 {
+            let tab_index = self.state.active_tab_index();
+            self.try_expand_snippet(tab_index);
+        }
+    }
+
     /// Called each time the UI needs repainting.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         crate::diag::next_frame();
@@ -2406,13 +2570,14 @@ impl eframe::App for FerriteApp {
         // One-shot window diagnostic for debugging borderless offset issues (GH #112)
         if !self.window_diagnostic_logged {
             self.window_diagnostic_logged = true;
-            let screen_rect = ctx.screen_rect();
+            let viewport_rect = ctx.viewport_rect();
+            let content_rect = ctx.content_rect();
             let ppp = ctx.pixels_per_point();
             let inner_rect = ctx.input(|i| i.viewport().inner_rect);
             let outer_rect = ctx.input(|i| i.viewport().outer_rect);
             info!(
-                "Window diagnostic: screen_rect={:?}, pixels_per_point={:.2}, inner={:?}, outer={:?}",
-                screen_rect, ppp, inner_rect, outer_rect
+                "Window diagnostic: viewport_rect={:?}, content_rect={:?}, pixels_per_point={:.2}, inner={:?}, outer={:?}",
+                viewport_rect, content_rect, ppp, inner_rect, outer_rect
             );
         }
 
@@ -2515,6 +2680,14 @@ impl eframe::App for FerriteApp {
         // Poll file watcher for workspace changes
         self.handle_file_watcher_events();
 
+        // Background workspace file index (quick switcher / search-in-files)
+        self.sync_workspace_file_index();
+        if self.workspace_file_index.poll() {
+            ctx.request_repaint();
+        } else if self.workspace_file_index.is_indexing() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+
         // Poll LSP manager for status changes and spawn failures
         self.handle_lsp_events(ctx);
 
@@ -2541,104 +2714,6 @@ impl eframe::App for FerriteApp {
         if ctx.input(|i| i.viewport().close_requested()) && !self.handle_close_request() {
             // Cancel the close request - we need to show a confirmation dialog
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        }
-
-        // Consume command palette shortcut BEFORE render to suppress OS system menu
-        // (Alt+Space on Windows/Linux) and prevent TextEdit from eating the key.
-        self.consume_command_palette_key(ctx);
-
-        // IMPORTANT: Consume undo/redo keys BEFORE rendering to prevent egui's TextEdit
-        // built-in undo from processing them. Must happen before render_ui().
-        self.consume_undo_redo_keys(ctx);
-
-        // NOTE: Event::Cut filter removed - FerriteEditor handles cut correctly
-        // The old filter checked Tab.cursors which isn't synced with FerriteEditor.selections
-        // FerriteEditor's cut handler already checks has_selection() before cutting
-
-        // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
-        // from processing the arrow keys and moving the cursor before we can handle the move.
-        // We save the direction and handle the move AFTER render so cursor updates stick.
-        let move_line_direction = self.consume_move_line_keys(ctx);
-
-        // IMPORTANT: Handle smart paste BEFORE rendering to intercept paste events
-        // and transform them into markdown links/images when appropriate.
-        self.consume_smart_paste(ctx);
-
-        // PERFORMANCE: Only capture pre-render state for auto-close if enabled AND file is small
-        // Cloning large content (5MB+) every frame is extremely expensive
-        let is_large_file = self
-            .state
-            .active_tab()
-            .map(|t| t.is_large_file())
-            .unwrap_or(false);
-        let auto_close_enabled = self.state.settings.auto_close_brackets && !is_large_file;
-
-        let (pre_render_content, pre_render_cursor) = if auto_close_enabled {
-            self.state
-                .active_tab()
-                .map(|tab| (tab.content.clone(), tab.cursors.primary().head))
-                .unwrap_or_default()
-        } else {
-            (String::new(), 0)
-        };
-
-        // IMPORTANT: Handle auto-close skip-over and selection wrapping BEFORE render
-        // This consumes events that would otherwise be processed by TextEdit
-        let auto_close_handled = if auto_close_enabled {
-            self.handle_auto_close_pre_render(ctx)
-        } else {
-            false
-        };
-
-        // Ensure echo worker is spawned if AI panel is visible (lazy initialization)
-        #[cfg(feature = "async-workers")]
-        self.ensure_echo_worker();
-
-        // Render the main UI (this updates editor selection)
-        let deferred_format = self.render_ui(ctx);
-
-        for msg in drain_code_execution_toasts(ctx) {
-            self.state.show_toast(msg, self.get_app_time(), 5.0);
-        }
-
-        // Handle auto-close pair insertion AFTER render (if not already handled pre-render)
-        if auto_close_enabled && !auto_close_handled {
-            self.handle_auto_close_post_render(&pre_render_content, pre_render_cursor);
-        }
-
-        // Handle move line AFTER render so cursor position updates are preserved
-        if let Some(direction) = move_line_direction {
-            self.handle_move_line(direction);
-        }
-
-        // Handle keyboard shortcuts AFTER render so selection is up-to-date
-        // Note: Undo/redo is handled separately above, before render
-        self.handle_keyboard_shortcuts(ctx);
-
-        // Dispatch any pending command palette action AFTER render
-        if let Some(cmd) = self.pending_palette_command.take() {
-            self.dispatch_palette_command(ctx, cmd);
-        }
-
-        // Handle deferred format action from ribbon with pre-captured selection
-        if let Some(deferred) = deferred_format {
-            debug!(
-                "Applying deferred format command from ribbon: {:?} with selection {:?}",
-                deferred.cmd, deferred.selection
-            );
-            self.handle_format_command_with_selection(ctx, deferred.cmd, deferred.selection);
-            // Restore focus to the editor after applying formatting
-            // This ensures the editor keeps focus even though the button click stole it
-            if let Some(tab) = self.state.active_tab_mut() {
-                tab.needs_focus = true;
-            }
-        }
-
-        // Try to expand snippets if enabled
-        // This checks if a space/tab was just typed and expands any trigger word
-        if self.state.settings.snippets_enabled && self.state.tab_count() > 0 {
-            let tab_index = self.state.active_tab_index();
-            self.try_expand_snippet(tab_index);
         }
 
         // Block widgets under resize grab zones while the resize cursor is active.

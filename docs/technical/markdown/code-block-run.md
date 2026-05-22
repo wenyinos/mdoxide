@@ -86,11 +86,23 @@ ANSI parsing happens in the UI layer (`ansi_render::parse`, including CRLF norma
 | Toast drain (fallback path) | `src/app/mod.rs` (after `render_ui`), `drain_code_execution_toasts` |
 | Strings | `locales/en.yaml` — `widgets.code_block.run_*` (incl. `run_stop`, `run_status_cancelled`, parameterised `run_status_timed_out`), `settings.editor.code_execution_*` |
 
+## Known limitations (v0.3.0)
+
+Manual regression on Windows passed using [`test_md/test_code_execution.md`](../../../test_md/test_code_execution.md). The following edge cases remain; hardening is scheduled for **v0.3.1** — see [ROADMAP.md](../../../ROADMAP.md) (*Executable code blocks — hardening*).
+
+| Limitation | Impact | Workaround |
+|------------|--------|------------|
+| **`bash` / `shell` fences on Windows without Git Bash or WSL** | Fallback tries `pwsh` / `powershell` / `cmd` but writes temp files with those extensions while keeping **bash source** — likely confusing spawn/parse errors. | Use `powershell`, `pwsh`, or `cmd` fences on plain Windows; install Git Bash or WSL for `bash`. |
+| **`sh` / `zsh` fences** | Only one interpreter is tried (`sh` or `zsh`); no platform fallback chain. | Use `bash` (Unix / Git Bash) or `powershell` / `cmd` (Windows). |
+| **Run output keyed by code-block start line** | Inserting or deleting lines **above** a block changes its egui id; in-flight or completed inline output can disappear or attach to the wrong block. | **Dismiss** and **Run** again after structural edits above the fence. |
+| **Empty scroll while running** | A slow script with no early stdout shows a blank output area until bytes arrive (status header still shows “Running”). | Cosmetic only; wait for output or use **Stop**. |
+| **Copy / Insert as block and stderr** | Clipboard and inserted ` ```output ` blocks concatenate stderr without the on-screen `stderr` heading. | Paste from panel manually if you need labelled sections. |
+
 ## Validation
 
 - `cargo test --bin ferrite markdown::ansi_render` covers the SGR parser (plain text, basic colors, 256-color, truecolor, bold/reset, carriage return rewrite, **CRLF vs bare `\r`**, empty input, trailing newline).
 - `cargo test --bin ferrite markdown::code_execution` covers language classification (incl. `pwsh`), Run-button visibility flags, status glyph mapping (incl. `Cancelled`), `RunState.timeout_secs` capture, and the idempotent `cancel(&RunHandle)` helper.
-- Manual:
+- Manual: full checklist in [`test_md/test_code_execution.md`](../../../test_md/test_code_execution.md). Spot checks:
   - Enable Settings → Editor → Code execution; open a markdown file containing shell or python fences; click Run and verify the inline panel reports stdout/stderr with colors and an accurate exit indicator.
   - Long-running snippet (`sleep 60`, `while True: pass`): click **Stop** and confirm the panel transitions to `Stopped by user` within ~100 ms, the spinner stops rotating, and the UI scrolls/interacts normally throughout.
   - Lower the timeout (e.g. 5s), run an infinite loop, and confirm the panel reads `Timed out after 5s` once the worker reaps the child.

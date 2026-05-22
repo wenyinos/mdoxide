@@ -1,6 +1,6 @@
 # Ferrite - AI Context
 
-Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
+Rust (edition 2021) + egui 0.34.2 markdown editor. Immediate-mode GUI — no retained widget state, UI rebuilds each frame.
 
 ## Rules (DO NOT UPDATE)
 - Never auto-update this file or `current-handover-prompt.md` — only update when explicitly requested.
@@ -12,7 +12,7 @@ Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retai
 - Use Context7 MCP tool to fetch library documentation when needed (resolve library ID first, then fetch docs).
 
 ## Tech Stack
-- **Language:** Rust 2021, egui 0.31.1 + eframe (immediate-mode GUI; bumped from 0.28 in v0.3.0 — see `docs/technical/platform/eframe-egui-031-upgrade.md`)
+- **Language:** Rust 2021 (MSRV **1.92**), egui **0.34.2** + eframe (glow on Windows; bumped 0.28 → 0.31 → 0.34 — see `docs/technical/platform/eframe-egui-031-upgrade.md`, `eframe-egui-034-upgrade.md`)
 - **Text:** ropey (rope buffer), comrak (Markdown AST), syntect (syntax highlighting), harfrust (OTL shaping)
 - **Terminal:** portable-pty + vte | **VCS:** git2 | **Dialogs:** rfd | **i18n:** rust-i18n | **Hashing:** blake3 | **PDF read:** hayro | **PDF write:** krilla + krilla-svg
 - **Memory:** mimalloc (Windows), jemalloc (Unix)
@@ -25,7 +25,7 @@ Rust (edition 2021) + egui 0.31 markdown editor. Immediate-mode GUI — no retai
 | `state.rs` | All application state (`AppState`, `Tab`, `TabKind`, `SpecialTabKind`, `FileType`) |
 | `editor/ferrite/` | Rope-based editor (`ropey`): buffer, cursor, history, view, rendering, line_cache |
 | `editor/widget.rs` | EditorWidget wrapper, integrates FerriteEditor via egui memory |
-| `markdown/` | `editor.rs` (rendered view), `code_execution.rs` (fenced Run + `RunHandle`/`RunStatus`), `ansi_render.rs` (vte-backed SGR parser for inline run output), `parser.rs` (comrak AST), `mermaid/` (11 diagram types + `validation.rs` for `MermaidError` / inline diagnostics), `csv_viewer.rs`, `tree_viewer.rs` |
+| `markdown/` | `editor.rs` (rendered view), `rendered_session.rs` (edit session coordinator), `rendered_commit_undo.rs` (commit-boundary undo queue), `code_execution.rs`, … |
 | `terminal/` | Integrated terminal (PTY, VTE, screen, themes, split layouts) |
 | `ui/` | Panels: ribbon, settings, file_tree, outline, search, terminal, productivity, frontmatter, welcome, command_palette |
 | `config/` | Settings persistence, session/crash recovery, snippets |
@@ -76,7 +76,12 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | Add/modify a UI panel | `ui/` → create or edit panel module |
 | Modify editor core | `editor/ferrite/editor.rs` (behavior), `buffer.rs` (text), `view.rs` (viewport) |
 | Modify markdown rendering | `markdown/editor.rs` or `markdown/widgets.rs` |
-| Rendered table cells (hits, Tab focus) | `markdown/widgets.rs` `EditableTable` — [`table-cell-focus-navigation.md`](./technical/markdown/table-cell-focus-navigation.md) |
+| Rendered edit session | `markdown/rendered_session.rs`; hub: [`rendered-edit-session.md`](./technical/markdown/rendered-edit-session.md); block wiring in `editor.rs` |
+| Rendered commit undo | `markdown/rendered_commit_undo.rs` (pre/post snapshot queue); `Tab::apply_rendered_commit_undo_entries` in `state.rs`; drained from `central_panel.rs` after `MarkdownEditor::show` |
+| Session / crash recovery | `config/session.rs` (`RecoveryContent`, autosave); `state.rs` `resolve_tab_content` — [`session-persistence.md`](./technical/files/session-persistence.md) |
+| Rendered widget id scope | `markdown/editor.rs` `push_id(editor_id + source_epoch)` — [`rendered-widget-identity.md`](./technical/markdown/rendered-widget-identity.md) |
+| External invalidation epoch (`source_epoch`) | `state.rs` → `Tab::source_epoch()`, `bump_source_epoch()`, `record_external_edit_from_snapshot()` |
+| Rendered table cells (hits, Tab focus) | `markdown/widgets.rs` `EditableTable` — [`table-cell-focus-navigation.md`](./technical/markdown/table-cell-focus-navigation.md); session/force-commit in [`rendered-edit-session-tables.md`](./technical/markdown/rendered-edit-session-tables.md) |
 | Modify markdown parsing | `markdown/parser.rs` |
 | Modify central panel | `app/central_panel.rs` |
 | Add special tab | `state.rs` → `SpecialTabKind`, `app/central_panel.rs` |
@@ -88,6 +93,7 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 | PDF print preview | `app/export.rs` (`handle_print_preview`), `state.rs` (`PdfViewerState` ephemeral temp + session skip); docs: `docs/technical/viewers/print-preview.md` |
 | Terminal | `terminal/` (pty, screen, widget, layout) |
 | Git/VCS | `vcs/git.rs` |
+| Workspace file index | `workspaces/file_index.rs` — full-tree walk for Ctrl+P / search (not lazy tree) |
 
 ## Performance Rules (FerriteEditor)
 
@@ -102,6 +108,8 @@ fn process(text: &str) -> Vec<&str> { text.lines().collect() }
 
 ## Recently Changed
 
+- **2026-05:** **Workspace file index** — Background `walkdir` index for Ctrl+P and Ctrl+Shift+F (full tree, not lazy sidebar); progress bar on large folders. See `docs/technical/files/workspace-file-index.md`.
+- **2026-05:** **v0.3.0** — egui/eframe **0.34.2**, Rust **1.92** MSRV, skrifa text backend, Popup/Tooltip API migrations, HarfRust validation, Phosphor **0.12**. See `docs/technical/platform/eframe-egui-034-upgrade.md`.
 - **2026-05:** User-configurable **Ferrite accent** (`Settings.accent_color`): Settings/Welcome color picker; drives headings, selection tint, tabs, view R/S/V segment, productivity hub, status LSP/branch; markdown links unchanged. See `docs/technical/ui/theme-system.md`.
 
 ## Build & Test

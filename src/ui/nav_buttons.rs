@@ -17,7 +17,17 @@
 //! ```
 
 use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_UP};
-use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, StrokeKind, Ui, Vec2};
+use eframe::egui::{self, Color32, Context, Pos2, Rect, Sense, StrokeKind, Ui, Vec2};
+
+/// Temp data key: when true, nav buttons are hidden (modal overlays are open).
+fn overlay_blocks_nav_id() -> egui::Id {
+    egui::Id::new("overlay_blocks_nav_buttons")
+}
+
+/// Hide document nav buttons while a modal overlay (quick switcher, command palette, etc.) is open.
+pub fn set_overlay_blocks_nav_buttons(ctx: &Context, blocked: bool) {
+    ctx.data_mut(|d| d.insert_temp(overlay_blocks_nav_id(), blocked));
+}
 
 /// Action requested by navigation button click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +72,13 @@ const HOVER_ALPHA: u8 = 220;
 pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) -> NavAction {
     let mut action = NavAction::None;
 
+    if ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(overlay_blocks_nav_id()).unwrap_or(false))
+    {
+        return NavAction::None;
+    }
+
     // Calculate button container position (top-right with margin)
     let container_pos = Pos2::new(
         editor_rect.max.x - BUTTON_SIZE - MARGIN,
@@ -85,10 +102,10 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
         return NavAction::None;
     }
 
-    // Create an Area for the floating overlay
-    let layer_id = egui::LayerId::new(egui::Order::Foreground, ui.id().with("nav_buttons"));
+    // Middle layer: above editor content, below modal overlays (Foreground/Tooltip).
+    let layer_id = egui::LayerId::new(egui::Order::Middle, ui.id().with("nav_buttons"));
 
-    ui.with_layer_id(layer_id, |ui| {
+    ui.scope_builder(egui::UiBuilder::new().layer_id(layer_id), |ui| {
         // Position the buttons vertically
         // Using simple arrow characters that render in most fonts
         let button_positions = [
@@ -154,11 +171,9 @@ pub fn render_nav_buttons(ui: &mut Ui, editor_rect: Rect, is_dark_mode: bool) ->
             } else {
                 egui::FontId::proportional(14.0)
             };
-            let galley = ui.painter().layout_no_wrap(
-                icon.to_string(),
-                font_id,
-                text_color,
-            );
+            let galley = ui
+                .painter()
+                .layout_no_wrap(icon.to_string(), font_id, text_color);
             let text_pos = Pos2::new(
                 button_rect.center().x - galley.size().x / 2.0,
                 button_rect.center().y - galley.size().y / 2.0,

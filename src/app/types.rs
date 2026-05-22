@@ -89,8 +89,6 @@ pub(crate) enum KeyboardAction {
     InsertToc,
     /// Toggle Frontmatter Panel (Ctrl+Shift+M)
     ToggleFrontmatter,
-    /// Open command palette (Alt+Space)
-    CommandPalette,
     /// Zoom in (Ctrl+=)
     ZoomIn,
     /// Zoom out (Ctrl+-)
@@ -105,12 +103,8 @@ pub(crate) enum KeyboardAction {
 pub(crate) struct HeadingNavRequest {
     /// Target line number (1-indexed)
     pub line: usize,
-    /// Character offset in the document (for precise positioning)
-    pub char_offset: Option<usize>,
     /// Heading title text (for text-based search and matching)
     pub title: Option<String>,
-    /// Heading level (1-6) for constructing the markdown pattern
-    pub level: Option<u8>,
 }
 
 /// A deferred format action that captures the selection state at click time.

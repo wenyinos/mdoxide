@@ -3,12 +3,12 @@
 //! This module contains handlers for HTML export and copy-as-HTML.
 
 use super::FerriteApp;
-use crate::state::TabKind;
 use crate::export::{
     copy_html_to_clipboard, generate_html_document_export, render_markdown_to_pdf,
     resolve_html_theme_for_export, syntax_dark_mode_for_export, PdfTheme,
 };
 use crate::files::dialogs::detect_linux_desktop;
+use crate::state::TabKind;
 use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
@@ -342,15 +342,12 @@ impl FerriteApp {
             return;
         }
 
-        let display_title =
-            source_path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .map(|name| {
-                    t!("print_preview.tab_title", file = name.to_string()).to_string()
-                })
-                .unwrap_or_else(|| t!("print_preview.untitled").to_string());
+        let display_title = source_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .map(|name| t!("print_preview.tab_title", file = name.to_string()).to_string())
+            .unwrap_or_else(|| t!("print_preview.untitled").to_string());
 
         match self.state.open_pdf_tab(tmp_path.clone(), true) {
             Ok(idx) => {

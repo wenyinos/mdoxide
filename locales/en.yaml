@@ -209,7 +209,7 @@ settings:
     default_language: "Default Language"
     default_language_hint: "Language for syntax highlighting in unsaved/new documents when no language is detected from the file path"
     default_language_auto: "Auto (none)"
-    sync_scroll_tooltip: "Synchronize scroll position when switching between Raw and Rendered views"
+    sync_scroll_tooltip: "Keep scroll position aligned in Split view and when switching Raw ↔ Rendered (Ctrl+E)"
     use_spaces: "Use Spaces for Indentation"
     use_spaces_tooltip: "Use spaces instead of tabs for indentation"
     vim_mode: "Vim Mode"
@@ -260,6 +260,10 @@ settings:
     header_spacing_hint: "Vertical spacing between headings (H1-H6) in rendered view"
   preview:
     sync_scroll: "Sync Scroll"
+    split_sync_scroll: "Sync"
+    split_sync_scroll_tooltip: "Keep the raw editor and rendered preview aligned while scrolling (split view)"
+    split_sync_bidirectional: "2-way"
+    split_sync_bidirectional_tooltip: "When on, scrolling the rendered preview also moves the raw editor. When off, only raw → rendered."
     default_view: "Default View Mode"
   files:
     title: "Files"
@@ -740,6 +744,12 @@ recovery:
     start_fresh: "Start Fresh"
     restore_tooltip: "Restore all tabs from the previous session"
     start_fresh_tooltip: "Discard the previous session and start with an empty editor"
+  conflict:
+    banner_text: "Recovered content differs from this file on disk."
+    keep_recovered: "Keep Recovered"
+    keep_recovered_tooltip: "Dismiss this notice and keep the recovered buffer. The tab stays modified so you can save manually."
+    reload_disk: "Reload from Disk"
+    reload_disk_tooltip: "Replace the buffer with the current file on disk and discard the recovered changes."
   untitled: "Untitled document"
 
 # Common buttons and actions
@@ -853,6 +863,7 @@ mermaid:
 # Workspace
 workspace:
   close_folder: "Close Folder"
+  indexing: "Indexing… %{count} files found"
   new_file: "New File"
   new_folder: "New Folder"
   rename: "Rename"
@@ -914,6 +925,8 @@ welcome:
     accent_color: "Ferrite accent color"
     language: "Language"
   line_width_hint: "Limits how wide text lines can grow. Set a value for centered text in Zen Mode (F11)."
+  show_on_empty_launch: "Show welcome on empty launch"
+  show_on_empty_launch_hint: "Open this page when Ferrite starts with no documents loaded. Uncheck to start with a blank tab instead."
 
 # Terminal panel
 terminal:

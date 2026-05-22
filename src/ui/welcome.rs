@@ -62,7 +62,7 @@ impl WelcomePanel {
                 .show(ui, |ui| {
                     ui.set_max_width(560.0);
 
-                    let system_dark = ui.ctx().style().visuals.dark_mode;
+                    let system_dark = ui.ctx().global_style().visuals.dark_mode;
                     let is_dark = match settings.theme {
                         Theme::Dark => true,
                         Theme::Light => false,
@@ -166,7 +166,7 @@ impl WelcomePanel {
                         ui.add_space(8.0);
 
                         let current_lang = settings.language;
-                        egui::ComboBox::from_id_source("welcome_language_combo")
+                        egui::ComboBox::from_id_salt("welcome_language_combo")
                             .selected_text(current_lang.selector_display_name())
                             .width(200.0)
                             .show_ui(ui, |ui| {
@@ -308,7 +308,7 @@ impl WelcomePanel {
 
                     ui.horizontal(|ui| {
                         let current_display = settings.max_line_width.display_name();
-                        egui::ComboBox::from_id_source("welcome_max_line_width_combo")
+                        egui::ComboBox::from_id_salt("welcome_max_line_width_combo")
                             .selected_text(current_display)
                             .width(160.0)
                             .show_ui(ui, |ui| {
@@ -375,7 +375,7 @@ impl WelcomePanel {
                     );
                     ui.add_space(6.0);
 
-                    egui::ComboBox::from_id_source("welcome_cjk_preference_combo")
+                    egui::ComboBox::from_id_salt("welcome_cjk_preference_combo")
                         .selected_text(settings.cjk_font_preference.selector_display_name())
                         .width(220.0)
                         .show_ui(ui, |ui| {
@@ -456,6 +456,17 @@ impl WelcomePanel {
                         &mut settings.auto_save_enabled_default,
                         &t!("settings.files.enable_auto_save").to_string(),
                         &t!("settings.files.auto_save_tooltip").to_string(),
+                        weak_color,
+                    ) {
+                        changed = true;
+                    }
+
+                    ui.add_space(10.0);
+                    if Self::setting_toggle(
+                        ui,
+                        &mut settings.show_welcome_on_empty_launch,
+                        &t!("welcome.show_on_empty_launch").to_string(),
+                        &t!("welcome.show_on_empty_launch_hint").to_string(),
                         weak_color,
                     ) {
                         changed = true;

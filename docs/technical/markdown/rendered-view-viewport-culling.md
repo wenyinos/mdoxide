@@ -34,9 +34,13 @@ All blocks are rendered normally. For each block the start-Y offset and rendered
 
 ### Cache invalidation
 
-`ViewportCullingState` is invalidated when:
-- **Content changes** — content hash mismatch triggers a new measurement pass.
+`ViewportCullingState` is fully invalidated (bootstrap remeasure) when:
+- **Block structure changes** — top-level block count or `(start_line, end_line)` ranges differ from cached `block_line_ranges` (structural edits, paste, delete block, etc.).
 - **Available width changes** — width delta > 1 px triggers re-measurement (reflowing may change block heights).
+
+**Partial invalidation (content hash only):** When source text changes but block line ranges are unchanged — e.g. toggling a task list checkbox (`[ ]` ↔ `[x]`), editing text inside an existing paragraph — the cached block heights and `block_start_y` are **reused**. Only `content_hash` is refreshed. This prevents scroll jumps from bootstrap remeasure on trivial inline edits.
+
+`has_valid_heights` is true when either `content_hash` matches **or** `block_structure_matches()` succeeds.
 
 ## Key types
 
@@ -47,6 +51,8 @@ struct ViewportCullingState {
     block_start_y: Vec<f32>,   // Y offset of each block (includes spacing)
     block_heights: Vec<f32>,   // Height of each block
     total_height: f32,         // Measured total content height
+    block_measured: Vec<bool>, // true = real render or cache hit
+    block_line_ranges: Vec<(usize, usize)>, // (start_line, end_line) per block
 }
 ```
 

@@ -77,3 +77,14 @@ if is_task {
 - Nested task lists preserve indentation
 - Malformed syntax falls back to text rendering
 - Case-insensitive `[x]`/`[X]` handling
+
+## Scroll stability
+
+Toggling a checkbox changes one character in the source (`[ ]` ↔ `[x]`), which updates `content_hash` but **does not** change block boundaries. Without special handling, viewport culling treated that as a full invalidation and ran the bootstrap remeasure pass on the next frame, often producing a different `total_height` and a visible scroll jump. Checkbox clicks also started the scroll-cooldown window (because `pointer.any_down()` was treated as “user scrolling”), which suppressed the height fixup that would otherwise compensate.
+
+**Fix (v0.3.0):**
+
+1. **Structure-preserving culling** — `ViewportCullingState` stores `block_line_ranges`. When ranges match the current AST, cached heights are reused and only `content_hash` is refreshed. See [`rendered-view-viewport-culling.md`](./rendered-view-viewport-culling.md).
+2. **Scroll input detection** — `is_active_scroll_input()` counts wheel and scrollbar **drag** only, not checkbox clicks. See [`sync-scrolling.md`](../sync-scrolling.md) § Viewport culling and scroll stability.
+
+**Manual test:** Open a long task list in rendered view, scroll to the middle, toggle several checkboxes — scroll position should not move.

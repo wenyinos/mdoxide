@@ -4,20 +4,17 @@
 //! (outline, terminal, zen, pipeline), theme switching, undo/redo dispatch,
 //! scroll interpolation, and heading navigation.
 
-use super::helpers::{byte_to_char_offset, find_line_byte_range};
 use super::types::HeadingNavRequest;
 use super::FerriteApp;
-use crate::config::{CjkFontPreference, Settings, Theme, ViewMode};
+use crate::config::{Theme, ViewMode};
 use crate::editor::{extract_outline_for_file, DocumentOutline, DocumentStats, OutlineType};
-use crate::fonts;
-use crate::state::{BacklinkIndex, FileType, PendingAction};
+use crate::state::{BacklinkIndex, FileType};
 use eframe::egui;
-use log::{debug, info, warn};
+use log::{debug, info};
 
 #[cfg(feature = "async-workers")]
 use crate::workers::{echo_worker, WorkerHandle, WorkerResponse};
 use rust_i18n::t;
-use std::path::{Path, PathBuf};
 
 impl FerriteApp {
     /// Handle closing the current tab (with unsaved prompt if needed).
@@ -630,52 +627,6 @@ impl FerriteApp {
         self.pending_scroll_to_line = Some(nav.line);
     }
 
-    /// Find a heading near a specific line (for fuzzy matching).
-    /// Returns character offsets (not byte offsets) for use with egui.
-    pub(crate) fn find_heading_near_line(
-        content: &str,
-        title: &str,
-        level: u8,
-        expected_line: usize,
-    ) -> Option<(usize, usize)> {
-        let hashes = "#".repeat(level as usize);
-        let mut current_line: usize = 1;
-        let mut char_offset: usize = 0; // Track character offset, not byte offset
-
-        for line in content.lines() {
-            // Check if we're near the expected line (within 5 lines)
-            let diff = if current_line > expected_line {
-                current_line - expected_line
-            } else {
-                expected_line - current_line
-            };
-
-            if diff <= 5 {
-                // Check if this line is a heading of the right level
-                if line.starts_with(&hashes) && !line.starts_with(&format!("{}#", hashes)) {
-                    // Extract heading text after the hashes
-                    let heading_text = line[hashes.len()..].trim();
-                    // Case-insensitive comparison
-                    if heading_text.eq_ignore_ascii_case(title) {
-                        let start = char_offset;
-                        let end = char_offset + line.chars().count();
-                        return Some((start, end));
-                    }
-                }
-            }
-
-            // Add character count of this line plus 1 for newline
-            char_offset += line.chars().count() + 1;
-            current_line += 1;
-
-            // Stop searching too far past the expected line
-            if current_line > expected_line + 10 {
-                break;
-            }
-        }
-        None
-    }
-
     /// Update the cached outline if the document content has changed.
     pub(crate) fn update_outline_if_needed(&mut self) {
         if let Some(tab) = self.state.active_tab() {
@@ -758,13 +709,9 @@ impl FerriteApp {
         }
 
         if let Some(workspace) = &self.state.workspace {
-            // Walk the workspace directory to find all markdown files.
-            // We use walkdir instead of workspace.all_files() because the file tree
-            // uses shallow/lazy loading — subdirectories may not be scanned yet
-            // (e.g., on session restore), which would miss backlink sources.
             let root = workspace.root_path.clone();
             let hidden = workspace.hidden_patterns.clone();
-            let all_md_files = collect_markdown_files(&root, &hidden);
+            let all_md_files = crate::workspaces::collect_markdown_files(&root, &hidden);
             let file_count = all_md_files.len();
 
             if file_count <= 50 {
@@ -832,44 +779,4 @@ impl FerriteApp {
             }
         }
     }
-}
-
-/// Walk the workspace directory recursively to collect all markdown files,
-/// skipping hidden directories (same patterns as the file tree).
-///
-/// This is independent of the lazy file tree, so it works even when
-/// subdirectories haven't been expanded yet (e.g., right after session restore).
-fn collect_markdown_files(root: &Path, hidden_patterns: &[String]) -> Vec<PathBuf> {
-    use walkdir::WalkDir;
-
-    WalkDir::new(root)
-        .into_iter()
-        .filter_entry(|entry| {
-            let name = entry.file_name().to_string_lossy();
-            // Skip hidden dot-directories/files
-            if name.starts_with('.') {
-                return false;
-            }
-            // Skip directories matching hidden patterns
-            if entry.file_type().is_dir() {
-                for pattern in hidden_patterns {
-                    if name == pattern.as_str() {
-                        return false;
-                    }
-                }
-            }
-            true
-        })
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            if !e.file_type().is_file() {
-                return false;
-            }
-            match e.path().extension().and_then(|ext| ext.to_str()) {
-                Some(ext) => ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"),
-                None => false,
-            }
-        })
-        .map(|e| e.into_path())
-        .collect()
 }

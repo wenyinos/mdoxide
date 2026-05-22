@@ -8,10 +8,12 @@
 //! - Credits and license information
 
 use crate::app::modifier_symbol;
-use crate::markdown::mermaid::{mermaid_kind_menu_label, snippet_fenced_block, MermaidTemplateKind};
+use crate::markdown::mermaid::{
+    mermaid_kind_menu_label, snippet_fenced_block, MermaidTemplateKind,
+};
 use crate::ui::phosphor_icons::{
     phosphor_rich_text, ARROWS_LEFT_RIGHT, CARET_DOWN, CARET_RIGHT, CHART_LINE, EYE, FILE, FOLDER,
-    GEAR, INFO, KEYBOARD, LINK, PENCIL, TEXT_T, TREE_STRUCTURE,
+    GEAR, INFO, KEYBOARD, LINK, PENCIL, TEXT_T,
 };
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui};
 use rust_i18n::t;
@@ -174,13 +176,6 @@ impl AboutSection {
     }
 }
 
-/// Result of showing the about panel.
-#[derive(Debug, Clone, Default)]
-pub struct AboutPanelOutput {
-    /// Whether the panel should be closed.
-    pub close_requested: bool,
-}
-
 /// About/Help panel state and rendering.
 #[derive(Debug, Clone)]
 pub struct AboutPanel {
@@ -203,118 +198,6 @@ impl AboutPanel {
             active_section: AboutSection::default(),
             collapsed_categories: Vec::new(),
         }
-    }
-
-    /// Show the about panel as a modal window.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The egui context
-    /// * `is_dark` - Whether the current theme is dark mode
-    ///
-    /// # Returns
-    ///
-    /// Output indicating what actions to take
-    pub fn show(&mut self, ctx: &egui::Context, is_dark: bool) -> AboutPanelOutput {
-        let mut output = AboutPanelOutput::default();
-
-        // Semi-transparent overlay
-        let screen_rect = ctx.screen_rect();
-        let overlay_color = if is_dark {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 180)
-        } else {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 120)
-        };
-
-        egui::Area::new(egui::Id::new("about_overlay"))
-            .order(egui::Order::Middle)
-            .fixed_pos(screen_rect.min)
-            .show(ctx, |ui| {
-                let response = ui.allocate_response(screen_rect.size(), egui::Sense::click());
-                ui.painter().rect_filled(screen_rect, 0.0, overlay_color);
-
-                // Close on click outside
-                if response.clicked() {
-                    output.close_requested = true;
-                }
-            });
-
-        // About modal window
-        egui::Window::new(format!("❓ {}", t!("about.title")))
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .min_width(550.0)
-            .max_width(650.0)
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                // Handle escape key to close
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    output.close_requested = true;
-                }
-
-                ui.horizontal(|ui| {
-                    // Left side: Section tabs
-                    ui.vertical(|ui| {
-                        ui.set_min_width(100.0);
-
-                        for section in [
-                            AboutSection::About,
-                            AboutSection::Shortcuts,
-                            AboutSection::Mermaid,
-                        ] {
-                            let selected = self.active_section == section;
-                            let text = format!("{} {}", section.icon(), section.label());
-
-                            let btn = ui.add_sized(
-                                [95.0, 32.0],
-                                egui::SelectableLabel::new(
-                                    selected,
-                                    RichText::new(text).size(14.0),
-                                ),
-                            );
-
-                            if btn.clicked() {
-                                self.active_section = section;
-                            }
-                        }
-                    });
-
-                    ui.separator();
-
-                    // Right side: Section content
-                    ui.vertical(|ui| {
-                        ui.set_min_width(420.0);
-                        ui.set_min_height(380.0);
-
-                        match self.active_section {
-                            AboutSection::About => {
-                                self.show_about_section(ui, is_dark);
-                            }
-                            AboutSection::Shortcuts => {
-                                self.show_shortcuts_section(ui, is_dark);
-                            }
-                            AboutSection::Mermaid => {
-                                self.show_mermaid_section(ui, is_dark);
-                            }
-                        }
-                    });
-                });
-
-                ui.separator();
-
-                // Bottom buttons
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(t!("dialog.confirm.close")).clicked() {
-                            output.close_requested = true;
-                        }
-                        ui.label(RichText::new(t!("about.close_hint")).small().weak());
-                    });
-                });
-            });
-
-        output
     }
 
     /// Render the about/help panel inline within a tab (not as a modal window).
@@ -350,7 +233,7 @@ impl AboutPanel {
 
                     let btn = ui.add_sized(
                         [sidebar_width - 16.0, 32.0],
-                        egui::SelectableLabel::new(selected, RichText::new(text).size(14.0)),
+                        egui::Button::selectable(selected, RichText::new(text).size(14.0)),
                     );
 
                     if btn.clicked() {
@@ -501,11 +384,7 @@ impl AboutPanel {
 
         ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(4.0);
-            ui.label(
-                RichText::new(t!("about.mermaid.title"))
-                    .size(16.0)
-                    .strong(),
-            );
+            ui.label(RichText::new(t!("about.mermaid.title")).size(16.0).strong());
             ui.add_space(8.0);
             ui.label(t!("about.mermaid.intro"));
             ui.add_space(8.0);
@@ -581,7 +460,11 @@ impl AboutPanel {
                     .horizontal(|ui| {
                         ui.label(
                             phosphor_rich_text(
-                                if is_collapsed { CARET_RIGHT } else { CARET_DOWN },
+                                if is_collapsed {
+                                    CARET_RIGHT
+                                } else {
+                                    CARET_DOWN
+                                },
                                 12.0,
                             )
                             .strong(),
@@ -685,9 +568,4 @@ mod tests {
         assert_eq!(shortcuts[0].action_key, "shortcuts.file.new");
     }
 
-    #[test]
-    fn test_about_panel_output_default() {
-        let output = AboutPanelOutput::default();
-        assert!(!output.close_requested);
-    }
 }

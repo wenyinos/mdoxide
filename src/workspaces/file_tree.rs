@@ -387,6 +387,17 @@ fn sort_entries(entries: &mut Vec<FileTreeNode>) {
     });
 }
 
+/// Whether a directory entry should be skipped during a full workspace walk.
+///
+/// Matches lazy file-tree rules: hidden dot entries (except allowlisted names) and
+/// configured hidden folder/file patterns.
+pub(crate) fn entry_hidden(name: &str, hidden_patterns: &[String]) -> bool {
+    if name.starts_with('.') && !is_allowed_dot_file(name) {
+        return true;
+    }
+    should_hide(name, hidden_patterns)
+}
+
 /// Check if a dot file should be shown (some are important).
 fn is_allowed_dot_file(name: &str) -> bool {
     matches!(
