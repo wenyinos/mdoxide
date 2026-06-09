@@ -51,7 +51,7 @@ Secondary instance                 Primary instance
    - Used on Windows so the Explorer-launched secondary process can call `AllowSetForegroundWindow(primary_pid)` before exiting
 
 3. **Startup flow** (runs early, before config/logging/icon loading):
-   ```
+   ```text
    Parse CLI args → Read lock file → port exists?
      YES → connect to port (500ms timeout)
        SUCCESS → (Windows: allow foreground for primary PID) → send paths, shutdown(Write), exit
