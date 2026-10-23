@@ -6679,10 +6679,10 @@ mod tests {
         assert_eq!(tab.title(), "Untitled");
 
         tab.set_content("modified".to_string());
-        assert_eq!(tab.title(), "Untitled*");
+        assert_eq!(tab.title(), "Untitled ●");
 
         tab.path = Some(PathBuf::from("/test/document.md"));
-        assert_eq!(tab.title(), "document.md*");
+        assert_eq!(tab.title(), "document.md ●");
 
         tab.mark_saved();
         assert_eq!(tab.title(), "document.md");
