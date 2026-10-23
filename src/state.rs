@@ -4407,9 +4407,11 @@ impl AppState {
         let encoded_bytes = tab.encode_content();
         let encoding = tab.current_encoding;
 
-        std::fs::write(&path, &encoded_bytes).map_err(|e| crate::error::Error::FileWrite {
-            path: path.clone(),
-            source: e,
+        crate::files::atomic::write_atomic(&path, &encoded_bytes).map_err(|e| {
+            crate::error::Error::FileWrite {
+                path: path.clone(),
+                source: e,
+            }
         })?;
 
         // Update original_bytes to match what we saved
@@ -4437,9 +4439,11 @@ impl AppState {
         let encoded_bytes = tab.encode_content();
         let encoding = tab.current_encoding;
 
-        std::fs::write(&path, &encoded_bytes).map_err(|e| crate::error::Error::FileWrite {
-            path: path.clone(),
-            source: e,
+        crate::files::atomic::write_atomic(&path, &encoded_bytes).map_err(|e| {
+            crate::error::Error::FileWrite {
+                path: path.clone(),
+                source: e,
+            }
         })?;
 
         tab.path = Some(path.clone());

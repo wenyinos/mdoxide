@@ -115,3 +115,6 @@ logs
 # Cyclopsctl (added by cyclopsctl init)
 cyclopsctl.toml
 .cyclopsctl/
+
+# Large generated perf fixtures (kept out of git)
+test_md/*.csv

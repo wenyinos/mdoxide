@@ -30,12 +30,12 @@ impl ContentHash {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CachedAst {
-    doc: MarkdownDocument,
+    doc: std::sync::Arc<MarkdownDocument>,
     last_access: std::time::Instant,
 }
 
 impl CachedAst {
-    fn new(doc: MarkdownDocument) -> Self {
+    fn new(doc: std::sync::Arc<MarkdownDocument>) -> Self {
         Self {
             doc,
             last_access: std::time::Instant::now(),
@@ -64,16 +64,16 @@ impl MarkdownAstCache {
         }
     }
 
-    fn get(&mut self, hash: &ContentHash) -> Option<MarkdownDocument> {
+    fn get(&mut self, hash: &ContentHash) -> Option<std::sync::Arc<MarkdownDocument>> {
         if let Some(entry) = self.entries.get_mut(hash) {
             entry.touch();
-            Some(entry.doc.clone())
+            Some(std::sync::Arc::clone(&entry.doc))
         } else {
             None
         }
     }
 
-    fn insert(&mut self, hash: ContentHash, doc: MarkdownDocument) {
+    fn insert(&mut self, hash: ContentHash, doc: std::sync::Arc<MarkdownDocument>) {
         if self.entries.len() >= MAX_ENTRIES {
             self.evict_lru();
         }
@@ -116,15 +116,19 @@ where
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Return a cached `MarkdownDocument` for `content`, parsing only on cache miss.
-pub fn get_or_parse(content: &str) -> Result<MarkdownDocument> {
+///
+/// The document is shared behind an `Arc` so cache hits are refcount bumps
+/// rather than full AST clones (a 5k-node document cloned every frame was the
+/// single largest per-frame allocation before this change).
+pub fn get_or_parse(content: &str) -> Result<std::sync::Arc<MarkdownDocument>> {
     let hash = ContentHash::of(content);
 
     if let Some(doc) = with_cache(|c| c.get(&hash)) {
         return Ok(doc);
     }
 
-    let doc = super::parser::parse_markdown(content)?;
-    with_cache(|c| c.insert(hash, doc.clone()));
+    let doc = std::sync::Arc::new(super::parser::parse_markdown(content)?);
+    with_cache(|c| c.insert(hash, std::sync::Arc::clone(&doc)));
     Ok(doc)
 }
 
