@@ -35,6 +35,13 @@ const JETBRAINS_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold
 const JETBRAINS_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Italic.ttf");
 const JETBRAINS_BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-BoldItalic.ttf");
 
+/// Bundled Simplified-Chinese fallback (Source Han Sans SC / Noto Sans CJK SC).
+///
+/// Guarantees readable Chinese on systems without a CJK font installed.
+/// The system font is preferred when present; this is the safety net.
+const SOURCE_HAN_SANS_SC: &[u8] =
+    include_bytes!("../assets/fonts/SourceHanSansSC-Regular.otf");
+
 /// Cache for system font list (expensive to compute, do once)
 static SYSTEM_FONTS_CACHE: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -1073,11 +1080,16 @@ fn load_japanese_font() -> Option<FontData> {
 
 /// Load Simplified Chinese system font.
 fn load_chinese_sc_font() -> Option<FontData> {
-    // MacOS: PingFang SC
     // Windows: Microsoft YaHei
     // Linux: Noto Sans CJK SC
-    let candidates = ["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC"];
-    load_system_font(&candidates)
+    let candidates = ["Microsoft YaHei", "Noto Sans CJK SC"];
+    if let Some(font) = load_system_font(&candidates) {
+        return Some(font);
+    }
+
+    // Bundled fallback so Chinese never renders as tofu on a bare system.
+    info!("No system Simplified-Chinese font found; using bundled Source Han Sans SC");
+    Some(FontData::from_static(SOURCE_HAN_SANS_SC))
 }
 
 /// Load Traditional Chinese system font.
