@@ -14,12 +14,16 @@ pub struct PaletteCommand {
 }
 
 impl PaletteCommand {
-    pub fn label(&self) -> &'static str {
-        self.command.display_name()
+    pub fn label(&self) -> String {
+        self.command.display_name_localized()
     }
 
     pub fn category(&self) -> &'static str {
         self.command.category()
+    }
+
+    pub fn category_label(&self) -> String {
+        self.command.category_label()
     }
 }
 

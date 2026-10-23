@@ -560,6 +560,13 @@ shortcuts:
     export_pdf: 导出 PDF
     print_preview: 打印预览
     insert_toc: 插入目录
+    open_workspace: 打开工作区
+    close_workspace: 关闭工作区
+    zoom_in: 放大
+    zoom_out: 缩小
+    reset_zoom: 重置缩放
+    command_palette: 命令面板
+    toggle_frontmatter: 切换 frontmatter 面板
   file:
     new: 新文件
     open: 打开文件

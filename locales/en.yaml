@@ -592,6 +592,13 @@ shortcuts:
     export_pdf: "Export PDF"
     print_preview: "Print preview"
     insert_toc: "Insert Table of Contents"
+    open_workspace: "Open Workspace"
+    close_workspace: "Close Workspace"
+    zoom_in: "Zoom In"
+    zoom_out: "Zoom Out"
+    reset_zoom: "Reset Zoom"
+    command_palette: "Command Palette"
+    toggle_frontmatter: "Toggle Frontmatter Panel"
   # File shortcuts (for help panel)
   file:
     new: "New File"

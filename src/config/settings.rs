@@ -787,6 +787,87 @@ impl ShortcutCommand {
         }
     }
 
+    /// Localized display name for UI surfaces (command palette, shortcut editor).
+    pub fn display_name_localized(&self) -> String {
+        match self {
+            ShortcutCommand::Save => rust_i18n::t!("shortcuts.commands.save"),
+            ShortcutCommand::SaveAs => rust_i18n::t!("shortcuts.commands.save_as"),
+            ShortcutCommand::Open => rust_i18n::t!("shortcuts.commands.open"),
+            ShortcutCommand::New => rust_i18n::t!("shortcuts.commands.new"),
+            ShortcutCommand::NewTab => rust_i18n::t!("shortcuts.commands.new_tab"),
+            ShortcutCommand::CloseTab => rust_i18n::t!("shortcuts.commands.close_tab"),
+            ShortcutCommand::OpenWorkspace => rust_i18n::t!("shortcuts.commands.open_workspace"),
+            ShortcutCommand::CloseWorkspace => rust_i18n::t!("shortcuts.commands.close_workspace"),
+            ShortcutCommand::NextTab => rust_i18n::t!("shortcuts.commands.next_tab"),
+            ShortcutCommand::PrevTab => rust_i18n::t!("shortcuts.commands.prev_tab"),
+            ShortcutCommand::GoToLine => rust_i18n::t!("shortcuts.commands.go_to_line"),
+            ShortcutCommand::QuickOpen => rust_i18n::t!("shortcuts.commands.quick_open"),
+            ShortcutCommand::ToggleViewMode => rust_i18n::t!("shortcuts.commands.toggle_view_mode"),
+            ShortcutCommand::CycleTheme => rust_i18n::t!("shortcuts.commands.cycle_theme"),
+            ShortcutCommand::ToggleZenMode => rust_i18n::t!("shortcuts.commands.toggle_zen_mode"),
+            ShortcutCommand::ToggleFullscreen => rust_i18n::t!("shortcuts.commands.toggle_fullscreen"),
+            ShortcutCommand::ToggleOutline => rust_i18n::t!("shortcuts.commands.toggle_outline"),
+            ShortcutCommand::ToggleFileTree => rust_i18n::t!("shortcuts.commands.toggle_file_tree"),
+            ShortcutCommand::TogglePipeline => rust_i18n::t!("shortcuts.commands.toggle_pipeline"),
+            ShortcutCommand::ToggleTerminal => rust_i18n::t!("shortcuts.commands.toggle_terminal"),
+            ShortcutCommand::ToggleProductivityHub => {
+                rust_i18n::t!("shortcuts.commands.toggle_productivity_hub")
+            }
+            ShortcutCommand::ZoomIn => rust_i18n::t!("shortcuts.commands.zoom_in"),
+            ShortcutCommand::ZoomOut => rust_i18n::t!("shortcuts.commands.zoom_out"),
+            ShortcutCommand::ResetZoom => rust_i18n::t!("shortcuts.commands.reset_zoom"),
+            ShortcutCommand::Undo => rust_i18n::t!("shortcuts.commands.undo"),
+            ShortcutCommand::Redo => rust_i18n::t!("shortcuts.commands.redo"),
+            ShortcutCommand::DeleteLine => rust_i18n::t!("shortcuts.commands.delete_line"),
+            ShortcutCommand::DuplicateLine => rust_i18n::t!("shortcuts.commands.duplicate_line"),
+            ShortcutCommand::MoveLineUp => rust_i18n::t!("shortcuts.commands.move_line_up"),
+            ShortcutCommand::MoveLineDown => rust_i18n::t!("shortcuts.commands.move_line_down"),
+            ShortcutCommand::SelectNextOccurrence => {
+                rust_i18n::t!("shortcuts.commands.select_next_occurrence")
+            }
+            ShortcutCommand::Find => rust_i18n::t!("shortcuts.commands.find"),
+            ShortcutCommand::FindReplace => rust_i18n::t!("shortcuts.commands.find_replace"),
+            ShortcutCommand::FindNext => rust_i18n::t!("shortcuts.commands.find_next"),
+            ShortcutCommand::FindPrev => rust_i18n::t!("shortcuts.commands.find_prev"),
+            ShortcutCommand::SearchInFiles => rust_i18n::t!("shortcuts.commands.search_in_files"),
+            ShortcutCommand::FormatBold => rust_i18n::t!("shortcuts.commands.bold"),
+            ShortcutCommand::FormatItalic => rust_i18n::t!("shortcuts.commands.italic"),
+            ShortcutCommand::FormatInlineCode => rust_i18n::t!("shortcuts.commands.inline_code"),
+            ShortcutCommand::FormatCodeBlock => rust_i18n::t!("shortcuts.commands.code_block"),
+            ShortcutCommand::FormatLink => rust_i18n::t!("shortcuts.commands.link"),
+            ShortcutCommand::FormatImage => rust_i18n::t!("shortcuts.commands.image"),
+            ShortcutCommand::FormatBlockquote => rust_i18n::t!("shortcuts.commands.blockquote"),
+            ShortcutCommand::FormatBulletList => rust_i18n::t!("shortcuts.commands.bullet_list"),
+            ShortcutCommand::FormatNumberedList => {
+                rust_i18n::t!("shortcuts.commands.numbered_list")
+            }
+            ShortcutCommand::FormatHeading1 => rust_i18n::t!("shortcuts.commands.heading_1"),
+            ShortcutCommand::FormatHeading2 => rust_i18n::t!("shortcuts.commands.heading_2"),
+            ShortcutCommand::FormatHeading3 => rust_i18n::t!("shortcuts.commands.heading_3"),
+            ShortcutCommand::FormatHeading4 => rust_i18n::t!("shortcuts.commands.heading_4"),
+            ShortcutCommand::FormatHeading5 => rust_i18n::t!("shortcuts.commands.heading_5"),
+            ShortcutCommand::FormatHeading6 => rust_i18n::t!("shortcuts.commands.heading_6"),
+            ShortcutCommand::FoldAll => rust_i18n::t!("shortcuts.commands.fold_all"),
+            ShortcutCommand::UnfoldAll => rust_i18n::t!("shortcuts.commands.unfold_all"),
+            ShortcutCommand::ToggleFoldAtCursor => {
+                rust_i18n::t!("shortcuts.commands.toggle_fold")
+            }
+            ShortcutCommand::CommandPalette => {
+                rust_i18n::t!("shortcuts.commands.command_palette")
+            }
+            ShortcutCommand::OpenSettings => rust_i18n::t!("shortcuts.commands.open_settings"),
+            ShortcutCommand::OpenAbout => rust_i18n::t!("shortcuts.commands.open_about"),
+            ShortcutCommand::ExportHtml => rust_i18n::t!("shortcuts.commands.export_html"),
+            ShortcutCommand::ExportPdf => rust_i18n::t!("shortcuts.commands.export_pdf"),
+            ShortcutCommand::PrintPreview => rust_i18n::t!("shortcuts.commands.print_preview"),
+            ShortcutCommand::InsertToc => rust_i18n::t!("shortcuts.commands.insert_toc"),
+            ShortcutCommand::ToggleFrontmatter => {
+                rust_i18n::t!("shortcuts.commands.toggle_frontmatter")
+            }
+        }
+        .to_string()
+    }
+
     /// Get the category for grouping in UI
     pub fn category(&self) -> &'static str {
         match self {
