@@ -3051,7 +3051,7 @@ fn render_heading(
                 ui.label(
                     RichText::new(format!("{marker} "))
                         .font(FontId::new(font_size * 0.75, font_family.clone()))
-                        .color(colors.blockquote_text.gamma_multiply(0.55)),
+                        .color(colors.quote_text.gamma_multiply(0.55)),
                 );
             }
 
