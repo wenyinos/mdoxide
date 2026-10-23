@@ -1090,15 +1090,13 @@ fn load_japanese_font() -> Option<FontData> {
 
 /// Load Simplified Chinese system font.
 fn load_chinese_sc_font() -> Option<FontData> {
-    // Windows: Microsoft YaHei
-    // Linux: Noto Sans CJK SC
-    let candidates = ["Microsoft YaHei", "Noto Sans CJK SC"];
-    if let Some(font) = load_system_font(&candidates) {
-        return Some(font);
-    }
-
-    // Bundled fallback so Chinese never renders as tofu on a bare system.
-    info!("No system Simplified-Chinese font found; using bundled Source Han Sans SC");
+    // Always prefer the bundled Simplified-Chinese face.
+    //
+    // System CJK fonts on Linux are usually the Noto Sans CJK *collection*,
+    // whose first face is Japanese; loading the .ttc as a single font therefore
+    // renders Japanese glyph variants for shared codepoints. The bundled face
+    // is region-correct, so it wins even when a system font is installed.
+    log::debug!("Using bundled Source Han Sans SC for Simplified Chinese");
     Some(FontData::from_static(SOURCE_HAN_SANS_SC))
 }
 
