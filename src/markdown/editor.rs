@@ -2035,6 +2035,15 @@ fn render_node_with_structural_keys(
                 list_type,
             );
         }
+        MarkdownNodeType::Math { literal, display } => {
+            crate::markdown::math_widget::show_math(
+                ui,
+                literal,
+                *display,
+                font_size,
+                colors.text,
+            );
+        }
         MarkdownNodeType::ThematicBreak => {
             render_thematic_break(ui, colors);
         }
@@ -2241,6 +2250,15 @@ fn render_node(
                 editor_font,
                 indent_level,
                 list_type,
+            );
+        }
+        MarkdownNodeType::Math { literal, display } => {
+            crate::markdown::math_widget::show_math(
+                ui,
+                literal,
+                *display,
+                font_size,
+                colors.text,
             );
         }
         MarkdownNodeType::ThematicBreak => {
@@ -4475,6 +4493,16 @@ fn render_inline_node(
                     new_style,
                 );
             }
+        }
+
+        MarkdownNodeType::Math { literal, display } => {
+            crate::markdown::math_widget::show_math(
+                ui,
+                literal,
+                *display,
+                font_size,
+                colors.text,
+            );
         }
 
         MarkdownNodeType::Code(code) => {

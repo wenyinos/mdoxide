@@ -846,6 +846,14 @@ pub fn serialize_node(node: &MarkdownNode) -> String {
 
         MarkdownNodeType::VideoEmbed(info) => info.source_text.clone(),
 
+        MarkdownNodeType::Math { literal, display } => {
+            if *display {
+                format!("$${}$$", literal)
+            } else {
+                format!("${}$", literal)
+            }
+        }
+
         // Inline elements
         MarkdownNodeType::Text(text) => text.clone(),
         MarkdownNodeType::Code(code) => format!("`{}`", code),
@@ -866,6 +874,13 @@ pub fn serialize_node(node: &MarkdownNode) -> String {
                 format!("![{}]({})", alt, url)
             } else {
                 format!("![{}]({} \"{}\")", alt, url, title)
+            }
+        }
+        MarkdownNodeType::Math { literal, display } => {
+            if *display {
+                format!("$${}$$", literal)
+            } else {
+                format!("${}$", literal)
             }
         }
         MarkdownNodeType::SoftBreak => " ".to_string(),

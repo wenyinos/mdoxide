@@ -32,6 +32,8 @@ pub struct MarkdownOptions {
     pub superscript: bool,
     /// Enable footnotes
     pub footnotes: bool,
+    /// Enable `$...$` / `$$...$$` math spans
+    pub math_dollars: bool,
     /// Enable description lists
     pub description_lists: bool,
     /// Enable front matter (YAML/TOML)
@@ -53,6 +55,7 @@ impl Default for MarkdownOptions {
             tasklist: true,
             superscript: false,
             footnotes: true,
+            math_dollars: true,
             description_lists: false,
             front_matter_delimiter: Some("---".to_string()),
             safe_urls: true,
@@ -74,6 +77,7 @@ impl MarkdownOptions {
         options.extension.tasklist = self.tasklist;
         options.extension.superscript = self.superscript;
         options.extension.footnotes = self.footnotes;
+        options.extension.math_dollars = self.math_dollars;
         options.extension.description_lists = self.description_lists;
         options.extension.front_matter_delimiter = self.front_matter_delimiter.clone();
         options.extension.header_ids = self.header_ids.clone();
@@ -273,6 +277,8 @@ pub enum MarkdownNodeType {
     },
     /// Embedded video ({{video URL}} or bare YouTube URL paragraph)
     VideoEmbed(VideoEmbedInfo),
+    /// LaTeX math span (`$...$` inline, `$$...$$` display)
+    Math { literal: String, display: bool },
 }
 
 /// Supported video hosting provider for embeds.
@@ -343,6 +349,7 @@ impl MarkdownNode {
                 output.push_str(display.as_deref().unwrap_or(target));
             }
             MarkdownNodeType::VideoEmbed(info) => output.push_str(&info.source_text),
+            MarkdownNodeType::Math { literal, .. } => output.push_str(literal),
             _ => {}
         }
         for child in &self.children {
@@ -1072,6 +1079,10 @@ fn convert_node_value(
         NodeValue::Strong => MarkdownNodeType::Strong,
         NodeValue::Strikethrough => MarkdownNodeType::Strikethrough,
         NodeValue::Superscript => MarkdownNodeType::Superscript,
+        NodeValue::Math(math) => MarkdownNodeType::Math {
+            literal: math.literal.clone(),
+            display: math.display_math,
+        },
         NodeValue::Link(link) => MarkdownNodeType::Link {
             url: link.url.clone(),
             title: link.title.clone(),
