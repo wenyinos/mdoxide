@@ -52,6 +52,7 @@ pub mod csv_viewer;
 pub mod emoji;
 mod editor;
 pub mod formatting;
+pub mod math_render;
 pub mod mermaid;
 mod parser;
 pub mod video_embed;

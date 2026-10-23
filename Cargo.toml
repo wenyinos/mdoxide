@@ -67,6 +67,11 @@ walkdir = "2"
 
 # Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP, BMP)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+# LaTeX math rendering (pure Rust, KaTeX-compatible; no JS/WebView)
+ratex-parser = "0.1.15"
+ratex-layout = "0.1.15"
+ratex-types = "0.1.15"
+ratex-render = { version = "0.1.15", features = ["embed-fonts"] }
 font-kit = "0.14.3"
 
 # Internationalization
