@@ -49,6 +49,7 @@ mod ast_ops;
 pub mod cache;
 mod code_execution;
 pub mod csv_viewer;
+pub mod emoji;
 mod editor;
 pub mod formatting;
 pub mod mermaid;

@@ -4408,9 +4408,10 @@ fn render_inline_node(
 ) {
     match &node.node_type {
         MarkdownNodeType::Text(text) => {
-            // Apply accumulated styles to the text
-            // Apply color, then use styled font with bold/italic variant
-            let rich_text = RichText::new(text).color(colors.text);
+            // Apply accumulated styles to the text.
+            // GitHub-style emoji shortcodes are expanded for display only.
+            let display = crate::markdown::emoji::replace_shortcodes(text);
+            let rich_text = RichText::new(display).color(colors.text);
             let styled = style.apply(rich_text, font_size, editor_font);
             ui.label(styled);
         }
