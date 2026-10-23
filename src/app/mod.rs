@@ -1714,6 +1714,13 @@ impl MDOxideApp {
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
         // Outline Panel (if enabled) - hidden in Zen Mode
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
+        let mut file_tree_file_clicked: Option<std::path::PathBuf> = None;
+        let mut file_tree_path_toggled: Option<std::path::PathBuf> = None;
+        let mut file_tree_needs_loading: Option<std::path::PathBuf> = None;
+        let mut file_tree_close_requested = false;
+        let mut file_tree_new_width: Option<f32> = None;
+        let mut file_tree_context_action: Option<FileTreeContextAction> = None;
+
         let mut outline_nav_request: Option<HeadingNavRequest> = None;
         let mut outline_toggled_id: Option<String> = None;
         let mut outline_new_width: Option<f32> = None;
@@ -1778,6 +1785,14 @@ impl MDOxideApp {
                 .set_side(self.state.settings.outline_side);
             self.outline_panel.set_current_section(current_section);
             let docked = self.state.settings.productivity_panel_docked;
+            let workspace_tree = self.state.workspace.as_ref().map(|ws| {
+                let name = ws
+                    .root_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("Workspace");
+                (&ws.file_tree, name)
+            });
             let outline_output = self.outline_panel.show(
                 ui,
                 &self.cached_outline,
@@ -1795,7 +1810,20 @@ impl MDOxideApp {
                 } else {
                     None
                 },
+                Some(&mut self.file_tree_panel),
+                workspace_tree,
             );
+            if let Some(ft) = outline_output.file_tree_output.clone() {
+                file_tree_file_clicked = ft.file_clicked;
+                file_tree_path_toggled = ft.path_toggled;
+                file_tree_needs_loading = ft.needs_loading;
+                file_tree_close_requested = ft.close_requested;
+                file_tree_new_width = ft.new_width;
+                file_tree_context_action = ft.context_action;
+            }
+            if outline_output.open_search {
+                self.handle_search_in_files();
+            }
 
             // Capture output for processing after render
             if let Some(line) = outline_output.scroll_to_line {
@@ -1880,14 +1908,11 @@ impl MDOxideApp {
 
         // File Tree Panel (workspace mode only) - hidden in Zen Mode
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
-        let mut file_tree_file_clicked: Option<std::path::PathBuf> = None;
-        let mut file_tree_path_toggled: Option<std::path::PathBuf> = None;
-        let mut file_tree_needs_loading: Option<std::path::PathBuf> = None;
-        let mut file_tree_close_requested = false;
-        let mut file_tree_new_width: Option<f32> = None;
-        let mut file_tree_context_action: Option<FileTreeContextAction> = None;
 
-        if self.state.should_show_file_tree() && !zen_mode {
+        if self.state.should_show_file_tree()
+            && !zen_mode
+            && self.outline_panel.active_tab() != crate::ui::OutlinePanelTab::Files
+        {
             if let Some(workspace) = &self.state.workspace {
                 let workspace_name = workspace
                     .root_path

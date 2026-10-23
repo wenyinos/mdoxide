@@ -34,7 +34,7 @@ const INDENT_PER_LEVEL: f32 = 16.0;
 const ROW_HEIGHT: f32 = 22.0;
 
 /// Output from the file tree panel.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FileTreeOutput {
     /// File that was clicked (should be opened in a tab)
     pub file_clicked: Option<PathBuf>,
@@ -140,12 +140,6 @@ impl FileTreePanel {
             Color32::from_rgb(200, 200, 200)
         };
 
-        let _header_bg = if is_dark {
-            Color32::from_rgb(40, 40, 40)
-        } else {
-            Color32::from_rgb(235, 235, 235)
-        };
-
         egui::Panel::left("file_tree_panel")
             .resizable(true)
             .default_size(self.width)
@@ -154,54 +148,74 @@ impl FileTreePanel {
             .show_inside(ui, |ui| {
                 // Update width from panel
                 let panel_width = ui.available_width();
-                if (panel_width - self.width).abs() > 1.0 {
+                let resized = (panel_width - self.width).abs() > 1.0;
+                if resized {
                     self.width = panel_width;
+                }
+
+                output = self.show_content(ui, file_tree, workspace_name, is_dark);
+                if resized {
                     output.new_width = Some(panel_width);
                 }
 
-                // Header with workspace name and close button
-                ui.allocate_ui_with_layout(
-                    Vec2::new(ui.available_width(), WORKSPACE_HEADER_HEIGHT),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.add_space(4.0);
+                docked_sidebar::paint_vertical_divider(ui, border_color, DockedSidebarEdge::Left);
+            });
 
-                        ui.label(phosphor_rich_text(FOLDER, 14.0));
+        output
+    }
 
-                        ui.add(
-                            egui::Label::new(RichText::new(workspace_name).size(12.0).strong())
-                                .truncate(),
-                        );
+    /// Render the tree body without owning a side panel.
+    ///
+    /// Used by the unified sidebar (MarkText-style tabs), where the container
+    /// panel is shared with the outline and search tabs.
+    pub fn show_content(
+        &mut self,
+        ui: &mut egui::Ui,
+        file_tree: &FileTreeNode,
+        workspace_name: &str,
+        is_dark: bool,
+    ) -> FileTreeOutput {
+        let mut output = FileTreeOutput::default();
 
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(8.0);
-                            if ui
-                                .add(
-                                    egui::Button::new(phosphor_rich_text(X, 12.0))
-                                        .frame(false)
-                                        .min_size(Vec2::new(20.0, 20.0)),
-                                )
-                                .on_hover_text(t!("workspace.close_folder").to_string())
-                                .clicked()
-                            {
-                                output.close_requested = true;
-                            }
-                        });
-                    },
+        // Header with workspace name and close button
+        ui.allocate_ui_with_layout(
+            Vec2::new(ui.available_width(), WORKSPACE_HEADER_HEIGHT),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.add_space(4.0);
+
+                ui.label(phosphor_rich_text(FOLDER, 14.0));
+
+                ui.add(
+                    egui::Label::new(RichText::new(workspace_name).size(12.0).strong()).truncate(),
                 );
 
-                ui.separator();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(8.0);
+                    if ui
+                        .add(
+                            egui::Button::new(phosphor_rich_text(X, 12.0))
+                                .frame(false)
+                                .min_size(Vec2::new(20.0, 20.0)),
+                        )
+                        .on_hover_text(t!("workspace.close_folder").to_string())
+                        .clicked()
+                    {
+                        output.close_requested = true;
+                    }
+                });
+            },
+        );
 
-                // Scrollable tree area
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.add_space(4.0);
-                        self.render_tree_node(ui, file_tree, 0, is_dark, &mut output);
-                        ui.add_space(4.0);
-                    });
+        ui.separator();
 
-                docked_sidebar::paint_vertical_divider(ui, border_color, DockedSidebarEdge::Left);
+        // Scrollable tree area
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.add_space(4.0);
+                self.render_tree_node(ui, file_tree, 0, is_dark, &mut output);
+                ui.add_space(4.0);
             });
 
         output

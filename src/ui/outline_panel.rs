@@ -8,11 +8,12 @@ use crate::config::OutlinePanelSide;
 use crate::editor::{DocumentOutline, DocumentStats, OutlineItem, OutlineType, StructuredStats};
 use crate::theme::accent;
 use crate::ui::backlinks_panel::BacklinksPanel;
+use crate::ui::file_tree::{FileTreeOutput, FileTreePanel};
 use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
 use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::phosphor_icons::{
-    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, LINK, LIST, LIST_CHECKS,
-    NOTE_PENCIL, TEXT_T, TIMER, X,
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, FOLDER, LINK, LIST,
+    LIST_CHECKS, MAGNIFYING_GLASS, NOTE_PENCIL, TEXT_T, TIMER, X,
 };
 use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, FontId, Response, RichText, ScrollArea, Sense, Ui, Vec2};
@@ -50,6 +51,10 @@ pub enum OutlinePanelTab {
     /// Document outline view (headings, etc.)
     #[default]
     Outline,
+    /// Workspace file tree
+    Files,
+    /// Workspace search launcher
+    Search,
     /// Document statistics view
     Statistics,
     /// Productivity hub (tasks, pomodoro, notes)
@@ -89,6 +94,10 @@ pub struct OutlinePanelOutput {
     pub backlink_navigate_to: Option<std::path::PathBuf>,
     /// New document content from frontmatter edits
     pub frontmatter_new_content: Option<String>,
+    /// Events produced by the embedded file tree tab
+    pub file_tree_output: Option<FileTreeOutput>,
+    /// User asked to open the search-in-files window
+    pub open_search: bool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,6 +198,8 @@ impl OutlinePanel {
         productivity_panel: Option<&mut ProductivityPanel>,
         backlinks_panel: Option<&BacklinksPanel>,
         frontmatter_panel: Option<&mut FrontmatterPanel>,
+        file_tree_panel: Option<&mut FileTreePanel>,
+        file_tree: Option<(&crate::workspaces::FileTreeNode, &str)>,
     ) -> OutlinePanelOutput {
         let mut output = OutlinePanelOutput::default();
 
@@ -266,6 +277,8 @@ impl OutlinePanel {
                     let header_text = match self.active_tab {
                         OutlinePanelTab::Productivity => t!("productivity.title").to_string(),
                         OutlinePanelTab::Frontmatter => "Frontmatter".to_string(),
+                        OutlinePanelTab::Files => t!("outline.tab_files").to_string(),
+                        OutlinePanelTab::Search => t!("outline.tab_search").to_string(),
                         _ => match &outline.outline_type {
                             OutlineType::Markdown => t!("outline.panel_title").to_string(),
                             OutlineType::Structured(_) => t!("outline.statistics").to_string(),
@@ -301,7 +314,46 @@ impl OutlinePanel {
                 ui.add_space(4.0);
 
                 // Render content based on active tab
-                if self.active_tab == OutlinePanelTab::Backlinks {
+                if self.active_tab == OutlinePanelTab::Files {
+                    match (file_tree_panel, file_tree) {
+                        (Some(panel), Some((tree, name))) => {
+                            output.file_tree_output = Some(panel.show_content(ui, tree, name, is_dark));
+                        }
+                        _ => {
+                            ui.add_space(20.0);
+                            ui.vertical_centered(|ui| {
+                                ui.label(
+                                    RichText::new(t!("outline.files_unavailable").to_string())
+                                        .size(11.0)
+                                        .color(muted_color)
+                                        .italics(),
+                                );
+                            });
+                        }
+                    }
+                } else if self.active_tab == OutlinePanelTab::Search {
+                    ui.add_space(20.0);
+                    ui.vertical_centered(|ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(t!("outline.open_search").to_string())
+                                        .size(12.0),
+                                )
+                                .min_size(Vec2::new(160.0, 26.0)),
+                            )
+                            .clicked()
+                        {
+                            output.open_search = true;
+                        }
+                        ui.add_space(6.0);
+                        ui.label(
+                            RichText::new(t!("outline.search_hint").to_string())
+                                .size(10.0)
+                                .color(muted_color),
+                        );
+                    });
+                } else if self.active_tab == OutlinePanelTab::Backlinks {
                     // Backlinks content
                     if let Some(bl_panel) = backlinks_panel {
                         let bl_output = bl_panel.show_content(ui, is_dark);
@@ -560,6 +612,7 @@ impl OutlinePanel {
                                             }
                                         });
                                 }
+                                OutlinePanelTab::Files | OutlinePanelTab::Search => {}
                                 OutlinePanelTab::Productivity => {
                                     // Already handled above, shouldn't reach here
                                 }
@@ -797,7 +850,8 @@ impl OutlinePanel {
             Color32::from_rgb(255, 255, 255)
         };
 
-        // Tab definitions: (tab enum, icon, label)
+        // Primary tabs follow MarkText (outline / files / search). The extra
+        // panels live behind the overflow menu so the strip stays readable.
         let tabs: Vec<(OutlinePanelTab, &str, String)> = vec![
             (
                 OutlinePanelTab::Outline,
@@ -805,19 +859,28 @@ impl OutlinePanel {
                 t!("outline.tab_outline").to_string(),
             ),
             (
+                OutlinePanelTab::Files,
+                FOLDER,
+                t!("outline.tab_files").to_string(),
+            ),
+            (
+                OutlinePanelTab::Search,
+                MAGNIFYING_GLASS,
+                t!("outline.tab_search").to_string(),
+            ),
+        ];
+        let overflow_tabs: Vec<(OutlinePanelTab, String)> = vec![
+            (
                 OutlinePanelTab::Statistics,
-                CHART_BAR,
                 t!("outline.tab_statistics").to_string(),
             ),
             (
                 OutlinePanelTab::Backlinks,
-                LINK,
                 t!("outline.tab_links").to_string(),
             ),
-            (OutlinePanelTab::Frontmatter, TEXT_T, "FM".to_string()),
+            (OutlinePanelTab::Frontmatter, "Frontmatter".to_string()),
             (
                 OutlinePanelTab::Productivity,
-                LIST_CHECKS,
                 t!("outline.tab_hub").to_string(),
             ),
         ];
@@ -828,7 +891,8 @@ impl OutlinePanel {
             // Calculate tab width to fit all tabs
             let num_tabs = tabs.len() as f32;
             let gap = 2.0 * (num_tabs - 1.0);
-            let available_width = ui.available_width() - 8.0 - gap;
+            // Leave room for the overflow menu button.
+            let available_width = ui.available_width() - 8.0 - gap - 26.0;
             let tab_width = (available_width / num_tabs).min(100.0);
 
             let mut active_rect_opt: Option<egui::Rect> = None;
@@ -865,6 +929,20 @@ impl OutlinePanel {
                     active_rect_opt = Some(rect);
                 }
             }
+
+            // Overflow menu keeps Statistics/Backlinks/Frontmatter/Productivity
+            // reachable without crowding the three primary tabs.
+            ui.menu_button("⋯", |ui| {
+                for (tab, label) in &overflow_tabs {
+                    if ui
+                        .selectable_label(self.active_tab == *tab, label)
+                        .clicked()
+                    {
+                        self.active_tab = *tab;
+                        ui.close();
+                    }
+                }
+            });
 
             // Draw underline for active tab
             if let Some(active_rect) = active_rect_opt {
