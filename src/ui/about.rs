@@ -297,7 +297,7 @@ impl AboutPanel {
             });
             ui.add_space(8.0);
 
-            const GITHUB_REPO: &str = "https://github.com/OlaProeis/MDOxide";
+            const GITHUB_REPO: &str = "https://github.com/wenyinos/mdoxide";
 
             ui.horizontal(|ui| {
                 ui.label(t!("about.github_label"));

@@ -41,7 +41,7 @@ User clicks button
 This is documented explicitly because it's the only internet-touching code in the app.
 
 ### What we send
-- **One HTTPS GET** to `https://api.github.com/repos/OlaProeis/MDOxide/releases/latest`
+- **One HTTPS GET** to `https://api.github.com/repos/wenyinos/mdoxide/releases/latest`
 - **Headers**: `User-Agent: MDOxide/<version>`, `Accept: application/vnd.github+json`
 - **No cookies, tokens, telemetry, or user data**
 
@@ -53,7 +53,7 @@ This is documented explicitly because it's the only internet-touching code in th
 The `html_url` from the API response is validated before being opened:
 
 ```rust
-const GITHUB_RELEASES_PREFIX: &str = "https://github.com/OlaProeis/MDOxide/releases/";
+const GITHUB_RELEASES_PREFIX: &str = "https://github.com/wenyinos/mdoxide/releases/";
 
 // Only open URLs that match our repo's release prefix
 if release.html_url.starts_with(GITHUB_RELEASES_PREFIX) {

@@ -6,7 +6,7 @@ rust-version = "1.92"
 description = "A native WYSIWYG Markdown editor built with Rust and egui (MarkText-compatible reimplementation)"
 repository = "https://github.com/wenyinos/mdoxide"
 license = "MIT"
-authors = ["OlaProeis", "MDOxide contributors"]
+authors = ["MDOxide contributors"]
 keywords = ["markdown", "editor", "text-editor", "egui"]
 categories = ["text-editors", "gui"]
 

@@ -6,8 +6,8 @@
 use serde::Deserialize;
 use std::sync::mpsc;
 
-const GITHUB_API: &str = "https://api.github.com/repos/OlaProeis/MDOxide/releases/latest";
-const GITHUB_RELEASES_PREFIX: &str = "https://github.com/OlaProeis/MDOxide/releases/";
+const GITHUB_API: &str = "https://api.github.com/repos/wenyinos/mdoxide/releases/latest";
+const GITHUB_RELEASES_PREFIX: &str = "https://github.com/wenyinos/mdoxide/releases/";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // ============================================================================
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn test_github_url_validation() {
         // Valid URLs pass through
-        let valid = "https://github.com/OlaProeis/MDOxide/releases/tag/v0.2.7";
+        let valid = "https://github.com/wenyinos/mdoxide/releases/tag/v0.2.7";
         assert!(valid.starts_with(GITHUB_RELEASES_PREFIX));
 
         // Malicious URLs are rejected
@@ -237,7 +237,7 @@ mod tests {
         assert!(!malicious.starts_with(GITHUB_RELEASES_PREFIX));
 
         // Subtle spoofs are rejected
-        let spoof = "https://github.com.evil.com/OlaProeis/MDOxide/releases/tag/v1.0";
+        let spoof = "https://github.com.evil.com/wenyinos/mdoxide/releases/tag/v1.0";
         assert!(!spoof.starts_with(GITHUB_RELEASES_PREFIX));
     }
 }

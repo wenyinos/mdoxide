@@ -1,6 +1,5 @@
 //! Configuration types for the PDF exporter.
 //!
-//! See `docs/technical/planning/pdf-export-pipeline.md` for the design rationale.
 
 use serde::{Deserialize, Serialize};
 

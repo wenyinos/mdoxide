@@ -4963,7 +4963,6 @@ fn render_list_item(
 
     // Note: Verbose per-frame debug logging removed to fix CPU usage issues on Intel Macs.
     // The original [LIST_ITEM_DEBUG] statements were causing ~50,000 log lines per 22 seconds.
-    // See docs/technical/intel-mac-cpu-issue-analysis.md for details.
 
     // Collect nested lists to render separately
     let nested_lists: Vec<&MarkdownNode> = node

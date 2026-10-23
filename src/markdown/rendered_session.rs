@@ -4,7 +4,7 @@
 //!
 //! See [`docs/technical/markdown/rendered-edit-session.md`](../../docs/technical/markdown/rendered-edit-session.md)
 //! for architecture, commit policy, and regression matrix. PRD:
-//! `docs/ai-workflow/prds/prd-rendered-edit-session.md`.
+//! `docs/technical/markdown/rendered-edit-session.md`.
 
 use std::collections::HashMap;
 

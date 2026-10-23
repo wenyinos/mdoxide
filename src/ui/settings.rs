@@ -838,19 +838,19 @@ impl SettingsPanel {
             .link(t!("settings.about.all_releases").to_string())
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/MDOxide/releases");
+            let _ = open::that("https://github.com/wenyinos/mdoxide/releases");
         }
         if ui
             .link(format!("🐛 {}", t!("settings.about.report_issue")))
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/MDOxide/issues");
+            let _ = open::that("https://github.com/wenyinos/mdoxide/issues");
         }
         if ui
             .link(format!("📖 {}", t!("settings.about.source_code")))
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/MDOxide");
+            let _ = open::that("https://github.com/wenyinos/mdoxide");
         }
 
         ui.add_space(16.0);

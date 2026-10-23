@@ -1,6 +1,6 @@
 # Mermaid Issue #83 — Edge Routing Repros
 
-GitHub: [#83 — Mermaid rendering: lines cross boxes](https://github.com/OlaProeis/MDOxide/issues/83)
+GitHub: [#83 — Mermaid rendering: lines cross boxes](https://github.com/wenyinos/mdoxide/issues/83)
 
 Open in **Rendered** or **Split** view and compare to [Mermaid Live Editor](https://mermaid.live).
 

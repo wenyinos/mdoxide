@@ -668,7 +668,6 @@ mod tests {
     /// codepoint (e.g. `Hebrew: שלום עולם`) used to panic with
     /// "byte index N is not a char boundary", aborting the process in a
     /// `panic = "abort"` release build (STATUS_STACK_BUFFER_OVERRUN).
-    /// See `docs/technical/platform/v0.3.0-regression-matrix.md` Issue I-3.
     #[test]
     fn is_url_does_not_panic_on_mixed_script_text() {
         // Each of these previously panicked at `&s[colon_pos..colon_pos + 3]`

@@ -5,7 +5,6 @@
 //! buffers draw operations per page, and replays them onto krilla pages on
 //! finalize.
 //!
-//! See `docs/technical/planning/pdf-export-pipeline.md` for the full design
 //! decision and v1 vs v2+ scope.
 //!
 //! # Public surface

@@ -12,7 +12,6 @@
 //!    of the document) we open a real krilla `Page`, replay the buffered
 //!    `DrawOp`s onto its `Surface`, attach link annotations, and move on.
 //!
-//! See `docs/technical/planning/pdf-export-pipeline.md` for the long‑term
 //! plan. Known v1 limitations are documented inline below.
 
 #![allow(clippy::too_many_arguments)]
