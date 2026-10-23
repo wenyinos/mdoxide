@@ -1,4 +1,4 @@
-//! Cursor module for Ferrite editor.
+//! Cursor module for MarkFlow editor.
 //!
 //! This module provides cursor position tracking and text selection for the text editor.
 //!

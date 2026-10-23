@@ -1,4 +1,4 @@
-//! Version Control System integration for Ferrite
+//! Version Control System integration for MarkFlow
 //!
 //! This module provides Git integration features including:
 //! - Repository detection

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 /// Runtime state for a workspace that should be persisted.
 ///
 /// This includes transient state like expanded tree nodes, recent files,
-/// and panel sizes. Stored in `{workspace_root}/.ferrite/state.json`.
+/// and panel sizes. Stored in `{workspace_root}/.markflow/state.json`.
 ///
 /// Different from `WorkspaceSettings` which contains user configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -50,7 +50,7 @@ impl WorkspaceState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The subdirectory name for workspace configuration.
-const WORKSPACE_CONFIG_DIR: &str = ".ferrite";
+const WORKSPACE_CONFIG_DIR: &str = ".markflow";
 
 /// The state file name.
 const STATE_FILE: &str = "state.json";
@@ -86,7 +86,7 @@ pub fn load_workspace_state(workspace_root: &Path) -> Option<WorkspaceState> {
 
 /// Save workspace state to disk using atomic write.
 ///
-/// Creates the `.ferrite` directory if it doesn't exist.
+/// Creates the `.markflow` directory if it doesn't exist.
 /// Uses write-to-temp-then-rename pattern to prevent partial/corrupted files.
 pub fn save_workspace_state(
     workspace_root: &Path,
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_load_save_workspace_state() {
-        let temp_dir = std::env::temp_dir().join("ferrite_test_workspace_state");
+        let temp_dir = std::env::temp_dir().join("markflow_test_workspace_state");
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 

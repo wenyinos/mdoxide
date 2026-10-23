@@ -1,4 +1,4 @@
-//! Document Export Module for Ferrite
+//! Document Export Module for MarkFlow
 //!
 //! This module provides functionality for exporting markdown documents to various formats
 //! including standalone themed HTML and copying HTML to clipboard.

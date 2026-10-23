@@ -68,14 +68,14 @@ fn preshape_complex_script_line(line_content: &str, font_id: &FontId) {
     match super::shaping::shape_text(line_content, bytes, font_id.size) {
         Ok(glyphs) => {
             log::trace!(
-                target: "ferrite::shaping",
+                target: "markflow::shaping",
                 "harfrust pre-shape chars={} glyphs={}",
                 line_content.chars().count(),
                 glyphs.len(),
             );
         }
         Err(e) => {
-            log::debug!(target: "ferrite::shaping", "shape_text failed: {e}");
+            log::debug!(target: "markflow::shaping", "shape_text failed: {e}");
         }
     }
 }
@@ -668,7 +668,7 @@ impl LineCache {
                 Ok(cs) if !cs.is_empty() => cs,
                 Ok(_) => return None,
                 Err(e) => {
-                    log::debug!(target: "ferrite::shaping", "shaped-line: shape failed: {e}");
+                    log::debug!(target: "markflow::shaping", "shaped-line: shape failed: {e}");
                     return None;
                 }
             };
@@ -693,7 +693,7 @@ impl LineCache {
             // Cursor/selection use HarfRust advances; egui (skrifa) lays out cluster substring.
             if galley_width > c.advance * 1.15 {
                 log::trace!(
-                    target: "ferrite::shaping",
+                    target: "markflow::shaping",
                     "cluster galley wider than shaped advance: text={cluster_text:?} \
                      galley_w={galley_width:.2} advance={:.2}",
                     c.advance

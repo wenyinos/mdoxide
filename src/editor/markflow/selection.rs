@@ -1,4 +1,4 @@
-//! Selection rendering and utilities for FerriteEditor.
+//! Selection rendering and utilities for MarkFlowEditor.
 //!
 //! This module contains:
 //! - Selection rendering (`render_selection`, `render_line_selection`)
@@ -8,9 +8,9 @@
 use egui::{Color32, FontId, Pos2, Rect, Vec2};
 
 use super::cursor::{Cursor, Selection};
-use super::editor::FerriteEditor;
+use super::editor::MarkFlowEditor;
 
-impl FerriteEditor {
+impl MarkFlowEditor {
     /// Finds word boundaries around a cursor position.
     /// Returns (word_start, word_end) cursors.
     pub(crate) fn find_word_boundaries(&self, cursor: Cursor) -> (Cursor, Cursor) {
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_select_all() {
-        let mut editor = FerriteEditor::from_string("Hello\nWorld");
+        let mut editor = MarkFlowEditor::from_string("Hello\nWorld");
 
         editor.select_all();
         assert!(editor.has_selection());
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_find_word_boundaries_word() {
-        let editor = FerriteEditor::from_string("hello world test");
+        let editor = MarkFlowEditor::from_string("hello world test");
 
         // Cursor in middle of "world"
         let (start, end) = editor.find_word_boundaries(Cursor::new(0, 7));
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_find_word_boundaries_start() {
-        let editor = FerriteEditor::from_string("hello world");
+        let editor = MarkFlowEditor::from_string("hello world");
 
         // Cursor at start of "hello"
         let (start, end) = editor.find_word_boundaries(Cursor::new(0, 0));
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_find_word_boundaries_whitespace() {
-        let editor = FerriteEditor::from_string("hello   world");
+        let editor = MarkFlowEditor::from_string("hello   world");
 
         // Cursor on whitespace between words
         let (start, end) = editor.find_word_boundaries(Cursor::new(0, 6));
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_find_word_boundaries_punctuation() {
-        let editor = FerriteEditor::from_string("hello, world");
+        let editor = MarkFlowEditor::from_string("hello, world");
 
         // Cursor on comma
         let (start, end) = editor.find_word_boundaries(Cursor::new(0, 5));
@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_find_word_boundaries_empty_line() {
-        let editor = FerriteEditor::from_string("");
+        let editor = MarkFlowEditor::from_string("");
 
         let (start, end) = editor.find_word_boundaries(Cursor::new(0, 0));
         assert_eq!(start.column, 0);

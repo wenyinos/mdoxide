@@ -1,4 +1,4 @@
-//! Workspace management for Ferrite
+//! Workspace management for MarkFlow
 //!
 //! This module provides folder/workspace support including:
 //! - File tree data structures and scanning
@@ -48,7 +48,7 @@ pub enum AppMode {
     Workspace {
         /// Root path of the workspace folder
         root: PathBuf,
-        /// Path to workspace settings file (.ferrite/settings.json)
+        /// Path to workspace settings file (.markflow/settings.json)
         settings_path: PathBuf,
     },
 }
@@ -75,7 +75,7 @@ impl AppMode {
 
     /// Create a new workspace mode from a folder path.
     pub fn from_folder(root: PathBuf) -> Self {
-        let settings_path = root.join(".ferrite").join("settings.json");
+        let settings_path = root.join(".markflow").join("settings.json");
         Self::Workspace {
             root,
             settings_path,
@@ -289,7 +289,7 @@ mod tests {
         let mode = AppMode::from_folder(root);
 
         if let AppMode::Workspace { settings_path, .. } = mode {
-            assert!(settings_path.ends_with(".ferrite/settings.json"));
+            assert!(settings_path.ends_with(".markflow/settings.json"));
         } else {
             panic!("Expected Workspace mode");
         }

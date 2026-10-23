@@ -1,4 +1,4 @@
-//! User-configurable Ferrite accent (headings, selection tint, UI chrome).
+//! User-configurable MarkFlow accent (headings, selection tint, UI chrome).
 //! Standard hyperlink blues are fixed in [`standard_link_color`].
 
 use eframe::egui::Color32;

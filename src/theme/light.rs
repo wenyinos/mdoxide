@@ -1,6 +1,6 @@
 //! Light Theme Configuration
 //!
-//! This module provides the light theme for Ferrite.
+//! This module provides the light theme for MarkFlow.
 //! It converts the `ThemeColors::light()` palette into egui's `Visuals`
 //! for consistent UI styling.
 
@@ -31,7 +31,7 @@ use super::{ThemeColors, ThemeSpacing};
 /// let ctx = &egui::Context::default();
 /// ctx.set_visuals(create_light_visuals());
 /// ```
-/// Build Ferrite visuals from an already-built light palette (`ThemeColors`).
+/// Build MarkFlow visuals from an already-built light palette (`ThemeColors`).
 pub(crate) fn visuals_from_palette(colors: &ThemeColors) -> Visuals {
     let spacing = ThemeSpacing::default();
 
@@ -150,14 +150,14 @@ pub(crate) fn visuals_from_palette(colors: &ThemeColors) -> Visuals {
     visuals
 }
 
-/// Ferrite light theme egui visuals with the given Ferrite accent.
+/// MarkFlow light theme egui visuals with the given MarkFlow accent.
 pub fn create_light_visuals(accent: Color32) -> Visuals {
     let mut palette = ThemeColors::light();
     palette.apply_user_accent(accent);
     visuals_from_palette(&palette)
 }
 
-/// Alias for callers that omit accent (defaults to canonical Ferrite blue).
+/// Alias for callers that omit accent (defaults to canonical MarkFlow blue).
 pub fn create_light_visuals_defaults() -> Visuals {
     create_light_visuals(super::accent::default_accent())
 }

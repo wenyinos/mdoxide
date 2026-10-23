@@ -1,4 +1,4 @@
-//! Mouse input handling for FerriteEditor.
+//! Mouse input handling for MarkFlowEditor.
 //!
 //! This module handles mouse events including wheel scrolling.
 

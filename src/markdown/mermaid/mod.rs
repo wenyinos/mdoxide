@@ -405,10 +405,10 @@ fn render_diagram_title(ui: &mut Ui, title: &str, dark_mode: bool, font_size: f3
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::markdown::mermaid::flowchart::{
-        parse_direction, parse_edge_line_full, parse_node_from_text, FlowDirection, NodeShape,
-        NodeStyle,
+    use crate::markdown::mermaid::flowchart::parser::{
+        parse_direction, parse_edge_line_full, parse_node_from_text,
     };
+    use crate::markdown::mermaid::flowchart::{FlowDirection, NodeShape, NodeStyle};
     use crate::markdown::mermaid::text::{EstimatedTextMeasurer, TextMeasurer};
 
     #[test]
@@ -1738,9 +1738,11 @@ mod tests {
         println!("  Min required subgraph width: {}", min_required_width);
         println!("  Actual subgraph width: {}", sg_layout.size.x);
 
-        // The subgraph width should be at least as wide as the title + padding
+        // The subgraph width should be at least as wide as the title + padding.
+        // Allow a sub-pixel tolerance: layout uses f32 math and can land a few
+        // ULP below the measured requirement (509.09998 vs 509.1).
         assert!(
-            sg_layout.size.x >= min_required_width,
+            sg_layout.size.x + 0.5 >= min_required_width,
             "Subgraph width ({}) should be >= title width + padding ({})",
             sg_layout.size.x,
             min_required_width

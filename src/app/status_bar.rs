@@ -1,9 +1,9 @@
-//! Status bar rendering for the Ferrite application.
+//! Status bar rendering for the MarkFlow application.
 //!
 //! This module renders the bottom status bar with file path, encoding selector,
 //! line/column info, word count, CSV controls, and toast messages.
 
-use super::FerriteApp;
+use super::MarkFlowApp;
 use crate::config::ViewMode;
 use crate::markdown::{
     delimiter_display_name, delimiter_symbol, get_tabular_file_type, DELIMITERS,
@@ -14,7 +14,7 @@ use eframe::egui;
 use log::{debug, warn};
 use rust_i18n::t;
 
-impl FerriteApp {
+impl MarkFlowApp {
     /// Render the bottom status bar panel.
     ///
     /// Returns (toggle_rainbow_columns, pending_encoding_change).
@@ -29,11 +29,11 @@ impl FerriteApp {
 
         egui::Panel::bottom("status_bar").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
-                let ferrite_accent = self.state.settings.ferrite_accent_rgb();
+                let markflow_accent = self.state.settings.markflow_accent_rgb();
                 let status_accent = if is_dark {
-                    accent::lerp_color(ferrite_accent, egui::Color32::WHITE, 0.26)
+                    accent::lerp_color(markflow_accent, egui::Color32::WHITE, 0.26)
                 } else {
-                    accent::lerp_color(ferrite_accent, egui::Color32::BLACK, 0.38)
+                    accent::lerp_color(markflow_accent, egui::Color32::BLACK, 0.38)
                 };
 
                 // Left side: File path (clickable for recent files popup)

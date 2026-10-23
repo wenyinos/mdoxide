@@ -1,14 +1,14 @@
-//! Find and Replace operations for FerriteEditor.
+//! Find and Replace operations for MarkFlowEditor.
 //!
 //! This module contains:
 //! - `replace_current_match` - Replace single match with undo support
 //! - `replace_all_matches` - Replace all matches with undo support
 //! - `current_match_text` - Get text of current match
 
-use super::editor::FerriteEditor;
+use super::editor::MarkFlowEditor;
 
-#[allow(dead_code)] // Find/replace helpers on FerriteEditor
-impl FerriteEditor {
+#[allow(dead_code)] // Find/replace helpers on MarkFlowEditor
+impl MarkFlowEditor {
     /// Replaces the current search match with the given replacement text.
     ///
     /// This method performs a single replacement at the current match position,

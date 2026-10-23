@@ -1,4 +1,4 @@
-//! Git integration service for Ferrite
+//! Git integration service for MarkFlow
 //!
 //! Provides Git repository detection, branch information, and file status tracking
 //! using the git2 library.

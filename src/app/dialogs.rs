@@ -1,4 +1,4 @@
-//! Dialog rendering for the Ferrite application.
+//! Dialog rendering for the MarkFlow application.
 //!
 //! This module contains the rendering of modal dialogs: go-to-line,
 //! close confirmation, file operation dialogs, and find/replace panel.
@@ -8,7 +8,7 @@
 
 #[allow(unused_imports)]
 use super::helpers::modifier_symbol;
-use super::FerriteApp;
+use super::MarkFlowApp;
 use crate::markdown::{spawn_run, take_pending_code_execution_consent};
 use crate::state::PendingAction;
 use crate::ui::phosphor_icons::{phosphor_rich_text, PACKAGE, WARNING};
@@ -17,7 +17,7 @@ use log::debug;
 use rust_i18n::t;
 use std::time::Duration;
 
-impl FerriteApp {
+impl MarkFlowApp {
     /// Render dialog windows.
     pub(crate) fn render_dialogs(&mut self, ctx: &egui::Context) {
         if let Some(pending) = take_pending_code_execution_consent(ctx) {

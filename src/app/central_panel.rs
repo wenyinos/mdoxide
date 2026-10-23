@@ -1,4 +1,4 @@
-//! Central panel rendering for the Ferrite application.
+//! Central panel rendering for the MarkFlow application.
 //!
 //! This module renders the main editor content area including the tab bar,
 //! editor widget (raw/rendered/split views), CSV viewer, tree viewer,
@@ -6,7 +6,7 @@
 
 use super::helpers::{get_formatting_state_for, modifier_symbol};
 use super::types::{DeferredFormatAction, HeadingNavRequest};
-use super::FerriteApp;
+use super::MarkFlowApp;
 use crate::config::{ShortcutCommand, ViewMode};
 use crate::editor::{
     show_split_sync_footer, EditorWidget, Minimap, SearchHighlights, SemanticMinimap,
@@ -180,7 +180,7 @@ fn render_pdf_page(
     }
 }
 
-impl FerriteApp {
+impl MarkFlowApp {
     fn render_untitled_tab_rename_dialog(&mut self, ctx: &egui::Context) {
         let Some((tab_idx, mut buffer)) = self.state.ui.rename_untitled_tab.take() else {
             return;
@@ -597,7 +597,7 @@ impl FerriteApp {
                 let theme_colors = ThemeColors::from_theme(
                     theme,
                     ui.visuals(),
-                    self.state.settings.ferrite_accent_rgb(),
+                    self.state.settings.markflow_accent_rgb(),
                 );
 
                 // Prepare search highlights if find panel is open
@@ -807,7 +807,7 @@ impl FerriteApp {
                                 }
                             }
 
-                            // Raw mode: FerriteEditor owns undo via EditHistory
+                            // Raw mode: MarkFlowEditor owns undo via EditHistory
                             // — no central-panel snapshot needed.
 
                             // Format toolbar state (markdown files only, hidden in Zen Mode)
@@ -932,11 +932,11 @@ impl FerriteApp {
 
                                 vim_label_for_status = editor_output.vim_mode_label;
 
-                                // NOTE: Fold toggle is handled internally by FerriteEditor and synced
+                                // NOTE: Fold toggle is handled internally by MarkFlowEditor and synced
                                 // back to Tab in widget.rs. We just need to check if a fold was toggled
                                 // for any post-processing (currently none needed).
                                 if editor_output.fold_toggle_line.is_some() {
-                                    // Fold state already synced from FerriteEditor to Tab in widget.rs
+                                    // Fold state already synced from MarkFlowEditor to Tab in widget.rs
                                     log::debug!(
                                         "Fold toggled at line {:?}",
                                         editor_output.fold_toggle_line
@@ -966,7 +966,7 @@ impl FerriteApp {
 
                                 if editor_output.changed {
                                     debug!("Content modified in raw editor");
-                                    // FerriteEditor records its own undo ops — no
+                                    // MarkFlowEditor records its own undo ops — no
                                     // central-panel record_edit_from_snapshot() here.
                                     if folding_enabled {
                                         tab.mark_folds_dirty();
@@ -1119,10 +1119,10 @@ impl FerriteApp {
                                 match action {
                                     RibbonAction::Format(cmd) => {
                                         // Capture selection now before any focus changes
-                                        use crate::editor::get_ferrite_editor_mut;
+                                        use crate::editor::get_markflow_editor_mut;
                                         let tab_id = self.state.active_tab().map(|t| t.id);
                                         let selection = tab_id.and_then(|id| {
-                                            get_ferrite_editor_mut(&ctx, id, |editor| {
+                                            get_markflow_editor_mut(&ctx, id, |editor| {
                                                 let sel = editor.selection();
                                                 let (start, end) = sel.ordered();
                                                 let line_count = editor.buffer().line_count();
@@ -1405,7 +1405,7 @@ impl FerriteApp {
                                 let mut editor_scroll_anchor_fraction: f32 = 0.0;
                                 let mut split_sync_footer = SplitSyncFooterOutput::default();
 
-                                // Split left pane is Raw (FerriteEditor) — no
+                                // Split left pane is Raw (MarkFlowEditor) — no
                                 // central-panel undo snapshot needed for it.
 
                                 // Format toolbar state for split view (markdown only)
@@ -1546,11 +1546,11 @@ impl FerriteApp {
                                     editor_scroll_anchor_fraction =
                                         editor_output.scroll_anchor_fraction;
 
-                                    // NOTE: Fold toggle is handled internally by FerriteEditor and synced
+                                    // NOTE: Fold toggle is handled internally by MarkFlowEditor and synced
                                     // back to Tab in widget.rs. We just need to check if a fold was toggled
                                     // for any post-processing (currently none needed).
                                     if editor_output.fold_toggle_line.is_some() {
-                                        // Fold state already synced from FerriteEditor to Tab in widget.rs
+                                        // Fold state already synced from MarkFlowEditor to Tab in widget.rs
                                         log::debug!(
                                             "Fold toggled at line {:?}",
                                             editor_output.fold_toggle_line
@@ -1567,7 +1567,7 @@ impl FerriteApp {
                                     }
 
                                     if editor_output.changed {
-                                        // FerriteEditor records its own undo ops.
+                                        // MarkFlowEditor records its own undo ops.
                                         if folding_enabled {
                                             tab.mark_folds_dirty();
                                         }
@@ -1729,10 +1729,10 @@ impl FerriteApp {
                                     match action {
                                         RibbonAction::Format(cmd) => {
                                             // Capture selection now before any focus changes
-                                            use crate::editor::get_ferrite_editor_mut;
+                                            use crate::editor::get_markflow_editor_mut;
                                             let tab_id = self.state.active_tab().map(|t| t.id);
                                             let selection = tab_id.and_then(|id| {
-                                                get_ferrite_editor_mut(&ctx, id, |editor| {
+                                                get_markflow_editor_mut(&ctx, id, |editor| {
                                                     let sel = editor.selection();
                                                     let (start, end) = sel.ordered();
                                                     let line_count = editor.buffer().line_count();

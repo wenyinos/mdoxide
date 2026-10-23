@@ -1,11 +1,11 @@
-//! File operations for the Ferrite application.
+//! File operations for the MarkFlow application.
 //!
 //! This module contains handlers for file open, save, save-as, workspace
 //! management, drag-and-drop, file tree context actions, file watcher events,
 //! and git auto-refresh.
 
 use super::types::FileLoadMsg;
-use super::FerriteApp;
+use super::MarkFlowApp;
 use crate::config::ViewMode;
 use crate::files::dialogs::{
     open_folder_dialog, open_multiple_files_dialog, portal_install_instructions, save_file_dialog,
@@ -25,7 +25,7 @@ const BACKGROUND_LOAD_THRESHOLD: u64 = 5 * 1024 * 1024; // 5 MB
 /// Chunk size for background file reading (controls progress update granularity).
 const LOAD_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
 
-impl FerriteApp {
+impl MarkFlowApp {
     /// Handle the "File > Open" action.
     ///
     /// Opens a native file dialog allowing multiple file selection and loads
@@ -1418,14 +1418,14 @@ impl FerriteApp {
         );
 
         // Insert markdown link at cursor position in the active tab
-        // Uses cursor_position (line, col) which is reliably synced from FerriteEditor,
+        // Uses cursor_position (line, col) which is reliably synced from MarkFlowEditor,
         // rather than tab.cursors which may be stale.
         if let Some(tab) = self.state.active_tab_mut() {
             // Save state for undo
             let old_content = tab.content.clone();
             let old_cursor = tab.cursors.primary().head;
 
-            // Use cursor_position (line, col) which is reliably synced from FerriteEditor
+            // Use cursor_position (line, col) which is reliably synced from MarkFlowEditor
             let (cursor_line, cursor_col) = tab.cursor_position;
 
             // Calculate byte position from line/col
@@ -1467,9 +1467,9 @@ impl FerriteApp {
         Ok(())
     }
 
-    /// Handle file paths received from secondary Ferrite instances.
+    /// Handle file paths received from secondary MarkFlow instances.
     ///
-    /// When the user double-clicks a file in the OS while Ferrite is already running,
+    /// When the user double-clicks a file in the OS while MarkFlow is already running,
     /// the second process forwards the path here via the single-instance TCP protocol.
     /// This opens the file as a new tab and brings the window to the front.
     pub(crate) fn handle_instance_paths(&mut self, ctx: &egui::Context) {
@@ -2013,7 +2013,7 @@ impl FerriteApp {
     }
 }
 
-impl FerriteApp {
+impl MarkFlowApp {
     /// Show a portal error dialog with installation instructions for the user's distro.
     ///
     /// This is called when a file dialog fails on Linux desktops like Hyprland

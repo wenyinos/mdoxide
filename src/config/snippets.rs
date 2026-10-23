@@ -1,4 +1,4 @@
-//! Snippets/Abbreviation System for Ferrite
+//! Snippets/Abbreviation System for MarkFlow
 //!
 //! This module provides user-defined text expansions with built-in date/time snippets.
 //! Users can type a trigger word followed by space/tab, and it expands to the full text.
@@ -12,7 +12,7 @@
 //!
 //! ## Custom Snippets
 //!
-//! Custom snippets are stored in `~/.config/ferrite/snippets.json` (or platform equivalent)
+//! Custom snippets are stored in `~/.config/markflow/snippets.json` (or platform equivalent)
 //! in JSON format: `{ "trigger": "expansion text" }`
 
 use chrono::Local;
@@ -168,9 +168,9 @@ impl SnippetManager {
     ///
     /// Uses the centralized config directory (supports portable mode):
     /// - Portable: `<exe_dir>/portable/snippets.json`
-    /// - Linux: `~/.config/ferrite/snippets.json`
-    /// - macOS: `~/Library/Application Support/ferrite/snippets.json`
-    /// - Windows: `%APPDATA%\ferrite\snippets.json`
+    /// - Linux: `~/.config/markflow/snippets.json`
+    /// - macOS: `~/Library/Application Support/markflow/snippets.json`
+    /// - Windows: `%APPDATA%\markflow\snippets.json`
     pub fn config_path() -> PathBuf {
         use crate::config::persistence::get_config_dir;
         get_config_dir()

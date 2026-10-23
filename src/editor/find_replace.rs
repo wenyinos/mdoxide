@@ -1,4 +1,4 @@
-//! Find and Replace functionality for Ferrite
+//! Find and Replace functionality for MarkFlow
 //!
 //! This module provides comprehensive search and replace capabilities including:
 //! - Real-time incremental search with match highlighting

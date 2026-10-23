@@ -1,10 +1,10 @@
-//! Editor module for Ferrite
+//! Editor module for MarkFlow
 //!
 //! This module contains the text editor widget and related functionality
 //! for editing markdown documents.
 
-// Ferrite editor module (custom high-performance editor)
-mod ferrite;
+// MarkFlow editor module (custom high-performance editor)
+mod markflow;
 
 // Other editor modules
 mod find_replace;
@@ -16,8 +16,8 @@ mod outline;
 mod stats;
 mod widget;
 
-// Re-export Ferrite editor types
-pub use ferrite::{compute_edit_ops, EditHistory};
+// Re-export MarkFlow editor types
+pub use markflow::{compute_edit_ops, EditHistory};
 
 // Re-export other editor types
 pub use find_replace::{FindReplacePanel, FindState};
@@ -33,5 +33,5 @@ pub use outline::{
 pub use stats::{DocumentStats, TextStats};
 pub use widget::{EditorWidget, SearchHighlights};
 
-// Re-export FerriteEditor access helpers
-pub use widget::{cleanup_ferrite_editor, get_ferrite_editor_mut};
+// Re-export MarkFlowEditor access helpers
+pub use widget::{cleanup_markflow_editor, get_markflow_editor_mut};

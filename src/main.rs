@@ -1,7 +1,7 @@
 // Hide console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! Ferrite - Main Entry Point
+//! MarkFlow - Main Entry Point
 //!
 //! A fast, lightweight text editor for Markdown, JSON, and more. Built with Rust and egui.
 
@@ -58,7 +58,7 @@ mod vcs;
 mod workers;
 mod workspaces;
 
-use app::FerriteApp;
+use app::MarkFlowApp;
 use clap::Parser;
 use config::{load_config, LogLevel};
 use log::info;
@@ -153,9 +153,9 @@ pub fn log_memory(label: &str) {
     );
 }
 
-/// Ferrite - A fast, lightweight text editor for Markdown, JSON, and more.
+/// MarkFlow - A fast, lightweight text editor for Markdown, JSON, and more.
 #[derive(Parser, Debug)]
-#[command(name = "ferrite", version, about, long_about = None)]
+#[command(name = "markflow", version, about, long_about = None)]
 struct Cli {
     /// Files or directory to open on startup.
     ///
@@ -191,11 +191,11 @@ fn parse_log_level(s: &str) -> Result<LogLevel, String> {
 // This provides consistent appearance across all platforms (Windows, macOS, Linux).
 
 /// Application name constant.
-const APP_NAME: &str = "Ferrite";
+const APP_NAME: &str = "MarkFlow";
 
 fn main() -> eframe::Result<()> {
-    // Trace file works in release (no console on Windows). Check %TEMP%\ferrite_startup_trace.log
-    if std::env::var("FERRITE_DIAG")
+    // Trace file works in release (no console on Windows). Check %TEMP%\markflow_startup_trace.log
+    if std::env::var("MARKFLOW_DIAG")
         .ok()
         .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
     {
@@ -219,7 +219,7 @@ fn main() -> eframe::Result<()> {
     }
 
     // Single-instance check EARLY — before heavy initialization (config, icons, logging).
-    // When the user double-clicks a file while Ferrite is already running, the secondary
+    // When the user double-clicks a file while MarkFlow is already running, the secondary
     // process should forward paths and exit as fast as possible (<100ms).
     diag::trace("after CLI parse");
     let instance_listener = match single_instance::try_acquire_instance(&initial_paths) {
@@ -301,7 +301,7 @@ fn main() -> eframe::Result<()> {
     // The window still appears opaque because eframe paints an opaque background each frame.
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title(APP_NAME)
-        .with_app_id("ferrite")
+        .with_app_id("markflow")
         .with_decorations(false)
         .with_transparent(true)
         .with_inner_size([window_size.width, window_size.height])
@@ -341,9 +341,9 @@ fn main() -> eframe::Result<()> {
         APP_NAME,
         native_options,
         Box::new(move |cc| {
-            diag::trace("eframe CreationContext — FerriteApp::new");
-            let mut app = FerriteApp::new(cc);
-            diag::trace("FerriteApp::new finished");
+            diag::trace("eframe CreationContext — MarkFlowApp::new");
+            let mut app = MarkFlowApp::new(cc);
+            diag::trace("MarkFlowApp::new finished");
 
             // Store the single-instance listener for polling in the update loop
             app.set_instance_listener(instance_listener);

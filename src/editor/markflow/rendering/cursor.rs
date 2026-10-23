@@ -1,4 +1,4 @@
-//! Cursor rendering for FerriteEditor.
+//! Cursor rendering for MarkFlowEditor.
 //!
 //! This module handles cursor positioning and rendering, with full support for:
 //! - Single-line text (non-wrapped mode with horizontal scrolling)

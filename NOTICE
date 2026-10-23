@@ -1,0 +1,19 @@
+MarkFlow
+Copyright (c) 2026 MarkFlow contributors
+
+This product is a derivative work of Ferrite (https://github.com/OlaProeis/Ferrite),
+Copyright (c) Ola Proeis, licensed under the MIT License. The original LICENSE file
+is retained in this repository.
+
+MarkFlow aims to reimplement the user experience of MarkText
+(https://github.com/marktext/marktext), Copyright (c) MarkText contributors,
+licensed under the MIT License. No MarkText source code is included in this
+repository; only its public design and behaviour are referenced.
+
+Third-party assets:
+- Inter font — SIL Open Font License 1.1 (assets/fonts/Inter-LICENSE.txt)
+- JetBrains Mono font — SIL Open Font License 1.1 (assets/fonts/JetBrainsMono-LICENSE.txt)
+- Phosphor icons — MIT (via egui-phosphor)
+
+All third-party dependencies retain their own licenses; run
+`cargo license` or see Cargo.lock for the full dependency graph.

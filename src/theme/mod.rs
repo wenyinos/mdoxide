@@ -1,4 +1,4 @@
-//! Theme System for Ferrite
+//! Theme System for MarkFlow
 //!
 //! This module provides a comprehensive theming system that defines colors,
 //! fonts, and spacing for consistent UI styling across the application.
@@ -88,7 +88,7 @@ impl ThemeColors {
         self.base.selected = accent::selection_fill(accent, dark);
     }
 
-    /// Create theme colors for the given theme variant with a Ferrite accent.
+    /// Create theme colors for the given theme variant with a MarkFlow accent.
     ///
     /// This is the primary way to get themed colors. It automatically
     /// selects the appropriate palette based on the theme setting.
@@ -213,7 +213,7 @@ impl BaseColors {
             border_subtle: Color32::from_rgb(185, 185, 185), // Darkened from 230 for ~2.3:1 contrast
             hover: Color32::from_rgb(235, 235, 240), // Slightly tinted for better visibility
             // Saturated enough to remain visible at the ~40% alpha the
-            // FerriteEditor selection overlay applies on top of text (#121).
+            // MarkFlowEditor selection overlay applies on top of text (#121).
             // At full alpha this also works as a light-theme widget-selected
             // color without being harsh.
             selected: Color32::from_rgb(100, 170, 245),

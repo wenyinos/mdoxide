@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.olaproeis.Ferrite</id>
-  <name>Ferrite</name>
-  <summary>Write and preview markdown</summary>
+  <id>dev.markflow.app</id>
+  <name>MarkFlow</name>
+  <summary>A native WYSIWYG markdown editor</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
-  <developer id="io.github.olaproeis">
-    <name>OlaProeis</name>
+  <developer id="dev.markflow">
+    <name>MarkFlow contributors</name>
   </developer>
 
   <branding>

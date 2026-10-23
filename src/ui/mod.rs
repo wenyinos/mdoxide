@@ -1,4 +1,4 @@
-//! UI components for Ferrite
+//! UI components for MarkFlow
 //!
 //! This module contains reusable UI widgets and components.
 //!

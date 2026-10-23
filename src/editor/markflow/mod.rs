@@ -1,4 +1,4 @@
-//! Ferrite editor module - custom text editor widget for Ferrite.
+//! MarkFlow editor module - custom text editor widget for MarkFlow.
 //!
 //! This module provides a high-performance text editor with:
 //! - Rope-based text storage (`TextBuffer`)
@@ -26,5 +26,5 @@ pub mod vim;
 
 // Re-export the main types for external use
 pub use cursor::Cursor;
-pub use editor::FerriteEditor;
+pub use editor::MarkFlowEditor;
 pub use history::{compute_edit_ops, EditHistory};

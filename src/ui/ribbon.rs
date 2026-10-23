@@ -1,4 +1,4 @@
-//! Ribbon UI Component for Ferrite
+//! Ribbon UI Component for MarkFlow
 //!
 //! This module implements a modern ribbon-style interface with icon-based controls
 //! organized into logical groups, replacing the traditional menu bar.

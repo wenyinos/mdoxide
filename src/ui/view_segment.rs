@@ -1,4 +1,4 @@
-//! View Mode Segmented Control for Ferrite
+//! View Mode Segmented Control for MarkFlow
 //!
 //! This module implements a modern segmented control widget for switching
 //! between view modes (Raw, Split, Rendered) in the title bar.
@@ -68,7 +68,7 @@ impl ViewModeSegment {
         current_mode: ViewMode,
         file_type: FileType,
         is_dark: bool,
-        ferrite_accent: Color32,
+        markflow_accent: Color32,
     ) -> Option<ViewSegmentAction> {
         let mut action: Option<ViewSegmentAction> = None;
 
@@ -85,9 +85,9 @@ impl ViewModeSegment {
         };
 
         let selected_bg = if is_dark {
-            ferrite_accent
+            markflow_accent
         } else {
-            accent::lerp_color(ferrite_accent, Color32::WHITE, 0.2)
+            accent::lerp_color(markflow_accent, Color32::WHITE, 0.2)
         };
 
         let hover_bg = if is_dark {
@@ -258,7 +258,7 @@ impl ViewModeSegment {
         ui: &mut egui::Ui,
         current_mode: ViewMode,
         is_dark: bool,
-        ferrite_accent: Color32,
+        markflow_accent: Color32,
     ) -> Option<ViewSegmentAction> {
         let mut action: Option<ViewSegmentAction> = None;
 
@@ -270,9 +270,9 @@ impl ViewModeSegment {
         };
 
         let selected_bg = if is_dark {
-            ferrite_accent
+            markflow_accent
         } else {
-            accent::lerp_color(ferrite_accent, Color32::WHITE, 0.2)
+            accent::lerp_color(markflow_accent, Color32::WHITE, 0.2)
         };
 
         let hover_bg = if is_dark {

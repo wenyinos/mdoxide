@@ -1,4 +1,4 @@
-//! Keyboard input handling for FerriteEditor.
+//! Keyboard input handling for MarkFlowEditor.
 //!
 //! This module handles keyboard events including cursor movement,
 //! text insertion, deletion operations, and text selection.

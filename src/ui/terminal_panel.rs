@@ -208,7 +208,7 @@ impl TerminalPanelState {
     }
 
     /// Initialize the first terminal if needed.
-    /// First tries to load workspace layout from .ferrite/terminal-layout.json,
+    /// First tries to load workspace layout from .markflow/terminal-layout.json,
     /// otherwise creates a new default terminal.
     fn initialize(&mut self) {
         if !self.initialized {
@@ -332,14 +332,14 @@ impl TerminalPanelState {
         false
     }
 
-    /// Get the workspace layout file path (.ferrite/terminal-layout.json)
+    /// Get the workspace layout file path (.markflow/terminal-layout.json)
     pub fn get_workspace_layout_path(&self) -> Option<std::path::PathBuf> {
         self.working_dir
             .as_ref()
-            .map(|dir| dir.join(".ferrite").join("terminal-layout.json"))
+            .map(|dir| dir.join(".markflow").join("terminal-layout.json"))
     }
 
-    /// Try to load workspace layout from .ferrite/terminal-layout.json
+    /// Try to load workspace layout from .markflow/terminal-layout.json
     /// Returns true if layout was loaded successfully
     pub fn try_load_workspace_layout(&mut self) -> bool {
         if self.workspace_layout_loaded {
@@ -406,7 +406,7 @@ impl TerminalPanelState {
         false
     }
 
-    /// Save current workspace layout to .ferrite/terminal-layout.json
+    /// Save current workspace layout to .markflow/terminal-layout.json
     pub fn save_workspace_layout(&mut self) -> bool {
         let layout_path = match self.get_workspace_layout_path() {
             Some(p) => p,
@@ -418,10 +418,10 @@ impl TerminalPanelState {
             return false;
         }
 
-        // Create .ferrite directory if it doesn't exist
+        // Create .markflow directory if it doesn't exist
         if let Some(parent) = layout_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                log::error!("Failed to create .ferrite directory: {}", e);
+                log::error!("Failed to create .markflow directory: {}", e);
                 return false;
             }
         }
@@ -1190,9 +1190,9 @@ impl TerminalPanel {
         let theme_name = &settings.terminal_theme_name;
         let theme = crate::terminal::TerminalTheme::from_name(theme_name).unwrap_or_else(|| {
             if is_dark {
-                crate::terminal::TerminalTheme::ferrite_dark()
+                crate::terminal::TerminalTheme::markflow_dark()
             } else {
-                crate::terminal::TerminalTheme::ferrite_light()
+                crate::terminal::TerminalTheme::markflow_light()
             }
         });
 
@@ -1995,7 +1995,7 @@ impl TerminalPanel {
                                 ui.close();
                             }
 
-                            // Save to .ferrite/terminal-layout.json in workspace root
+                            // Save to .markflow/terminal-layout.json in workspace root
                             let workspace_layout_path = state.get_workspace_layout_path();
                             let can_save_workspace = workspace_layout_path.is_some();
 
@@ -2010,7 +2010,7 @@ impl TerminalPanel {
                             {
                                 if state.save_workspace_layout() {
                                     log::info!(
-                                        "Saved workspace layout to .ferrite/terminal-layout.json"
+                                        "Saved workspace layout to .markflow/terminal-layout.json"
                                     );
                                 }
                                 ui.close();
@@ -2060,7 +2060,7 @@ impl TerminalPanel {
 
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter(
-                                        &t!("terminal.filter.ferrite_workspace").to_string(),
+                                        &t!("terminal.filter.markflow_workspace").to_string(),
                                         &["json"],
                                     )
                                     .set_file_name("workspace.json")
@@ -2079,7 +2079,7 @@ impl TerminalPanel {
                             {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter(
-                                        &t!("terminal.filter.ferrite_workspace").to_string(),
+                                        &t!("terminal.filter.markflow_workspace").to_string(),
                                         &["json"],
                                     )
                                     .pick_file()
@@ -2400,9 +2400,9 @@ impl TerminalPanel {
                         let theme = crate::terminal::TerminalTheme::from_name(theme_name)
                             .unwrap_or_else(|| {
                                 if is_dark {
-                                    crate::terminal::TerminalTheme::ferrite_dark()
+                                    crate::terminal::TerminalTheme::markflow_dark()
                                 } else {
-                                    crate::terminal::TerminalTheme::ferrite_light()
+                                    crate::terminal::TerminalTheme::markflow_light()
                                 }
                             });
 

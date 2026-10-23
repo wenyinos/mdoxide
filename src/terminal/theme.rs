@@ -13,14 +13,14 @@ pub struct TerminalTheme {
 
 impl Default for TerminalTheme {
     fn default() -> Self {
-        Self::ferrite_dark()
+        Self::markflow_dark()
     }
 }
 
 impl TerminalTheme {
-    pub fn ferrite_dark() -> Self {
+    pub fn markflow_dark() -> Self {
         Self {
-            name: "Ferrite Dark".to_string(),
+            name: "MarkFlow Dark".to_string(),
             background: Color32::from_rgb(30, 30, 30),
             foreground: Color32::from_rgb(220, 220, 220),
             selection_bg: Color32::from_rgb(60, 80, 110),
@@ -46,9 +46,9 @@ impl TerminalTheme {
         }
     }
 
-    pub fn ferrite_light() -> Self {
+    pub fn markflow_light() -> Self {
         Self {
-            name: "Ferrite Light".to_string(),
+            name: "MarkFlow Light".to_string(),
             background: Color32::from_rgb(250, 250, 250),
             foreground: Color32::from_rgb(30, 30, 30),
             selection_bg: Color32::from_rgb(173, 214, 255),
@@ -103,7 +103,7 @@ impl TerminalTheme {
     }
 
     pub fn all() -> Vec<Self> {
-        vec![Self::ferrite_dark(), Self::ferrite_light(), Self::dracula()]
+        vec![Self::markflow_dark(), Self::markflow_light(), Self::dracula()]
     }
 
     pub fn from_name(name: &str) -> Option<Self> {

@@ -1,15 +1,15 @@
-//! Search match management for FerriteEditor.
+//! Search match management for MarkFlowEditor.
 //!
 //! This module contains:
 //! - Search match getters (`search_matches`, `search_match_count`, etc.)
 //! - Search match setters (`set_search_matches`, `clear_search_matches`)
 //! - Current match navigation (`current_search_match`, `set_current_search_match`)
 
-use super::editor::{FerriteEditor, SearchMatch};
+use super::editor::{MarkFlowEditor, SearchMatch};
 use super::highlights::MAX_DISPLAYED_MATCHES;
 
-#[allow(dead_code)] // Search match accessors on FerriteEditor
-impl FerriteEditor {
+#[allow(dead_code)] // Search match accessors on MarkFlowEditor
+impl MarkFlowEditor {
     // ─────────────────────────────────────────────────────────────────────────────
     // Search Highlights (Phase 2)
     // ─────────────────────────────────────────────────────────────────────────────

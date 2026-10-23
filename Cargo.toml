@@ -1,12 +1,12 @@
 [package]
-name = "ferrite"
-version = "0.3.0"
+name = "markflow"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.92"
-description = "A fast, lightweight text editor for Markdown, JSON, and more"
+description = "A native WYSIWYG Markdown editor built with Rust and egui (MarkText-compatible reimplementation)"
 repository = "https://github.com/OlaProeis/Ferrite"
 license = "MIT"
-authors = ["OlaProeis"]
+authors = ["OlaProeis", "MarkFlow contributors"]
 keywords = ["markdown", "editor", "text-editor", "egui"]
 categories = ["text-editors", "gui"]
 

@@ -1,4 +1,4 @@
-//! Gutter (line numbers) rendering for FerriteEditor.
+//! Gutter (line numbers) rendering for MarkFlowEditor.
 
 use crate::ui::phosphor_icons::{phosphor_font, CARET_DOWN, CARET_RIGHT};
 use egui::{Color32, FontId, Pos2, Rect, Stroke, Vec2};

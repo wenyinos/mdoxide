@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MarkFlow
+GenericName=Markdown Editor
+Comment=A native WYSIWYG markdown editor built with Rust and egui
+Exec=markflow %F
+Icon=dev.markflow.app
+Terminal=false
+Categories=Utility;Development;TextEditor;
+Keywords=markdown;editor;text;wysiwyg;
+MimeType=text/plain;text/markdown;text/x-markdown;
+StartupNotify=true
+StartupWMClass=markflow

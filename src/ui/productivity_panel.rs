@@ -1,4 +1,4 @@
-//! Productivity panel data models and persistence for Ferrite
+//! Productivity panel data models and persistence for MarkFlow
 //!
 //! This module provides the core data structures for the productivity hub:
 //! - Task management with markdown parsing
@@ -83,6 +83,17 @@ impl Task {
             text,
             priority,
         })
+    }
+
+    /// Serialize this task back to markdown checkbox syntax.
+    pub fn to_markdown(&self) -> String {
+        let check = if self.completed { "x" } else { " " };
+        let prefix = match self.priority {
+            2 => "!! ",
+            1 => "! ",
+            _ => "",
+        };
+        format!("- [{check}] {prefix}{}", self.text)
     }
 
 }
@@ -251,15 +262,15 @@ impl AutoSave {
 // Persistence Functions
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Save tasks to .ferrite/tasks.json in workspace root.
+/// Save tasks to .markflow/tasks.json in workspace root.
 ///
 /// Uses atomic write pattern (write to .bak, then rename).
 pub fn save_tasks(workspace_root: &Path, tasks: &[Task]) -> std::io::Result<()> {
-    let ferrite_dir = workspace_root.join(".ferrite");
-    std::fs::create_dir_all(&ferrite_dir)?;
+    let markflow_dir = workspace_root.join(".markflow");
+    std::fs::create_dir_all(&markflow_dir)?;
 
-    let tasks_path = ferrite_dir.join("tasks.json");
-    let backup_path = ferrite_dir.join("tasks.json.bak");
+    let tasks_path = markflow_dir.join("tasks.json");
+    let backup_path = markflow_dir.join("tasks.json.bak");
 
     let json = serde_json::to_string_pretty(tasks)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -271,12 +282,12 @@ pub fn save_tasks(workspace_root: &Path, tasks: &[Task]) -> std::io::Result<()> 
     Ok(())
 }
 
-/// Load tasks from .ferrite/tasks.json in workspace root.
+/// Load tasks from .markflow/tasks.json in workspace root.
 ///
 /// Returns empty Vec if file doesn't exist or is invalid.
 /// If JSON is corrupted, creates a backup and returns empty Vec.
 pub fn load_tasks(workspace_root: &Path) -> Vec<Task> {
-    let tasks_path = workspace_root.join(".ferrite").join("tasks.json");
+    let tasks_path = workspace_root.join(".markflow").join("tasks.json");
 
     if !tasks_path.exists() {
         return Vec::new();
@@ -302,9 +313,9 @@ pub fn load_tasks(workspace_root: &Path) -> Vec<Task> {
     }
 }
 
-/// Save note content to .ferrite/notes/{name}.txt
+/// Save note content to .markflow/notes/{name}.txt
 pub fn save_note(workspace_root: &Path, name: &str, content: &str) -> std::io::Result<()> {
-    let notes_dir = workspace_root.join(".ferrite").join("notes");
+    let notes_dir = workspace_root.join(".markflow").join("notes");
     std::fs::create_dir_all(&notes_dir)?;
 
     // Sanitize name to prevent path traversal
@@ -319,22 +330,22 @@ pub fn save_note(workspace_root: &Path, name: &str, content: &str) -> std::io::R
     Ok(())
 }
 
-/// Load note content from .ferrite/notes/{name}.txt
+/// Load note content from .markflow/notes/{name}.txt
 pub fn load_note(workspace_root: &Path, name: &str) -> String {
     let safe_name = name.replace(['/', '\\'], "_").replace("..", "_");
     let note_path = workspace_root
-        .join(".ferrite")
+        .join(".markflow")
         .join("notes")
         .join(format!("{}.txt", safe_name));
 
     std::fs::read_to_string(&note_path).unwrap_or_default()
 }
 
-/// Delete a note from .ferrite/notes/{name}.txt
+/// Delete a note from .markflow/notes/{name}.txt
 pub fn delete_note(workspace_root: &Path, name: &str) -> std::io::Result<()> {
     let safe_name = name.replace(['/', '\\'], "_").replace("..", "_");
     let note_path = workspace_root
-        .join(".ferrite")
+        .join(".markflow")
         .join("notes")
         .join(format!("{}.txt", safe_name));
 
@@ -345,7 +356,7 @@ pub fn delete_note(workspace_root: &Path, name: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Rename a note from old_name to new_name in .ferrite/notes/
+/// Rename a note from old_name to new_name in .markflow/notes/
 pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std::io::Result<()> {
     let safe_old = old_name.replace(['/', '\\'], "_").replace("..", "_");
     let safe_new = new_name.replace(['/', '\\'], "_").replace("..", "_");
@@ -357,7 +368,7 @@ pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std
         ));
     }
 
-    let notes_dir = workspace_root.join(".ferrite").join("notes");
+    let notes_dir = workspace_root.join(".markflow").join("notes");
     let old_path = notes_dir.join(format!("{}.txt", safe_old));
     let new_path = notes_dir.join(format!("{}.txt", safe_new));
 
@@ -377,7 +388,7 @@ pub fn rename_note(workspace_root: &Path, old_name: &str, new_name: &str) -> std
 
 /// List available notes in workspace
 pub fn list_notes(workspace_root: &Path) -> Vec<String> {
-    let notes_dir = workspace_root.join(".ferrite").join("notes");
+    let notes_dir = workspace_root.join(".markflow").join("notes");
 
     if !notes_dir.exists() {
         return vec!["default".to_string()];
@@ -584,7 +595,7 @@ impl ProductivityPanel {
         &mut self,
         ui: &mut eframe::egui::Ui,
         ctx: &eframe::egui::Context,
-        ferrite_accent: eframe::egui::Color32,
+        markflow_accent: eframe::egui::Color32,
     ) -> bool {
         use crate::ui::phosphor_icons::{
             phosphor_rich_text, CARET_DOWN, CARET_UP, CHECK, COFFEE, LIST_CHECKS, NOTE_PENCIL,
@@ -612,7 +623,7 @@ impl ProductivityPanel {
         } else {
             Color32::from_rgb(218, 222, 228)
         };
-        let accent_color = ferrite_accent;
+        let accent_color = markflow_accent;
         let success_color = if is_dark {
             Color32::from_rgb(75, 210, 100)
         } else {
@@ -1338,7 +1349,7 @@ impl ProductivityPanel {
         ctx: &eframe::egui::Context,
         visible: &mut bool,
         dock_width: f32,
-        ferrite_accent: eframe::egui::Color32,
+        markflow_accent: eframe::egui::Color32,
     ) -> bool {
         use eframe::egui::{self, Layout, RichText, Vec2};
 
@@ -1373,7 +1384,7 @@ impl ProductivityPanel {
                             egui::Button::new(
                                 RichText::new(format!("⤵ {}", t!("productivity.notes.dock")))
                                     .size(11.0)
-                                    .color(ferrite_accent),
+                                    .color(markflow_accent),
                             ),
                         );
                         if dock_btn
@@ -1411,7 +1422,7 @@ impl ProductivityPanel {
                     .auto_shrink([false, false])
                     .show(&mut child_ui, |ui| {
                         ui.set_max_width(avail_w);
-                        needs_repaint = self.show_content(ui, ctx, ferrite_accent);
+                        needs_repaint = self.show_content(ui, ctx, markflow_accent);
                     });
             });
 

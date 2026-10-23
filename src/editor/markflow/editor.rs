@@ -1,6 +1,6 @@
-//! FerriteEditor - Custom text editor widget for Ferrite.
+//! MarkFlowEditor - Custom text editor widget for MarkFlow.
 //!
-//! This module provides `FerriteEditor`, a custom egui widget that integrates:
+//! This module provides `MarkFlowEditor`, a custom egui widget that integrates:
 //! - `TextBuffer` for rope-based text storage
 //! - `ViewState` for viewport tracking and virtual scrolling
 //! - `LineCache` for efficient galley caching
@@ -13,9 +13,9 @@
 //!
 //! # Example
 //! ```rust,ignore
-//! use crate::editor::FerriteEditor;
+//! use crate::editor::MarkFlowEditor;
 //!
-//! let mut editor = FerriteEditor::from_string("Hello, World!\nLine 2");
+//! let mut editor = MarkFlowEditor::from_string("Hello, World!\nLine 2");
 //!
 //! // In your egui update loop:
 //! egui::CentralPanel::default().show(ctx, |ui| {
@@ -64,7 +64,7 @@ pub struct SearchMatch {
 
 /// Custom text editor widget integrating Phase 1 modules.
 ///
-/// `FerriteEditor` provides a high-performance text editing widget with:
+/// `MarkFlowEditor` provides a high-performance text editing widget with:
 /// - Rope-based text storage for O(log n) operations
 /// - Virtual scrolling (only renders visible lines)
 /// - Galley caching to avoid expensive text layout every frame
@@ -77,7 +77,7 @@ pub struct SearchMatch {
 /// # Thread Safety
 /// This struct is not thread-safe and should only be used from the UI thread.
 #[derive(Debug, Clone)]
-pub struct FerriteEditor {
+pub struct MarkFlowEditor {
     /// The text content.
     pub(crate) buffer: TextBuffer,
     /// Viewport state for virtual scrolling.
@@ -210,19 +210,19 @@ pub struct FerriteEditor {
     pub(crate) vim_state: super::vim::VimState,
 }
 
-impl Default for FerriteEditor {
+impl Default for MarkFlowEditor {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[allow(dead_code)] // FerriteEditor public API surface (widgets, tests, future crate extraction)
-impl FerriteEditor {
+#[allow(dead_code)] // MarkFlowEditor public API surface (widgets, tests, future crate extraction)
+impl MarkFlowEditor {
     /// Creates a new empty editor.
     ///
     /// # Example
     /// ```rust,ignore
-    /// let editor = FerriteEditor::new();
+    /// let editor = MarkFlowEditor::new();
     /// assert!(editor.is_empty());
     /// ```
     #[must_use]
@@ -293,7 +293,7 @@ impl FerriteEditor {
     ///
     /// # Example
     /// ```rust,ignore
-    /// let editor = FerriteEditor::from_string("Hello\nWorld");
+    /// let editor = MarkFlowEditor::from_string("Hello\nWorld");
     /// assert_eq!(editor.line_count(), 2);
     /// ```
     #[must_use]
@@ -360,7 +360,7 @@ impl FerriteEditor {
     /// Replace the buffer content while preserving editor state (view, syntax, etc.).
     ///
     /// This is used when external changes (e.g., WYSIWYG editing, file reload) modify
-    /// tab.content and the FerriteEditor needs to be updated without full recreation.
+    /// tab.content and the MarkFlowEditor needs to be updated without full recreation.
     /// Unlike `from_string()`, this preserves:
     /// - ViewState (scroll position, viewport)
     /// - Syntax highlighting configuration
@@ -3696,7 +3696,7 @@ mod tests {
 
     #[test]
     fn test_new_editor() {
-        let editor = FerriteEditor::new();
+        let editor = MarkFlowEditor::new();
         assert!(editor.is_empty());
         assert_eq!(editor.line_count(), 1); // Empty buffer has 1 line
         assert_eq!(editor.cursor(), Cursor::start());
@@ -3705,27 +3705,27 @@ mod tests {
 
     #[test]
     fn test_from_string() {
-        let editor = FerriteEditor::from_string("Hello\nWorld\nTest");
+        let editor = MarkFlowEditor::from_string("Hello\nWorld\nTest");
         assert!(!editor.is_empty());
         assert_eq!(editor.line_count(), 3);
     }
 
     #[test]
     fn test_from_string_empty() {
-        let editor = FerriteEditor::from_string("");
+        let editor = MarkFlowEditor::from_string("");
         assert!(editor.is_empty());
         assert_eq!(editor.line_count(), 1);
     }
 
     #[test]
     fn test_default() {
-        let editor = FerriteEditor::default();
+        let editor = MarkFlowEditor::default();
         assert!(editor.is_empty());
     }
 
     #[test]
     fn test_set_cursor() {
-        let mut editor = FerriteEditor::from_string("Hello\nWorld");
+        let mut editor = MarkFlowEditor::from_string("Hello\nWorld");
 
         // Normal set
         editor.set_cursor(Cursor::new(1, 3));
@@ -3743,7 +3743,7 @@ mod tests {
 
     #[test]
     fn test_selection() {
-        let mut editor = FerriteEditor::from_string("Hello\nWorld");
+        let mut editor = MarkFlowEditor::from_string("Hello\nWorld");
 
         // Set a selection
         let sel = Selection::new(Cursor::new(0, 0), Cursor::new(0, 5));
@@ -3757,7 +3757,7 @@ mod tests {
 
     #[test]
     fn test_selected_text() {
-        let mut editor = FerriteEditor::from_string("Hello World");
+        let mut editor = MarkFlowEditor::from_string("Hello World");
 
         // No selection
         assert_eq!(editor.selected_text(), "");
@@ -3773,7 +3773,7 @@ mod tests {
 
     #[test]
     fn test_selected_text_multiline() {
-        let mut editor = FerriteEditor::from_string("Hello\nWorld\nTest");
+        let mut editor = MarkFlowEditor::from_string("Hello\nWorld\nTest");
 
         // Select from "ello" to "Wor"
         editor.set_selection(Selection::new(Cursor::new(0, 1), Cursor::new(1, 3)));
@@ -3782,7 +3782,7 @@ mod tests {
 
     #[test]
     fn test_selected_text_multi_cursor() {
-        let mut editor = FerriteEditor::from_string("alpha\nbeta\ngamma");
+        let mut editor = MarkFlowEditor::from_string("alpha\nbeta\ngamma");
 
         editor.set_selection(Selection::new(Cursor::new(0, 0), Cursor::new(0, 5)));
         editor.add_selection(Selection::new(Cursor::new(1, 0), Cursor::new(1, 4)));
@@ -3795,7 +3795,7 @@ mod tests {
 
     #[test]
     fn test_delete_selection() {
-        let mut editor = FerriteEditor::from_string("Hello World");
+        let mut editor = MarkFlowEditor::from_string("Hello World");
 
         // No selection - should return false
         assert!(!editor.delete_selection());
@@ -3811,7 +3811,7 @@ mod tests {
 
     #[test]
     fn test_set_font_size() {
-        let mut editor = FerriteEditor::new();
+        let mut editor = MarkFlowEditor::new();
 
         editor.set_font_size(16.0);
         assert!((editor.font_size() - 16.0).abs() < 0.01);
@@ -3827,7 +3827,7 @@ mod tests {
 
     #[test]
     fn test_buffer_access() {
-        let mut editor = FerriteEditor::from_string("Test");
+        let mut editor = MarkFlowEditor::from_string("Test");
 
         // Read access
         assert_eq!(editor.buffer().line_count(), 1);
@@ -3841,7 +3841,7 @@ mod tests {
 
     #[test]
     fn test_view_access() {
-        let mut editor = FerriteEditor::new();
+        let mut editor = MarkFlowEditor::new();
 
         // Default view
         assert_eq!(editor.view().first_visible_line(), 0);
@@ -3853,7 +3853,7 @@ mod tests {
 
     #[test]
     fn test_mark_dirty() {
-        let mut editor = FerriteEditor::new();
+        let mut editor = MarkFlowEditor::new();
         editor.mark_dirty();
         // Internal state change, verified by cache invalidation on next ui() call
     }
@@ -3862,20 +3862,20 @@ mod tests {
     fn test_large_buffer() {
         // Create a buffer with 1000 lines
         let content: String = (0..1000).map(|i| format!("Line {i}\n")).collect();
-        let editor = FerriteEditor::from_string(&content);
+        let editor = MarkFlowEditor::from_string(&content);
 
         assert_eq!(editor.line_count(), 1001); // 1000 lines + 1 from trailing newline
     }
 
     #[test]
     fn test_unicode_content() {
-        let editor = FerriteEditor::from_string("こんにちは\n世界\n🌍🌎🌏");
+        let editor = MarkFlowEditor::from_string("こんにちは\n世界\n🌍🌎🌏");
         assert_eq!(editor.line_count(), 3);
     }
 
     #[test]
     fn test_cursor_with_unicode() {
-        let mut editor = FerriteEditor::from_string("こんにちは");
+        let mut editor = MarkFlowEditor::from_string("こんにちは");
 
         // Set cursor to middle of Japanese text
         editor.set_cursor(Cursor::new(0, 2));
@@ -3900,7 +3900,7 @@ mod tests {
     fn test_view_visible_line_range_large_file() {
         // Create a buffer with 100,000 lines (simulating large file)
         let content: String = (0..100_000).map(|i| format!("Line {i}\n")).collect();
-        let mut editor = FerriteEditor::from_string(&content);
+        let mut editor = MarkFlowEditor::from_string(&content);
 
         // Set up viewport: 400px height with 20px line height = ~20 visible lines
         editor.view.update_viewport(400.0);
@@ -3931,7 +3931,7 @@ mod tests {
     #[test]
     fn test_view_visible_line_range_scrolled() {
         let content: String = (0..1000).map(|i| format!("Line {i}\n")).collect();
-        let mut editor = FerriteEditor::from_string(&content);
+        let mut editor = MarkFlowEditor::from_string(&content);
 
         // Set up viewport and scroll to middle
         editor.view.update_viewport(400.0);
@@ -3959,7 +3959,7 @@ mod tests {
 
     #[test]
     fn test_horizontal_scroll_offset() {
-        let mut editor = FerriteEditor::from_string("Short line\nThis is a very long line that extends far to the right and would require horizontal scrolling to see fully");
+        let mut editor = MarkFlowEditor::from_string("Short line\nThis is a very long line that extends far to the right and would require horizontal scrolling to see fully");
 
         // Default horizontal scroll should be 0
         assert!((editor.view.horizontal_scroll() - 0.0).abs() < 0.01);
@@ -3975,7 +3975,7 @@ mod tests {
 
     #[test]
     fn test_view_line_to_pixel_alignment() {
-        let mut editor = FerriteEditor::from_string("Line 1\nLine 2\nLine 3\nLine 4\nLine 5");
+        let mut editor = MarkFlowEditor::from_string("Line 1\nLine 2\nLine 3\nLine 4\nLine 5");
 
         editor.view.set_line_height(FIXED_LINE_HEIGHT);
         editor.view.scroll_to_line(0);
@@ -3995,7 +3995,7 @@ mod tests {
 
     #[test]
     fn test_view_pixel_to_line_conversion() {
-        let mut editor = FerriteEditor::from_string("Line 1\nLine 2\nLine 3");
+        let mut editor = MarkFlowEditor::from_string("Line 1\nLine 2\nLine 3");
 
         editor.view.set_line_height(FIXED_LINE_HEIGHT);
         editor.view.scroll_to_line(0);
@@ -4018,7 +4018,7 @@ mod tests {
         // Create content with very long lines (simulating code with no wrapping)
         let long_line = "x".repeat(500); // 500 character line
         let content = format!("{long_line}\nShort\n{long_line}");
-        let editor = FerriteEditor::from_string(&content);
+        let editor = MarkFlowEditor::from_string(&content);
 
         assert_eq!(editor.line_count(), 3);
 
@@ -4032,7 +4032,7 @@ mod tests {
     #[test]
     fn test_ensure_line_visible() {
         let content: String = (0..100).map(|i| format!("Line {i}\n")).collect();
-        let mut editor = FerriteEditor::from_string(&content);
+        let mut editor = MarkFlowEditor::from_string(&content);
 
         // Set up a small viewport
         editor.view.update_viewport(200.0);
@@ -4057,7 +4057,7 @@ mod tests {
     #[test]
     fn test_scroll_by_incremental() {
         let content: String = (0..100).map(|i| format!("Line {i}\n")).collect();
-        let mut editor = FerriteEditor::from_string(&content);
+        let mut editor = MarkFlowEditor::from_string(&content);
 
         editor.view.update_viewport(200.0);
         editor.view.set_line_height(FIXED_LINE_HEIGHT);

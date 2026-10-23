@@ -1,4 +1,4 @@
-//! Rendering module for FerriteEditor.
+//! Rendering module for MarkFlowEditor.
 //!
 //! This module coordinates text and cursor rendering for the editor.
 

@@ -1,4 +1,4 @@
-//! Settings Panel Component for Ferrite
+//! Settings Panel Component for MarkFlow
 //!
 //! This module implements a modal settings panel that allows users to configure
 //! appearance, editor behavior, and file handling options with live preview.
@@ -708,7 +708,7 @@ impl SettingsPanel {
 
         // Application info
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Ferrite").strong().size(16.0));
+            ui.label(RichText::new("MarkFlow").strong().size(16.0));
             ui.label(
                 RichText::new(format!("v{}", update::current_version()))
                     .monospace()
@@ -838,19 +838,19 @@ impl SettingsPanel {
             .link(t!("settings.about.all_releases").to_string())
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/Ferrite/releases");
+            let _ = open::that("https://github.com/OlaProeis/MarkFlow/releases");
         }
         if ui
             .link(format!("🐛 {}", t!("settings.about.report_issue")))
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/Ferrite/issues");
+            let _ = open::that("https://github.com/OlaProeis/MarkFlow/issues");
         }
         if ui
             .link(format!("📖 {}", t!("settings.about.source_code")))
             .clicked()
         {
-            let _ = open::that("https://github.com/OlaProeis/Ferrite");
+            let _ = open::that("https://github.com/OlaProeis/MarkFlow");
         }
 
         ui.add_space(16.0);

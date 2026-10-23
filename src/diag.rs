@@ -1,9 +1,9 @@
 //! Optional startup / hot-path diagnostics.
 //!
-//! Enable with environment variable `FERRITE_DIAG=1` (also accepts `true` / `yes`).
+//! Enable with environment variable `MARKFLOW_DIAG=1` (also accepts `true` / `yes`).
 //!
 //! **Release builds hide the Windows console**, so when diagnosing hangs use the
-//! trace file: `%TEMP%\ferrite_startup_trace.log` (see [`trace_path`]).
+//! trace file: `%TEMP%\markflow_startup_trace.log` (see [`trace_path`]).
 
 use std::cell::Cell;
 use std::io::Write;
@@ -20,18 +20,18 @@ static ENABLED: OnceLock<bool> = OnceLock::new();
 static TRACE_PATH: OnceLock<PathBuf> = OnceLock::new();
 static START_INSTANT: OnceLock<Instant> = OnceLock::new();
 
-/// Whether `FERRITE_DIAG` is enabled for this process.
+/// Whether `MARKFLOW_DIAG` is enabled for this process.
 pub fn enabled() -> bool {
     *ENABLED.get_or_init(|| {
-        std::env::var("FERRITE_DIAG")
+        std::env::var("MARKFLOW_DIAG")
             .ok()
             .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
     })
 }
 
-/// Path to the startup trace log (written when `FERRITE_DIAG` is on).
+/// Path to the startup trace log (written when `MARKFLOW_DIAG` is on).
 pub fn trace_path() -> &'static PathBuf {
-    TRACE_PATH.get_or_init(|| std::env::temp_dir().join("ferrite_startup_trace.log"))
+    TRACE_PATH.get_or_init(|| std::env::temp_dir().join("markflow_startup_trace.log"))
 }
 
 /// Append a timestamped line to the trace file and mirror to `log::warn!`.
@@ -68,14 +68,14 @@ pub fn trace_reset() {
     }
     let _ = START_INSTANT.set(Instant::now());
     let path = trace_path();
-    let header = format!("Ferrite startup trace — {}\n", chrono_lite_timestamp());
+    let header = format!("MarkFlow startup trace — {}\n", chrono_lite_timestamp());
     let _ = std::fs::write(path, header);
     // Also drop a pointer file users can find easily
-    let pointer = std::env::temp_dir().join("ferrite_DIAG_LOG_HERE.txt");
+    let pointer = std::env::temp_dir().join("markflow_DIAG_LOG_HERE.txt");
     let _ = std::fs::write(
         &pointer,
         format!(
-            "Open this log while diagnosing Ferrite:\n{}\n",
+            "Open this log while diagnosing MarkFlow:\n{}\n",
             path.display()
         ),
     );

@@ -1,19 +1,19 @@
-//! HarfRust (`harfrust`) OpenType shaping for FerriteEditor.
+//! HarfRust (`harfrust`) OpenType shaping for MarkFlowEditor.
 //!
 //! Converts `&str` into a glyph run with per-glyph advances and cluster mapping
 //! (UTF-8 byte indices), using the same font bytes egui loads for the editor.
 //!
 //! **egui 0.34 text layout:** [`egui::Galley`] is built by epaint via **skrifa** /
-//! **vello_cpu** (default in egui 0.34; no Ferrite Cargo feature flags). Galleys
+//! **vello_cpu** (default in egui 0.34; no MarkFlow Cargo feature flags). Galleys
 //! do not apply full OTL shaping for complex scripts — cursor/selection for those
 //! lines use HarfRust advances from this module; drawing uses per-cluster mini-
-//! galleys positioned at shaped offsets ([`crate::editor::ferrite::line_cache::ShapedLine`]).
+//! galleys positioned at shaped offsets ([`crate::editor::markflow::line_cache::ShapedLine`]).
 //!
 //! **Index conventions:** HarfRust `cluster` fields are UTF-8 **byte** offsets.
 //! [`egui::Galley::cursor_from_pos`] / [`egui::Galley::pos_from_cursor`] use
 //! [`egui::text::CCursor`] **character** indices — do not mix with byte indices.
 //!
-//! Deeper visual validation lives in task **89.6** (`RUST_LOG=ferrite::shaping`).
+//! Deeper visual validation lives in task **89.6** (`RUST_LOG=markflow::shaping`).
 
 use harfrust::{BufferFlags, FontRef, ShaperData, UnicodeBuffer};
 use std::fmt;

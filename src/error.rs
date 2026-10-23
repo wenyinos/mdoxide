@@ -1,4 +1,4 @@
-//! Centralized error handling for Ferrite
+//! Centralized error handling for MarkFlow
 //!
 //! This module provides a unified error type that covers all error scenarios
 //! in the application: file I/O, configuration, and markdown parsing.

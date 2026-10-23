@@ -1,4 +1,4 @@
-//! Ferrite Phosphor icon mappings (MIT — [Phosphor Icons](https://phosphoricons.com/)).
+//! MarkFlow Phosphor icon mappings (MIT — [Phosphor Icons](https://phosphoricons.com/)).
 //!
 //! Central place for toolbar/panel icon glyphs so we don't scatter emoji across the UI.
 

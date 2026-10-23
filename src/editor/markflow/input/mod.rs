@@ -1,6 +1,6 @@
-//! Input handling module for FerriteEditor.
+//! Input handling module for MarkFlowEditor.
 //!
-//! This module provides keyboard and mouse input handling for the Ferrite editor,
+//! This module provides keyboard and mouse input handling for the MarkFlow editor,
 //! including character insertion, cursor movement, text deletion, selection, and scrolling.
 
 pub mod keyboard;

@@ -1,4 +1,4 @@
-//! Vim modal editing support for FerriteEditor.
+//! Vim modal editing support for MarkFlowEditor.
 //!
 //! Provides Normal/Insert/Visual mode keybindings with mode indicator.
 //! Activated via the `vim_mode` setting. When disabled, the editor

@@ -1,4 +1,4 @@
-//! Configuration module for Ferrite
+//! Configuration module for MarkFlow
 //!
 //! This module handles user preferences and application settings,
 //! including serialization/deserialization to/from JSON and

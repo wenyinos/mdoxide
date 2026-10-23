@@ -866,7 +866,7 @@ fn parse_recovery_content_json(json: &str) -> Option<RecoveryContent> {
 ///
 /// Returns the full [`RecoveryContent`] (content + identity metadata) so
 /// callers can verify path/hash before applying the buffer. Files from older
-/// Ferrite versions deserialize with `path`/`original_content_hash` defaulted
+/// MarkFlow versions deserialize with `path`/`original_content_hash` defaulted
 /// to `None` and `schema_version` defaulted to `1`.
 pub fn load_recovery_content(tab_id: usize) -> Option<RecoveryContent> {
     let dir = get_recovery_content_dir()?;
@@ -1798,7 +1798,7 @@ mod tests {
 
     #[test]
     fn test_recovery_content_legacy_format_loads_with_defaults() {
-        // Recovery file written by an older Ferrite version: no `path`,
+        // Recovery file written by an older MarkFlow version: no `path`,
         // no `original_content_hash`, no `schema_version`. It must still
         // deserialize cleanly and pick up the documented defaults.
         let legacy_json = r#"{
@@ -1883,7 +1883,7 @@ mod tests {
 
     #[test]
     fn test_parse_recovery_content_json_legacy_file() {
-        // End-to-end: JSON bytes from an older Ferrite version flow through
+        // End-to-end: JSON bytes from an older MarkFlow version flow through
         // the loader path and emerge as a current-schema struct with `None`
         // identity fields ready for tab-id-only matching in resolve_tab_content.
         let legacy_json = r#"{
@@ -1982,7 +1982,7 @@ mod tests {
     fn test_auto_save_metadata_legacy_json_defaults_disk_hash_none() {
         // Pre-task-106 autosave files lack `disk_content_hash`. They must
         // still parse and pick up `None` via serde default so users
-        // upgrading from older Ferrite versions do not lose their autosaves.
+        // upgrading from older MarkFlow versions do not lose their autosaves.
         let legacy_json = r#"{
             "tab_id": 11,
             "original_path": "/tmp/legacy.md",
@@ -2148,7 +2148,7 @@ mod tests {
 
     #[test]
     fn test_106_acceptance_recovery_legacy_file_back_compat() {
-        // Subtask 106.7 #3: a recovery file from an older Ferrite version
+        // Subtask 106.7 #3: a recovery file from an older MarkFlow version
         // has neither `path` nor `original_content_hash`. The loader must
         // still produce a usable `RecoveryContent` so the identity gate's
         // legacy bypass can apply it (preserving recovered text for

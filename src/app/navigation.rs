@@ -1,11 +1,11 @@
-//! Navigation and panel toggle handlers for the Ferrite application.
+//! Navigation and panel toggle handlers for the MarkFlow application.
 //!
 //! This module contains tab switching, view mode cycling, panel toggles
 //! (outline, terminal, zen, pipeline), theme switching, undo/redo dispatch,
 //! scroll interpolation, and heading navigation.
 
 use super::types::HeadingNavRequest;
-use super::FerriteApp;
+use super::MarkFlowApp;
 use crate::config::{Theme, ViewMode};
 use crate::editor::{extract_outline_for_file, DocumentOutline, DocumentStats, OutlineType};
 use crate::state::{BacklinkIndex, FileType};
@@ -16,7 +16,7 @@ use log::{debug, info};
 use crate::workers::{echo_worker, WorkerHandle, WorkerResponse};
 use rust_i18n::t;
 
-impl FerriteApp {
+impl MarkFlowApp {
     /// Handle closing the current tab (with unsaved prompt if needed).
     pub(crate) fn handle_close_current_tab(&mut self, ctx: &egui::Context) {
         let index = self.state.active_tab_index();

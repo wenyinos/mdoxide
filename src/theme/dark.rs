@@ -1,6 +1,6 @@
 //! Dark Theme Configuration
 //!
-//! This module provides the dark theme for Ferrite.
+//! This module provides the dark theme for MarkFlow.
 //! It converts the `ThemeColors::dark()` palette into egui's `Visuals`
 //! for consistent UI styling.
 
@@ -31,7 +31,7 @@ use super::{ThemeColors, ThemeSpacing};
 /// let ctx = &egui::Context::default();
 /// ctx.set_visuals(create_dark_visuals());
 /// ```
-/// Build Ferrite visuals from an already-built dark palette (`ThemeColors`).
+/// Build MarkFlow visuals from an already-built dark palette (`ThemeColors`).
 pub(crate) fn visuals_from_palette(colors: &ThemeColors) -> Visuals {
     let spacing = ThemeSpacing::default();
 
@@ -146,14 +146,14 @@ pub(crate) fn visuals_from_palette(colors: &ThemeColors) -> Visuals {
     visuals
 }
 
-/// Ferrite dark theme egui visuals with the given Ferrite accent.
+/// MarkFlow dark theme egui visuals with the given MarkFlow accent.
 pub fn create_dark_visuals(accent: eframe::egui::Color32) -> Visuals {
     let mut palette = ThemeColors::dark();
     palette.apply_user_accent(accent);
     visuals_from_palette(&palette)
 }
 
-/// Alias for callers that omit accent (defaults to canonical Ferrite blue).
+/// Alias for callers that omit accent (defaults to canonical MarkFlow blue).
 pub fn create_dark_visuals_defaults() -> Visuals {
     create_dark_visuals(super::accent::default_accent())
 }

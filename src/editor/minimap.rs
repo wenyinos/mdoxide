@@ -1,4 +1,4 @@
-//! Minimap Navigation Panel for Ferrite
+//! Minimap Navigation Panel for MarkFlow
 //!
 //! This module provides two minimap variants for the editor:
 //!
@@ -186,12 +186,12 @@ impl<'a> Minimap<'a> {
             .as_ref()
             .map(|c| c.is_dark())
             .unwrap_or(false);
-        let ferrite_accent = self
+        let markflow_accent = self
             .theme_colors
             .as_ref()
             .map(|c| c.editor.heading)
             .unwrap_or_else(|| crate::theme::accent::default_accent());
-        let colors = MinimapColors::new(is_dark, ferrite_accent);
+        let colors = MinimapColors::new(is_dark, markflow_accent);
 
         // Calculate minimap dimensions
         let line_count = self.content.lines().count().max(1);
@@ -711,12 +711,12 @@ impl<'a> SemanticMinimap<'a> {
             .as_ref()
             .map(|c| c.is_dark())
             .unwrap_or(false);
-        let ferrite_accent = self
+        let markflow_accent = self
             .theme_colors
             .as_ref()
             .map(|c| c.editor.heading)
             .unwrap_or_else(|| crate::theme::accent::default_accent());
-        let colors = SemanticMinimapColors::new(is_dark, ferrite_accent);
+        let colors = SemanticMinimapColors::new(is_dark, markflow_accent);
 
         // Get available space
         let available_height = ui.available_height();
@@ -811,7 +811,7 @@ impl<'a> SemanticMinimap<'a> {
                             let col = if is_current {
                                 colors.current_level_indicator
                             } else {
-                                heading_level_color_semantic(level, is_dark, ferrite_accent)
+                                heading_level_color_semantic(level, is_dark, markflow_accent)
                             };
                             (fs, ind, lbl, col)
                         }

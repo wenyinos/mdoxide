@@ -1,4 +1,4 @@
-//! Icon loading utilities for Ferrite
+//! Icon loading utilities for MarkFlow
 //!
 //! This module provides helper functions to load PNG icons and convert them
 //! to `egui::IconData` for use as window icons, and to load PNG images as

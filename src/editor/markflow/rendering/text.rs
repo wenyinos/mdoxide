@@ -1,4 +1,4 @@
-//! Text rendering for FerriteEditor.
+//! Text rendering for MarkFlowEditor.
 
 use egui::{Color32, FontId, Pos2};
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-//! Welcome Panel Component for Ferrite
+//! Welcome Panel Component for MarkFlow
 //!
 //! This module implements the Welcome panel displayed on first launch,
 //! allowing users to configure theme, language, fonts, and editor preferences.
@@ -82,7 +82,7 @@ impl WelcomePanel {
 
                     // ── Title ──────────────────────────────────────────
                     ui.label(
-                        RichText::new("Ferrite")
+                        RichText::new("MarkFlow")
                             .size(36.0)
                             .strong()
                             .color(text_color),

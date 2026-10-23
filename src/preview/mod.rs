@@ -1,4 +1,4 @@
-//! Preview and sync scrolling module for Ferrite
+//! Preview and sync scrolling module for MarkFlow
 //!
 //! This module provides synchronized scrolling between Raw and Rendered
 //! markdown views, allowing users to see corresponding content in both panes.

@@ -1,4 +1,4 @@
-//! Main application module for Ferrite
+//! Main application module for MarkFlow
 //!
 //! This module implements the eframe App trait for the main application,
 //! handling window management, UI updates, and event processing.
@@ -29,7 +29,7 @@ mod title_bar;
 mod types;
 
 use crate::config::{apply_snippet, find_trigger_at_cursor, SnippetManager, ViewMode, WindowSize};
-use crate::editor::{cleanup_ferrite_editor, DocumentOutline, DocumentStats, FindReplacePanel};
+use crate::editor::{cleanup_markflow_editor, DocumentOutline, DocumentStats, FindReplacePanel};
 use crate::fonts;
 use crate::markdown::{
     cleanup_rendered_editor_memory, delimiter_display_name, drain_code_execution_toasts,
@@ -61,7 +61,7 @@ use std::collections::HashMap;
 
 /// Keyboard shortcut actions that need to be deferred.
 /// The main application struct that holds all state and implements eframe::App.
-pub struct FerriteApp {
+pub struct MarkFlowApp {
     /// Central application state
     state: AppState,
     /// Theme manager for handling theme switching
@@ -208,8 +208,8 @@ pub struct FerriteApp {
     workspace_file_index: crate::workspaces::WorkspaceFileIndex,
 }
 
-impl FerriteApp {
-    /// Create a new FerriteApp instance.
+impl MarkFlowApp {
+    /// Create a new MarkFlowApp instance.
     ///
     /// This initializes the application state from the config file and applies
     /// the saved theme preference. It also checks for crash recovery and
@@ -217,8 +217,8 @@ impl FerriteApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         use crate::config::{create_lock_file, load_session_state, SessionSaveThrottle};
 
-        info!("Initializing Ferrite");
-        crate::diag::event_once("app_new", "FerriteApp::new started");
+        info!("Initializing MarkFlow");
+        crate::diag::event_once("app_new", "MarkFlowApp::new started");
         crate::log_memory("App::new() start");
 
         // Set up custom fonts with lazy CJK loading for faster startup
@@ -762,10 +762,10 @@ impl FerriteApp {
 
     /// Get the window title based on current state.
     ///
-    /// Returns a title in the format: "Filename - Ferrite"
-    /// or "Ferrite" if no file is open.
+    /// Returns a title in the format: "Filename - MarkFlow"
+    /// or "MarkFlow" if no file is open.
     fn window_title(&self) -> String {
-        const APP_NAME: &str = "Ferrite";
+        const APP_NAME: &str = "MarkFlow";
 
         if let Some(tab) = self.state.active_tab() {
             let tab_title = tab.title();
@@ -938,7 +938,7 @@ impl FerriteApp {
         // Clean up egui temporary data for rendered editor widgets
         if let Some(ctx) = ctx {
             cleanup_rendered_editor_memory(ctx);
-            cleanup_ferrite_editor(ctx, tab_id);
+            cleanup_markflow_editor(ctx, tab_id);
         }
 
         // Clear global caches that may hold large data from the closed tab.
@@ -1548,7 +1548,7 @@ impl FerriteApp {
             let theme_colors = ThemeColors::from_theme(
                 theme,
                 &ctx.global_style().visuals,
-                self.state.settings.ferrite_accent_rgb(),
+                self.state.settings.markflow_accent_rgb(),
             );
 
             let ribbon_bg = if is_dark {
@@ -1617,11 +1617,11 @@ impl FerriteApp {
         let mut deferred_format_action = if let Some(action) = ribbon_action {
             match action {
                 RibbonAction::Format(cmd) => {
-                    // Capture the current selection state from FerriteEditor
-                    use crate::editor::get_ferrite_editor_mut;
+                    // Capture the current selection state from MarkFlowEditor
+                    use crate::editor::get_markflow_editor_mut;
                     let tab_id = self.state.active_tab().map(|t| t.id);
                     let selection = tab_id.and_then(|id| {
-                        get_ferrite_editor_mut(&ctx, id, |editor| {
+                        get_markflow_editor_mut(&ctx, id, |editor| {
                             let sel = editor.selection();
                             let (start, end) = sel.ordered();
 
@@ -1680,7 +1680,7 @@ impl FerriteApp {
                     });
                     if selection.is_none() {
                         debug!(
-                            "WARNING: No selection captured for format action {:?} - FerriteEditor may not be initialized yet",
+                            "WARNING: No selection captured for format action {:?} - MarkFlowEditor may not be initialized yet",
                             cmd
                         );
                     } else {
@@ -1786,7 +1786,7 @@ impl FerriteApp {
                 &self.cached_outline,
                 self.cached_doc_stats.as_ref(),
                 is_dark,
-                self.state.settings.ferrite_accent_rgb(),
+                self.state.settings.markflow_accent_rgb(),
                 if docked {
                     Some(&mut self.productivity_panel)
                 } else {
@@ -2210,12 +2210,12 @@ impl FerriteApp {
             // the same size as the dock did (avoids a jarring resize on
             // first detach and gives `Resize` a sensible upper bound).
             let dock_width = self.state.settings.outline_width;
-            let ferrite_accent_panel = self.state.settings.ferrite_accent_rgb();
+            let markflow_accent_panel = self.state.settings.markflow_accent_rgb();
             self.productivity_panel.show(
                 &ctx,
                 &mut self.state.settings.productivity_panel_visible,
                 dock_width,
-                ferrite_accent_panel,
+                markflow_accent_panel,
             );
 
             // Check if user clicked "Dock" to re-attach to outline panel
@@ -2456,7 +2456,7 @@ impl FerriteApp {
     }
 }
 
-impl eframe::App for FerriteApp {
+impl eframe::App for MarkFlowApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
 
@@ -2468,9 +2468,9 @@ impl eframe::App for FerriteApp {
         // built-in undo from processing them. Must happen before render_ui().
         self.consume_undo_redo_keys(&ctx);
 
-        // NOTE: Event::Cut filter removed - FerriteEditor handles cut correctly
-        // The old filter checked Tab.cursors which isn't synced with FerriteEditor.selections
-        // FerriteEditor's cut handler already checks has_selection() before cutting
+        // NOTE: Event::Cut filter removed - MarkFlowEditor handles cut correctly
+        // The old filter checked Tab.cursors which isn't synced with MarkFlowEditor.selections
+        // MarkFlowEditor's cut handler already checks has_selection() before cutting
 
         // IMPORTANT: Consume Alt+Arrow keys BEFORE rendering to prevent egui's TextEdit
         // from processing the arrow keys and moving the cursor before we can handle the move.

@@ -1,4 +1,4 @@
-//! Application state management for Ferrite
+//! Application state management for MarkFlow
 //!
 //! This module defines the central `AppState` struct that manages all
 //! application data and UI state, including the current file, open tabs,
@@ -5253,7 +5253,7 @@ impl AppState {
     /// 1. **Legacy bypass** — pre-task-106 recovery files have neither `path`
     ///    nor `original_content_hash` set. Those fall back to the historical
     ///    "tab id only" matching (`has_unsaved_content` was already required
-    ///    by the caller) so users upgrading from older Ferrite versions don't
+    ///    by the caller) so users upgrading from older MarkFlow versions don't
     ///    silently lose recovered buffers. No conflict banner can be raised
     ///    in this branch because we have no identity to compare against.
     /// 2. **Path equality** — `recovered.path` must equal `session_tab.path`.
@@ -5284,7 +5284,26 @@ impl AppState {
             recovered.path.is_none() && recovered.original_content_hash.is_none();
 
         if is_legacy {
-            // Pre-task-106 recovery file with no identity to verify.
+            // Pre-task-106 recovery file with no identity to verify. An
+            // identity-less buffer may only be restored to an untitled tab:
+            // applying it to a path-backed tab is the exact cross-tab bleed
+            // that silently overwrote a user's file (see
+            // `test_recovery_identity_original_bleeding_repro_rejected`).
+            if session_tab.path.is_some() {
+                warn!(
+                    "Rejecting legacy recovery for path-backed tab {} ({}): \
+                     no identity to verify; recovery file will be pruned.",
+                    session_tab.tab_id, session_tab.display_title
+                );
+                crate::diag::event(
+                    "session_recovery_identity_mismatch",
+                    format!(
+                        "tab_id={} title={} session_path={:?} reason=legacy_no_identity",
+                        session_tab.tab_id, session_tab.display_title, session_tab.path,
+                    ),
+                );
+                return None;
+            }
             // Preserve historical behaviour so upgrading users keep their
             // recovered buffers; the caller already required has_unsaved_content
             // and `prune_stale_recovery_files` cleans up dangling tab ids.
@@ -6071,20 +6090,25 @@ mod tests {
     }
 
     #[test]
-    fn test_recovery_identity_legacy_file_path_backed_session_applied() {
+    fn test_recovery_identity_legacy_file_path_backed_session_rejected() {
         use crate::config::RecoveryContent;
         // Pre-task-106 recovery file (no path, no hash) on a path-backed
-        // session tab is applied via the back-compat fallback so users
-        // upgrading from older Ferrite versions do not lose recovered text.
+        // session tab.
+        //
+        // These two shapes are indistinguishable from the cross-tab bleed
+        // repro below (`new_with_identity(id, text, None, None)`), so applying
+        // them is exactly how an unrelated buffer overwrote
+        // `task_50_table_inline_formatting.md`. Safety wins over back-compat:
+        // identity-less buffers only restore to untitled tabs, and the
+        // recovery file is left on disk for manual inspection.
         let st = session_tab(4, Some(PathBuf::from("/legacy/notes.md")), true);
         let rc = RecoveryContent::new(4, "legacy buffer".into());
         assert!(rc.path.is_none() && rc.original_content_hash.is_none());
 
-        let resolved = AppState::try_apply_recovery(&st, &rc).expect("legacy back-compat");
-        match resolved {
-            ResolvedContent::Recovered(c) => assert_eq!(c, "legacy buffer"),
-            other => panic!("legacy file must apply as Recovered, got {other:?}"),
-        }
+        assert!(
+            AppState::try_apply_recovery(&st, &rc).is_none(),
+            "identity-less recovery must not apply to a path-backed tab"
+        );
     }
 
     #[test]
@@ -7416,7 +7440,7 @@ mod tests {
 
         // Create a temporary file to test actual restoration
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_restore.md");
+        let temp_file = temp_dir.join("markflow_test_restore.md");
         let test_content = "# Test Restored Content\n\nThis is a test.";
 
         // Write the test file
@@ -7458,8 +7482,8 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file1 = temp_dir.join("ferrite_test_restore1.md");
-        let temp_file2 = temp_dir.join("ferrite_test_restore2.md");
+        let temp_file1 = temp_dir.join("markflow_test_restore1.md");
+        let temp_file2 = temp_dir.join("markflow_test_restore2.md");
 
         // Write test files
         std::fs::File::create(&temp_file1)
@@ -7512,7 +7536,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_restore_partial.md");
+        let temp_file = temp_dir.join("markflow_test_restore_partial.md");
 
         // Write only one test file
         std::fs::File::create(&temp_file)
@@ -7562,7 +7586,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_open_view_mode.md");
+        let temp_file = temp_dir.join("markflow_test_open_view_mode.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test")
@@ -7592,7 +7616,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_close_view_mode.md");
+        let temp_file = temp_dir.join("markflow_test_close_view_mode.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test")
@@ -7621,7 +7645,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_open_focus_true.md");
+        let temp_file = temp_dir.join("markflow_test_open_focus_true.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test Content")
@@ -7648,7 +7672,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_open_focus_false.md");
+        let temp_file = temp_dir.join("markflow_test_open_focus_false.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Background File")
@@ -7678,7 +7702,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_already_open.md");
+        let temp_file = temp_dir.join("markflow_test_already_open.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Already Open")
@@ -7714,7 +7738,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_already_open_no_focus.md");
+        let temp_file = temp_dir.join("markflow_test_already_open_no_focus.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Already Open No Focus")
@@ -7751,7 +7775,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("ferrite_test_recent_update.md");
+        let temp_file = temp_dir.join("markflow_test_recent_update.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Recent Test")
@@ -7847,7 +7871,7 @@ mod tests {
     fn test_backlink_index_get_and_build() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("ferrite_backlink_test");
+        let temp_dir = std::env::temp_dir().join("markflow_backlink_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         // Create test files
@@ -7897,7 +7921,7 @@ mod tests {
     fn test_backlink_index_update_file() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("ferrite_backlink_update_test");
+        let temp_dir = std::env::temp_dir().join("markflow_backlink_update_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let file_a = temp_dir.join("note-a.md");
@@ -7938,7 +7962,7 @@ mod tests {
     fn test_backlink_scan_on_demand() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("ferrite_backlink_ondemand_test");
+        let temp_dir = std::env::temp_dir().join("markflow_backlink_ondemand_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let file_a = temp_dir.join("note-a.md");
