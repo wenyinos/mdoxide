@@ -4,9 +4,11 @@
 
 !define APPNAME "MDOxide"
 !define EXE "mdoxide.exe"
+; NSIS resolves relative paths from this script's directory.
+!define PROJECT_ROOT "..\.."
 
 Name "${APPNAME}"
-OutFile "dist\MDOxide-${VERSION}-setup.exe"
+OutFile "${PROJECT_ROOT}\dist\MDOxide-${VERSION}-setup.exe"
 Unicode true
 InstallDir "$PROGRAMFILES64\MDOxide"
 RequestExecutionLevel admin
@@ -16,7 +18,7 @@ Page instfiles
 
 Section "Install"
   SetOutPath "$INSTDIR"
-  File "target\release\${EXE}"
+  File "${PROJECT_ROOT}\target\release\${EXE}"
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   CreateShortcut "$DESKTOP\MDOxide.lnk" "$INSTDIR\${EXE}"
