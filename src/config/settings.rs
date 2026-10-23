@@ -2009,6 +2009,10 @@ pub struct Settings {
     /// Whether to enable word wrap
     pub word_wrap: bool,
 
+    /// Keep the cursor line vertically centred while typing (MarkText typewriter mode).
+    #[serde(default)]
+    pub typewriter_mode: bool,
+
     /// Tab size (number of spaces)
     pub tab_size: u8,
 
@@ -2460,6 +2464,7 @@ impl Default for Settings {
 
             // Editor Behavior
             word_wrap: true,
+            typewriter_mode: false,
             tab_size: 4,
             use_spaces: true,
             auto_save_enabled_default: false,

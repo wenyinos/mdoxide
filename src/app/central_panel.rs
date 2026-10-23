@@ -838,6 +838,7 @@ impl MDOxideApp {
                             let mut format_bar_action: Option<RibbonAction> = None;
                             let mut vim_label_for_status: Option<&'static str> = None;
                             let mut content_changed_in_editor = false;
+                            let typewriter_mode = self.state.settings.typewriter_mode;
 
                             if let Some(tab) = self.state.active_tab_mut() {
                                 // Update folds if dirty
@@ -918,6 +919,7 @@ impl MDOxideApp {
                                     .theme_colors(theme_colors.clone())
                                     .id(editor_widget_id)
                                     .scroll_to_line(scroll_to_line)
+                                    .typewriter_mode(typewriter_mode)
                                     .zen_mode(zen_mode, zen_max_column_width)
                                     .max_line_width(max_line_width) // Apply when not in Zen Mode
                                     .transient_highlight(transient_hl)

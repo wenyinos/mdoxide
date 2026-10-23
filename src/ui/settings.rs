@@ -1340,6 +1340,13 @@ impl SettingsPanel {
                     changed = true;
                 }
                 if ui
+                    .checkbox(&mut settings.typewriter_mode, t!("settings.editor.typewriter"))
+                    .on_hover_text(t!("settings.editor.typewriter_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
                     .checkbox(&mut settings.show_line_numbers, t!("settings.editor.show_line_numbers"))
                     .on_hover_text(t!("settings.editor.line_numbers_tooltip"))
                     .changed()

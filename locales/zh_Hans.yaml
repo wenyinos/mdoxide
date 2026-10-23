@@ -131,6 +131,8 @@ settings:
     tab_size: "制表符长度"
     spaces: "空格"
     word_wrap: "自动换行"
+    typewriter: "打字机模式"
+    typewriter_tooltip: "输入时保持光标行垂直居中"
     word_wrap_tooltip: "长行文本自动换行，而不是水平滚动"
     show_line_numbers: "显示行号"
     line_numbers_tooltip: "在编辑器边栏显示行号"

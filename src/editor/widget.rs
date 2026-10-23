@@ -197,6 +197,8 @@ pub struct EditorWidget<'a> {
     font_family: EditorFont,
     /// Line number to scroll to (1-indexed, from outline navigation).
     scroll_to_line: Option<usize>,
+    /// Keep the cursor line centred while typing (typewriter mode)
+    typewriter_mode: bool,
     /// Whether Zen Mode is enabled (centered text column).
     zen_mode: bool,
     /// Maximum column width in characters for Zen Mode centering.
@@ -244,6 +246,7 @@ impl<'a> EditorWidget<'a> {
             search_highlights: None,
             font_family: EditorFont::default(),
             scroll_to_line: None,
+            typewriter_mode: false,
             zen_mode: false,
             zen_max_column_width: 80.0,
             transient_highlight: None,
@@ -315,6 +318,13 @@ impl<'a> EditorWidget<'a> {
     #[must_use]
     pub fn scroll_to_line(mut self, line: Option<usize>) -> Self {
         self.scroll_to_line = line;
+        self
+    }
+
+    /// Keep the cursor line vertically centred while typing.
+    #[must_use]
+    pub fn typewriter_mode(mut self, enabled: bool) -> Self {
+        self.typewriter_mode = enabled;
         self
     }
 
@@ -781,6 +791,24 @@ impl<'a> EditorWidget<'a> {
         // Clone the context to avoid borrow conflict
         let ctx = ui.ctx().clone();
         let response = editor.ui(&ctx, ui);
+
+        // Typewriter mode: keep the cursor line centred while typing, but not
+        // while the user is merely wheel-scrolling (which would snap back).
+        if self.typewriter_mode && response.has_focus() {
+            let typing = ui.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        egui::Event::Text(_) | egui::Event::Key { pressed: true, .. }
+                    )
+                })
+            });
+            if typing {
+                let total_lines = editor.buffer().line_count();
+                let line = editor.cursor().line.min(total_lines.saturating_sub(1));
+                editor.view_mut().scroll_to_center_line(line, total_lines);
+            }
+        }
 
         // Handle auto-focus for new tabs
         // When needs_focus is set (new tab, newly opened file), request keyboard focus
