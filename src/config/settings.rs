@@ -862,6 +862,21 @@ impl ShortcutCommand {
         }
     }
 
+    /// Localized label for the category used by the command palette.
+    pub fn category_label(&self) -> String {
+        match self.category() {
+            "File" => rust_i18n::t!("command.category.file"),
+            "Navigation" => rust_i18n::t!("command.category.navigation"),
+            "View" => rust_i18n::t!("command.category.view"),
+            "Search" => rust_i18n::t!("command.category.search"),
+            "Edit" => rust_i18n::t!("command.category.edit"),
+            "Format" => rust_i18n::t!("command.category.format"),
+            "Folding" => rust_i18n::t!("command.category.folding"),
+            _ => rust_i18n::t!("command.category.other"),
+        }
+        .to_string()
+    }
+
     /// Get the default key binding for this command
     pub fn default_binding(&self) -> KeyBinding {
         use KeyCode::*;
@@ -2275,6 +2290,9 @@ pub struct Settings {
     /// Changes take effect immediately when selected in Settings.
     /// Persisted to config.json and loaded on startup.
     pub language: Language,
+    /// True once the user has picked a language explicitly. While false the
+    /// app follows the system locale on every start.
+    pub language_explicit: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
     // CSV Viewer Settings
@@ -2465,7 +2483,7 @@ impl Default for Settings {
             accent_color: crate::theme::accent::DEFAULT_ACCENT_RGB,
             view_mode: ViewMode::default(),
             show_line_numbers: true,
-            font_size: 14.0,
+            font_size: 15.0,
             font_family: EditorFont::default(),
             cjk_font_preference: CjkFontPreference::default(),
             complex_script_font_preferences: std::collections::BTreeMap::new(),
@@ -2563,7 +2581,8 @@ impl Default for Settings {
             default_view_mode: ViewMode::default(), // Default to Raw mode
 
             // Language Settings
-            language: Language::default(), // Default to English
+            language: Language::default(),
+            language_explicit: false,
 
             // CSV Viewer Settings
             csv_rainbow_columns: false, // Disabled by default for clean look
@@ -3008,7 +3027,7 @@ mod tests {
         assert_eq!(settings.theme, Theme::Light);
         assert_eq!(settings.view_mode, ViewMode::Raw);
         assert!(settings.show_line_numbers);
-        assert_eq!(settings.font_size, 14.0);
+        assert_eq!(settings.font_size, 15.0);
         assert!(settings.recent_files.is_empty());
         assert_eq!(settings.max_recent_files, 20);
         assert_eq!(settings.window_size.width, 1200.0);
@@ -3297,7 +3316,7 @@ mod tests {
         // All other fields should have defaults
         assert_eq!(settings.view_mode, ViewMode::Raw);
         assert!(settings.show_line_numbers);
-        assert_eq!(settings.font_size, 14.0);
+        assert_eq!(settings.font_size, 15.0);
     }
 
     #[test]
@@ -3971,7 +3990,7 @@ mod tests {
 
         // All other fields should have their defaults
         assert_eq!(settings.theme, Theme::Light);
-        assert_eq!(settings.font_size, 14.0);
+        assert_eq!(settings.font_size, 15.0);
         assert_eq!(settings.view_mode, ViewMode::Raw);
         assert!(settings.show_line_numbers);
     }

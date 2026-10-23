@@ -2961,7 +2961,7 @@ impl MDOxideApp {
         if viewer_state.page_count == 0 {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new("PDF has no pages")
+                    egui::RichText::new(t!("editor.pdf_no_pages"))
                         .color(ui.visuals().error_fg_color)
                         .size(16.0),
                 );
@@ -3240,7 +3240,7 @@ impl MDOxideApp {
                     );
                     ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("Failed to load file")
+                        egui::RichText::new(t!("editor.file_load_failed"))
                             .size(18.0)
                             .strong(),
                     );

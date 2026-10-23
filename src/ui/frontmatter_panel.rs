@@ -7,6 +7,7 @@
 
 use crate::ui::phosphor_icons::{phosphor_rich_text, TRASH, WARNING, X};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Ui, Vec2};
+use rust_i18n::t;
 
 const FIELD_SPACING: f32 = 8.0;
 
@@ -349,19 +350,19 @@ impl FrontmatterPanel {
     ) {
         ui.add_space(16.0);
         ui.label(
-            RichText::new("No frontmatter detected")
+            RichText::new(t!("frontmatter.no_frontmatter"))
                 .color(muted_color)
                 .italics(),
         );
         ui.add_space(8.0);
         ui.label(
-            RichText::new("Add YAML frontmatter between --- delimiters at the top of your file.")
+            RichText::new(t!("frontmatter.add_hint"))
                 .color(muted_color)
                 .small(),
         );
         ui.add_space(12.0);
 
-        if ui.button("Add frontmatter").clicked() {
+        if ui.button(t!("frontmatter.add_button").to_string()).clicked() {
             let default_fields = vec![
                 FrontmatterField {
                     key: "title".to_string(),
@@ -490,11 +491,11 @@ impl FrontmatterPanel {
                     let resp = ui.add(
                         egui::TextEdit::singleline(&mut self.new_key_buf)
                             .desired_width(ui.available_width() - 60.0)
-                            .hint_text("new key…"),
+                            .hint_text(t!("frontmatter.new_key_hint").to_string()),
                     );
                     let enter_pressed =
                         resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                    if (ui.button("Add").clicked() || enter_pressed)
+                    if (ui.button(t!("frontmatter.add").to_string()).clicked() || enter_pressed)
                         && !self.new_key_buf.trim().is_empty()
                     {
                         let key = self.new_key_buf.trim().to_string();

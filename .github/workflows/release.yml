@@ -63,11 +63,22 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $nsis = "${env:ProgramFiles(x86)}\NSIS"
+          if (-not (Test-Path "$nsis\makensis.exe")) {
+            throw "makensis.exe not found under $nsis"
+          }
+          "NSIS_DIR=$nsis" >> $env:GITHUB_ENV
+
       - name: Build NSIS installer
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          makensis /DVERSION="${{ github.ref_name }}" installer/windows/mdoxide.nsi
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          & "$env:NSIS_DIR\makensis.exe" /DVERSION=$version installer/windows/mdoxide.nsi
 
       - uses: actions/upload-artifact@v4
         with:

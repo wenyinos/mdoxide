@@ -33,7 +33,8 @@
   - ✅ release 构建通过：未压缩 51MB，xz 压缩后 18.3MB（达到 ≤20MB 分发包目标）
   - ✅ 大文件实测：15MB / 36 万行 Markdown 后台加载，峰值 RSS 约 564MB，加载期间 UI 不阻塞
   - ✅ 打包配置：DEB / RPM / NSIS 与 release workflow 就绪
-  - ⏳ v0.1.0 tag 与 GitHub Release（DEB/RPM/NSIS 由 release workflow 构建）
+  - ✅ v0.1.0 已发布（Linux RPM/DEB）
+  - ✅ v0.1.2：汉化补全、启动跟随系统语言、默认字号与字体可读性、Windows NSIS 修复；产物由 release workflow 直接发布
 
 ## 明确不做
 

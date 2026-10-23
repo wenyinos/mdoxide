@@ -354,7 +354,7 @@ impl FormatToolbar {
                 ui.centered_and_justified(|ui| {
                     ui.horizontal(|ui| {
                         ui.label(phosphor_rich_text(CARET_UP, 10.0).color(chevron_color));
-                        ui.label(RichText::new("Format").size(10.0).color(chevron_color));
+                        ui.label(RichText::new(t!("format_toolbar.format_label")).size(10.0).color(chevron_color));
                     });
                 });
             });
@@ -363,7 +363,7 @@ impl FormatToolbar {
                 toggle_visibility = true;
             }
 
-            response.on_hover_text("Show formatting toolbar");
+            response.on_hover_text(t!("format_toolbar.show_toolbar_tooltip"));
 
             FormatToolbarOutput {
                 action,

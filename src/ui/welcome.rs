@@ -394,10 +394,10 @@ impl WelcomePanel {
                         });
 
                     // ── Command Palette ──────────────────────────────
-                    Self::section_heading(ui, "Command Palette", text_color);
+                    Self::section_heading(ui, t!("welcome.command_palette").as_ref(), text_color);
 
                     ui.label(
-                        RichText::new("Quick access to all commands. Press the shortcut to open a searchable command list.")
+                        RichText::new(t!("welcome.quick_access"))
                             .weak()
                             .small()
                             .color(weak_color),
@@ -406,7 +406,7 @@ impl WelcomePanel {
 
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new("Shortcut")
+                            RichText::new(t!("welcome.shortcut"))
                                 .strong()
                                 .color(text_color),
                         );
@@ -442,7 +442,7 @@ impl WelcomePanel {
                     });
 
                     ui.label(
-                        RichText::new("You can change this later in Settings > Keyboard Shortcuts")
+                        RichText::new(t!("welcome.later_settings"))
                             .weak()
                             .small()
                             .color(weak_color),

@@ -11,6 +11,7 @@ use crate::ui::icons::phosphor_rich_text;
 use eframe::egui::{self, Color32, Key, LayerId, Order, Pos2, RichText, Sense};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use rust_i18n::t;
 use std::collections::VecDeque;
 
 const MAX_RESULTS: usize = 15;
@@ -241,7 +242,7 @@ impl CommandPalette {
                             ui.horizontal(|ui| {
                                 ui.add_space(16.0);
                                 ui.label(
-                                    RichText::new("No matching commands")
+                                    RichText::new(t!("command_palette.no_matching_commands"))
                                         .color(secondary_color)
                                         .italics(),
                                 );
@@ -263,7 +264,7 @@ impl CommandPalette {
                                         ui.horizontal(|ui| {
                                             ui.add_space(12.0);
                                             ui.label(
-                                                RichText::new(cat)
+                                                RichText::new(result.command.category_label())
                                                     .color(category_color)
                                                     .small()
                                                     .strong(),
@@ -294,7 +295,7 @@ impl CommandPalette {
                                         if result.is_recent && !self.query.is_empty() {
                                             ui.add_space(4.0);
                                             ui.label(
-                                                RichText::new("recent")
+                                                RichText::new(t!("command_palette.recent"))
                                                     .color(secondary_color)
                                                     .small()
                                                     .italics(),

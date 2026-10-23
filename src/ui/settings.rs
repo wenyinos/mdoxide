@@ -1016,6 +1016,7 @@ impl SettingsPanel {
                         .changed()
                     {
                         // Apply language change immediately
+                        settings.language_explicit = true;
                         set_locale(settings.language.locale_code());
                         changed = true;
                     }
@@ -1542,10 +1543,10 @@ impl SettingsPanel {
 
         // Language server binary overrides (Editor section)
         ui.add_space(12.0);
-        ui.label(RichText::new("Language servers").strong());
+        ui.label(RichText::new(t!("settings.editor.language_servers")).strong());
         ui.label(
             RichText::new(
-                "Optional path to the server binary per detected server. Leave empty to use PATH.",
+                t!("settings.editor.language_servers_hint"),
             )
             .weak()
             .small(),

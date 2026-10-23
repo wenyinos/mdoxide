@@ -4,7 +4,7 @@
 //! platform-specific directories with robust error handling and
 //! graceful fallback to defaults.
 
-use crate::config::Settings;
+use crate::config::{Language, Settings};
 use crate::error::{Error, Result, ResultExt};
 use log::{debug, info, warn};
 use std::fs;
@@ -172,8 +172,10 @@ fn ensure_config_dir() -> Result<PathBuf> {
 /// println!("Theme: {:?}", settings.theme);
 /// ```
 pub fn load_config() -> Settings {
-    load_config_internal()
-        .unwrap_or_warn_default(Settings::default(), "Failed to load configuration")
+    load_config_internal().unwrap_or_warn_default(
+        Settings::default_with_system_locale(),
+        "Failed to load configuration",
+    )
 }
 
 /// Internal implementation of config loading.
@@ -215,6 +217,18 @@ fn load_config_internal() -> Result<Settings> {
             source: Some(Box::new(e)),
         }
     })?;
+
+    // Follow the system locale until the user explicitly picks a language.
+    if !settings.language_explicit {
+        let system_language = Language::from_system_locale();
+        if settings.language != system_language {
+            debug!(
+                "Applying system language {} (no explicit user choice yet)",
+                system_language.locale_code()
+            );
+            settings.language = system_language;
+        }
+    }
 
     // Prune recent files and workspaces that no longer exist on disk
     let pruned_files = settings.prune_stale_recent_files();
@@ -415,7 +429,7 @@ mod tests {
 
         assert_eq!(settings.theme, Theme::Dark);
         // Missing fields should have defaults
-        assert_eq!(settings.font_size, 14.0);
+        assert_eq!(settings.font_size, 15.0);
         assert!(settings.show_line_numbers);
     }
 
@@ -569,7 +583,7 @@ mod tests {
 
         // Should always return valid settings, even if file doesn't exist
         // Verify we got valid defaults by checking a known default value
-        assert_eq!(settings.font_size, 14.0);
+        assert_eq!(settings.font_size, 15.0);
     }
 
     #[test]

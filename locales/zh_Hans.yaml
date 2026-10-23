@@ -2,847 +2,1068 @@
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
-# Application metadata
+print_preview:
+  tab_title: '%{file} — 打印预览'
+  untitled: 未命名 — 打印预览
 app:
-  name: "MDOxide"
-
-# Menu bar items
+  name: MDOxide
 menu:
   file:
-    label: "文件"
-    open: "打开..."
-    save: "保存"
-    save_as: "另存为..."
-    recent: "最近的文件"
-    export: "导出"
-    export_html: "导出为 HTML..."
-    export_clipboard: "复制为 HTML"
+    label: 文件
+    open: 打开...
+    save: 保存
+    save_as: 另存为...
+    recent: 最近的文件
+    export: 导出
+    export_html: 导出为 HTML...
+    export_clipboard: 复制为 HTML
+    export_pdf: 导出为 PDF...
+    print_preview: 打印预览...
   edit:
-    label: "编辑"
+    label: 编辑
   format:
-    label: "格式"
+    label: 格式
   tools:
-    label: "工具"
-
-# Toolbar buttons
-
-# View mode labels
+    label: 工具
 view_mode:
-  raw_desc: "纯 Markdown 文本编辑"
-  rendered_desc: "所见即所得渲染编辑"
-  split_desc: "源代码编辑器 + 渲染预览并排显示"
-
-# Status bar
+  raw_desc: 纯 Markdown 文本编辑
+  rendered_desc: 所见即所得渲染编辑
+  split_desc: 源代码编辑器 + 渲染预览并排显示
+format_toolbar:
+  format_label: 格式
+  show_toolbar_tooltip: 显示格式工具栏
+  mermaid_menu: Mermaid…
+  mermaid_entry_tooltip: 在光标处插入 Mermaid 图表
+  mermaid_flowchart: 流程图
+  mermaid_sequence: 时序图
+  mermaid_state: 状态图
+  mermaid_class: 类图
+  mermaid_er: ER 图
+  mermaid_pie: 饼图
+  mermaid_gantt: 甘特图
+  mermaid_journey: 用户旅程
+  mermaid_mindmap: 思维导图
+  mermaid_timeline: 时间线
+  mermaid_gitgraph: Git 图
 status:
-  untitled: "未命名"
-  no_file: "无文件打开"
-  vim_mode: "Vim 编辑模式（Esc = 普通模式，i = 插入模式）"
-  cursor_position: "行 %{line}, 列 %{col}"
-  delimiter_tooltip: "分隔符: %{delimiter}\n%{info}点击进行更改"
-  header_tooltip: "第一行作为标题：%{status}\n%{info}点击更改"
-  rainbow_tooltip: "彩虹列着色：%{status}\n点击切换"
-  encoding_tooltip: "文件编码：%{encoding}\n%{info}点击进行更改"
-  encoding_heading: "文件编码"
-  recent_files_heading: "最近的文件"
-  recent_folders_heading: "最近的文件夹"
-  file_tooltip: "%{path}\n\n点击：打开\nShift+点击：在后台打开"
-  folder_tooltip: "%{path}\n\n点击：作为工作区打开"
+  untitled: 未命名
+  no_file: 无文件打开
+  vim_mode: Vim 编辑模式（Esc = 普通模式，i = 插入模式）
+  cursor_position: 行 %{line}, 列 %{col}
+  delimiter_tooltip: '分隔符: %{delimiter}
 
-# File dialogs
+    %{info}点击进行更改'
+  header_tooltip: '第一行作为标题：%{status}
+
+    %{info}点击更改'
+  rainbow_tooltip: '彩虹列着色：%{status}
+
+    点击切换'
+  encoding_tooltip: '文件编码：%{encoding}
+
+    %{info}点击进行更改'
+  encoding_heading: 文件编码
+  recent_files_heading: 最近的文件
+  recent_folders_heading: 最近的文件夹
+  file_tooltip: '%{path}
+
+
+    点击：打开
+
+    Shift+点击：在后台打开'
+  folder_tooltip: '%{path}
+
+
+    点击：作为工作区打开'
 dialog:
+  copy_install_command: 复制安装命令
   unsaved_changes:
-    title: "未保存的更改"
-    save: "保存"
-    dont_save: "不保存"
+    title: 未保存的更改
+    save: 保存
+    dont_save: 不保存
+  code_execution_consent:
+    title: 允许运行本文档中的代码？
+    body_intro: 运行围栏代码块会在你的计算机上以当前用户权限启动真实子进程。MDOxide 不会沙箱化运行器，也不会过滤网络访问。
+    body_settings_echo: 与“设置 → 编辑器 → 代码执行”中的注意事项相同：无沙箱——仅对信任的文档使用。
+    enable_and_run: 启用并运行
+    enable_and_run_tooltip: 开启代码执行、记住此选择，并运行你点击的代码块。
+    just_enable: 仅启用
+    just_enable_tooltip: 开启代码执行并记住同意，暂不运行代码块。
+    cancel_tooltip: 关闭且不修改设置、不运行代码（Esc）。
   confirm:
-    cancel: "取消"
-    close: "关闭"
+    cancel: 取消
+    close: 关闭
   rename_untitled_tab:
-    title: "重命名标签"
-    hint: "仅为显示名称（不是文件路径）。使用“另存为”写入磁盘。"
-    apply: "应用"
-  # File operation dialogs
+    title: 重命名标签
+    hint: 仅为显示名称（不是文件路径）。使用“另存为”写入磁盘。
+    apply: 应用
   file:
-    new_file: "新文件"
-    new_folder: "新文件夹"
-    enter_file_name: "请输入文件名："
-    enter_folder_name: "请输入文件夹名："
-    hint_file: "filename.md"
-    hint_folder: "folder-name"
-    create: "创建"
-    rename: "重命名"
-    enter_new_name: "请输入新名："
-    exists_error: "已存在同名文件或文件夹"
-    confirm_delete: "确认删除"
-    delete_folder_warning: "⚠ 这将删除该文件夹及其所有内容！"
-    delete: "删除"
-    file: "文件"
-    folder: "文件夹"
-    location: "位置：%{path}"
-    delete_confirm: "确定要删除此%{item_type}吗？"
-  # Go to Line dialog
+    new_file: 新文件
+    new_folder: 新文件夹
+    enter_file_name: 请输入文件名：
+    enter_folder_name: 请输入文件夹名：
+    hint_file: filename.md
+    hint_folder: folder-name
+    create: 创建
+    rename: 重命名
+    enter_new_name: 请输入新名：
+    exists_error: 已存在同名文件或文件夹
+    confirm_delete: 确认删除
+    delete_folder_warning: ⚠ 这将删除该文件夹及其所有内容！
+    delete: 删除
+    file: 文件
+    folder: 文件夹
+    location: 位置：%{path}
+    delete_confirm: 确定要删除此%{item_type}吗？
   go_to_line:
-    title: "跳转到行"
-    enter_line: "请输入行号："
-    go: "跳转"
-    range: "范围：1-%{max}"
-
-# Settings panel
+    title: 跳转到行
+    enter_line: 请输入行号：
+    go: 跳转
+    range: 范围：1-%{max}
+  pdf_export:
+    title: 导出为 PDF
+    description: 将当前文档渲染为自包含的 PDF 文件。
+    page_size: 页面大小
+    margins: 页边距
+    custom_margins_hint: 上 / 右 / 下 / 左（PDF 点）
+    page_break_h1: 每个一级标题另起一页
+    page_numbers: 包含页码
+    use_theme_colors: 使用当前编辑器主题（否则在白纸上打印）
+    open_after_export: 导出后打开文件
+    export: 导出…
+  html_export:
+    title: 导出为 HTML
+    description: 生成带主题的 HTML 文件，可选大纲、注释与资源内嵌。
+    self_contained: 自包含（内嵌本地图片；查看时无需网络）
+    image_paths: 链接图片
+    include_outline: 包含大纲（目录）
+    include_comments: 包含 HTML 注释 / 源码标记
+    link_base: 相对链接的基础目录（留空则使用文档所在目录）
+    theme: 主题
+    include_title: 包含文档标题
+    syntax_highlighting: 代码围栏语法高亮
+    open_after_export: 导出后打开文件
+    export: 导出…
 settings:
-  title: "设置"
-  reset_all: "重置全部"
-  reset_tooltip: "重置所有设置项为默认值"
-  auto_save_hint: "设置会自动保存"
-  default_view_hint: "新标签页的视图模式（现有标签页保留其已保存的视图模式）"
+  title: 设置
+  reset_all: 重置全部
+  reset_tooltip: 重置所有设置项为默认值
+  auto_save_hint: 设置会自动保存
+  default_view_hint: 新标签页的视图模式（现有标签页保留其已保存的视图模式）
   font_size:
-    small: "小"
-    medium: "中"
-    large: "大"
+    small: 小
+    medium: 中
+    large: 大
   general:
-    theme: "主题"
-    theme_dark: "深色"
-    theme_light: "浅色"
-    theme_system: "跟随系统"
-    restore_session: "启动时恢复之前的会话"
+    theme: 主题
+    theme_dark: 深色
+    theme_light: 浅色
+    theme_system: 跟随系统
+    restore_session: 启动时恢复之前的会话
   editor:
-    title: "编辑器"
-    font_family: "字体"
-    font_size: "字体尺寸"
-    font_inter_desc: "现代、简洁的比例字体"
-    font_jetbrains_desc: "代码等宽字体"
-    custom_font: "自定义字体"
-    custom_font_desc: "从已安装的系统字体中选择"
-    select_system_font: "选中字体："
-    custom_font_pick_placeholder: "请选择字体…"
-    font_preview: "预览："
-    font_not_found: "⚠ 系统中未找到该字体"
-    cjk_preference: "中日韩地区偏好"
-    cjk_preference_hint: "选择哪个中日韩字体优先用于区域字形变体"
-    cjk_auto: "自动（系统区域设置）"
-    cjk_auto_desc: "根据系统区域设置确定中日韩字体优先级"
-    cjk_korean: "韩语（한국어）"
-    cjk_korean_desc: "优先使用韩语字形变体"
-    cjk_simplified_chinese: "简体中文（简体中文）"
-    cjk_simplified_chinese_desc: "优先使用简体中文字形变体"
-    cjk_traditional_chinese: "繁体中文（繁體中文）"
-    cjk_traditional_chinese_desc: "优先使用繁体中文字形变体"
-    cjk_japanese: "日语（日本語）"
-    cjk_japanese_desc: "优先使用日语字形变体"
-    tab_size: "制表符长度"
-    spaces: "空格"
-    word_wrap: "自动换行"
-    typewriter: "打字机模式"
-    typewriter_tooltip: "输入时保持光标行垂直居中"
-    focus_mode: "专注模式"
-    focus_mode_tooltip: "淡化除当前编辑块以外的所有内容"
-    bubble_toolbar: "选中浮动工具条"
-    bubble_toolbar_tooltip: "选中文字时在旁侧显示格式工具条"
-    word_wrap_tooltip: "长行文本自动换行，而不是水平滚动"
-    show_line_numbers: "显示行号"
-    line_numbers_tooltip: "在编辑器边栏显示行号"
-    show_minimap: "显示迷你地图"
-    minimap_tooltip: "在编辑器右侧显示迷你地图导航面板"
-    minimap_mode: "迷你地图模式"
-    minimap_mode_auto: "自动"
-    minimap_mode_auto_desc: "Markdown 用语义表示，代码用像素表示"
-    minimap_mode_semantic: "语法"
-    minimap_mode_semantic_desc: "结构概述及标题"
-    minimap_mode_pixel: "像素"
-    minimap_mode_pixel_desc: "代码概述（含字符）"
-    highlight_brackets: "高亮显示匹配括号"
-    brackets_tooltip: "当光标位于相邻位置时，高亮显示匹配的括号 ()、[]、{}、<> 以及强调符号对 ** 和 __"
-    auto_close_brackets: "自动闭合括号和引用"
-    auto_close_tooltip: "自动插入右括号和右引号。输入开头文字时，选中文本会自动换行。"
-    syntax_highlighting: "语法高亮"
-    syntax_tooltip: "启用源代码文件（Rust、Python、JavaScript 等）的语法高亮显示"
-    sync_scroll_tooltip: "在原始视图和渲染视图之间切换时同步滚动位置"
-    use_spaces: "使用空格进行缩进"
-    use_spaces_tooltip: "缩进时请使用空格而不是制表符"
-    max_line_width: "最大行宽"
-    custom_width: "自定义 - 指定像素宽度"
-    code_folding: "代码折叠"
-    enable_folding: "启用代码折叠"
-    folding_tooltip: "允许折叠文档的各个部分（Ctrl+Shift+[ 折叠全部，Ctrl+Shift+] 展开）"
-    show_fold_indicators: "显示折叠指示器"
-    fold_indicators_tooltip: "在装订线处显示折叠指示器（仅显示 - 折叠功能尚未实现）"
-    fold_headings: "标题"
-    fold_headings_tooltip: "折叠 Markdown 标题及其内容"
-    fold_code_blocks: "代码块"
-    fold_code_blocks_tooltip: "折叠栅栏式代码块（```...```）"
-    fold_lists: "列表"
-    fold_lists_tooltip: "折叠嵌套列表层次结构"
-    fold_indentation: "缩进（JSON/YAML）"
-    fold_indentation_tooltip: "JSON/YAML 文件中基于折叠缩进的结构"
-    snippets: "片段"
-    enable_snippets: "启用代码片段扩展"
-    snippets_tooltip: "将触发词扩展为预定义文本。内置代码片段：;date、;time、;datetime、;now"
-    builtin_snippets: "内置代码片段："
-    snippet_date: ";date → 年-月-日"
-    snippet_time: ";time → 时:分"
-    snippet_datetime: ";datetime → 日期+时间"
-    snippet_now: ";now → ISO 8601 格式"
-    # CJK Paragraph Indentation
-    paragraph_indent: "CJK 段落缩进"
-    paragraph_indent_hint: "CJK 排版规范的首行缩进"
-    paragraph_indent_custom: "自定义"
-    paragraph_indent_custom_desc: "自定义 em 值"
-    vim_mode: "Vim模式"
-    vim_mode_tooltip: "启用 Vim 风格的模态编辑，包含普通模式、插入模式和可视模式。使用 hjkl 进行导航，i 进入插入模式，Esc 返回普通模式。"
+    language_servers: 语言服务器
+    language_servers_hint: 为每个检测到的服务器指定可执行文件路径，留空则使用 PATH。
+    title: 编辑器
+    font_family: 字体
+    font_size: 字体尺寸
+    font_inter_desc: 现代、简洁的比例字体
+    font_jetbrains_desc: 代码等宽字体
+    custom_font: 自定义字体
+    custom_font_desc: 从已安装的系统字体中选择
+    select_system_font: 选中字体：
+    custom_font_pick_placeholder: 请选择字体…
+    font_preview: 预览：
+    font_not_found: ⚠ 系统中未找到该字体
+    cjk_preference: 中日韩地区偏好
+    cjk_preference_hint: 选择哪个中日韩字体优先用于区域字形变体
+    cjk_auto: 自动（系统区域设置）
+    cjk_auto_desc: 根据系统区域设置确定中日韩字体优先级
+    cjk_korean: 韩语（한국어）
+    cjk_korean_desc: 优先使用韩语字形变体
+    cjk_simplified_chinese: 简体中文（简体中文）
+    cjk_simplified_chinese_desc: 优先使用简体中文字形变体
+    cjk_traditional_chinese: 繁体中文（繁體中文）
+    cjk_traditional_chinese_desc: 优先使用繁体中文字形变体
+    cjk_japanese: 日语（日本語）
+    cjk_japanese_desc: 优先使用日语字形变体
+    complex_scripts: 其他文字
+    complex_scripts_hint: 为阿拉伯文、孟加拉文、天城文、泰文、希伯来文、泰米尔文、格鲁吉亚文、亚美尼亚文、埃塞俄比亚文等文字预选字体。打开包含这些文字的文件时按需加载字体。
+    complex_script_default: 默认（系统）
+    tab_size: 制表符长度
+    spaces: 空格
+    word_wrap: 自动换行
+    typewriter: 打字机模式
+    typewriter_tooltip: 输入时保持光标行垂直居中
+    focus_mode: 专注模式
+    focus_mode_tooltip: 淡化除当前编辑块以外的所有内容
+    bubble_toolbar: 选中浮动工具条
+    bubble_toolbar_tooltip: 选中文字时在旁侧显示格式工具条
+    word_wrap_tooltip: 长行文本自动换行，而不是水平滚动
+    show_line_numbers: 显示行号
+    line_numbers_tooltip: 在编辑器边栏显示行号
+    show_minimap: 显示迷你地图
+    minimap_tooltip: 在编辑器右侧显示迷你地图导航面板
+    minimap_mode: 迷你地图模式
+    minimap_mode_auto: 自动
+    minimap_mode_auto_desc: Markdown 用语义表示，代码用像素表示
+    minimap_mode_semantic: 语法
+    minimap_mode_semantic_desc: 结构概述及标题
+    minimap_mode_pixel: 像素
+    minimap_mode_pixel_desc: 代码概述（含字符）
+    highlight_brackets: 高亮显示匹配括号
+    brackets_tooltip: 当光标位于相邻位置时，高亮显示匹配的括号 ()、[]、{}、<> 以及强调符号对 ** 和 __
+    auto_close_brackets: 自动闭合括号和引用
+    auto_close_tooltip: 自动插入右括号和右引号。输入开头文字时，选中文本会自动换行。
+    syntax_highlighting: 语法高亮
+    syntax_tooltip: 启用源代码文件（Rust、Python、JavaScript 等）的语法高亮显示
+    default_language: 默认语言
+    default_language_hint: 当无法从文件路径检测语言时，未保存/新文档用于语法高亮的语言
+    default_language_auto: 自动（无）
+    sync_scroll_tooltip: 在原始视图和渲染视图之间切换时同步滚动位置
+    use_spaces: 使用空格进行缩进
+    use_spaces_tooltip: 缩进时请使用空格而不是制表符
+    vim_mode: Vim模式
+    vim_mode_tooltip: 启用 Vim 风格的模态编辑，包含普通模式、插入模式和可视模式。使用 hjkl 进行导航，i 进入插入模式，Esc 返回普通模式。
+    code_execution_heading: 代码执行
+    code_execution_warning: 启用后，渲染的 Markdown 可能在你的计算机上运行命令。默认禁用。无沙箱——仅对信任的文档使用。
+    code_execution_enable: 允许从 Markdown 代码块执行代码
+    code_execution_enable_tooltip: 在预览中运行围栏代码块的总开关（需要受支持的语言与执行器，后续版本提供）
+    code_execution_allow_shell: 允许 shell 代码块（bash、sh、pwsh…）
+    code_execution_allow_shell_tooltip: 关闭时，即使启用了执行，标记为 shell 的围栏代码块也会被阻止
+    code_execution_allow_python: 允许 Python 代码块
+    code_execution_allow_python_tooltip: 关闭时，即使启用了执行，Python 围栏代码块也会被阻止
+    code_execution_timeout: 每次运行超时
+    code_execution_seconds_suffix: 秒
+    code_execution_timeout_tooltip: 超过此秒数后自动停止（5–300）
+    code_execution_show_inline_output: 在代码块下方显示输出面板
+    code_execution_show_inline_output_tooltip: 内联渲染捕获的 stdout/stderr（含 ANSI 颜色）。关闭时仅通过提示条报告完成。
+    max_line_width: 最大行宽
+    custom_width: 自定义 - 指定像素宽度
+    code_folding: 代码折叠
+    enable_folding: 启用代码折叠
+    folding_tooltip: 允许折叠文档的各个部分（Ctrl+Shift+[ 折叠全部，Ctrl+Shift+] 展开）
+    show_fold_indicators: 显示折叠指示器
+    fold_indicators_tooltip: 在装订线处显示折叠指示器（仅显示 - 折叠功能尚未实现）
+    fold_headings: 标题
+    fold_headings_tooltip: 折叠 Markdown 标题及其内容
+    fold_code_blocks: 代码块
+    fold_code_blocks_tooltip: 折叠栅栏式代码块（```...```）
+    fold_lists: 列表
+    fold_lists_tooltip: 折叠嵌套列表层次结构
+    fold_indentation: 缩进（JSON/YAML）
+    fold_indentation_tooltip: JSON/YAML 文件中基于折叠缩进的结构
+    snippets: 片段
+    enable_snippets: 启用代码片段扩展
+    snippets_tooltip: 将触发词扩展为预定义文本。内置代码片段：;date、;time、;datetime、;now
+    builtin_snippets: 内置代码片段：
+    snippet_date: ;date → 年-月-日
+    snippet_time: ;time → 时:分
+    snippet_datetime: ;datetime → 日期+时间
+    snippet_now: ;now → ISO 8601 格式
+    paragraph_indent: CJK 段落缩进
+    paragraph_indent_hint: CJK 排版规范的首行缩进
+    paragraph_indent_custom: 自定义
+    paragraph_indent_custom_desc: 自定义 em 值
+    header_spacing: 标题间距
+    header_spacing_hint: 渲染视图中标题（H1-H6）之间的垂直间距
   preview:
-    sync_scroll: "同步滚动"
-    default_view: "默认视图模式"
+    sync_scroll: 同步滚动
+    split_sync_scroll: 同步
+    split_sync_scroll_tooltip: 分屏视图中滚动时保持源码编辑器与渲染预览对齐
+    split_sync_bidirectional: 双向
+    split_sync_bidirectional_tooltip: 开启后，滚动渲染预览也会移动源码编辑器；关闭时仅源码 → 渲染。
+    default_view: 默认视图模式
   files:
-    title: "文件"
-    restore_session_tooltip: "启用时，启动时恢复之前打开的标签页。禁用时，以单个空白标签页启动。会话数据始终保存。"
-    quick_note_workflow: "速记工作流（无路径未命名标签）"
-    quick_note_workflow_tooltip: "无路径标签关闭时不提示保存；有改动的未命名标签不再阻止退出。开启“恢复会话”时，未保存文本仍会写入配置目录下的会话恢复数据。"
-    quick_note_workflow_hint: "双击未命名标签可设置显示名称。关闭此项可恢复对新标签的常规保存确认。"
-    enable_auto_save: "默认启用自动保存"
-    auto_save_tooltip: "新建文档将启用自动保存功能。使用临时文件以防止数据丢失。"
-    auto_save_delay: "自动保存间隔："
-    recent_files: "最近文件"
-    clear_recent: "清除最近文件"
-    clear_recent_tooltip: "从最近文件列表中删除所有文件"
-    seconds: "%{count} 秒"
-    remember_files: "记住最近 %{count} 个文件"
-    files_count: "%{count} 个文件"
+    title: 文件
+    restore_session_tooltip: 启用时，启动时恢复之前打开的标签页。禁用时，以单个空白标签页启动。会话数据始终保存。
+    quick_note_workflow: 速记工作流（无路径未命名标签）
+    quick_note_workflow_tooltip: 无路径标签关闭时不提示保存；有改动的未命名标签不再阻止退出。开启“恢复会话”时，未保存文本仍会写入配置目录下的会话恢复数据。
+    quick_note_workflow_hint: 双击未命名标签可设置显示名称。关闭此项可恢复对新标签的常规保存确认。
+    enable_auto_save: 默认启用自动保存
+    auto_save_tooltip: 新建文档将启用自动保存功能。使用临时文件以防止数据丢失。
+    auto_save_delay: 自动保存间隔：
+    recent_files: 最近文件
+    clear_recent: 清除最近文件
+    clear_recent_tooltip: 从最近文件列表中删除所有文件
+    seconds: '%{count} 秒'
+    remember_files: 记住最近 %{count} 个文件
+    files_count: '%{count} 个文件'
   appearance:
-    title: "界面"
-    language: "语言"
-    language_hint: "选择用户界面的显示语言"
+    title: 界面
+    accent_color: MDOxide 强调色
+    accent_color_hint: 渲染标题（H1–H6）、选区着色、标签页和高亮控件使用此强调色。超链接保持标准蓝色。
+    accent_reset: 重置颜色
+    language: 语言
+    language_hint: 选择用户界面的显示语言
     syntax_theme: 语法主题
     syntax_theme_hint: 代码语法高亮显示颜色主题
     syntax_theme_auto: 自动（匹配应用主题）
   keyboard:
-    title: "键盘"
-    search_hint: "筛选快捷键..."
-    reset_all: "重置全部快捷键"
-    reset_all_tooltip: "将所有键盘快捷键重置为默认绑定"
-    reset_default: "重置为默认值"
-    press_key: "绑定按键到"
-    waiting: "等待快捷键..."
-    cancel: "取消"
-    apply: "应用"
-    conflict_with: "发生冲突"
-    click_to_change: "点击更改快捷键"
+    title: 键盘
+    search_hint: 筛选快捷键...
+    reset_all: 重置全部快捷键
+    reset_all_tooltip: 将所有键盘快捷键重置为默认绑定
+    reset_default: 重置为默认值
+    press_key: 绑定按键到
+    waiting: 等待快捷键...
+    cancel: 取消
+    apply: 应用
+    conflict_with: 发生冲突
+    click_to_change: 点击更改快捷键
   about:
-    title: "关于"
-    description: "一款用于 Markdown、JSON 等格式的快速轻量级文本编辑器"
-    updates: "更新"
-    check_for_updates: "检查更新"
-    checking: "正在检查更新 ..."
-    up_to_date: "已经是最新版本！"
-    check_again: "再次检查"
-    update_available: "新版本可用！"
-    new_version: "版本"
-    view_release: "查看版本发布与下载"
-    check_failed: "未能检查更新"
-    try_again: "再次尝试"
-    links: "链接"
-    all_releases: "所有发行版"
-    report_issue: "报告问题"
-    source_code: "源代码"
-    license: "采用 MIT 许可证"
+    title: 关于
+    description: 一款用于 Markdown、JSON 等格式的快速轻量级文本编辑器
+    updates: 更新
+    check_for_updates: 检查更新
+    checking: 正在检查更新 ...
+    up_to_date: 已经是最新版本！
+    check_again: 再次检查
+    update_available: 新版本可用！
+    new_version: 版本
+    view_release: 查看版本发布与下载
+    check_failed: 未能检查更新
+    try_again: 再次尝试
+    links: 链接
+    all_releases: 所有发行版
+    report_issue: 报告问题
+    source_code: 源代码
+    license: 采用 MIT 许可证
   terminal:
-    title: "终端"
-    enable: "使用集成终端"
-    font_size: "字体大小"
-    scrollback: "回滚行数"
-    copy_selection: "自动复制选定内容"
-    copy_selection_tooltip: "使用鼠标选择时自动将文本复制到剪贴板"
-    theme: "终端主题"
-    opacity: "背景不透明度"
-    startup_command: "启动命令"
-    startup_command_desc: "打开新终端时运行的命令（例如：'echo Hello'）"
-    startup_command_hint: "可选"
-    monitors: "检测到的显示器"
-    monitors_desc: "检测到的窗口分布显示布局"
-    monitor_label: "显示器 %{index}:"
-    monitor_geometry: "（宽度%{width} x 高度%{height}，位于坐标（%{x}，%{y}））"
-    breathing_color: "闪烁光标的颜色"
-    prompt_patterns: "自定义指令模式"
-    prompt_patterns_desc: "用于检测终端提示符的正则表达式模式（每行一个）"
-    prompt_patterns_hint: "例如 ^\\w+@\\w+:"
-    auto_load_layout: "自动加载布局"
-    auto_load_layout_tooltip: "自动从项目根目录加载 terminal_layout.json"
-    sound_notification: "通知提示音"
-    sound_notification_desc: "在终端等待输入时播放声音"
-    enable_sound: "启用提示音"
-    enable_sound_tooltip: "当终端检测到提示符（等待输入）时播放通知声音"
-    custom_sound: "自定义提示音文件（可选）"
-    custom_sound_hint: "留空则使用系统提示音"
-    auto_focus: "输入时自动聚焦"
-    auto_focus_desc: "当终端开始等待输入时自动切换到该终端"
-    focus_on_prompt: "检测到提示符时聚焦终端"
-    focus_on_prompt_tooltip: "当终端从运行状态转变为等待输入状态时自动聚焦该终端"
-    font_size_format: "%{size}像素"
-    opacity_format: "%{value}%"
-
-# Find and Replace panel
+    title: 终端
+    enable: 使用集成终端
+    font_size: 字体大小
+    scrollback: 回滚行数
+    copy_selection: 自动复制选定内容
+    copy_selection_tooltip: 使用鼠标选择时自动将文本复制到剪贴板
+    theme: 终端主题
+    opacity: 背景不透明度
+    startup_command: 启动命令
+    startup_command_desc: 打开新终端时运行的命令（例如：'echo Hello'）
+    startup_command_hint: 可选
+    monitors: 检测到的显示器
+    monitors_desc: 检测到的窗口分布显示布局
+    monitor_label: '显示器 %{index}:'
+    monitor_geometry: （宽度%{width} x 高度%{height}，位于坐标（%{x}，%{y}））
+    breathing_color: 闪烁光标的颜色
+    prompt_patterns: 自定义指令模式
+    prompt_patterns_desc: 用于检测终端提示符的正则表达式模式（每行一个）
+    prompt_patterns_hint: '例如 ^\w+@\w+:'
+    auto_load_layout: 自动加载布局
+    auto_load_layout_tooltip: 自动从项目根目录加载 terminal_layout.json
+    sound_notification: 通知提示音
+    sound_notification_desc: 在终端等待输入时播放声音
+    enable_sound: 启用提示音
+    enable_sound_tooltip: 当终端检测到提示符（等待输入）时播放通知声音
+    custom_sound: 自定义提示音文件（可选）
+    custom_sound_hint: 留空则使用系统提示音
+    auto_focus: 输入时自动聚焦
+    auto_focus_desc: 当终端开始等待输入时自动切换到该终端
+    focus_on_prompt: 检测到提示符时聚焦终端
+    focus_on_prompt_tooltip: 当终端从运行状态转变为等待输入状态时自动聚焦该终端
+    font_size_format: '%{size}像素'
+    opacity_format: '%{value}%'
 find:
-  placeholder: "搜索..."
-  replace_placeholder: "替换为..."
-  match_case: "区分大小写"
-  match_case_short: "Aa"
-  whole_word: "整个单词"
-  use_regex: "使用正则表达式"
-  replace: "替换"
-  replace_all: "替换所有"
-  no_results: "未找到匹配项"
-  title: "查找与替换"
-  title_replace: "查找与替换"
-  title_find: "查找"
-  close_tooltip: "关闭 (Escape)"
-  hide_replace: "隐藏替换 (Ctrl+H)"
-  show_replace: "显示替换 (Ctrl+H)"
-  prev_tooltip: "上一个 (Shift+F3)"
-  next_tooltip: "下一个 (F3 或 Enter)"
-  replace_tooltip: "替换当前匹配"
-  replace_all_tooltip: "替换所有匹配"
-  keyboard_hints: "Enter/F3: 下一个 • Shift+F3: 上一个 • Esc: 关闭"
-
-# Outline panel
+  placeholder: 搜索...
+  replace_placeholder: 替换为...
+  match_case: 区分大小写
+  match_case_short: Aa
+  whole_word: 整个单词
+  use_regex: 使用正则表达式
+  replace: 替换
+  replace_all: 替换所有
+  no_results: 未找到匹配项
+  title: 查找与替换
+  title_replace: 查找与替换
+  title_find: 查找
+  close_tooltip: 关闭 (Escape)
+  hide_replace: 隐藏替换 (Ctrl+H)
+  show_replace: 显示替换 (Ctrl+H)
+  prev_tooltip: 上一个 (Shift+F3)
+  next_tooltip: 下一个 (F3 或 Enter)
+  replace_tooltip: 替换当前匹配
+  replace_all_tooltip: 替换所有匹配
+  keyboard_hints: 'Enter/F3: 下一个 • Shift+F3: 上一个 • Esc: 关闭'
 outline:
-  panel_title: "文档"
-  statistics: "统计数据"
-  tab_outline: "大纲"
-  tab_files: "文件"
-  tab_search: "搜索"
-  files_unavailable: "打开文件夹后可浏览文件"
-  open_search: "在工作区中搜索"
-  search_hint: "快捷键 Ctrl+Shift+F"
-  tab_statistics: "统计数据"
-  no_headings: "未找到标题"
-  add_headings_hint: "使用 # 语法添加标题"
-  close_tooltip: "关闭大纲（Ctrl+Shift+O）"
-  parse_error: "⚠ 解析错误"
-
-# Document statistics
+  frontmatter_markdown_only: 仅 Markdown 文件支持编辑 frontmatter
+  item_tooltip: "%{title}（第 %{line} 行）"
+  panel_title: 文档
+  statistics: 统计数据
+  tab_outline: 大纲
+  tab_files: 文件
+  tab_search: 搜索
+  files_unavailable: 打开文件夹后可浏览文件
+  open_search: 在工作区中搜索
+  search_hint: 快捷键 Ctrl+Shift+F
+  tab_statistics: 统计数据
+  summary: '%{headings} 个标题 · 约 %{minutes} 分钟阅读'
+  no_headings: 未找到标题
+  add_headings_hint: '使用 # 语法添加标题'
+  close_tooltip: 关闭大纲（Ctrl+Shift+O）
+  parse_error: ⚠ 解析错误
+  detach: 分离
+  detach_tooltip: 分离为浮动窗口
+  backlinks_unavailable: 反向链接不可用
+  productivity_unavailable: 效率中心不可用
+  tab_links: 链接
+  tab_hub: 中心
+  json_structure: 📁 结构
+  json_values: 值
+  json_objects: 对象
+  json_arrays: 数组
+  json_total_keys: 键总数
+  json_max_depth: 最大深度
+  json_total_values: 值总数
+  json_strings: 字符串
+  json_numbers: 数字
+  json_booleans: 布尔值
+  json_nulls: 空值
+  json_array_items: 数组项
 stats:
-  no_data: "暂无统计数据"
-  text_stats: "文本"
-  summary: "%{headings} 个标题 · 阅读时间约 %{minutes} 分钟"
-  detach_tooltip: "分离到浮动窗口"
-  backlinks_unavailable: "反向链接不可用"
-  productivity_unavailable: "生产力中心不可用"
-  tab_links: "链接"
-  tab_hub: "中心"
-  json_structure: "📁 结构"
-  json_values: "值"
-  json_objects: "对象"
-  json_arrays: "数组"
-  json_total_keys: "键总数"
-  json_max_depth: "最大深度"
-  json_total_values: "值总数"
-  json_strings: "字符串"
-  json_numbers: "数字"
-  json_booleans: "布尔值"
-  json_nulls: "空值"
-  json_array_items: "数组项"
-  words: "单词"
-  characters: "字符"
-  characters_no_spaces: "字符（不含空格）"
-  lines: "行"
-  paragraphs: "段落"
-  structure: "结构"
-  headings_total: "标题"
-  list_items: "列表项"
-  horizontal_rules: "水平线"
-  media_links: "媒体与链接"
-  links: "链接"
-  images: "图片"
-  code_diagrams: "代码和图表"
-  code_blocks: "代码块"
-  mermaid_diagrams: "Mermaid 图表"
-  tables: "表格"
-  blockquotes: "引用块"
-
-# File tree / Sidebar
-
-# Quick switcher
+  no_data: 暂无统计数据
+  text_stats: 文本
+  words: 单词
+  characters: 字符
+  characters_no_spaces: 字符（不含空格）
+  lines: 行
+  paragraphs: 段落
+  structure: 结构
+  headings_total: 标题
+  list_items: 列表项
+  horizontal_rules: 水平线
+  media_links: 媒体与链接
+  links: 链接
+  images: 图片
+  code_diagrams: 代码和图表
+  code_blocks: 代码块
+  mermaid_diagrams: Mermaid 图表
+  tables: 表格
+  blockquotes: 引用块
 quick_switcher:
-  placeholder: "搜索文件..."
-  no_results: "没有匹配的文件"
-  recent_tooltip: "最近打开"
-  keyboard_hints: "↑↓ 导航 ⏎ 打开 Esc 关闭"
-
-# Search in files
+  placeholder: 搜索文件...
+  no_results: 没有匹配的文件
+  recent_tooltip: 最近打开
+  keyboard_hints: ↑↓ 导航 ⏎ 打开 Esc 关闭
 search:
-  title: "在文件中搜索"
-  label: "搜索："
-  placeholder: "请输入搜索文本..."
-  more_matches: "    ... 更多匹配项未显示"
-  keyboard_hints: "按 Enter 键搜索 • 点击搜索结果打开 • 按 Esc 键关闭"
-
-# About dialog
+  title: 在文件中搜索
+  label: 搜索：
+  placeholder: 请输入搜索文本...
+  more_matches: '    ... 更多匹配项未显示'
+  keyboard_hints: 按 Enter 键搜索 • 点击搜索结果打开 • 按 Esc 键关闭
 about:
-  title: "关于/帮助"
+  title: 关于/帮助
   tab:
-    about: "关于"
-    shortcuts: "快捷键"
-    mermaid: "Mermaid"
-  description: "一款快速、轻量级的文本编辑器，支持 Markdown、JSON 等格式。"
-  close_hint: "按 F1 或 Esc 键关闭"
-  # Links section
-  links: "链接部分"
-  github_label: "GitHub："
-  view_on_github: "在 GitHub 上查看"
-  github_tooltip: "在浏览器中打开存储库"
-  report_issue_label: "报告问题："
-  submit_bug: "提交错误报告"
-  issue_tooltip: "在浏览器中打开问题跟踪器"
-  # Built with section
-  built_with: "构建部分"
+    about: 关于
+    shortcuts: 快捷键
+    mermaid: Mermaid
+  mermaid:
+    title: Mermaid 图表语法
+    intro: 将图表放入带 mermaid 语言标记的围栏代码块中。在源码或分屏视图中，格式工具栏的“插入 → Mermaid…”会插入与下方相同的起始片段。
+    doc_site_label: 完整参考：
+    doc_link: mermaid.js.org
+    doc_tooltip: 在浏览器中打开 https://mermaid.js.org/
+    snippet_label: 起始片段（与“插入 → Mermaid…”一致）
+    types:
+      flowchart: 流程图用节点和箭头表示流程、判断与样式化形状。可尝试自上而下（TD）、从左到右（LR），以及用 `style` / `classDef` 设置颜色。
+      sequence: 时序图用生命线展示参与者及其随时间变化的消息（`->`、`->>`、`-->>`）。
+      state: 状态图描述状态与转换；`stateDiagram-v2` 是现代语法。
+      class: 类图建模类型及其关系，如继承与关联。
+      er: 实体关系图声明实体与基数（`||--o{` 等）。
+      pie: 饼图用带标签的数值切片展示整体占比。
+      gantt: 甘特图在时间轴上用分组和时长安排任务。
+      journey: 用户旅程图在分组中为用户或角色评分各步骤。
+      mindmap: 思维导图从中心主题向外分支。
+      timeline: 时间线沿水平轴列出带日期的标题。
+      gitgraph: Git 图以线性化历史视图展示提交与分支。
+  description: 一款快速、轻量级的文本编辑器，支持 Markdown、JSON 等格式。
+  close_hint: 按 F1 或 Esc 键关闭
+  links: 链接部分
+  github_label: GitHub：
+  view_on_github: 在 GitHub 上查看
+  github_tooltip: 在浏览器中打开存储库
+  report_issue_label: 报告问题：
+  submit_bug: 提交错误报告
+  issue_tooltip: 在浏览器中打开问题跟踪器
+  built_with: 构建部分
   lib:
-    egui: "即时模式图形用户界面框架"
-    comrak: "GitHub 风格的 Markdown 解析器"
-    syntect: "语法高亮"
-    serde: "序列化框架"
-    notify: "文件系统监视器"
-  # License section
-  license: "许可"
-  license_type: "MIT 许可协议"
-  copyright: "© 2026 MDOxide Contributors"
-  version: "版本 %{version}"
-
-# Keyboard shortcuts
+    egui: 即时模式图形用户界面框架
+    comrak: GitHub 风格的 Markdown 解析器
+    syntect: 语法高亮
+    serde: 序列化框架
+    notify: 文件系统监视器
+  license: 许可
+  license_type: MIT 许可协议
+  copyright: © 2026 MDOxide Contributors
+  version: 版本 %{version}
 shortcuts:
-  title: "快捷键"
-  expand_hint: "点击类别即可展开/折叠"
-  # Categories
+  title: 快捷键
+  expand_hint: 点击类别即可展开/折叠
   category:
-    file: "文件"
-    edit: "编辑"
-    view: "视图"
-    formatting: "格式化"
-    workspace: "工作区"
-    navigation: "导航"
-  # Command names (used in keyboard settings panel)
+    file: 文件
+    edit: 编辑
+    view: 视图
+    formatting: 格式化
+    workspace: 工作区
+    navigation: 导航
   commands:
-    # File operations
-    save: "保存"
-    save_as: "另存为"
-    open: "打开文件"
-    new: "新建文件"
-    new_tab: "新建标签页"
-    close_tab: "关闭标签页"
-    # Navigation
-    next_tab: "下一个标签页"
-    prev_tab: "上一个标签页"
-    go_to_line: "跳转到行"
-    quick_open: "快速打开"
-    # View
-    toggle_view_mode: "切换视图模式"
-    cycle_theme: "切换主题"
-    toggle_zen_mode: "切换无干扰模式"
-    toggle_fullscreen: "切换全屏"
-    toggle_outline: "切换大纲"
-    toggle_file_tree: "切换文件树"
-    toggle_pipeline: "切换管道"
-    # Edit
-    undo: "撤销"
-    redo: "重做"
-    delete_line: "删除行"
-    duplicate_line: "复制行"
-    move_line_up: "上移行"
-    move_line_down: "下移行"
-    select_next_occurrence: "选择下一个匹配项"
-    # Search
-    find: "查找"
-    find_replace: "查找与替换"
-    find_next: "查找下一处"
-    find_prev: "查找上一处"
-    search_in_files: "在文件中搜索"
-    # Formatting
-    bold: "粗体"
-    italic: "斜体"
-    inline_code: "行内代码"
-    code_block: "代码块"
-    link: "链接"
-    image: "图片"
-    blockquote: "引用"
-    bullet_list: "项目符号列表"
-    numbered_list: "编号列表"
-    heading_1: "一级标题"
-    heading_2: "二级标题"
-    heading_3: "三级标题"
-    heading_4: "四级标题"
-    heading_5: "五级标题"
-    heading_6: "六级标题"
-    # Folding
-    fold_all: "全部折叠"
-    unfold_all: "全部展开"
-    toggle_fold: "切换折叠"
-    # Other
-    open_settings: "打开设置"
-    open_about: "关于/帮助"
-    export_html: "导出 HTML"
-    insert_toc: "插入目录"
-  # File shortcuts (for help panel)
+    save: 保存
+    save_as: 另存为
+    open: 打开文件
+    new: 新建文件
+    new_tab: 新建标签页
+    close_tab: 关闭标签页
+    next_tab: 下一个标签页
+    prev_tab: 上一个标签页
+    go_to_line: 跳转到行
+    quick_open: 快速打开
+    toggle_view_mode: 切换视图模式
+    cycle_theme: 切换主题
+    toggle_zen_mode: 切换无干扰模式
+    toggle_fullscreen: 切换全屏
+    toggle_outline: 切换大纲
+    toggle_file_tree: 切换文件树
+    toggle_pipeline: 切换管道
+    toggle_terminal: 切换终端
+    toggle_productivity_hub: 切换效率中心
+    undo: 撤销
+    redo: 重做
+    delete_line: 删除行
+    duplicate_line: 复制行
+    move_line_up: 上移行
+    move_line_down: 下移行
+    select_next_occurrence: 选择下一个匹配项
+    find: 查找
+    find_replace: 查找与替换
+    find_next: 查找下一处
+    find_prev: 查找上一处
+    search_in_files: 在文件中搜索
+    bold: 粗体
+    italic: 斜体
+    inline_code: 行内代码
+    code_block: 代码块
+    link: 链接
+    image: 图片
+    blockquote: 引用
+    bullet_list: 项目符号列表
+    numbered_list: 编号列表
+    heading_1: 一级标题
+    heading_2: 二级标题
+    heading_3: 三级标题
+    heading_4: 四级标题
+    heading_5: 五级标题
+    heading_6: 六级标题
+    fold_all: 全部折叠
+    unfold_all: 全部展开
+    toggle_fold: 切换折叠
+    open_settings: 打开设置
+    open_about: 关于/帮助
+    export_html: 导出 HTML
+    export_pdf: 导出 PDF
+    print_preview: 打印预览
+    insert_toc: 插入目录
   file:
-    new: "新文件"
-    open: "打开文件"
-    save: "保存"
-    save_as: "另存为"
-    close_tab: "关闭标签页"
-  # Edit shortcuts (for help panel)
+    new: 新文件
+    open: 打开文件
+    save: 保存
+    save_as: 另存为
+    close_tab: 关闭标签页
   edit:
-    undo: "撤销"
-    redo: "重做"
-    find: "查找"
-    find_replace: "查找与替换"
-    select_all: "全选"
-    copy: "复制"
-    cut: "剪切"
-    paste: "粘贴"
-    delete_line: "删除行"
-    duplicate_line: "复制行"
-    move_line_up: "上移行"
-    move_line_down: "下移行"
-    select_next_occurrence: "选择下一个匹配项"
-  # View shortcuts (for help panel)
+    undo: 撤销
+    redo: 重做
+    find: 查找
+    find_replace: 查找与替换
+    select_all: 全选
+    copy: 复制
+    cut: 剪切
+    paste: 粘贴
+    delete_line: 删除行
+    duplicate_line: 复制行
+    move_line_up: 上移行
+    move_line_down: 下移行
+    select_next_occurrence: 选择下一个匹配项
   view:
-    toggle_view: "切换原始/渲染状态"
-    toggle_outline: "切换大纲"
-    zoom_in: "放大"
-    zoom_out: "缩小"
-    reset_zoom: "重置缩放"
-    settings: "设置"
-    about: "关于/帮助"
-  # Formatting shortcuts (for help panel)
+    toggle_view: 切换原始/渲染状态
+    toggle_outline: 切换大纲
+    zoom_in: 放大
+    zoom_out: 缩小
+    reset_zoom: 重置缩放
+    settings: 设置
+    about: 关于/帮助
   format:
-    bold: "粗体"
-    italic: "斜体"
-    underline: "下划线"
-    link: "插入链接"
-    code: "插入代码"
-  # Workspace shortcuts (for help panel)
+    bold: 粗体
+    italic: 斜体
+    underline: 下划线
+    link: 插入链接
+    code: 插入代码
   workspace:
-    quick_switcher: "快速文件切换器"
-    search_files: "在文件中搜索"
-    toggle_tree: "切换文件树"
-  # Navigation shortcuts (for help panel)
+    quick_switcher: 快速文件切换器
+    search_files: 在文件中搜索
+    toggle_tree: 切换文件树
   nav:
-    next_tab: "下一个标签页"
-    prev_tab: "上一个标签页"
-    go_to_line: "跳转到行"
-    find_next: "查找下一处"
-    find_prev: "查找上一处"
-
-# Error messages
-
-# Notifications / Toasts
+    next_tab: 下一个标签页
+    prev_tab: 上一个标签页
+    go_to_line: 跳转到行
+    find_next: 查找下一处
+    find_prev: 查找上一处
 notification:
-  restored_auto_save: "已从自动保存恢复"
-  auto_save_discarded: "自动保存已丢弃"
-  session_restored: "会话已恢复"
-  large_file_performance: "大文件（%{size} MB）。可能会影响性能。"
-  undo: "撤销（剩余 %{remaining} 步）"
-  nothing_to_undo: "没有可撤销的操作"
-  redo: "重做（剩余 %{remaining} 步）"
-  nothing_to_redo: "没有可重做的操作"
-  outline_shown: "大纲面板已显示"
-  outline_hidden: "大纲面板已隐藏"
-  loaded_terminal_layout: "已加载工作区终端布局"
-  terminal_shown: "终端面板已显示"
-  terminal_hidden: "终端面板已隐藏"
-  zen_enabled: "禅模式已启用"
-  zen_disabled: "禅模式已关闭"
-  fullscreen_enter: "全屏模式（按 F10 或 Esc 退出）"
-  fullscreen_exit: "已退出全屏模式"
-  pipeline_disabled: "流水线功能已禁用"
-  pipeline_zen: "禅模式下流水线面板已隐藏"
-  pipeline_unsupported: "流水线仅适用于 JSON/YAML 文件（当前：%{file_type}）"
-  pipeline_opened: "流水线面板已打开"
-  pipeline_closed: "流水线面板已关闭"
-  file_tree_shown: "文件树已显示"
-  file_tree_hidden: "文件树已隐藏"
-  open_folder_first: "请先打开一个文件夹（📁 按钮）"
-  open_folder_quick_open: "请先打开一个文件夹以使用快速打开功能"
-  open_folder_search: "请先打开一个文件夹以使用文件内搜索功能"
-  toc_markdown_only: "目录仅适用于 Markdown 文件"
-  toc_updated: "目录已更新（%{count} 个标题）"
-  toc_inserted: "目录已插入（%{count} 个标题）"
-  toc_inserted_empty: "目录已插入（未找到标题）"
-  no_document_format: "没有可格式化的文档"
-  not_structured: "不是结构化数据文件"
-  document_formatted: "文档已格式化"
-  format_failed: "格式化失败: %{error}"
-  parse_error: "解析错误: %{error}"
-  no_document_validate: "没有可验证的文档"
-  valid_syntax: "✔ %{file_type} 语法有效"
-  invalid_syntax: "✗ %{error}"
-  replaced: "已替换"
-  replaced_count: "已替换 %{count} 处"
-  no_document_export: "没有可导出的文档"
-  exported_to: "已导出到 %{path}"
-  export_failed: "导出失败: %{error}"
-  no_document_copy: "没有文档可以复制"
-  html_copied: "HTML已拷贝到剪切板"
-  copy_failed: "拷贝失败: %{error}"
-  opened_files: "已打开 %{count} 个文件"
-  saved: "已保存：%{path}"
-  opened_workspace: "已打开工作区：%{name}"
-  workspace_closed: "工作区已关闭"
-  file_tree_refreshed: "文件树已刷新"
-  created: "已创建：%{name}"
-  renamed_to: "已重命名为：%{name}"
-  deleted: "已删除：%{name}"
-  opened_background: "已在后台打开：%{name}"
-  settings_reset: "恢复默认设置"
-  encoding_changed: "编码已更改为 %{encoding}"
-  reloaded_single: "已重新加载：%{name}"
-  reloaded_multiple: "已从磁盘重新加载 %{count} 个文件"
-  external_change_single: "文件已被外部修改（有未保存的更改）：%{name}"
-  external_change_multiple: "%{count} 个文件已被外部修改（有未保存的更改）"
-  image_added: "图片已添加到资源文件夹"
-  images_added: "%{count} 张图片已添加到资源文件夹"
-  opened_external_single: "已根据外部请求打开文件"
-  opened_external_multiple: "已根据外部请求打开 %{count} 个文件"
-  wikilink_not_found: "[[%{target}]] — 文件未找到"
-  wikilink_open_failed: "无法打开 [[%{target}]]：%{error}"
-
-# Tree viewer (JSON/YAML/TOML)
+  restored_auto_save: 已从自动保存恢复
+  auto_save_discarded: 自动保存已丢弃
+  session_restored: 会话已恢复
+  large_file_performance: 大文件（%{size} MB）。可能会影响性能。
+  large_file_loading: 正在后台加载大文件（%{size} MB）...
+  file_loaded: 文件加载成功（%{size} MB）
+  file_load_failed: 文件加载失败：%{error}
+  undo: 撤销（剩余 %{remaining} 步）
+  nothing_to_undo: 没有可撤销的操作
+  redo: 重做（剩余 %{remaining} 步）
+  nothing_to_redo: 没有可重做的操作
+  outline_shown: 大纲面板已显示
+  outline_hidden: 大纲面板已隐藏
+  loaded_terminal_layout: 已加载工作区终端布局
+  terminal_shown: 终端面板已显示
+  terminal_hidden: 终端面板已隐藏
+  zen_enabled: 禅模式已启用
+  zen_disabled: 禅模式已关闭
+  fullscreen_enter: 全屏模式（按 F10 或 Esc 退出）
+  fullscreen_exit: 已退出全屏模式
+  pipeline_disabled: 流水线功能已禁用
+  pipeline_zen: 禅模式下流水线面板已隐藏
+  pipeline_unsupported: 流水线仅适用于 JSON/YAML 文件（当前：%{file_type}）
+  pipeline_opened: 流水线面板已打开
+  pipeline_closed: 流水线面板已关闭
+  file_tree_shown: 文件树已显示
+  file_tree_hidden: 文件树已隐藏
+  open_folder_first: 请先打开一个文件夹（📁 按钮）
+  open_folder_quick_open: 请先打开一个文件夹以使用快速打开功能
+  open_folder_search: 请先打开一个文件夹以使用文件内搜索功能
+  toc_markdown_only: 目录仅适用于 Markdown 文件
+  toc_updated: 目录已更新（%{count} 个标题）
+  toc_inserted: 目录已插入（%{count} 个标题）
+  toc_inserted_empty: 目录已插入（未找到标题）
+  no_document_format: 没有可格式化的文档
+  not_structured: 不是结构化数据文件
+  document_formatted: 文档已格式化
+  format_failed: '格式化失败: %{error}'
+  parse_error: '解析错误: %{error}'
+  no_document_validate: 没有可验证的文档
+  valid_syntax: ✔ %{file_type} 语法有效
+  invalid_syntax: ✗ %{error}
+  replaced: 已替换
+  replaced_count: 已替换 %{count} 处
+  no_document_export: 没有可导出的文档
+  exported_to: 已导出到 %{path}
+  export_failed: '导出失败: %{error}'
+  no_document_copy: 没有文档可以复制
+  html_copied: HTML已拷贝到剪切板
+  copy_failed: '拷贝失败: %{error}'
+  opened_files: 已打开 %{count} 个文件
+  saved: 已保存：%{path}
+  opened_workspace: 已打开工作区：%{name}
+  workspace_closed: 工作区已关闭
+  file_tree_refreshed: 文件树已刷新
+  created: 已创建：%{name}
+  renamed_to: 已重命名为：%{name}
+  deleted: 已删除：%{name}
+  opened_background: 已在后台打开：%{name}
+  settings_reset: 恢复默认设置
+  encoding_changed: 编码已更改为 %{encoding}
+  reloaded_single: 已重新加载：%{name}
+  reloaded_multiple: 已从磁盘重新加载 %{count} 个文件
+  external_change_single: 文件已被外部修改（有未保存的更改）：%{name}
+  external_change_multiple: '%{count} 个文件已被外部修改（有未保存的更改）'
+  image_added: 图片已添加到资源文件夹
+  images_added: '%{count} 张图片已添加到资源文件夹'
+  opened_external_single: 已根据外部请求打开文件
+  opened_external_multiple: 已根据外部请求打开 %{count} 个文件
+  wikilink_not_found: '[[%{target}]] — 文件未找到'
+  wikilink_open_failed: 无法打开 [[%{target}]]：%{error}
 tree_viewer:
-  collapse_all: "全部收起"
-  expand_all: "全部展开"
-  copy_path: "复制路径"
-  show_raw: "显示原始"
-  parse_error: "⚠ 解析错误："
-  large_file_warning: "文件较大（%{size} MB）。显示原始内容。"
-
-# Git integration
+  collapse_all: 全部收起
+  expand_all: 全部展开
+  copy_path: 复制路径
+  show_raw: 显示原始
+  parse_error: ⚠ 解析错误：
+  large_file_warning: 文件较大（%{size} MB）。显示原始内容。
 git:
-  modified: "修改"
-  deleted: "已删除"
-  renamed: "重命名"
-  untracked: "未追踪"
-  staged: "已暂存"
-  tracked: "已追踪"
-  staged_modified: "已暂存但有修改"
-  ignored: "已忽略"
-  conflict: "冲突"
-
-# Accessibility
+  modified: 修改
+  deleted: 已删除
+  renamed: 重命名
+  untracked: 未追踪
+  staged: 已暂存
+  tracked: 已追踪
+  staged_modified: 已暂存但有修改
+  ignored: 已忽略
+  conflict: 冲突
 a11y:
-  close_button: "关闭"
-  minimize_button: "最小化"
-
-# Recovery and session dialogs
+  close_button: 关闭
+  minimize_button: 最小化
 recovery:
   auto_save:
-    title: "自动保存恢复"
-    backup_found: "已找到该文件的自动保存备份。"
-    restore_question: "您想恢复自动保存的内容吗？"
-    restore: "恢复"
-    discard: "丢弃"
-    time_label: "最后修改：%{time}"
+    title: 自动保存恢复
+    backup_found: 已找到该文件的自动保存备份。
+    restore_question: 您想恢复自动保存的内容吗？
+    restore: 恢复
+    discard: 丢弃
+    time_label: 最后修改：%{time}
   session:
-    title: "恢复会话"
-    crash_detected: "MDOxide 检测到您之前的会话未正确关闭。"
-    restore_question: "您想恢复之前的会话吗？"
-    restore: "恢复会话"
-    start_fresh: "重新开始"
-    restore_tooltip: "恢复上一会话的所有标签页"
-    start_fresh_tooltip: "丢弃上一会话并启动空编辑器"
-  untitled: "未命名文档"
-
-# Common buttons and actions
+    tabs_unsaved: "%{count} 个标签页有未保存的更改"
+    title: 恢复会话
+    crash_detected: MDOxide 检测到您之前的会话未正确关闭。
+    restore_question: 您想恢复之前的会话吗？
+    restore: 恢复会话
+    start_fresh: 重新开始
+    restore_tooltip: 恢复上一会话的所有标签页
+    start_fresh_tooltip: 丢弃上一会话并启动空编辑器
+  conflict:
+    banner_text: 恢复的内容与磁盘文件不一致。
+    keep_recovered: 保留恢复内容
+    keep_recovered_tooltip: 关闭此提示并保留恢复的缓冲区。标签页保持已修改状态，你可以手动保存。
+    reload_disk: 从磁盘重新加载
+    reload_disk_tooltip: 用磁盘上的当前文件替换缓冲区，丢弃恢复的更改。
+  untitled: 未命名文档
 common:
-  ok: "确定"
-  copy: "复制"
-  error: "错误"
-  dismiss: "关闭"
-
-# Code blocks and widgets
+  ok: 确定
+  copy: 复制
+  error: 错误
+  dismiss: 关闭
 widgets:
   code_block:
-    copy_tooltip: "复制到剪贴板"
-    finish_tooltip: "完成编辑"
-    edit_tooltip: "编辑代码"
+    copy_tooltip: 复制到剪贴板
+    finish_tooltip: 完成编辑
+    edit_tooltip: 编辑代码
+    run_label: 运行
+    run_tooltip: 将此代码块作为子进程运行（编辑器 → 代码执行）。可用 Tab 在“编辑”和“复制”间聚焦。
+    run_finished: '运行完成：
+
+      {output}'
+    run_failed: '运行失败：
+
+      {error}'
+    run_output_heading: 输出
+    run_status_running: 运行中
+    run_status_success: 退出码 0
+    run_status_failure: 退出码 %{code}
+    run_status_failure_unknown: 退出码 ?
+    run_status_timed_out: 超时（%{secs} 秒）
+    run_status_cancelled: 已被用户停止
+    run_status_failed: 失败
+    run_no_output: （无 stdout 或 stderr）
+    run_no_output_hint: 如果预期有输出，请添加 print/echo 或调用你的函数——退出码 0 只表示进程结束。
+    run_dismiss: 关闭
+    run_dismiss_tooltip: 隐藏此输出面板
+    run_stop: 停止
+    run_stop_tooltip: 停止正在运行的命令
+    run_copy_output: 复制
+    run_copy_output_tooltip: 复制输出到剪贴板
+    run_insert_output: 插入为代码块
+    run_insert_output_tooltip: 将捕获的输出作为 ```output 围栏代码块插入源码
+    run_stderr_heading: stderr
   table:
-    add_row: "+ 行"
-    add_column: "+ 列"
-    align_left: "左对齐"
-    align_center: "居中对齐"
-    align_right: "右对齐"
-    delete_column_label: "删除列："
-    delete_column: "删除第 %{index} 列"
-    align_label: "对齐："
-    align_none: "无对齐"
-    delete_row: "删除行"
-    add_row_tooltip: "添加新行"
-    add_column_tooltip: "添加新列"
-    alignment_tooltip: "%{alignment}（点击循环切换）"
+    add_row: + 行
+    add_column: + 列
+    align_left: 左对齐
+    align_center: 居中对齐
+    align_right: 右对齐
+    delete_column_label: 删除列：
+    delete_column: 删除第 %{index} 列
+    align_label: 对齐：
+    align_none: 无对齐
+    delete_row: 删除行
+    add_row_tooltip: 添加新行
+    add_column_tooltip: 添加新列
+    alignment_tooltip: '%{alignment}（点击循环切换）'
   list:
-    decrease_level: "降低级别"
-    increase_level: "提高级别"
-    remove_item: "移除项目"
-    add_item: "+ 添加项目"
+    decrease_level: 降低级别
+    increase_level: 提高级别
+    remove_item: 移除项目
+    add_item: + 添加项目
   link:
-    edit: "编辑链接"
-    open: "🔗 打开"
-    copy: "📋 复制"
-    text_label: "文本："
-    url_label: "网址："
-    copy_tooltip: "复制链接到剪贴板"
-
-# CSV Viewer
+    edit: 编辑链接
+    open: 🔗 打开
+    copy: 📋 复制
+    text_label: 文本：
+    url_label: 网址：
+    copy_tooltip: 复制链接到剪贴板
 csv:
-  delimiter_auto: "自动检测"
-  error: "CSV 解析失败"
-  select_delimiter: "选择分隔符"
-  header_row: "标题行"
-  has_headers_yes: "首行为标题"
-  has_headers_no: "无标题行"
-  show_raw: "显示原始"
-  large_file_warning: "文件较大（%{size} MB）。显示原始内容。"
-
-# Pipeline panel
+  delimiter_auto: 自动检测
+  error: CSV 解析失败
+  select_delimiter: 选择分隔符
+  header_row: 标题行
+  has_headers_yes: 首行为标题
+  has_headers_no: 无标题行
+  show_raw: 显示原始
+  large_file_warning: 文件较大（%{size} MB）。显示原始内容。
+  editing_disabled_large: 文件较大（%{size} MB）。单元格编辑已禁用——切换到源码视图（Ctrl+E）进行编辑。
 pipeline:
-  title: "⚡ 实时管道"
-  command_placeholder: "jq '.items[]' 或 yq '.data' ..."
-  run: "▶ 运行"
-  recent: "最近命令"
-  no_output: "(无输出)"
-  running: "执行中..."
-  truncated: "(已截断)"
-  close_tooltip: "关闭管道面板"
-  cancel_tooltip: "取消执行"
-  run_tooltip: "执行命令 (Enter)"
-  stdout: "标准输出"
-  stderr: "标准错误"
-  hint: "在上方输入命令以通过管道处理文档。\n示例：\n• jq '.'           - 格式化 JSON\n• jq '.items[]'  \
-    \  - 提取数组项\n• yq '.data'       - 提取 YAML 字段\n• grep 'pattern'   - 搜索模式"
-  no_output_success: "(命令无输出)"
+  title: ⚡ 实时管道
+  command_placeholder: jq '.items[]' 或 yq '.data' ...
+  run: ▶ 运行
+  recent: 最近命令
+  no_output: (无输出)
+  running: 执行中...
+  truncated: (已截断)
+  close_tooltip: 关闭管道面板
+  cancel_tooltip: 取消执行
+  run_tooltip: 执行命令 (Enter)
+  stdout: 标准输出
+  stderr: 标准错误
+  hint: '在上方输入命令以通过管道处理文档。
 
-# Encoding
+    示例：
 
-# Tab context menu
+    • jq ''.''           - 格式化 JSON
+
+    • jq ''.items[]''    - 提取数组项
+
+    • yq ''.data''       - 提取 YAML 字段
+
+    • grep ''pattern''   - 搜索模式'
+  no_output_success: (命令无输出)
 tab:
-  reveal_in_explorer: "在资源管理器中显示"
-
-# Mermaid diagrams
+  reveal_in_explorer: 在资源管理器中显示
 mermaid:
-  badge: "mermaid"
-  empty: "(空图表)"
-  rendering_error: "渲染错误：%{error}"
-
-# Table of Contents
-
-# Formatting toolbar tooltips
-
-# Workspace
+  badge: mermaid
+  empty: (空图表)
+  rendering_error: 渲染错误：%{error}
+  warning_line: 第 %{line} 行：
 workspace:
-  close_folder: "关闭文件夹"
-  new_file: "新建文件"
-  new_folder: "新建文件夹"
-  rename: "重命名"
-  delete: "删除"
-  refresh: "刷新"
-  recent_folders: "最近文件夹"
-
-# Zen mode
+  close_folder: 关闭文件夹
+  indexing: 正在索引… 找到 %{count} 个文件
+  new_file: 新建文件
+  new_folder: 新建文件夹
+  rename: 重命名
+  delete: 删除
+  refresh: 刷新
+  recent_folders: 最近文件夹
 zen:
-  enter: "进入专注模式"
-  exit: "退出专注模式"
-
-# Log levels (for settings)
-
-# Drag and drop
-
-# Time relative strings
+  enter: 进入专注模式
+  exit: 退出专注模式
 time:
-  seconds_ago: "%{count} 秒前"
-  minutes_ago: "%{count} 分钟前"
-  hours_ago: "%{count} 小时前"
-  days_ago: "%{count} 天前"
-
-# Tooltips
+  seconds_ago: '%{count} 秒前'
+  minutes_ago: '%{count} 分钟前'
+  hours_ago: '%{count} 小时前'
+  days_ago: '%{count} 天前'
 tooltip:
-  fullscreen_exit: "退出全屏 (F10 或 Esc)"
-  fullscreen_enter: "全屏 (F10)"
-  settings: "设置 (Ctrl+,)"
-  recent_items: "点击查看最近文件和文件夹\nShift+点击在后台打开"
-  about_help: "关于/帮助 (F1)"
-  git_branch: "当前 Git 分支"
-  new_tab: "新标签页"
+  fullscreen_exit: 退出全屏 (F10 或 Esc)
+  fullscreen_enter: 全屏 (F10)
+  settings: 设置 (Ctrl+,)
+  recent_items: '点击查看最近文件和文件夹
 
-# Ribbon toolbar additions
+    Shift+点击在后台打开'
+  about_help: 关于/帮助 (F1)
+  git_branch: 当前 Git 分支
+  new_tab: 新标签页
 ribbon:
-  format_document: "格式化文档（美化打印）"
-  validate_syntax: "验证语法"
-  pipeline: "实时管道..."
-  hide_info_panel: "隐藏信息面板"
-  show_info_panel: "显示信息面板"
-  toggle_outline: "切换大纲"
-  copy_html_tooltip: "复制渲染的 HTML 到剪贴板"
-  export_pdf: "导出为 PDF"
-  coming_soon: "即将推出"
-  heading_level: "标题 %{level}"
-
-# Welcome page (first launch)
+  format_document: 格式化文档（美化打印）
+  validate_syntax: 验证语法
+  pipeline: 实时管道...
+  hide_info_panel: 隐藏信息面板
+  show_info_panel: 显示信息面板
+  toggle_outline: 切换大纲
+  copy_html_tooltip: 复制渲染的 HTML 到剪贴板
+  export_pdf: 导出为 PDF
+  print_preview: 打印预览...
+  coming_soon: 即将推出
+  heading_level: 标题 %{level}
 welcome:
-  subtitle: "配置您的编辑器以开始使用。"
+  command_palette: 命令面板
+  quick_access: 快速访问所有命令。按下快捷键打开可搜索的命令列表。
+  shortcut: 快捷键
+  later_settings: 你可以稍后在“设置 > 键盘快捷键”中修改
+  subtitle: 配置您的编辑器以开始使用。
   section:
-    appearance: "外观"
-    editor: "编辑器"
-    cjk: "CJK 字体偏好"
-    files: "文件"
+    appearance: 外观
+    accent_hint: 渲染标题和界面高亮使用此强调色。链接保持经典蓝色。
+    editor: 编辑器
+    cjk: CJK 字体偏好
+    files: 文件
   label:
-    theme: "主题"
-    language: "语言"
-  line_width_hint: "限制文本行的最大宽度。在禅模式（F11）下设置一个数值以居中显示文本。"
-
-# Terminal panel
+    theme: 主题
+    accent_color: MDOxide 强调色
+    language: 语言
+  line_width_hint: 限制文本行的最大宽度。在禅模式（F11）下设置一个数值以居中显示文本。
+  show_on_empty_launch: 空启动时显示欢迎页
+  show_on_empty_launch_hint: 当 MDOxide 启动且未加载文档时打开此页面。取消勾选则启动时显示空白标签页。
 terminal:
-  not_found: "未找到终端"
-  fallback_title: "终端"
-  new_terminal_here: "在此处新建终端"
-  maximize_active_pane: "最大化活动面板"
-  pop_out: "弹出终端"
-  split_horizontal: "水平分割"
-  split_vertical: "垂直分割"
-  rename: "重命名"
-  close: "关闭"
-  close_pane: "关闭面板"
-  close_others: "关闭其他"
-  scatter_to_windows: "分散到窗口"
-  watching: "正在监视：%{path}"
-  stop_watching: "停止监视"
-  watch_workspace_root: "监视工作区根目录"
-  export_html: "将输出导出为 HTML..."
-  no_workspace_root: "（未设置工作区根目录）"
-  no_macros: "未保存宏。"
-  close_panel_tooltip: "关闭终端面板"
-  running_process_warning: "此终端正在运行进程。"
-  terminate_warning: "关闭它将终止该进程。"
-  close_terminal: "关闭终端"
-  close_terminal_title: "关闭终端？"
-  cancel: "取消"
-  no_terminal: "没有终端。点击 + 创建一个。"
-  restore: "恢复"
-  process_exited: "终端 '%{title}' 的进程已退出"
-  tab_name: "标签页 %{index}"
-  floating_title: "#%{index} %{title}"
+  not_found: 未找到终端
+  fallback_title: 终端
+  new_terminal_here: 在此处新建终端
+  maximize_active_pane: 最大化活动面板
+  pop_out: 弹出终端
+  split_horizontal: 水平分割
+  split_vertical: 垂直分割
+  rename: 重命名
+  close: 关闭
+  close_pane: 关闭面板
+  close_others: 关闭其他
+  scatter_to_windows: 分散到窗口
+  watching: 正在监视：%{path}
+  stop_watching: 停止监视
+  watch_workspace_root: 监视工作区根目录
+  export_html: 将输出导出为 HTML...
+  no_workspace_root: （未设置工作区根目录）
+  no_macros: 未保存宏。
+  close_panel_tooltip: 关闭终端面板
+  running_process_warning: 此终端正在运行进程。
+  terminate_warning: 关闭它将终止该进程。
+  close_terminal: 关闭终端
+  close_terminal_title: 关闭终端？
+  cancel: 取消
+  no_terminal: 没有终端。点击 + 创建一个。
+  restore: 恢复
+  process_exited: 终端 '%{title}' 的进程已退出
+  tab_name: 标签页 %{index}
+  floating_title: '#%{index} %{title}'
   shell:
-    powershell: "PowerShell"
-    cmd: "CMD"
-    wsl: "WSL"
+    powershell: PowerShell
+    cmd: CMD
+    wsl: WSL
   layout:
-    columns_2: "2 列"
-    rows_2: "2 行"
-    grid_2x2: "2x2 网格"
-    save_layout: "保存当前布局..."
-    load_layout: "正在加载布局..."
-    save_workspace_layout: "保存为工作区布局"
+    columns_2: 2 列
+    rows_2: 2 行
+    grid_2x2: 2x2 网格
+    save_layout: 保存当前布局...
+    load_layout: 正在加载布局...
+    save_workspace_layout: 保存为工作区布局
+    custom_layout: 自定义布局
+  workspace:
+    scatter_all: 分散所有标签页
+    save: 保存工作区...
+    load: 加载工作区...
+    default_name: 工作区
+  menu:
+    layouts: 布局
+    workspaces: 工作区
+    watch_mode: 监视模式
+    macros: 宏
+  filter:
+    terminal_layout: 终端布局
+    mdoxide_workspace: MDOxide 工作区
+  error:
+    shell_not_found: 请检查 shell 是否已安装且路径正确
+    pty_failed: PTY 分配失败。请尝试关闭其他终端或重启应用
+    permission_denied: 权限被拒绝。请检查是否有运行该 shell 的权限
+    io_failed: 终端 I/O 失败。请尝试关闭并重新打开终端
+    layout_failed: 修改终端布局失败
+    unexpected: 发生意外错误。请尝试重启终端
+    format: 终端：%{operation} — %{hint}
+productivity:
+  title: 效率中心
+  workspace_hint: 打开工作区以启用任务与笔记持久化
+  tasks:
+    title: 任务
+    progress: 已完成 %{completed}/%{total}
+    input_hint: 输入任务或 - [ ] 任务...
+    add: 添加
+    tip: 提示：使用 - [ ] 表示复选框，! 或 !! 表示优先级
+    move_up: 上移
+    move_down: 下移
+    delete: 删除任务
+    empty: 暂无任务
+    add_first: 在上方添加你的第一个任务
+  pomodoro_status:
+    work: 工作时段
+    break_label: 休息
+  pomodoro:
+    title: 番茄钟
+    work: 工作：%{time}
+    break_label: 休息：%{time}
+    ready: 就绪
+    cycles: 轮次：%{count}
+    stop: 停止
+    start_work: 开始工作（25 分钟）
+    start_break: 开始休息（5 分钟）
+  notes:
+    title: 快速笔记
+    name_label: 名称：
+    note_label: 笔记：
+    confirm_rename: 确认重命名
+    cancel_rename: 取消重命名
+    new_note: 新建笔记
+    rename_note: 重命名笔记
+    confirm_delete: 点击确认删除
+    delete_note: 删除笔记
+    input_hint: 在此输入笔记...
+    dock: 停靠
+    dock_tooltip: 停靠到大纲面板
+    close_hint: （× 也会停靠）
+    ok: 确定
+    confirm: 确认？
+    empty_name: 笔记名称不能为空
+    duplicate_name: 已存在同名笔记
+echo:
+  title: Echo 演示（AI 面板占位）
+  prompt: 此面板演示异步 worker。输入一条消息：
+  responses: 响应（100ms 延迟）：
+  replacement_note: 此面板将在第 8 阶段替换为 AI 聊天。
+  demo_note: 演示：惰性 worker 启动、mpsc 通信、非阻塞 UI。
+title_bar:
+  restore: 还原
+  maximize: 最大化
+error:
+  save_failed: '保存文件失败：
 
-# Productivity panel
+    %{error}'
+  open_workspace_failed: '打开工作区失败：
 
-# Echo/AI placeholder (development)
+    %{error}'
+  open_file_failed: '打开文件失败：
 
-# Title bar
+    %{error}'
+  create_file_failed: '创建文件失败：
 
-# Error dialogs
+    %{error}'
+  create_folder_failed: '创建文件夹失败：
 
-# File dialog titles and filters
+    %{error}'
+  rename_failed: '重命名失败：
+
+    %{error}'
+  delete_failed: '删除失败：
+
+    %{error}'
+  image_failed: '添加图片失败：
+
+    %{error}'
+  explorer_failed: '打开文件管理器失败：
+
+    %{error}'
+  write_failed: '写入文件失败：
+
+    %{error}'
+  encoding_failed: 更改编码失败：%{error}
+file_dialog:
+  open_workspace: 打开工作区文件夹
+  open_files: 打开文件
+  save_file: 保存文件
+  filter:
+    supported: 支持的文件
+    markdown: Markdown 文件
+    text: 文本文件
+    json: JSON 文件
+    yaml: YAML 文件
+    toml: TOML 文件
+    csv_tsv: CSV/TSV 文件
+    all: 所有文件
+    html: HTML 文件
+command_palette:
+  no_matching_commands: 没有匹配的命令
+  recent: 最近
+command:
+  category:
+    file: 文件
+    navigation: 导航
+    view: 视图
+    search: 搜索
+    edit: 编辑
+    format: 格式
+    folding: 折叠
+    other: 其他
+frontmatter:
+  no_frontmatter: 未检测到 frontmatter
+  add_hint: 在文件顶部的 --- 分隔符之间添加 YAML frontmatter。
+  add_button: 添加 frontmatter
+  add: 添加
+  new_key_hint: 新键…
+editor:
+  pdf_no_pages: PDF 没有页面
+  file_load_failed: 文件加载失败

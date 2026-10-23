@@ -381,7 +381,7 @@ impl OutlinePanel {
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                RichText::new("Frontmatter editing is only available for Markdown files")
+                                RichText::new(t!("outline.frontmatter_markdown_only"))
                                     .size(11.0)
                                     .color(muted_color)
                                     .italics(),

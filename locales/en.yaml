@@ -40,6 +40,8 @@ view_mode:
 
 # Bottom markdown format toolbar (Raw / Split raw pane)
 format_toolbar:
+  format_label: "Format"
+  show_toolbar_tooltip: "Show formatting toolbar"
   mermaid_menu: "Mermaid…"
   mermaid_entry_tooltip: "Insert a Mermaid diagram at the cursor"
   mermaid_flowchart: "Flowchart"
@@ -72,6 +74,7 @@ status:
 
 # File dialogs
 dialog:
+  copy_install_command: "Copy Install Command"
   unsaved_changes:
     title: "Unsaved Changes"
     save: "Save"
@@ -159,6 +162,8 @@ settings:
     theme_system: "System"
     restore_session: "Restore previous session on startup"
   editor:
+    language_servers: "Language servers"
+    language_servers_hint: "Optional path to the server binary per detected server. Leave empty to use PATH."
     title: "Editor"
     font_family: "Font"
     font_size: "Font Size"
@@ -386,6 +391,8 @@ find:
 
 # Outline panel
 outline:
+  frontmatter_markdown_only: "Frontmatter editing is only available for Markdown files"
+  item_tooltip: "%{title} (line %{line})"
   panel_title: "Document"
   statistics: "Statistics"
   tab_outline: "Outline"
@@ -748,6 +755,7 @@ recovery:
     discard: "Discard"
     time_label: "Last modified: %{time}"
   session:
+    tabs_unsaved: "%{count} tabs with unsaved changes"
     title: "Session Recovery"
     crash_detected: "MDOxide detected that your previous session was not closed properly."
     restore_question: "Would you like to restore your previous session?"
@@ -925,6 +933,10 @@ ribbon:
 
 # Welcome page (first launch)
 welcome:
+  command_palette: "Command Palette"
+  quick_access: "Quick access to all commands. Press the shortcut to open a searchable command list."
+  shortcut: "Shortcut"
+  later_settings: "You can change this later in Settings > Keyboard Shortcuts"
   subtitle: "Configure your editor to get started."
   section:
     appearance: "Appearance"
@@ -1093,3 +1105,29 @@ file_dialog:
     csv_tsv: "CSV/TSV Files"
     all: "All Files"
     html: "HTML Files"
+
+command_palette:
+  no_matching_commands: "No matching commands"
+  recent: "recent"
+
+command:
+  category:
+    file: "File"
+    navigation: "Navigation"
+    view: "View"
+    search: "Search"
+    edit: "Edit"
+    format: "Format"
+    folding: "Folding"
+    other: "Other"
+
+frontmatter:
+  no_frontmatter: "No frontmatter detected"
+  add_hint: "Add YAML frontmatter between --- delimiters at the top of your file."
+  add_button: "Add frontmatter"
+  add: "Add"
+  new_key_hint: "new key…"
+
+editor:
+  pdf_no_pages: "PDF has no pages"
+  file_load_failed: "Failed to load file"

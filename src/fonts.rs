@@ -1392,14 +1392,28 @@ fn add_cjk_fallbacks(
     preference: CjkFontPreference,
 ) {
     let order = preference.font_order();
-    for key in order {
-        if cjk_state.is_loaded(key) {
-            fonts
-                .families
-                .entry(family.clone())
-                .or_default()
-                .push((*key).to_owned());
+    let loaded: Vec<&str> = order
+        .iter()
+        .copied()
+        .filter(|key| cjk_state.is_loaded(*key))
+        .collect();
+    if loaded.is_empty() {
+        return;
+    }
+
+    let entry = fonts.families.entry(family.clone()).or_default();
+    if family == FontFamily::Proportional {
+        // Prefer CJK faces over the Latin face for proportional text: their
+        // strokes are fuller and read better at small UI sizes.
+        let insert_at = entry
+            .iter()
+            .position(|face| face.as_str() == FONT_INTER)
+            .unwrap_or(entry.len());
+        for (offset, key) in loaded.into_iter().enumerate() {
+            entry.insert(insert_at + offset, key.to_owned());
         }
+    } else {
+        entry.extend(loaded.into_iter().map(str::to_owned));
     }
 }
 
@@ -2395,20 +2409,20 @@ fn configure_text_styles(ctx: &egui::Context) {
     let text_styles: BTreeMap<TextStyle, FontId> = [
         (
             TextStyle::Heading,
-            FontId::new(24.0, FontFamily::Proportional),
+            FontId::new(25.0, FontFamily::Proportional),
         ),
-        (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
+        (TextStyle::Body, FontId::new(15.0, FontFamily::Proportional)),
         (
             TextStyle::Monospace,
-            FontId::new(14.0, FontFamily::Monospace),
+            FontId::new(15.0, FontFamily::Monospace),
         ),
         (
             TextStyle::Button,
-            FontId::new(14.0, FontFamily::Proportional),
+            FontId::new(15.0, FontFamily::Proportional),
         ),
         (
             TextStyle::Small,
-            FontId::new(12.0, FontFamily::Proportional),
+            FontId::new(13.0, FontFamily::Proportional),
         ),
     ]
     .into();

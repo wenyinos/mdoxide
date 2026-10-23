@@ -163,7 +163,7 @@ impl MDOxideApp {
 
                     // Copy command button
                     ui.horizontal(|ui| {
-                        if ui.button("Copy Install Command").clicked() {
+                        if ui.button(t!("dialog.copy_install_command").to_string()).clicked() {
                             let cmd = self.state.ui.portal_error_command.clone();
                             // Set clipboard via egui's output
                             ui.copy_text(cmd.clone());

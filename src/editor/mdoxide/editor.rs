@@ -43,7 +43,7 @@ use crate::state::FoldState;
 use crate::ui::{render_nav_buttons, NavAction};
 
 /// Default font size for the editor.
-const DEFAULT_FONT_SIZE: f32 = 14.0;
+const DEFAULT_FONT_SIZE: f32 = 15.0;
 
 /// Fixed line height for Phase 1 rendering.
 /// This provides consistent vertical spacing regardless of font metrics.
