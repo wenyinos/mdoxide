@@ -242,7 +242,6 @@ run fenced code block, terminal output while scrolling editor — no hangs obser
   Windows using `dtolnay/rust-toolchain@master` (reads `rust-toolchain.toml`).
 - **`.github/workflows/release.yml`** — release builds use the same pinned toolchain
   instead of `@stable`.
-- **Nix** (`flake.nix`, `nix.yml`) — unchanged; uses nixpkgs Rust for package builds.
 
 ### Documentation & release metadata
 

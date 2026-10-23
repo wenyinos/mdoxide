@@ -15,7 +15,6 @@ Confirm before creating `vX.Y.Z`:
   - Screenshot URLs use tag `vX.Y.Z` (not `master`)
 - [ ] `portable/FerriteMDPortable/App/AppInfo/appinfo.ini` `PackageVersion` / `DisplayVersion`
 - [ ] `README.md` “Latest” release blurb
-- [ ] Nix CI green on `master` ([`.github/workflows/nix.yml`](../.github/workflows/nix.yml)) — flake reads version from `Cargo.toml`; no manual `flake.nix` bump
 
 **Tag and push:**
 
@@ -68,7 +67,3 @@ Do **not** open the Flathub PR until the tag exists and GitHub Release builds su
 
 ---
 
-## Nix (no separate release step)
-
-- **Upstream flake:** `nix run github:OlaProeis/Ferrite/vX.Y.Z` works after tag push.
-- **Nixpkgs:** optional; not required for GitHub/Flathub release. See [`linux-package-distribution-plan.md`](./linux-package-distribution-plan.md).

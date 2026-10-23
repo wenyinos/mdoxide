@@ -87,48 +87,8 @@ cargo run
 cargo run --release
 
 # Or run the binary directly
-./target/release/ferrite      # Linux/macOS
-./target/release/ferrite.exe  # Windows
-```
-
----
-
-## Nix / NixOS Workflow
-
-Ferrite now ships with an official `flake.nix` for reproducible build and dev flows.
-
-```bash
-# Run from upstream without installing
-nix run github:OlaProeis/Ferrite
-
-# Enter the project dev shell (Rust toolchain + platform deps)
-nix develop
-
-# Build package output from local checkout
-nix build .#ferrite
-./result/bin/ferrite
-```
-
-### Declarative usage on NixOS/Home Manager
-
-```nix
-{
-  inputs.ferrite.url = "github:OlaProeis/Ferrite";
-
-  outputs = { self, nixpkgs, ferrite, ... }: {
-    # NixOS example
-    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        ({ pkgs, ... }: {
-          environment.systemPackages = [
-            ferrite.packages.${pkgs.system}.ferrite
-          ];
-        })
-      ];
-    };
-  };
-}
+target/release/mdoxide      # Linux/macOS
+./target/release/oxidemd.exe  # Windows
 ```
 
 ---
@@ -176,7 +136,7 @@ The simplest distribution method—just the executable:
 
 ```bash
 cargo build --release
-# Binary at: target/release/ferrite.exe
+# Binary at: target/release/oxidemd.exe
 ```
 
 The Windows executable includes the embedded application icon (via `build.rs`).
@@ -423,7 +383,7 @@ Code signing prevents Windows SmartScreen warnings:
 
 ```powershell
 # Using signtool (from Windows SDK)
-signtool sign /f certificate.pfx /p password /tr http://timestamp.digicert.com /td sha256 target/release/ferrite.exe
+signtool sign /f certificate.pfx /p password /tr http://timestamp.digicert.com /td sha256 target/release/oxidemd.exe
 ```
 
 **Required**: An EV (Extended Validation) code signing certificate.
@@ -565,11 +525,11 @@ cargo fmt && cargo clippy
 cargo build --release --features debug
 
 # Use perf (Linux)
-perf record ./target/release/ferrite
+perf record target/release/mdoxide
 perf report
 
 # Use Instruments (macOS)
-instruments -t "Time Profiler" ./target/release/ferrite
+instruments -t "Time Profiler" target/release/mdoxide
 ```
 
 ---

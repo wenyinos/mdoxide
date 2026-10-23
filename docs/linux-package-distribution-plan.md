@@ -309,61 +309,6 @@ snapcraft upload --release=stable ferrite_0.2.5.2_amd64.snap
 
 ---
 
-## Priority 4: Nixpkgs
-
-**Why:** Growing community, excellent for developers, reproducible builds.
-
-### Steps
-
-#### 1. Create Nix Expression
-
-Submit PR to NixOS/nixpkgs adding `pkgs/applications/editors/ferrite/default.nix`:
-
-```nix
-{ lib
-, rustPlatform
-, fetchFromGitHub
-, pkg-config
-, libxkbcommon
-, libxcb
-, wayland
-}:
-
-rustPlatform.buildRustPackage rec {
-  pname = "ferrite";
-  version = "0.2.5.2";
-
-  src = fetchFromGitHub {
-    owner = "OlaProeis";
-    repo = "Ferrite";
-    rev = "v${version}";
-    hash = "sha256-REPLACE_WITH_HASH";
-  };
-
-  cargoHash = "sha256-REPLACE_WITH_CARGO_HASH";
-
-  nativeBuildInputs = [ pkg-config ];
-  
-  buildInputs = [
-    libxkbcommon
-    libxcb
-    wayland
-  ];
-
-  meta = with lib; {
-    description = "Cross-platform markdown editor built with Rust and egui";
-    homepage = "https://github.com/OlaProeis/Ferrite";
-    license = licenses.mit;
-    maintainers = with maintainers; [ /* your nixpkgs maintainer name */ ];
-    platforms = platforms.linux;
-  };
-}
-```
-
-### Estimated Effort: 2-4 hours
-
----
-
 ## Implementation Checklist
 
 ### Phase 1: Preparation (Do First)
@@ -400,13 +345,6 @@ rustPlatform.buildRustPackage rec {
 - [ ] Build and test locally
 - [ ] Publish to Snap Store
 
-### Phase 5: Nixpkgs (Optional)
-
-- [ ] Create Nix expression
-- [ ] Calculate hashes
-- [ ] Submit PR to nixpkgs
-- [ ] Address review feedback
-
 ---
 
 ## Maintenance Considerations
@@ -416,7 +354,6 @@ rustPlatform.buildRustPackage rec {
 1. **Flathub:** Update manifest with new tag, Flathub auto-builds
 2. **Homebrew:** Update formula with new version + SHA256
 3. **Snap:** Build and upload new version
-4. **Nix:** Update hashes, submit PR or wait for community update
 
 ### Automation Options
 
@@ -430,10 +367,9 @@ rustPlatform.buildRustPackage rec {
 
 - **Flathub Docs:** https://docs.flathub.org/
 - **Flatpak Manifest Reference:** https://docs.flatpak.org/en/latest/manifests.html
-- **flatpak-cargo-generator:** https://github.com/nickel-lang/nickel/blob/master/flake.nix
+- **flatpak-cargo-generator:** https://github.com/flatpak/flatpak-builder-tools
 - **Homebrew Formula Cookbook:** https://docs.brew.sh/Formula-Cookbook
 - **Snapcraft Docs:** https://snapcraft.io/docs
-- **Nixpkgs Contributing:** https://github.com/NixOS/nixpkgs/blob/master/CONTRIBUTING.md
 
 ---
 
@@ -444,7 +380,7 @@ rustPlatform.buildRustPackage rec {
 | 1 | Preparation: Create desktop file, metainfo, gather screenshots |
 | 1-2 | Flathub: Create manifest, test locally, submit PR |
 | 2 | Homebrew: Create tap repository, test, document |
-| 3+ | (Optional) Snap and Nix submissions |
+| 3+ | (Optional) Snap submission |
 
 ---
 
