@@ -1,3 +1,7 @@
+> **状态（2026-10-23）**：本文是上游时期的 KaTeX/WebView 设计草案，**已废弃**。
+> 现行方案见 [`docs/plans/实施计划.md`](plans/实施计划.md) Q5.2：使用 RaTeX（纯 Rust、无 JS/WebView）。
+> 保留本文仅作历史参考。
+
 # TeX Math Support Plan
 
 > **Project:** Add LaTeX/TeX math rendering to MDOxide  
