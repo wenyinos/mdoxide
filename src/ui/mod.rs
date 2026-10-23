@@ -1,4 +1,4 @@
-//! UI components for MarkFlow
+//! UI components for MDOxide
 //!
 //! This module contains reusable UI widgets and components.
 //!

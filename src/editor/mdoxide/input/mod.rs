@@ -1,6 +1,6 @@
-//! Input handling module for MarkFlowEditor.
+//! Input handling module for MDOxideEditor.
 //!
-//! This module provides keyboard and mouse input handling for the MarkFlow editor,
+//! This module provides keyboard and mouse input handling for the MDOxide editor,
 //! including character insertion, cursor movement, text deletion, selection, and scrolling.
 
 pub mod keyboard;

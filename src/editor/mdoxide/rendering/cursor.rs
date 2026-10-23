@@ -1,4 +1,4 @@
-//! Cursor rendering for MarkFlowEditor.
+//! Cursor rendering for MDOxideEditor.
 //!
 //! This module handles cursor positioning and rendering, with full support for:
 //! - Single-line text (non-wrapped mode with horizontal scrolling)

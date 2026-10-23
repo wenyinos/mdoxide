@@ -1,4 +1,4 @@
-//! Mouse input handling for MarkFlowEditor.
+//! Mouse input handling for MDOxideEditor.
 //!
 //! This module handles mouse events including wheel scrolling.
 

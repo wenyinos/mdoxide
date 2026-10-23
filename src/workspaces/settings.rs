@@ -13,7 +13,7 @@ use std::path::Path;
 
 /// Settings specific to a workspace.
 ///
-/// Stored in `{workspace_root}/.markflow/settings.json`.
+/// Stored in `{workspace_root}/.mdoxide/settings.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WorkspaceSettings {
@@ -74,7 +74,7 @@ impl WorkspaceSettings {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The subdirectory name for workspace configuration.
-const WORKSPACE_CONFIG_DIR: &str = ".markflow";
+const WORKSPACE_CONFIG_DIR: &str = ".mdoxide";
 
 /// The settings file name.
 const SETTINGS_FILE: &str = "settings.json";
@@ -112,7 +112,7 @@ pub fn load_workspace_settings(workspace_root: &Path) -> Option<WorkspaceSetting
 
 /// Save workspace settings to disk.
 ///
-/// Creates the `.markflow` directory if it doesn't exist.
+/// Creates the `.mdoxide` directory if it doesn't exist.
 pub fn save_workspace_settings(
     workspace_root: &Path,
     settings: &WorkspaceSettings,
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_load_save_workspace_settings() {
-        let temp_dir = std::env::temp_dir().join("markflow_test_workspace_settings");
+        let temp_dir = std::env::temp_dir().join("mdoxide_test_workspace_settings");
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 

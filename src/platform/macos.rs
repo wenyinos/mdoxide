@@ -1,6 +1,6 @@
 //! macOS-specific functionality for handling Apple Events (Open With, file associations)
 //!
-//! When a user opens a file with MarkFlow via Finder's "Open With" menu or by double-clicking
+//! When a user opens a file with MDOxide via Finder's "Open With" menu or by double-clicking
 //! a file associated with the app, macOS sends an Apple Event rather than passing the file
 //! path as a command-line argument.
 //!
@@ -11,11 +11,11 @@
 //! - Apple Events for file opening require access to delegate methods
 //! - eframe does not currently expose winit's `Event::Opened` events
 //!
-//! The app bundle includes file type associations (CFBundleDocumentTypes), so MarkFlow
+//! The app bundle includes file type associations (CFBundleDocumentTypes), so MDOxide
 //! appears in the "Open With" menu. However, files opened this way won't actually open
 //! until eframe adds support.
 //!
-//! Workaround: Use the command line: `markflow /path/to/file.md`
+//! Workaround: Use the command line: `mdoxide /path/to/file.md`
 //!
 //! See: https://github.com/rust-windowing/winit/issues/1751
 

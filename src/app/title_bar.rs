@@ -1,10 +1,10 @@
-//! Title bar rendering for the MarkFlow application.
+//! Title bar rendering for the MDOxide application.
 //!
 //! This module renders the custom title bar with window controls,
 //! app icon, file title, auto-save indicator, view mode segment,
 //! and minimize/maximize/close buttons.
 
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::config::ViewMode;
 use crate::state::FileType;
 use crate::ui::phosphor_icons::{phosphor_font, ARROWS_IN, GEAR, NOTE_PENCIL};
@@ -18,7 +18,7 @@ const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 18.0);
 /// Scale factor for chrome icon geometry (matches button shrink).
 const WINDOW_CHROME_ICON_SCALE: f32 = 0.8;
 
-impl MarkFlowApp {
+impl MDOxideApp {
     /// Render the custom title bar panel.
     pub(crate) fn render_title_bar(
         &mut self,
@@ -524,7 +524,7 @@ impl MarkFlowApp {
                         // View Mode segmented control (all document tabs)
                         if has_editor && !is_special_tab {
                             let segment = ViewModeSegment::new();
-                            let markflow_accent = self.state.settings.markflow_accent_rgb();
+                            let mdoxide_accent = self.state.settings.mdoxide_accent_rgb();
 
                             if current_file_type.supports_split() {
                                 // Markdown/tabular: 3-mode (Raw | Split | Rendered)
@@ -533,7 +533,7 @@ impl MarkFlowApp {
                                     current_view_mode,
                                     current_file_type,
                                     is_dark,
-                                    markflow_accent,
+                                    mdoxide_accent,
                                 ) {
                                     title_bar_view_action = Some(action);
                                 }
@@ -543,7 +543,7 @@ impl MarkFlowApp {
                                     ui,
                                     current_view_mode,
                                     is_dark,
-                                    markflow_accent,
+                                    mdoxide_accent,
                                 ) {
                                     title_bar_view_action = Some(action);
                                 }

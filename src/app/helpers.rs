@@ -1,4 +1,4 @@
-//! Helper utility functions for the MarkFlow application module.
+//! Helper utility functions for the MDOxide application module.
 //!
 //! This module contains standalone functions for text position conversion
 //! and other utilities used across the app module.

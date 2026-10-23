@@ -1,4 +1,4 @@
-//! Configuration module for MarkFlow
+//! Configuration module for MDOxide
 //!
 //! This module handles user preferences and application settings,
 //! including serialization/deserialization to/from JSON and

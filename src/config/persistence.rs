@@ -1,4 +1,4 @@
-//! Configuration file persistence for MarkFlow
+//! Configuration file persistence for MDOxide
 //!
 //! This module handles loading and saving configuration files to
 //! platform-specific directories with robust error handling and
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Application name used for the config directory
-const APP_NAME: &str = "markflow";
+const APP_NAME: &str = "mdoxide";
 
 /// Configuration file name
 const CONFIG_FILE_NAME: &str = "config.json";
@@ -28,7 +28,7 @@ const PORTABLE_DIR_NAME: &str = "portable";
 
 /// Environment variable for overriding the data directory.
 /// Used by PortableApps.com launcher and custom portable setups.
-const DATA_DIR_ENV_VAR: &str = "MARKFLOW_DATA_DIR";
+const DATA_DIR_ENV_VAR: &str = "MDOXIDE_DATA_DIR";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Portable Mode Detection
@@ -38,7 +38,7 @@ const DATA_DIR_ENV_VAR: &str = "MARKFLOW_DATA_DIR";
 ///
 /// Portable mode is resolved with the following priority:
 ///
-/// 1. **`MARKFLOW_DATA_DIR` environment variable** — if set and pointing to an
+/// 1. **`MDOXIDE_DATA_DIR` environment variable** — if set and pointing to an
 ///    existing directory, that path is used. This supports the PortableApps.com
 ///    launcher and other external packaging systems that set the data path.
 /// 2. **`portable/` folder next to the executable** — the original detection
@@ -47,7 +47,7 @@ const DATA_DIR_ENV_VAR: &str = "MARKFLOW_DATA_DIR";
 /// In portable mode, all configuration and data is stored in the resolved
 /// folder instead of the system's AppData/config directory.
 fn get_portable_dir() -> Option<PathBuf> {
-    // Priority 1: MARKFLOW_DATA_DIR env var (PortableApps.com / custom setups)
+    // Priority 1: MDOXIDE_DATA_DIR env var (PortableApps.com / custom setups)
     if let Ok(dir) = std::env::var(DATA_DIR_ENV_VAR) {
         if !dir.is_empty() {
             let path = PathBuf::from(&dir);
@@ -90,12 +90,12 @@ fn get_portable_dir() -> Option<PathBuf> {
 /// Get the configuration directory for the application.
 ///
 /// Resolution order:
-/// 1. **`MARKFLOW_DATA_DIR` env var** — used by PortableApps.com and similar launchers
+/// 1. **`MDOXIDE_DATA_DIR` env var** — used by PortableApps.com and similar launchers
 /// 2. **`portable/` folder** next to the executable — self-contained portable installs
 /// 3. **Platform-specific directory** (standard install):
-///    - **Windows**: `%APPDATA%\markflow\`
-///    - **macOS**: `~/Library/Application Support/markflow/`
-///    - **Linux**: `~/.config/markflow/`
+///    - **Windows**: `%APPDATA%\mdoxide\`
+///    - **macOS**: `~/Library/Application Support/mdoxide/`
+///    - **Linux**: `~/.config/mdoxide/`
 ///
 /// # Errors
 ///
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_app_name_constant() {
-        assert_eq!(APP_NAME, "markflow");
+        assert_eq!(APP_NAME, "mdoxide");
     }
 
     #[test]

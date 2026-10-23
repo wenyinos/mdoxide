@@ -1,14 +1,14 @@
-//! Find and replace coordination for the MarkFlow application.
+//! Find and replace coordination for the MDOxide application.
 //!
 //! This module contains handlers for opening find/replace panel,
 //! navigating matches, selecting occurrences, and replacing text.
 
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use eframe::egui;
 use log::debug;
 use rust_i18n::t;
 
-impl MarkFlowApp {
+impl MDOxideApp {
     /// Handle opening the find panel.
     ///
     /// Opens the find panel, optionally in replace mode.
@@ -125,19 +125,19 @@ impl MarkFlowApp {
 
     /// Handle replace current match action.
     ///
-    /// This uses the MarkFlowEditor's rope-based replace for better performance
+    /// This uses the MDOxideEditor's rope-based replace for better performance
     /// with large files.
     pub(crate) fn handle_replace_current(&mut self, ctx: &egui::Context) {
-        use crate::editor::get_markflow_editor_mut;
+        use crate::editor::get_mdoxide_editor_mut;
 
         let replacement = self.state.ui.find_state.replace_term.clone();
 
-        // Get the active tab ID for MarkFlowEditor lookup
+        // Get the active tab ID for MDOxideEditor lookup
         let tab_id = self.state.active_tab().map(|t| t.id);
 
         if let Some(tab_id) = tab_id {
-            // Use MarkFlowEditor's replace (efficient for large files)
-            let replaced = get_markflow_editor_mut(ctx, tab_id, |editor| {
+            // Use MDOxideEditor's replace (efficient for large files)
+            let replaced = get_mdoxide_editor_mut(ctx, tab_id, |editor| {
                 editor.replace_current_match(&replacement)
             });
 
@@ -145,7 +145,7 @@ impl MarkFlowApp {
                 // The editor content changed - sync back to Tab and re-search
                 // to update match positions and count
                 let new_content =
-                    get_markflow_editor_mut(ctx, tab_id, |editor| editor.buffer().to_string())
+                    get_mdoxide_editor_mut(ctx, tab_id, |editor| editor.buffer().to_string())
                         .unwrap_or_default();
 
                 // Update Tab content
@@ -167,10 +167,10 @@ impl MarkFlowApp {
 
     /// Handle replace all matches action.
     ///
-    /// This uses the MarkFlowEditor's efficient batch replace for
+    /// This uses the MDOxideEditor's efficient batch replace for
     /// O(matches * log N) performance.
     pub(crate) fn handle_replace_all(&mut self, ctx: &egui::Context) {
-        use crate::editor::get_markflow_editor_mut;
+        use crate::editor::get_mdoxide_editor_mut;
 
         let replacement = self.state.ui.find_state.replace_term.clone();
         let match_count = self.state.ui.find_state.match_count();
@@ -179,12 +179,12 @@ impl MarkFlowApp {
             return;
         }
 
-        // Get the active tab ID for MarkFlowEditor lookup
+        // Get the active tab ID for MDOxideEditor lookup
         let tab_id = self.state.active_tab().map(|t| t.id);
 
         if let Some(tab_id) = tab_id {
-            // Use MarkFlowEditor's batch replace (efficient for large files)
-            let replaced_count = get_markflow_editor_mut(ctx, tab_id, |editor| {
+            // Use MDOxideEditor's batch replace (efficient for large files)
+            let replaced_count = get_mdoxide_editor_mut(ctx, tab_id, |editor| {
                 editor.replace_all_matches(&replacement)
             });
 
@@ -192,7 +192,7 @@ impl MarkFlowApp {
                 if count > 0 {
                     // The editor content changed - sync back to Tab
                     let new_content =
-                        get_markflow_editor_mut(ctx, tab_id, |editor| editor.buffer().to_string())
+                        get_mdoxide_editor_mut(ctx, tab_id, |editor| editor.buffer().to_string())
                             .unwrap_or_default();
 
                     // Update Tab content

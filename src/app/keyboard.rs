@@ -1,17 +1,17 @@
-//! Keyboard shortcut handling for the MarkFlow application.
+//! Keyboard shortcut handling for the MDOxide application.
 //!
 //! This module detects keyboard shortcuts and dispatches them to the
 //! appropriate handler methods.
 
 use super::types::KeyboardAction;
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::config::ShortcutCommand;
 use crate::markdown::MarkdownFormatCommand;
 use eframe::egui;
 use log::{debug, info};
 use rust_i18n::t;
 
-impl MarkFlowApp {
+impl MDOxideApp {
     pub(crate) fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         // Skip ALL keyboard shortcuts if terminal has focus
         // Terminal handles its own keyboard input

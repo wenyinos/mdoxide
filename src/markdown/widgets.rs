@@ -1624,7 +1624,7 @@ struct TableGlobalFocus {
 }
 
 fn table_global_focus_id() -> egui::Id {
-    egui::Id::new("markflow_table_global_focus")
+    egui::Id::new("mdoxide_table_global_focus")
 }
 
 /// Force-commit signal egui id for the table starting at `table_line`.
@@ -1633,7 +1633,7 @@ fn table_global_focus_id() -> egui::Id {
 /// from a [`BlockRef::TableCell`](crate::markdown::rendered_session::BlockRef::TableCell);
 /// read by [`EditableTable::show`] on its next frame.
 fn table_force_commit_id(table_line: usize) -> egui::Id {
-    egui::Id::new("markflow_table_force_commit").with(table_line)
+    egui::Id::new("mdoxide_table_force_commit").with(table_line)
 }
 
 /// Request that the next render of the table starting at `table_line` commit dirty edits
@@ -4013,9 +4013,9 @@ fn render_run_output_panel(
     response: &mut OutputPanelResponse,
 ) {
     let theme = if dark_mode {
-        TerminalTheme::markflow_dark()
+        TerminalTheme::mdoxide_dark()
     } else {
-        TerminalTheme::markflow_light()
+        TerminalTheme::mdoxide_light()
     };
     let panel_bg = if dark_mode {
         egui::Color32::from_rgb(24, 28, 34)

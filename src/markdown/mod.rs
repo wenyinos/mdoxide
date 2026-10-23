@@ -41,7 +41,7 @@
 #[inline]
 pub(crate) fn markdown_accent_temp_id() -> eframe::egui::Id {
     // Fixed id: MarkdownEditor stamps accent here each frame for widget fallbacks.
-    eframe::egui::Id::new("__markflow_markdown_accent__")
+    eframe::egui::Id::new("__mdoxide_markdown_accent__")
 }
 
 mod ansi_render;

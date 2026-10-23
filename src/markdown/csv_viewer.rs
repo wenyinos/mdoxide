@@ -1,4 +1,4 @@
-//! CSV/TSV Table Viewer for MarkFlow
+//! CSV/TSV Table Viewer for MDOxide
 //!
 //! This module provides a scrollable table view for CSV and TSV files,
 //! with fixed-width columns, header highlighting, and cell tooltips.

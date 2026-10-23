@@ -1,4 +1,4 @@
-//! PDF Export for MarkFlow.
+//! PDF Export for MDOxide.
 //!
 //! Native‑Rust PDF export built on the [`krilla`](https://crates.io/crates/krilla)
 //! crate (same author as the existing `hayro` viewer). Walks the comrak AST,

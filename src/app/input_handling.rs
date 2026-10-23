@@ -1,15 +1,15 @@
-//! Input handling for the MarkFlow application.
+//! Input handling for the MDOxide application.
 //!
 //! This module contains pre-render input consumption: undo/redo key interception,
 //! move-line key consumption, smart paste, and auto-close bracket handling.
 
 use super::helpers::modifier_symbol;
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::state::Selection;
 use eframe::egui;
 use log::{debug, warn};
 
-impl MarkFlowApp {
+impl MDOxideApp {
     /// Consume undo/redo keyboard events BEFORE rendering.
     ///
     /// This MUST be called before render_ui() to prevent egui's TextEdit from
@@ -203,12 +203,12 @@ impl MarkFlowApp {
     /// - Pasting an image URL with no selection: Creates markdown image `![](url)`
     /// - Otherwise: Normal paste behavior
     ///
-    /// Uses MarkFlowEditor's selection state (which is authoritative) rather than
+    /// Uses MDOxideEditor's selection state (which is authoritative) rather than
     /// tab.cursors which may be stale.
     ///
     /// Returns true if a paste event was consumed and handled with smart behavior.
     pub(crate) fn consume_smart_paste(&mut self, ctx: &egui::Context) -> bool {
-        use crate::editor::get_markflow_editor_mut;
+        use crate::editor::get_mdoxide_editor_mut;
 
         if self.terminal_panel_state.terminal_has_focus
             && self.terminal_panel_state.renaming_index.is_none()
@@ -222,10 +222,10 @@ impl MarkFlowApp {
         let tab_id = tab.id;
         let content = tab.content.clone();
 
-        // Query MarkFlowEditor for authoritative selection state
+        // Query MDOxideEditor for authoritative selection state
         // This is the actual selection visible in the editor, not the potentially stale tab.cursors
         let editor_state: Option<(bool, String, usize, usize)> =
-            get_markflow_editor_mut(ctx, tab_id, |editor| {
+            get_mdoxide_editor_mut(ctx, tab_id, |editor| {
                 let has_sel = editor.has_selection();
                 let selected_text = if has_sel {
                     editor.selected_text()
@@ -240,7 +240,7 @@ impl MarkFlowApp {
         {
             Some(state) => state,
             None => {
-                // No MarkFlowEditor available - fall back to tab state
+                // No MDOxideEditor available - fall back to tab state
                 let tab = self.state.active_tab().unwrap();
                 (
                     false,
@@ -308,7 +308,7 @@ impl MarkFlowApp {
 
         // If we found an action, consume the event and apply it
         if let Some((event_idx, action)) = action {
-            // Remove the paste event to prevent MarkFlowEditor from handling it
+            // Remove the paste event to prevent MDOxideEditor from handling it
             ctx.input_mut(|input| {
                 if event_idx < input.events.len() {
                     input.events.remove(event_idx);
@@ -647,20 +647,20 @@ mod tests {
 
     #[test]
     fn is_url_recognises_common_schemes() {
-        assert!(MarkFlowApp::is_url("http://example.com"));
-        assert!(MarkFlowApp::is_url("https://example.com/path?q=1#frag"));
-        assert!(MarkFlowApp::is_url("ftp://files.example.com"));
-        assert!(MarkFlowApp::is_url("file:///home/user/x.md"));
-        assert!(MarkFlowApp::is_url("  https://example.com  ")); // trims
+        assert!(MDOxideApp::is_url("http://example.com"));
+        assert!(MDOxideApp::is_url("https://example.com/path?q=1#frag"));
+        assert!(MDOxideApp::is_url("ftp://files.example.com"));
+        assert!(MDOxideApp::is_url("file:///home/user/x.md"));
+        assert!(MDOxideApp::is_url("  https://example.com  ")); // trims
     }
 
     #[test]
     fn is_url_rejects_non_urls() {
-        assert!(!MarkFlowApp::is_url(""));
-        assert!(!MarkFlowApp::is_url("just plain text"));
-        assert!(!MarkFlowApp::is_url("mailto:user@example.com")); // no `://`
-        assert!(!MarkFlowApp::is_url("foo:bar")); // no `://`
-        assert!(!MarkFlowApp::is_url("123://example.com")); // scheme must start alpha
+        assert!(!MDOxideApp::is_url(""));
+        assert!(!MDOxideApp::is_url("just plain text"));
+        assert!(!MDOxideApp::is_url("mailto:user@example.com")); // no `://`
+        assert!(!MDOxideApp::is_url("foo:bar")); // no `://`
+        assert!(!MDOxideApp::is_url("123://example.com")); // scheme must start alpha
     }
 
     /// Regression test for the v0.3.0 paste-crash:
@@ -674,33 +674,33 @@ mod tests {
         // Each of these previously panicked at `&s[colon_pos..colon_pos + 3]`
         // because the byte right after `:` was the start of a 2-/3-/4-byte UTF-8
         // codepoint, so `colon_pos + 3` landed mid-codepoint.
-        assert!(!MarkFlowApp::is_url("Hebrew: שלום עולם")); // 2-byte char after `:`
-        assert!(!MarkFlowApp::is_url("Bengali: আমি বাংলা")); // 3-byte char after `:`
-        assert!(!MarkFlowApp::is_url("Hindi: नमस्ते दुनिया")); // 3-byte char after `:`
-        assert!(!MarkFlowApp::is_url("Arabic: مرحبا بالعالم")); // 2-byte char after `:`
-        assert!(!MarkFlowApp::is_url("note: 你好")); // 3-byte CJK after `:`
-        assert!(!MarkFlowApp::is_url("emoji: 👨‍👩‍👧")); // 4-byte emoji after `:`
+        assert!(!MDOxideApp::is_url("Hebrew: שלום עולם")); // 2-byte char after `:`
+        assert!(!MDOxideApp::is_url("Bengali: আমি বাংলা")); // 3-byte char after `:`
+        assert!(!MDOxideApp::is_url("Hindi: नमस्ते दुनिया")); // 3-byte char after `:`
+        assert!(!MDOxideApp::is_url("Arabic: مرحبا بالعالم")); // 2-byte char after `:`
+        assert!(!MDOxideApp::is_url("note: 你好")); // 3-byte CJK after `:`
+        assert!(!MDOxideApp::is_url("emoji: 👨‍👩‍👧")); // 4-byte emoji after `:`
                                                    // Edge: single colon with nothing after
-        assert!(!MarkFlowApp::is_url("a:"));
+        assert!(!MDOxideApp::is_url("a:"));
         // Edge: short scheme-like prefix that ends mid-multi-byte char
-        assert!(!MarkFlowApp::is_url("a:ש"));
+        assert!(!MDOxideApp::is_url("a:ש"));
     }
 
     #[test]
     fn is_image_url_does_not_panic_on_mixed_script_text() {
         // is_image_url calls is_url first; the panic was reached via this path
         // (frame 21 in the v0.3.0-rc backtrace).
-        assert!(!MarkFlowApp::is_image_url("Hebrew: שלום עולם"));
-        assert!(!MarkFlowApp::is_image_url("emoji line 👨‍👩‍👧 here"));
+        assert!(!MDOxideApp::is_image_url("Hebrew: שלום עולם"));
+        assert!(!MDOxideApp::is_image_url("emoji line 👨‍👩‍👧 here"));
     }
 
     #[test]
     fn is_image_url_recognises_image_extensions() {
-        assert!(MarkFlowApp::is_image_url("https://example.com/photo.png"));
-        assert!(MarkFlowApp::is_image_url("https://example.com/photo.JPG")); // case-insensitive
-        assert!(MarkFlowApp::is_image_url("https://example.com/x.gif?v=2"));
-        assert!(MarkFlowApp::is_image_url("https://example.com/x.webp#frag"));
-        assert!(!MarkFlowApp::is_image_url("https://example.com/page.html"));
-        assert!(!MarkFlowApp::is_image_url("not a url at all.png"));
+        assert!(MDOxideApp::is_image_url("https://example.com/photo.png"));
+        assert!(MDOxideApp::is_image_url("https://example.com/photo.JPG")); // case-insensitive
+        assert!(MDOxideApp::is_image_url("https://example.com/x.gif?v=2"));
+        assert!(MDOxideApp::is_image_url("https://example.com/x.webp#frag"));
+        assert!(!MDOxideApp::is_image_url("https://example.com/page.html"));
+        assert!(!MDOxideApp::is_image_url("not a url at all.png"));
     }
 }

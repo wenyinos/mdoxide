@@ -1,12 +1,16 @@
-# MarkFlow
+# MDOxide
+
+**English** | [简体中文](README.zh-CN.md)
 
 A native WYSIWYG Markdown editor written in Rust, built with `egui`/`eframe` — no WebView, no Electron, no JavaScript runtime.
 
-MarkFlow is a ground-up Rust reimplementation of [MarkText](https://github.com/marktext/marktext)'s editing experience, forked from [Ferrite](https://github.com/OlaProeis/Ferrite) (MIT).
+MDOxide is a ground-up Rust reimplementation of [MarkText](https://github.com/marktext/marktext)'s editing experience, forked from [Ferrite](https://github.com/OlaProeis/Ferrite) (MIT).
+
+The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-Early development. M0 (baseline fork + rename + code audit) is complete; UI and interaction parity work is in progress. See [`docs/plans/`](docs/plans/) for the implementation plan and the M0 audit report.
+Early development. M0 (baseline fork + rename + code audit) is complete; M1 (module reduction, stability) and M2 (MarkText visual identity) are in progress. See [`docs/plans/`](docs/plans/) for the implementation plan and the M0 audit report.
 
 ## What works today (inherited from Ferrite)
 
@@ -31,10 +35,10 @@ Requirements: Rust 1.92 (pinned in `rust-toolchain.toml`), plus the usual Linux 
 
 ```bash
 cargo run --release        # run
-cargo test --release       # 1599 tests, 0 failures
-cargo build --release      # binary at target/release/markflow
+cargo test --release       # 1602 tests, 0 failures
+cargo build --release      # binary at target/release/mdoxide
 ```
 
 ## License
 
-MIT. MarkFlow is derived from Ferrite (Copyright © Ola Proeis) and reimplements the UX of MarkText; see [`NOTICE`](NOTICE) for attribution details.
+MIT. MDOxide is derived from Ferrite (Copyright © Ola Proeis) and reimplements the UX of MarkText; see [`NOTICE`](NOTICE) for attribution details.

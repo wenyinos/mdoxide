@@ -1,4 +1,4 @@
-//! Mouse position conversion for MarkFlowEditor.
+//! Mouse position conversion for MDOxideEditor.
 //!
 //! This module contains:
 //! - `pos_to_cursor` - Convert screen position to cursor position
@@ -7,9 +7,9 @@
 use egui::{Color32, Pos2, Rect, Ui};
 
 use super::cursor::Cursor;
-use super::editor::MarkFlowEditor;
+use super::editor::MDOxideEditor;
 
-impl MarkFlowEditor {
+impl MDOxideEditor {
     /// Calculates the column position from click coordinates.
     /// For wrapped text, uses both x and y_in_line to find the correct character.
     pub(crate) fn calculate_column_from_pos(

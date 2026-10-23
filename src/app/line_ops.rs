@@ -1,13 +1,13 @@
-//! Line operations for the MarkFlow application.
+//! Line operations for the MDOxide application.
 //!
 //! This module contains handlers for go-to-line, duplicate line,
 //! move line up/down, and delete line operations.
 
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::config::ViewMode;
 use log::{debug, warn};
 
-impl MarkFlowApp {
+impl MDOxideApp {
     /// Handle opening the Go to Line dialog.
     pub(crate) fn handle_open_go_to_line(&mut self) {
         // Get current line and max line from active tab
@@ -75,7 +75,7 @@ impl MarkFlowApp {
     /// - If selection: duplicates the selected text immediately after the selection
     ///
     /// Uses `cursor_position` (line, col) which is reliably synced from
-    /// MarkFlowEditor, rather than `tab.cursors` which may be stale.
+    /// MDOxideEditor, rather than `tab.cursors` which may be stale.
     pub(crate) fn handle_duplicate_line(&mut self) {
         let Some(tab) = self.state.active_tab_mut() else {
             return;
@@ -85,7 +85,7 @@ impl MarkFlowApp {
         let old_content = tab.content.clone();
         let old_cursor = tab.cursors.primary().head;
 
-        // Use cursor_position (line, col) which is reliably synced from MarkFlowEditor
+        // Use cursor_position (line, col) which is reliably synced from MDOxideEditor
         let (current_line_num, cursor_col) = tab.cursor_position;
 
         // Split into lines for manipulation

@@ -1,4 +1,4 @@
-//! About/Help Panel Component for MarkFlow
+//! About/Help Panel Component for MDOxide
 //!
 //! This module implements a modal About/Help panel that displays:
 //! - Application information and version
@@ -297,7 +297,7 @@ impl AboutPanel {
             });
             ui.add_space(8.0);
 
-            const GITHUB_REPO: &str = "https://github.com/OlaProeis/MarkFlow";
+            const GITHUB_REPO: &str = "https://github.com/OlaProeis/MDOxide";
 
             ui.horizontal(|ui| {
                 ui.label(t!("about.github_label"));

@@ -1,4 +1,4 @@
-//! Adapter from MarkFlow's `ThemeColors` to the colors the PDF renderer uses.
+//! Adapter from MDOxide's `ThemeColors` to the colors the PDF renderer uses.
 //!
 //! By default the PDF exporter renders on a clean white page with dark text
 //! (the "print default" theme) regardless of whether the editor is in dark
@@ -42,7 +42,7 @@ impl PdfTheme {
         }
     }
 
-    /// Build a `PdfTheme` from MarkFlow's active `ThemeColors` (used when the
+    /// Build a `PdfTheme` from MDOxide's active `ThemeColors` (used when the
     /// user opts in via `PdfExportOptions::use_theme_colors`).
     pub fn from_theme_colors(colors: &ThemeColors) -> Self {
         Self {

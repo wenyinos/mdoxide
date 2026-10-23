@@ -1,4 +1,4 @@
-//! Theme Manager for MarkFlow
+//! Theme Manager for MDOxide
 //!
 //! This module provides centralized theme management, handling theme switching,
 //! persistence, and application of themes to the egui context.
@@ -54,7 +54,7 @@ pub struct ThemeManager {
     needs_apply: bool,
     /// Last detected system dark mode state (for System theme)
     last_system_dark_mode: Option<bool>,
-    /// Persisted MarkFlow accent (selection, headings tint, widgets)
+    /// Persisted MDOxide accent (selection, headings tint, widgets)
     accent_rgb: [u8; 3],
 }
 

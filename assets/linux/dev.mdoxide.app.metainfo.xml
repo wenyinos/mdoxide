@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>dev.markflow.app</id>
-  <name>MarkFlow</name>
+  <id>dev.mdoxide.app</id>
+  <name>MDOxide</name>
   <summary>A native WYSIWYG markdown editor</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
-  <developer id="dev.markflow">
-    <name>MarkFlow contributors</name>
+  <developer id="dev.mdoxide">
+    <name>MDOxide contributors</name>
   </developer>
 
   <branding>

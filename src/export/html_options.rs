@@ -53,7 +53,7 @@ pub struct HtmlExportOptions {
     pub include_title: bool,
     pub include_syntax_highlighting: bool,
     pub open_after_export: bool,
-    /// Apply MarkFlow palette CSS (headings, tables, blockquotes). Off = structural CSS only.
+    /// Apply MDOxide palette CSS (headings, tables, blockquotes). Off = structural CSS only.
     pub use_theme_colors: bool,
     /// Extra user stylesheet appended at end of `<style>`.
     pub custom_css: Option<String>,

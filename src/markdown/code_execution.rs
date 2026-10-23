@@ -28,11 +28,11 @@ use eframe::egui;
 /// [`crate::markdown::MarkdownEditor`] stores the current snapshot at this id for
 /// [`crate::markdown::widgets::EditableCodeBlock`].
 pub(crate) fn code_execution_ctx_id() -> egui::Id {
-    egui::Id::new("markflow_markdown_code_execution_ctx")
+    egui::Id::new("mdoxide_markdown_code_execution_ctx")
 }
 
 fn code_execution_toasts_id() -> egui::Id {
-    egui::Id::new("markflow_code_exec_toasts")
+    egui::Id::new("mdoxide_code_exec_toasts")
 }
 
 /// Settings snapshot for gating and running fenced code blocks.
@@ -119,10 +119,10 @@ pub fn run_button_visible(ctx: &CodeExecutionUi, language: &str) -> bool {
 }
 
 fn pending_consent_dialog_id() -> egui::Id {
-    egui::Id::new("markflow_code_exec_pending_consent_v1")
+    egui::Id::new("mdoxide_code_exec_pending_consent_v1")
 }
 
-/// Queue opening the consent dialog (picked up in [`crate::app::dialogs::MarkFlowApp::render_dialogs`]).
+/// Queue opening the consent dialog (picked up in [`crate::app::dialogs::MDOxideApp::render_dialogs`]).
 pub fn push_pending_code_execution_consent(
     ctx: &egui::Context,
     pending: crate::state::PendingCodeRun,
@@ -153,7 +153,7 @@ pub fn push_code_execution_toast(ctx: &egui::Context, message: String) {
     });
 }
 
-/// Called from [`crate::app::MarkFlowApp::update`] to surface completion toasts.
+/// Called from [`crate::app::MDOxideApp::update`] to surface completion toasts.
 pub fn drain_code_execution_toasts(ctx: &egui::Context) -> Vec<String> {
     ctx.data_mut(|d| {
         let q: &mut Vec<String> =
@@ -380,7 +380,7 @@ impl TempScript {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("markflow_code_{nanos}{suffix}"));
+        let path = std::env::temp_dir().join(format!("mdoxide_code_{nanos}{suffix}"));
         Ok((Self { path: path.clone() }, path))
     }
 }

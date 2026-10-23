@@ -60,7 +60,7 @@ impl Default for WrapInfo {
 ///
 /// # Example
 /// ```
-/// use markflow::editor::ViewState;
+/// use mdoxide::editor::ViewState;
 ///
 /// let mut view = ViewState::new();
 /// view.update_viewport(600.0);  // 600px tall viewport

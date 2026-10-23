@@ -1,35 +1,35 @@
-//! Formatting operations for the MarkFlow application.
+//! Formatting operations for the MDOxide application.
 //!
 //! This module contains markdown formatting commands, TOC insertion,
 //! and structured document (JSON/YAML/TOML) format/validate.
 
 use super::helpers::{char_index_to_line_col, line_col_to_char_index};
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::markdown::{apply_raw_format, insert_or_update_toc, MarkdownFormatCommand, TocOptions};
 use crate::state::FileType;
 use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
 
-impl MarkFlowApp {
+impl MDOxideApp {
     /// Handle a markdown formatting command.
     ///
     /// Applies the formatting to the current selection in the active editor.
-    /// Uses MarkFlowEditor when available for better undo/redo integration,
+    /// Uses MDOxideEditor when available for better undo/redo integration,
     /// falling back to TabState-based formatting for legacy code paths.
     pub(crate) fn handle_format_command(
         &mut self,
         ctx: &egui::Context,
         cmd: MarkdownFormatCommand,
     ) {
-        use crate::editor::get_markflow_editor_mut;
+        use crate::editor::get_mdoxide_editor_mut;
 
         // Get tab_id before borrowing state mutably
         let tab_id = self.state.active_tab().map(|t| t.id);
 
         if let Some(tab_id) = tab_id {
-            // Try to use MarkFlowEditor (preferred path)
-            let markflow_result = get_markflow_editor_mut(ctx, tab_id, |editor| {
+            // Try to use MDOxideEditor (preferred path)
+            let mdoxide_result = get_mdoxide_editor_mut(ctx, tab_id, |editor| {
                 let applied = editor.apply_markdown_format(cmd);
                 if applied {
                     // Return new content and cursor state for syncing back to TabState
@@ -53,8 +53,8 @@ impl MarkFlowApp {
                 }
             });
 
-            // Sync result back to TabState if MarkFlowEditor was used
-            if let Some(Some((content, cursor_pos, selection))) = markflow_result {
+            // Sync result back to TabState if MDOxideEditor was used
+            if let Some(Some((content, cursor_pos, selection))) = mdoxide_result {
                 if let Some(tab) = self.state.active_tab_mut() {
                     tab.content = content;
                     tab.notify_external_content_change();
@@ -62,7 +62,7 @@ impl MarkFlowApp {
                     tab.selection = selection;
                     // Note: is_modified() automatically detects changes via content comparison
                     debug!(
-                        "Applied formatting via MarkFlowEditor: {:?}, selection={:?}",
+                        "Applied formatting via MDOxideEditor: {:?}, selection={:?}",
                         cmd, tab.selection
                     );
                 }
@@ -120,7 +120,7 @@ impl MarkFlowApp {
         cmd: MarkdownFormatCommand,
         captured_selection: Option<(usize, usize)>,
     ) {
-        use crate::editor::get_markflow_editor_mut;
+        use crate::editor::get_mdoxide_editor_mut;
 
         // Get tab_id before borrowing state mutably
         let tab_id = self.state.active_tab().map(|t| t.id);
@@ -131,8 +131,8 @@ impl MarkFlowApp {
                     "Using captured selection {:?} for tab_id {}",
                     selection, tab_id
                 );
-                // Use the pre-captured selection with MarkFlowEditor
-                let markflow_result = get_markflow_editor_mut(ctx, tab_id, |editor| {
+                // Use the pre-captured selection with MDOxideEditor
+                let mdoxide_result = get_mdoxide_editor_mut(ctx, tab_id, |editor| {
                     let applied = editor.apply_markdown_format_with_selection(cmd, selection);
                     if applied {
                         let content = editor.buffer().to_string();
@@ -157,14 +157,14 @@ impl MarkFlowApp {
                 });
 
                 // Sync result back to TabState
-                if let Some(Some((content, cursor_pos, selection))) = markflow_result {
+                if let Some(Some((content, cursor_pos, selection))) = mdoxide_result {
                     if let Some(tab) = self.state.active_tab_mut() {
                         tab.content = content;
                         tab.notify_external_content_change();
                         tab.cursor_position = cursor_pos;
                         tab.selection = selection;
                         debug!(
-                            "Applied formatting via MarkFlowEditor with captured selection: {:?}",
+                            "Applied formatting via MDOxideEditor with captured selection: {:?}",
                             cmd
                         );
                     }

@@ -1,8 +1,8 @@
-//! Export operations for the MarkFlow application.
+//! Export operations for the MDOxide application.
 //!
 //! This module contains handlers for HTML export and copy-as-HTML.
 
-use super::MarkFlowApp;
+use super::MDOxideApp;
 use crate::export::{
     copy_html_to_clipboard, generate_html_document_export, render_markdown_to_pdf,
     resolve_html_theme_for_export, syntax_dark_mode_for_export, PdfTheme,
@@ -13,7 +13,7 @@ use eframe::egui;
 use log::{debug, info, warn};
 use rust_i18n::t;
 
-impl MarkFlowApp {
+impl MDOxideApp {
     pub(crate) fn handle_open_html_export_dialog(&mut self) {
         if self.state.active_tab().is_none() {
             let time = self.get_app_time();
@@ -325,7 +325,7 @@ impl MarkFlowApp {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let tmp_path = std::env::temp_dir().join(format!("markflow-print-preview-{nanos}.pdf"));
+        let tmp_path = std::env::temp_dir().join(format!("mdoxide-print-preview-{nanos}.pdf"));
 
         if let Err(e) = std::fs::write(&tmp_path, &pdf_bytes) {
             warn!(

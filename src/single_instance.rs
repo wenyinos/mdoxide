@@ -1,6 +1,6 @@
 //! Single-instance application protocol.
 //!
-//! Ensures only one MarkFlow window runs at a time. When a second instance is
+//! Ensures only one MDOxide window runs at a time. When a second instance is
 //! launched (e.g., double-clicking a file in Explorer), it forwards the file
 //! paths to the already-running instance via a local TCP connection, then exits.
 //!

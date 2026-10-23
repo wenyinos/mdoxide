@@ -58,7 +58,7 @@ const TEXT_EXTENSIONS: &[&str] = &["txt", "text"];
 const CSV_EXTENSIONS: &[&str] = &["csv", "tsv"];
 
 /// Combined filter for all commonly edited file types (default filter).
-/// Includes markdown, text, and data files that MarkFlow supports.
+/// Includes markdown, text, and data files that MDOxide supports.
 const SUPPORTED_EXTENSIONS: &[&str] = &[
     "md", "markdown", "mdown", "mkd", "mkdn", // Markdown
     "txt", "text", // Plain text

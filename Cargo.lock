@@ -2975,7 +2975,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "markflow"
+name = "mdoxide"
 version = "0.1.0"
 dependencies = [
  "arboard",

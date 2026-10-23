@@ -1,15 +1,15 @@
-//! Search match management for MarkFlowEditor.
+//! Search match management for MDOxideEditor.
 //!
 //! This module contains:
 //! - Search match getters (`search_matches`, `search_match_count`, etc.)
 //! - Search match setters (`set_search_matches`, `clear_search_matches`)
 //! - Current match navigation (`current_search_match`, `set_current_search_match`)
 
-use super::editor::{MarkFlowEditor, SearchMatch};
+use super::editor::{MDOxideEditor, SearchMatch};
 use super::highlights::MAX_DISPLAYED_MATCHES;
 
-#[allow(dead_code)] // Search match accessors on MarkFlowEditor
-impl MarkFlowEditor {
+#[allow(dead_code)] // Search match accessors on MDOxideEditor
+impl MDOxideEditor {
     // ─────────────────────────────────────────────────────────────────────────────
     // Search Highlights (Phase 2)
     // ─────────────────────────────────────────────────────────────────────────────

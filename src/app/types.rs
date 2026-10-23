@@ -1,4 +1,4 @@
-//! Type definitions for the MarkFlow application module.
+//! Type definitions for the MDOxide application module.
 //!
 //! This module contains enums and structs used across the app module
 //! for keyboard actions, navigation requests, and deferred operations.

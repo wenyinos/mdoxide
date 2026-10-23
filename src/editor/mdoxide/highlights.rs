@@ -1,4 +1,4 @@
-//! Search and bracket matching highlight rendering for MarkFlowEditor.
+//! Search and bracket matching highlight rendering for MDOxideEditor.
 //!
 //! This module contains:
 //! - Search match highlight rendering (`render_search_highlights`)
@@ -10,7 +10,7 @@
 use egui::{Color32, FontId, Pos2, Rect, StrokeKind};
 
 use super::cursor::Cursor;
-use super::editor::MarkFlowEditor;
+use super::editor::MDOxideEditor;
 
 // Import bracket matching
 use crate::editor::matching::DelimiterMatcher;
@@ -20,8 +20,8 @@ use crate::editor::matching::DelimiterMatcher;
 /// This matches VS Code's behavior.
 pub(crate) const MAX_DISPLAYED_MATCHES: usize = 1000;
 
-#[allow(dead_code)] // Bracket/highlight configuration on MarkFlowEditor
-impl MarkFlowEditor {
+#[allow(dead_code)] // Bracket/highlight configuration on MDOxideEditor
+impl MDOxideEditor {
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Search Highlight Rendering
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

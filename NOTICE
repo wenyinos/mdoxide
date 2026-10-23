@@ -1,11 +1,11 @@
-MarkFlow
-Copyright (c) 2026 MarkFlow contributors
+MDOxide
+Copyright (c) 2026 MDOxide contributors
 
 This product is a derivative work of Ferrite (https://github.com/OlaProeis/Ferrite),
 Copyright (c) Ola Proeis, licensed under the MIT License. The original LICENSE file
 is retained in this repository.
 
-MarkFlow aims to reimplement the user experience of MarkText
+MDOxide aims to reimplement the user experience of MarkText
 (https://github.com/marktext/marktext), Copyright (c) MarkText contributors,
 licensed under the MIT License. No MarkText source code is included in this
 repository; only its public design and behaviour are referenced.

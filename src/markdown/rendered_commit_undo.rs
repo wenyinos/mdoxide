@@ -29,7 +29,7 @@ struct RenderedCommitUndoFrame {
 }
 
 fn frame_id() -> egui::Id {
-    egui::Id::new("markflow_rendered_commit_undo_frame")
+    egui::Id::new("mdoxide_rendered_commit_undo_frame")
 }
 
 /// Reset the per-frame commit queue at the start of rendered `MarkdownEditor::show`.

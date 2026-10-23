@@ -2,7 +2,7 @@
 //!
 //! This module is the **single undo system** for the entire application.
 //! `EditHistory` is owned by each `Tab` in `state.rs` and handles undo for
-//! both raw (MarkFlowEditor) and rendered (MarkdownEditor) modes.
+//! both raw (MDOxideEditor) and rendered (MarkdownEditor) modes.
 //!
 //! Edits are recorded as discrete operations (insert/delete) rather than full
 //! state snapshots, making memory usage proportional to edit size, not file size.
@@ -15,7 +15,7 @@
 //! 2. After editor `show()`: if changed, `Tab::record_external_edit_from_snapshot()` computes
 //!    a minimal diff via [`compute_edit_ops`] and pushes the resulting operations.
 //!
-//! Raw mode relies on MarkFlowEditor's own undo — no central-panel snapshot.
+//! Raw mode relies on MDOxideEditor's own undo — no central-panel snapshot.
 //!
 //! # Features
 //! - Operation-based undo/redo (not state snapshots)

@@ -1,4 +1,4 @@
-//! Text rendering for MarkFlowEditor.
+//! Text rendering for MDOxideEditor.
 
 use egui::{Color32, FontId, Pos2};
 use std::sync::Arc;

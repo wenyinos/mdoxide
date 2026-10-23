@@ -1,14 +1,14 @@
-//! Find and Replace operations for MarkFlowEditor.
+//! Find and Replace operations for MDOxideEditor.
 //!
 //! This module contains:
 //! - `replace_current_match` - Replace single match with undo support
 //! - `replace_all_matches` - Replace all matches with undo support
 //! - `current_match_text` - Get text of current match
 
-use super::editor::MarkFlowEditor;
+use super::editor::MDOxideEditor;
 
-#[allow(dead_code)] // Find/replace helpers on MarkFlowEditor
-impl MarkFlowEditor {
+#[allow(dead_code)] // Find/replace helpers on MDOxideEditor
+impl MDOxideEditor {
     /// Replaces the current search match with the given replacement text.
     ///
     /// This method performs a single replacement at the current match position,

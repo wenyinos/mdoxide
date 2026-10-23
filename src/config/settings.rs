@@ -1,4 +1,4 @@
-//! User settings and preferences for MarkFlow
+//! User settings and preferences for MDOxide
 //!
 //! This module defines the `Settings` struct that holds all user-configurable
 //! options, with serde support for JSON persistence.
@@ -1955,7 +1955,7 @@ fn default_code_execution_timeout_secs() -> u32 {
     30
 }
 
-/// Helper for serde default MarkFlow accent RGB.
+/// Helper for serde default MDOxide accent RGB.
 fn default_accent_color_rgb() -> [u8; 3] {
     crate::theme::accent::DEFAULT_ACCENT_RGB
 }
@@ -1973,7 +1973,7 @@ pub struct Settings {
     /// Color theme (light, dark, or system)
     pub theme: Theme,
 
-    /// MarkFlow accent RGB: rendered headings (H1–H6), checkboxes in preview, editor selection tint,
+    /// MDOxide accent RGB: rendered headings (H1–H6), checkboxes in preview, editor selection tint,
     /// and highlighted UI widgets. Markdown hyperlink color is fixed (standard blue) for readability.
     #[serde(default = "default_accent_color_rgb")]
     pub accent_color: [u8; 3],
@@ -2039,7 +2039,7 @@ pub struct Settings {
     /// it back on will restore the previous session.
     pub restore_session: bool,
 
-    /// Show the Welcome tab when MarkFlow launches with no documents open
+    /// Show the Welcome tab when MDOxide launches with no documents open
     /// (only empty untitled placeholders). Disable via the checkbox on Welcome.
     #[serde(default = "default_true")]
     pub show_welcome_on_empty_launch: bool,
@@ -2302,7 +2302,7 @@ pub struct Settings {
     /// Whether snippet expansion is enabled.
     /// When enabled, typing a trigger word followed by space/tab expands it.
     /// Built-in snippets: ;date, ;time, ;datetime, ;now
-    /// Custom snippets can be added via ~/.config/markflow/snippets.json
+    /// Custom snippets can be added via ~/.config/mdoxide/snippets.json
     pub snippets_enabled: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2575,7 +2575,7 @@ impl Default for Settings {
             terminal_font_size: 14.0, // Default terminal font size
             terminal_scrollback_lines: 10000, // Default scrollback buffer size
             terminal_copy_on_select: false, // Manual copy by default
-            terminal_theme_name: String::from("MarkFlow Dark"), // Default theme
+            terminal_theme_name: String::from("MDOxide Dark"), // Default theme
             terminal_opacity: 1.0,  // Opaque by default
             terminal_startup_command: String::new(),
             terminal_prompt_patterns: vec![
@@ -2660,9 +2660,9 @@ impl Settings {
         }
     }
 
-    /// User-selected MarkFlow accent as [`egui::Color32`].
+    /// User-selected MDOxide accent as [`egui::Color32`].
     #[inline]
-    pub fn markflow_accent_rgb(&self) -> egui::Color32 {
+    pub fn mdoxide_accent_rgb(&self) -> egui::Color32 {
         egui::Color32::from_rgb(
             self.accent_color[0],
             self.accent_color[1],

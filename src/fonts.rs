@@ -1,4 +1,4 @@
-//! Font management for MarkFlow
+//! Font management for MDOxide
 //!
 //! This module handles loading custom fonts with proper bold/italic variants.
 //! Fonts are embedded at compile time using `include_bytes!`.
@@ -979,7 +979,7 @@ pub fn row_height_for_font(ctx: &egui::Context, font_id: &FontId) -> f32 {
     ctx.fonts_mut(|fonts| fonts.row_height(font_id))
 }
 
-/// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::markflow::shaping).
+/// Map an egui [`FontId`] to embedded font bytes for [`harfrust`](crate::editor::mdoxide::shaping).
 ///
 /// Named Inter/JetBrains families resolve to the matching weight/style TTF.
 /// `FONT_CUSTOM` resolves to the cached custom font bytes when available.

@@ -1,4 +1,4 @@
-//! Find and Replace functionality for MarkFlow
+//! Find and Replace functionality for MDOxide
 //!
 //! This module provides comprehensive search and replace capabilities including:
 //! - Real-time incremental search with match highlighting

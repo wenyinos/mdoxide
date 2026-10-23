@@ -1,4 +1,4 @@
-//! Ribbon UI Component for MarkFlow
+//! Ribbon UI Component for MDOxide
 //!
 //! This module implements a modern ribbon-style interface with icon-based controls
 //! organized into logical groups, replacing the traditional menu bar.

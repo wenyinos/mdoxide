@@ -1,4 +1,4 @@
-//! Terminal emulation module for MarkFlow
+//! Terminal emulation module for MDOxide
 //!
 //! This module provides an integrated terminal emulator using:
 //! - `portable-pty` for cross-platform pseudo-terminal handling

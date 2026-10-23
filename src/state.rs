@@ -1,4 +1,4 @@
-//! Application state management for MarkFlow
+//! Application state management for MDOxide
 //!
 //! This module defines the central `AppState` struct that manages all
 //! application data and UI state, including the current file, open tabs,
@@ -5257,7 +5257,7 @@ impl AppState {
     /// 1. **Legacy bypass** — pre-task-106 recovery files have neither `path`
     ///    nor `original_content_hash` set. Those fall back to the historical
     ///    "tab id only" matching (`has_unsaved_content` was already required
-    ///    by the caller) so users upgrading from older MarkFlow versions don't
+    ///    by the caller) so users upgrading from older MDOxide versions don't
     ///    silently lose recovered buffers. No conflict banner can be raised
     ///    in this branch because we have no identity to compare against.
     /// 2. **Path equality** — `recovered.path` must equal `session_tab.path`.
@@ -7444,7 +7444,7 @@ mod tests {
 
         // Create a temporary file to test actual restoration
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_restore.md");
+        let temp_file = temp_dir.join("mdoxide_test_restore.md");
         let test_content = "# Test Restored Content\n\nThis is a test.";
 
         // Write the test file
@@ -7486,8 +7486,8 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file1 = temp_dir.join("markflow_test_restore1.md");
-        let temp_file2 = temp_dir.join("markflow_test_restore2.md");
+        let temp_file1 = temp_dir.join("mdoxide_test_restore1.md");
+        let temp_file2 = temp_dir.join("mdoxide_test_restore2.md");
 
         // Write test files
         std::fs::File::create(&temp_file1)
@@ -7540,7 +7540,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_restore_partial.md");
+        let temp_file = temp_dir.join("mdoxide_test_restore_partial.md");
 
         // Write only one test file
         std::fs::File::create(&temp_file)
@@ -7590,7 +7590,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_open_view_mode.md");
+        let temp_file = temp_dir.join("mdoxide_test_open_view_mode.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test")
@@ -7620,7 +7620,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_close_view_mode.md");
+        let temp_file = temp_dir.join("mdoxide_test_close_view_mode.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test")
@@ -7649,7 +7649,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_open_focus_true.md");
+        let temp_file = temp_dir.join("mdoxide_test_open_focus_true.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Test Content")
@@ -7676,7 +7676,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_open_focus_false.md");
+        let temp_file = temp_dir.join("mdoxide_test_open_focus_false.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Background File")
@@ -7706,7 +7706,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_already_open.md");
+        let temp_file = temp_dir.join("mdoxide_test_already_open.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Already Open")
@@ -7742,7 +7742,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_already_open_no_focus.md");
+        let temp_file = temp_dir.join("mdoxide_test_already_open_no_focus.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Already Open No Focus")
@@ -7779,7 +7779,7 @@ mod tests {
         use std::io::Write;
 
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("markflow_test_recent_update.md");
+        let temp_file = temp_dir.join("mdoxide_test_recent_update.md");
         std::fs::File::create(&temp_file)
             .unwrap()
             .write_all(b"# Recent Test")
@@ -7875,7 +7875,7 @@ mod tests {
     fn test_backlink_index_get_and_build() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("markflow_backlink_test");
+        let temp_dir = std::env::temp_dir().join("mdoxide_backlink_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         // Create test files
@@ -7925,7 +7925,7 @@ mod tests {
     fn test_backlink_index_update_file() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("markflow_backlink_update_test");
+        let temp_dir = std::env::temp_dir().join("mdoxide_backlink_update_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let file_a = temp_dir.join("note-a.md");
@@ -7966,7 +7966,7 @@ mod tests {
     fn test_backlink_scan_on_demand() {
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir().join("markflow_backlink_ondemand_test");
+        let temp_dir = std::env::temp_dir().join("mdoxide_backlink_ondemand_test");
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let file_a = temp_dir.join("note-a.md");

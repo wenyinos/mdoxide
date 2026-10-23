@@ -2409,7 +2409,7 @@ fn reload_formatted_block_from_source(
 /// `session_dismiss_if_clicked_outside` scope) to land on different keys. Only one
 /// rendered editor renders per frame, so a process-global Id is safe.
 fn session_active_clicked_key(_ui: &Ui) -> egui::Id {
-    egui::Id::new("markflow_rendered_session_active_clicked")
+    egui::Id::new("mdoxide_rendered_session_active_clicked")
 }
 
 fn note_session_active_clicked(ui: &mut Ui, block_ref: BlockRef, session: &RenderedEditSession, response: &Response) {

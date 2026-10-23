@@ -13,14 +13,14 @@ pub struct TerminalTheme {
 
 impl Default for TerminalTheme {
     fn default() -> Self {
-        Self::markflow_dark()
+        Self::mdoxide_dark()
     }
 }
 
 impl TerminalTheme {
-    pub fn markflow_dark() -> Self {
+    pub fn mdoxide_dark() -> Self {
         Self {
-            name: "MarkFlow Dark".to_string(),
+            name: "MDOxide Dark".to_string(),
             background: Color32::from_rgb(30, 30, 30),
             foreground: Color32::from_rgb(220, 220, 220),
             selection_bg: Color32::from_rgb(60, 80, 110),
@@ -46,9 +46,9 @@ impl TerminalTheme {
         }
     }
 
-    pub fn markflow_light() -> Self {
+    pub fn mdoxide_light() -> Self {
         Self {
-            name: "MarkFlow Light".to_string(),
+            name: "MDOxide Light".to_string(),
             background: Color32::from_rgb(250, 250, 250),
             foreground: Color32::from_rgb(30, 30, 30),
             selection_bg: Color32::from_rgb(173, 214, 255),
@@ -103,7 +103,7 @@ impl TerminalTheme {
     }
 
     pub fn all() -> Vec<Self> {
-        vec![Self::markflow_dark(), Self::markflow_light(), Self::dracula()]
+        vec![Self::mdoxide_dark(), Self::mdoxide_light(), Self::dracula()]
     }
 
     pub fn from_name(name: &str) -> Option<Self> {

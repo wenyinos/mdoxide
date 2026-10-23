@@ -117,12 +117,12 @@ pub fn syntax_dark_mode_for_export(
 // Comrak syntax adapter (inline syntect HTML)
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct MarkFlowHtmlHighlighter<'a> {
+struct MDOxideHtmlHighlighter<'a> {
     theme_name: &'a str,
     dark_mode: bool,
 }
 
-impl SyntaxHighlighterAdapter for MarkFlowHtmlHighlighter<'_> {
+impl SyntaxHighlighterAdapter for MDOxideHtmlHighlighter<'_> {
     fn write_highlighted(
         &self,
         output: &mut dyn Write,
@@ -226,7 +226,7 @@ fn extract_mermaid_fences(markdown: &str) -> (String, Vec<String>) {
         out.push_str(&markdown[last..whole.start()]);
         let idx = blocks.len();
         blocks.push(cap.get(1).unwrap().as_str().to_string());
-        out.push_str(&format!("\n\n<!--MARKFLOW-MERMAID-BLOCK:{idx}-->\n\n"));
+        out.push_str(&format!("\n\n<!--MDOXIDE-MERMAID-BLOCK:{idx}-->\n\n"));
         last = whole.end();
     }
     out.push_str(&markdown[last..]);
@@ -243,11 +243,11 @@ fn inject_mermaid_exports(
 ) -> String {
     let mut out = html.to_string();
     for (i, src) in blocks.iter().enumerate() {
-        let needle = format!("<!--MARKFLOW-MERMAID-BLOCK:{i}-->");
+        let needle = format!("<!--MDOXIDE-MERMAID-BLOCK:{i}-->");
         let body = if detect_mermaid_diagram_type(src) == MermaidDiagramType::Flowchart {
             try_flowchart_svg_snippet(src, flowchart_colors, diagram_w)
                 .map(|svg| {
-                    format!(r#"<figure class="markflow-mermaid markflow-mermaid-svg">{svg}</figure>"#)
+                    format!(r#"<figure class="mdoxide-mermaid mdoxide-mermaid-svg">{svg}</figure>"#)
                 })
                 .unwrap_or_else(|| mermaid_fallback_figure(src, theme_name, dark))
         } else {
@@ -261,7 +261,7 @@ fn inject_mermaid_exports(
 fn mermaid_fallback_figure(source: &str, theme_name: &str, dark: bool) -> String {
     let inner = highlighted_code_to_html_spans(source, "mermaid", theme_name, dark);
     format!(
-        r#"<figure class="markflow-mermaid markflow-mermaid-fallback"><figcaption class="mermaid-caption">Mermaid diagram</figcaption><pre class="mermaid-source"><code>{inner}</code></pre></figure>"#
+        r#"<figure class="mdoxide-mermaid mdoxide-mermaid-fallback"><figcaption class="mermaid-caption">Mermaid diagram</figcaption><pre class="mermaid-source"><code>{inner}</code></pre></figure>"#
     )
 }
 
@@ -495,7 +495,7 @@ fn build_header_comment(opts: &HtmlExportOptions, source_path: Option<&Path>) ->
         .map(|p| p.display().to_string())
         .unwrap_or_default();
     format!(
-        "<!-- markflow-html-export: theme={:?} self_contained={} path={} ts={ts} -->\n",
+        "<!-- mdoxide-html-export: theme={:?} self_contained={} path={} ts={ts} -->\n",
         opts.theme, opts.self_contained, path
     )
 }
@@ -606,7 +606,7 @@ fn generate_theme_styles(resolution: &HtmlThemeResolution) -> String {
     }
 }
 
-/// Optional MarkFlow-facing syntax CSS (spans from ThemeColors) when not using inline-only blocks.
+/// Optional MDOxide-facing syntax CSS (spans from ThemeColors) when not using inline-only blocks.
 fn syntax_css_from_palette(colors: &ThemeColors) -> String {
     format!(
         r#"
@@ -700,9 +700,9 @@ body {
 .markdown-body strong { font-weight: 600; }
 .markdown-body em { font-style: italic; }
 .markdown-body del { text-decoration: line-through; }
-.markflow-mermaid { margin: 1rem 0; }
-.markflow-mermaid svg { max-width: 100%; height: auto; display: block; }
-.markflow-mermaid-fallback .mermaid-caption { font-size: 0.85rem; color: var(--muted, #666); margin-bottom: 0.5rem; }
+.mdoxide-mermaid { margin: 1rem 0; }
+.mdoxide-mermaid svg { max-width: 100%; height: auto; display: block; }
+.mdoxide-mermaid-fallback .mermaid-caption { font-size: 0.85rem; color: var(--muted, #666); margin-bottom: 0.5rem; }
 .markdown-toc { margin-bottom: 2rem; padding: 1rem 1.25rem; border-radius: 8px; }
 .markdown-toc .toc-title { margin-top: 0; font-size: 1.1rem; }
 .markdown-toc ul { list-style: none; padding-left: 0; margin: 0; }
@@ -758,7 +758,7 @@ pub fn generate_html_document_export(
 
     let fm_note = if options.include_html_comments {
         extract_frontmatter_comment_raw(markdown)
-            .map(|fm| format!("<!-- markflow:frontmatter\n{}\n-->\n\n", html_escape(&fm)))
+            .map(|fm| format!("<!-- mdoxide:frontmatter\n{}\n-->\n\n", html_escape(&fm)))
             .unwrap_or_default()
     } else {
         String::new()
@@ -777,7 +777,7 @@ pub fn generate_html_document_export(
     comrak_opts.render.unsafe_ = true;
     comrak_opts.render.sourcepos = options.include_html_comments;
 
-    let adapter = MarkFlowHtmlHighlighter {
+    let adapter = MDOxideHtmlHighlighter {
         theme_name: syntax_theme_name,
         dark_mode: syntax_dark_mode,
     };
@@ -857,7 +857,7 @@ pub fn generate_html_document_export(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="generator" content="MarkFlow">
+    <meta name="generator" content="MDOxide">
     <title>{title}</title>
     <style>
 {styles}

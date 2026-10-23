@@ -1,4 +1,4 @@
-//! MarkFlow Phosphor icon mappings (MIT — [Phosphor Icons](https://phosphoricons.com/)).
+//! MDOxide Phosphor icon mappings (MIT — [Phosphor Icons](https://phosphoricons.com/)).
 //!
 //! Central place for toolbar/panel icon glyphs so we don't scatter emoji across the UI.
 

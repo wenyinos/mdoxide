@@ -1,4 +1,4 @@
-//! Cursor module for MarkFlow editor.
+//! Cursor module for MDOxide editor.
 //!
 //! This module provides cursor position tracking and text selection for the text editor.
 //!

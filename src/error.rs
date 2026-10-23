@@ -1,4 +1,4 @@
-//! Centralized error handling for MarkFlow
+//! Centralized error handling for MDOxide
 //!
 //! This module provides a unified error type that covers all error scenarios
 //! in the application: file I/O, configuration, and markdown parsing.

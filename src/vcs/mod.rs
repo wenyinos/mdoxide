@@ -1,4 +1,4 @@
-//! Version Control System integration for MarkFlow
+//! Version Control System integration for MDOxide
 //!
 //! This module provides Git integration features including:
 //! - Repository detection

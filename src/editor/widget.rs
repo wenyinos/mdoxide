@@ -1,7 +1,7 @@
-//! Text editor widget for MarkFlow
+//! Text editor widget for MDOxide
 //!
 //! This module implements the main text editor widget using the custom
-//! MarkFlowEditor, which provides high performance for large files through
+//! MDOxideEditor, which provides high performance for large files through
 //! virtual scrolling and rope-based text storage.
 
 use crate::config::{EditorFont, MaxLineWidth};
@@ -13,29 +13,29 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-use super::markflow::MarkFlowEditor;
+use super::mdoxide::MDOxideEditor;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MarkFlowEditor Storage
+// MDOxideEditor Storage
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Storage for MarkFlowEditor instances, keyed by tab ID.
+/// Storage for MDOxideEditor instances, keyed by tab ID.
 ///
 /// This is stored in egui's memory to persist across frames.
-/// Each tab gets its own MarkFlowEditor instance.
+/// Each tab gets its own MDOxideEditor instance.
 #[derive(Clone, Default)]
-struct MarkFlowEditorStorage {
-    /// Map from tab ID to MarkFlowEditor instance
-    editors: HashMap<usize, MarkFlowEditor>,
+struct MDOxideEditorStorage {
+    /// Map from tab ID to MDOxideEditor instance
+    editors: HashMap<usize, MDOxideEditor>,
     /// Hash of content for each editor (to detect external changes)
     content_hashes: HashMap<usize, u64>,
     /// Length of content for each editor (quick change detection without hashing)
     content_lengths: HashMap<usize, usize>,
 }
 
-/// Gets mutable access to a MarkFlowEditor by tab ID.
+/// Gets mutable access to a MDOxideEditor by tab ID.
 ///
-/// This function provides a way to access and mutate a MarkFlowEditor instance
+/// This function provides a way to access and mutate a MDOxideEditor instance
 /// from outside the widget rendering code (e.g., from app.rs handlers).
 ///
 /// # Arguments
@@ -49,24 +49,24 @@ struct MarkFlowEditorStorage {
 ///
 /// # Example
 /// ```rust,ignore
-/// let replaced = get_markflow_editor_mut(ctx, tab_id, |editor| {
+/// let replaced = get_mdoxide_editor_mut(ctx, tab_id, |editor| {
 ///     editor.replace_current_match("replacement")
 /// });
 /// ```
-pub fn get_markflow_editor_mut<R, F>(ctx: &egui::Context, tab_id: usize, f: F) -> Option<R>
+pub fn get_mdoxide_editor_mut<R, F>(ctx: &egui::Context, tab_id: usize, f: F) -> Option<R>
 where
-    F: FnOnce(&mut MarkFlowEditor) -> R,
+    F: FnOnce(&mut MDOxideEditor) -> R,
 {
     ctx.data_mut(|data| {
-        let storage = data.get_temp_mut_or_default::<MarkFlowEditorStorage>(egui::Id::NULL);
+        let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
         storage.editors.get_mut(&tab_id).map(f)
     })
 }
 
-/// Removes the MarkFlowEditor instance for a closed tab, freeing its memory.
+/// Removes the MDOxideEditor instance for a closed tab, freeing its memory.
 ///
 /// This should be called when a tab is closed to prevent memory retention.
-/// Each MarkFlowEditor contains:
+/// Each MDOxideEditor contains:
 /// - `TextBuffer` (rope-based storage, can be 100MB+ for large files)
 /// - `LineCache` (up to 200 cached galleys)
 /// - `EditHistory` (undo/redo operation stacks)
@@ -81,11 +81,11 @@ where
 /// ```rust,ignore
 /// // In tab close handler:
 /// state.close_tab(index);
-/// cleanup_markflow_editor(ctx, tab_id);
+/// cleanup_mdoxide_editor(ctx, tab_id);
 /// ```
-pub fn cleanup_markflow_editor(ctx: &egui::Context, tab_id: usize) {
+pub fn cleanup_mdoxide_editor(ctx: &egui::Context, tab_id: usize) {
     ctx.data_mut(|data| {
-        let storage = data.get_temp_mut_or_default::<MarkFlowEditorStorage>(egui::Id::NULL);
+        let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
         if let Some(mut editor) = storage.editors.remove(&tab_id) {
             let buffer_chars = editor.buffer.len();
             let cache_entries = editor.line_cache.len();
@@ -97,7 +97,7 @@ pub fn cleanup_markflow_editor(ctx: &egui::Context, tab_id: usize) {
             editor.search_matches.shrink_to_fit();
 
             log::info!(
-                "Cleaned up MarkFlowEditor for tab {}: buffer={} chars, cache={} entries",
+                "Cleaned up MDOxideEditor for tab {}: buffer={} chars, cache={} entries",
                 tab_id,
                 buffer_chars,
                 cache_entries
@@ -160,7 +160,7 @@ pub struct SearchHighlights {
 
 /// A text editor widget that integrates with the Tab state.
 ///
-/// This widget uses the custom MarkFlowEditor for high-performance editing:
+/// This widget uses the custom MDOxideEditor for high-performance editing:
 /// - Virtual scrolling (only renders visible lines)
 /// - Rope-based text storage (O(log n) operations)
 /// - Galley caching for efficient re-rendering
@@ -454,16 +454,16 @@ impl<'a> EditorWidget<'a> {
 
     /// Show the editor widget and return the output.
     ///
-    /// This uses the custom MarkFlowEditor which provides:
+    /// This uses the custom MDOxideEditor which provides:
     /// - Virtual scrolling (only renders visible lines)
     /// - Rope-based text storage (O(log n) operations)
     /// - Galley caching for efficient re-rendering
     pub fn show(mut self, ui: &mut Ui) -> EditorOutput {
         let tab_id = self.tab.id;
-        let _base_id = self.id.unwrap_or_else(|| ui.id().with("markflow_editor"));
+        let _base_id = self.id.unwrap_or_else(|| ui.id().with("mdoxide_editor"));
 
         // Capture an undo snapshot of the pre-edit content so edits made
-        // through MarkFlowEditor are recorded in `tab.edit_history` (the stack
+        // through MDOxideEditor are recorded in `tab.edit_history` (the stack
         // that Ctrl+Z / Ctrl+Y consult via `handle_undo` / `handle_redo`).
         // Without this the tab's edit history stays empty and users see
         // "Nothing to undo" even after typing — a v0.2.8 regression.
@@ -479,11 +479,11 @@ impl<'a> EditorWidget<'a> {
             );
         }
 
-        // Get or create MarkFlowEditor from storage
+        // Get or create MDOxideEditor from storage
         // PERFORMANCE: Avoid hashing large content every frame!
         // Use content length as a quick check, only hash if length matches
         let (mut editor, needs_content_sync, content_hash) = ui.ctx().data_mut(|data| {
-            let storage = data.get_temp_mut_or_default::<MarkFlowEditorStorage>(egui::Id::NULL);
+            let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
 
             // Check if we have an existing editor for this tab
             let has_editor = storage.editors.contains_key(&tab_id);
@@ -539,18 +539,18 @@ impl<'a> EditorWidget<'a> {
 
             // Get or create editor
             let editor = storage.editors.entry(tab_id).or_insert_with(|| {
-                debug!("Creating new MarkFlowEditor for tab {}", tab_id);
-                MarkFlowEditor::from_string(&self.tab.content)
+                debug!("Creating new MDOxideEditor for tab {}", tab_id);
+                MDOxideEditor::from_string(&self.tab.content)
             });
 
             // Clone the editor for use outside the closure
             // (We'll put it back after modifications)
-            let editor_clone = std::mem::replace(editor, MarkFlowEditor::new());
+            let editor_clone = std::mem::replace(editor, MDOxideEditor::new());
 
             (editor_clone, needs_sync, hash)
         });
 
-        // Sync content from Tab to MarkFlowEditor if external changes detected
+        // Sync content from Tab to MDOxideEditor if external changes detected
         if needs_content_sync {
             // Hash can desync from the stored cache while the rope still matches `tab.content`
             // (e.g. after session restore). Avoid `buffer().to_string()` on large files every frame.
@@ -582,7 +582,7 @@ impl<'a> EditorWidget<'a> {
                 // syntax highlighting, and other editor configuration. This avoids
                 // visual glitching that occurs when fully recreating the editor.
                 debug!(
-                    "Syncing Tab content to MarkFlowEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
+                    "Syncing Tab content to MDOxideEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
                     tab_id, self.tab.content.len(), self.tab.scroll_offset, 
                     self.tab.cursor_position.0, self.tab.cursor_position.1
                 );
@@ -591,7 +591,7 @@ impl<'a> EditorWidget<'a> {
                 // Restore cursor position from Tab
                 let cursor_line = self.tab.cursor_position.0;
                 let cursor_col = self.tab.cursor_position.1;
-                editor.set_cursor(super::markflow::Cursor::new(cursor_line, cursor_col));
+                editor.set_cursor(super::mdoxide::Cursor::new(cursor_line, cursor_col));
 
                 // Restore viewport/scroll position from Tab if the view was reset
                 // The set_content() method preserves ViewState, so only restore
@@ -627,7 +627,7 @@ impl<'a> EditorWidget<'a> {
         let char_width = self.font_size * 0.6; // Approximate average character width
         let max_wrap_width_px = self.max_line_width.to_pixels(char_width);
         debug!(
-            "MarkFlowEditor max_line_width setting: {:?} -> {:?}px (char_width={:.1})",
+            "MDOxideEditor max_line_width setting: {:?} -> {:?}px (char_width={:.1})",
             self.max_line_width, max_wrap_width_px, char_width
         );
         editor.set_max_wrap_width(max_wrap_width_px);
@@ -708,14 +708,14 @@ impl<'a> EditorWidget<'a> {
             )));
         }
 
-        // Sync fold state from Tab to MarkFlowEditor
+        // Sync fold state from Tab to MDOxideEditor
         // This allows the editor to skip rendering folded lines and show fold indicators
         // Always sync fold state (not just when indicators are shown) because it affects
         // which lines are hidden from rendering
         let fold_region_count = self.tab.fold_state.regions().len();
         if fold_region_count > 0 {
             debug!(
-                "Syncing {} fold regions to MarkFlowEditor, show_indicators={}",
+                "Syncing {} fold regions to MDOxideEditor, show_indicators={}",
                 fold_region_count, self.show_fold_indicators
             );
         }
@@ -769,7 +769,7 @@ impl<'a> EditorWidget<'a> {
             // - For outline/minimap navigation, users expect the clicked item at the top
             editor.view_mut().scroll_to_line(line_0indexed);
             // Also move the cursor to that line so outline/minimap sync works
-            use super::markflow::Cursor;
+            use super::mdoxide::Cursor;
             editor.set_cursor(Cursor::new(line_0indexed, 0));
             debug!(
                 "EditorWidget: after set_cursor, cursor_after={:?}",
@@ -777,7 +777,7 @@ impl<'a> EditorWidget<'a> {
             );
         }
 
-        // Render the MarkFlowEditor
+        // Render the MDOxideEditor
         // Clone the context to avoid borrow conflict
         let ctx = ui.ctx().clone();
         let response = editor.ui(&ctx, ui);
@@ -791,7 +791,7 @@ impl<'a> EditorWidget<'a> {
             debug!("EditorWidget: auto-focused tab {}", self.tab.id);
         }
 
-        // Update Tab's scroll metrics from MarkFlowEditor
+        // Update Tab's scroll metrics from MDOxideEditor
         // These are used by the minimap and outline panel for position sync
         // Capture all scroll metrics at once to avoid borrow conflicts later
         let (line_height, viewport_height_val, content_height_val, absolute_scroll_y) = {
@@ -808,13 +808,13 @@ impl<'a> EditorWidget<'a> {
         self.tab.raw_line_height = line_height;
         self.tab.content_height = content_height_val;
 
-        // Sync content from MarkFlowEditor back to Tab
+        // Sync content from MDOxideEditor back to Tab
         // This is critical for find/replace, preview, and other features that read tab.content
         //
         // PERFORMANCE: Only convert rope to string when content actually changed!
         // Previously this was doing 80MB string allocation + comparison EVERY FRAME,
         // causing massive lag and memory pressure for large files.
-        // Now we use MarkFlowEditor's dirty flag (set during input processing) to
+        // Now we use MDOxideEditor's dirty flag (set during input processing) to
         // detect changes without any string operations.
         let changed = editor.is_content_dirty();
         if changed {
@@ -898,7 +898,7 @@ impl<'a> EditorWidget<'a> {
 
         // Store the editor back
         ui.ctx().data_mut(|data| {
-            let storage = data.get_temp_mut_or_default::<MarkFlowEditorStorage>(egui::Id::NULL);
+            let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
             storage.editors.insert(tab_id, editor);
             storage.content_hashes.insert(tab_id, new_content_hash);
             storage.content_lengths.insert(tab_id, new_content_len);
@@ -906,7 +906,7 @@ impl<'a> EditorWidget<'a> {
 
         EditorOutput {
             changed,
-            ctrl_click_pos: None, // Multi-cursor handled internally by MarkFlowEditor
+            ctrl_click_pos: None, // Multi-cursor handled internally by MDOxideEditor
             fold_toggle_line,
             ime_committed_text,
             scroll_offset: scroll_total_offset,

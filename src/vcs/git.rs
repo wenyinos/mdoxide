@@ -1,4 +1,4 @@
-//! Git integration service for MarkFlow
+//! Git integration service for MDOxide
 //!
 //! Provides Git repository detection, branch information, and file status tracking
 //! using the git2 library.
