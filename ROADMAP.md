@@ -30,7 +30,13 @@
   - ✅ PDF 修复：内置思源黑体、CJK 断行与行首禁则、绘制状态泄漏、行内公式行高、链接颜色与下划线
   - ⏳ PDF v1 限制：Mermaid 输出为代码块、图片为占位符、无 bidi 重排
   - 决策：保留 krilla 后端，不切换 typst
-- **M5 发布**：RPM / DEB / Windows NSIS 打包脚本与 release 工作流已就位（`scripts/package-linux.sh`、`installer/windows/mdoxide.nsi`）；偏好设置面板、大文件性能仍待完成
+- **M5 发布**：
+  - ✅ 偏好设置面板：Appearance / Editor / Files / Keyboard / Terminal / About 六区已覆盖主要配置
+  - ✅ README 中英文更新（M0–M4 完成、功能清单、PDF 已知限制）
+  - ✅ release 构建通过：未压缩 51MB，xz 压缩后 18.3MB（达到 ≤20MB 分发包目标）
+  - ✅ 大文件实测：15MB / 36 万行 Markdown 后台加载，峰值 RSS 约 564MB，加载期间 UI 不阻塞
+  - ✅ 打包配置：DEB / RPM / NSIS 与 release workflow 就绪
+  - ⏳ 本地 DEB/RPM 构建验证、v0.1.0 tag 与 GitHub Release
 
 ## 明确不做
 
