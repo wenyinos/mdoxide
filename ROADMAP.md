@@ -14,14 +14,13 @@
   - ✅ 内置思源黑体（子集，Regular 3.5MB + Bold 3.6MB）
   - ✅ 标签栏按行居中，保留拖拽排序
   - ✅ 侧边栏三页签（大纲 / 文件 / 搜索），其余面板收进溢出菜单
-  - ✅ 打字机模式（原始编辑器）
-  - ⬜ 选区气泡格式条、专注模式、渲染模式下的打字机居中
+  - ✅ 打字机模式（原始 + 渲染）、专注模式、选区浮动格式条
 
 ## 计划中
 
 - **M3 交互对齐**：光标所在块源码标记淡显、选区浮动格式条、打字机/专注模式、MarkText 键位表、fcitx5 IME 验证
 - **M4 导出与扩展**：HTML/PDF 导出质量走查（hayro → typst 备选）、front matter、emoji；数学公式与 PlantUML 首版降级
-- **M5 发布**：偏好设置面板、拼写检查、大文件性能、RPM / DEB / Windows NSIS 打包、v0.1.0
+- **M5 发布**：RPM / DEB / Windows NSIS 打包脚本与 release 工作流已就位（`scripts/package-linux.sh`、`installer/windows/mdoxide.nsi`）；偏好设置面板、拼写检查、大文件性能仍待完成
 
 ## 明确不做
 

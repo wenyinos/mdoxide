@@ -177,7 +177,7 @@ assets = [
     # Binary
     ["target/release/mdoxide", "usr/bin/mdoxide", "755"],
     # Desktop entry
-    ["assets/icons/linux/dev.mdoxide.app.desktop", "usr/share/applications/dev.mdoxide.app.desktop", "644"],
+    ["assets/linux/dev.mdoxide.app.desktop", "usr/share/applications/dev.mdoxide.app.desktop", "644"],
     # Icons at various sizes
     ["assets/icons/icon_16.png", "usr/share/icons/hicolor/16x16/apps/dev.mdoxide.app.png", "644"],
     ["assets/icons/icon_32.png", "usr/share/icons/hicolor/32x32/apps/dev.mdoxide.app.png", "644"],
@@ -204,7 +204,7 @@ assets = [
     # Binary
     { source = "target/release/mdoxide", dest = "/usr/bin/mdoxide", mode = "755" },
     # Desktop entry
-    { source = "assets/icons/linux/dev.mdoxide.app.desktop", dest = "/usr/share/applications/dev.mdoxide.app.desktop", mode = "644" },
+    { source = "assets/linux/dev.mdoxide.app.desktop", dest = "/usr/share/applications/dev.mdoxide.app.desktop", mode = "644" },
     # Icons at various sizes
     { source = "assets/icons/icon_16.png", dest = "/usr/share/icons/hicolor/16x16/apps/dev.mdoxide.app.png", mode = "644" },
     { source = "assets/icons/icon_32.png", dest = "/usr/share/icons/hicolor/32x32/apps/dev.mdoxide.app.png", mode = "644" },

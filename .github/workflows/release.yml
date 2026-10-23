@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-packages:
+    name: Linux packages
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev
+
+      - uses: dtolnay/rust-toolchain@1.92.0
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build DEB and RPM
+        run: |
+          cargo install cargo-deb cargo-generate-rpm --locked
+          mkdir -p dist
+          cargo deb --no-build
+          cargo generate-rpm
+          cp target/debian/*.deb dist/
+          cp target/generate-rpm/*.rpm dist/
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mdoxide-linux
+          path: dist/*
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: true
+
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.92.0
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          makensis /DVERSION="${{ github.ref_name }}" installer/windows/mdoxide.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mdoxide-windows
+          path: dist/*.exe
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          draft: true
