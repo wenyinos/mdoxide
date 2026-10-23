@@ -3,7 +3,7 @@
 
 use eframe::egui::Color32;
 
-pub const DEFAULT_ACCENT_RGB: [u8; 3] = [100, 180, 255];
+pub const DEFAULT_ACCENT_RGB: [u8; 3] = [64, 158, 255]; // MarkText blue #409EFF
 
 #[inline]
 pub fn default_accent() -> Color32 {

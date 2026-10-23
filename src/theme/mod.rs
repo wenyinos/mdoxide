@@ -209,27 +209,27 @@ impl BaseColors {
             background: Color32::from_rgb(255, 255, 255),
             background_secondary: Color32::from_rgb(250, 250, 250),
             background_tertiary: Color32::from_rgb(245, 245, 245),
-            border: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1 contrast
-            border_subtle: Color32::from_rgb(185, 185, 185), // Darkened from 230 for ~2.3:1 contrast
-            hover: Color32::from_rgb(235, 235, 240), // Slightly tinted for better visibility
+            border: Color32::from_rgb(224, 224, 224), // MarkText: #e0e0e0
+            border_subtle: Color32::from_rgb(234, 234, 234), // MarkText: #eaeaea
+            hover: Color32::from_rgb(242, 242, 242),
             // Saturated enough to remain visible at the ~40% alpha the
             // MDOxideEditor selection overlay applies on top of text (#121).
             // At full alpha this also works as a light-theme widget-selected
             // color without being harsh.
-            selected: Color32::from_rgb(100, 170, 245),
+            selected: Color32::from_rgb(211, 227, 253), // MarkText selection #d3e3fd
         }
     }
 
     /// Dark theme base colors.
     pub fn dark() -> Self {
         Self {
-            background: Color32::from_rgb(30, 30, 30),
-            background_secondary: Color32::from_rgb(37, 37, 37),
-            background_tertiary: Color32::from_rgb(45, 45, 45),
-            border: Color32::from_rgb(60, 60, 60),
-            border_subtle: Color32::from_rgb(50, 50, 50),
-            hover: Color32::from_rgb(50, 50, 50),
-            selected: Color32::from_rgb(40, 60, 80),
+            background: Color32::from_rgb(40, 44, 52),      // MarkText dark: #282c34
+            background_secondary: Color32::from_rgb(33, 37, 43), // #21252b
+            background_tertiary: Color32::from_rgb(44, 49, 58),  // #2c313a
+            border: Color32::from_rgb(62, 68, 81),          // #3e4451
+            border_subtle: Color32::from_rgb(51, 56, 66),   // #333842
+            hover: Color32::from_rgb(47, 52, 61),           // #2f343d
+            selected: Color32::from_rgb(58, 66, 80),
         }
     }
 }
@@ -267,24 +267,24 @@ impl TextColors {
     /// - code: ~5.9:1 (exceeds WCAG AA)
     pub fn light() -> Self {
         Self {
-            primary: Color32::from_rgb(30, 30, 30),
-            secondary: Color32::from_rgb(75, 75, 75), // Slightly darkened for better contrast
-            muted: Color32::from_rgb(100, 100, 100),  // Darkened from 120 for ~5.3:1 contrast
-            disabled: Color32::from_rgb(140, 140, 140), // Darkened from 160 for better visibility
-            link: Color32::from_rgb(0, 90, 170),      // Slightly darkened for better contrast
-            code: Color32::from_rgb(70, 70, 70),      // Darkened for better readability
+            primary: Color32::from_rgb(51, 51, 51),    // MarkText body text #333
+            secondary: Color32::from_rgb(102, 102, 102),
+            muted: Color32::from_rgb(153, 153, 153),
+            disabled: Color32::from_rgb(187, 187, 187),
+            link: Color32::from_rgb(64, 158, 255),     // #409eff
+            code: Color32::from_rgb(199, 37, 78),      // inline code #c7254e
         }
     }
 
     /// Dark theme text colors.
     pub fn dark() -> Self {
         Self {
-            primary: Color32::from_rgb(220, 220, 220),
-            secondary: Color32::from_rgb(180, 180, 180),
-            muted: Color32::from_rgb(140, 140, 140),
-            disabled: Color32::from_rgb(100, 100, 100),
-            link: Color32::from_rgb(100, 180, 255),
-            code: Color32::from_rgb(200, 200, 150),
+            primary: Color32::from_rgb(171, 178, 191),  // MarkText dark: #abb2bf
+            secondary: Color32::from_rgb(157, 165, 180),
+            muted: Color32::from_rgb(122, 130, 144),
+            disabled: Color32::from_rgb(92, 99, 112),
+            link: Color32::from_rgb(97, 175, 239),      // #61afef
+            code: Color32::from_rgb(229, 192, 123),     // #e5c07b
         }
     }
 }
@@ -332,32 +332,32 @@ impl EditorThemeColors {
     /// - list_marker: ~5.3:1 (WCAG AA compliant)
     pub fn light() -> Self {
         Self {
-            heading: Color32::from_rgb(0, 90, 165), // Slightly darkened for better contrast
-            blockquote_border: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1
-            blockquote_text: Color32::from_rgb(85, 85, 85), // Darkened from 100 for better readability
-            code_block_bg: Color32::from_rgb(243, 244, 246), // Slightly lighter for better code contrast
-            code_block_border: Color32::from_rgb(175, 180, 190), // Darkened for better visibility
-            horizontal_rule: Color32::from_rgb(160, 160, 160), // Darkened from 200 for ~3.2:1
-            list_marker: Color32::from_rgb(85, 85, 85), // Darkened from 100 for better visibility
-            checkbox: Color32::from_rgb(0, 90, 165),    // Consistent with heading color
-            table_border: Color32::from_rgb(170, 175, 185), // Darkened for better visibility
-            table_header_bg: Color32::from_rgb(240, 242, 245),
+            heading: Color32::from_rgb(43, 43, 43),          // MarkText #333, one step darker for hierarchy
+            blockquote_border: Color32::from_rgb(223, 226, 229), // #dfe2e5
+            blockquote_text: Color32::from_rgb(119, 119, 119),   // #777
+            code_block_bg: Color32::from_rgb(246, 248, 250),     // #f6f8fa
+            code_block_border: Color32::from_rgb(225, 228, 232), // #e1e4e8
+            horizontal_rule: Color32::from_rgb(229, 229, 229),   // #e5e5e5
+            list_marker: Color32::from_rgb(51, 51, 51),
+            checkbox: Color32::from_rgb(64, 158, 255),           // #409eff
+            table_border: Color32::from_rgb(223, 226, 229),
+            table_header_bg: Color32::from_rgb(246, 248, 250),
         }
     }
 
     /// Dark theme editor colors.
     pub fn dark() -> Self {
         Self {
-            heading: Color32::from_rgb(100, 180, 255),
-            blockquote_border: Color32::from_rgb(80, 80, 80),
-            blockquote_text: Color32::from_rgb(180, 180, 180),
-            code_block_bg: Color32::from_rgb(35, 39, 46),
-            code_block_border: Color32::from_rgb(55, 60, 68),
-            horizontal_rule: Color32::from_rgb(80, 80, 80),
-            list_marker: Color32::from_rgb(150, 150, 150),
-            checkbox: Color32::from_rgb(100, 180, 255),
-            table_border: Color32::from_rgb(60, 65, 75),
-            table_header_bg: Color32::from_rgb(45, 50, 60),
+            heading: Color32::from_rgb(220, 223, 228),          // #dcdfe4
+            blockquote_border: Color32::from_rgb(75, 82, 99),   // #4b5263
+            blockquote_text: Color32::from_rgb(157, 165, 180),
+            code_block_bg: Color32::from_rgb(33, 37, 43),       // #21252b
+            code_block_border: Color32::from_rgb(62, 68, 81),
+            horizontal_rule: Color32::from_rgb(62, 68, 81),
+            list_marker: Color32::from_rgb(171, 178, 191),
+            checkbox: Color32::from_rgb(97, 175, 239),
+            table_border: Color32::from_rgb(62, 68, 81),
+            table_header_bg: Color32::from_rgb(33, 37, 43),
         }
     }
 }
@@ -454,12 +454,12 @@ impl UiColors {
     /// Light theme UI colors.
     pub fn light() -> Self {
         Self {
-            accent: Color32::from_rgb(0, 120, 212),
-            accent_hover: Color32::from_rgb(0, 100, 180),
-            success: Color32::from_rgb(40, 167, 69),
-            warning: Color32::from_rgb(255, 193, 7),
-            error: Color32::from_rgb(220, 53, 69),
-            info: Color32::from_rgb(23, 162, 184),
+            accent: Color32::from_rgb(64, 158, 255),      // #409eff
+            accent_hover: Color32::from_rgb(102, 177, 255), // #66b1ff
+            success: Color32::from_rgb(103, 194, 58),
+            warning: Color32::from_rgb(230, 162, 60),
+            error: Color32::from_rgb(245, 108, 108),
+            info: Color32::from_rgb(144, 147, 153),
             // Subtle gold/yellow tint for bracket matching - visible but not overpowering
             matching_bracket_bg: Color32::from_rgba_unmultiplied(255, 220, 100, 80),
             matching_bracket_border: Color32::from_rgb(200, 170, 50),
@@ -469,12 +469,12 @@ impl UiColors {
     /// Dark theme UI colors.
     pub fn dark() -> Self {
         Self {
-            accent: Color32::from_rgb(100, 180, 255),
-            accent_hover: Color32::from_rgb(130, 200, 255),
-            success: Color32::from_rgb(75, 210, 100),
-            warning: Color32::from_rgb(255, 210, 50),
-            error: Color32::from_rgb(255, 100, 100),
-            info: Color32::from_rgb(80, 200, 220),
+            accent: Color32::from_rgb(97, 175, 239),     // #61afef
+            accent_hover: Color32::from_rgb(130, 195, 245),
+            success: Color32::from_rgb(152, 195, 121),
+            warning: Color32::from_rgb(229, 192, 123),
+            error: Color32::from_rgb(224, 108, 117),
+            info: Color32::from_rgb(86, 182, 194),
             // Subtle cyan/blue tint for bracket matching - visible on dark backgrounds
             matching_bracket_bg: Color32::from_rgba_unmultiplied(80, 180, 220, 60),
             matching_bracket_border: Color32::from_rgb(100, 180, 220),
@@ -586,13 +586,13 @@ mod tests {
 
     #[test]
     fn test_text_colors_contrast() {
+        fn luma(c: Color32) -> f32 {
+            0.299 * f32::from(c.r()) + 0.587 * f32::from(c.g()) + 0.114 * f32::from(c.b())
+        }
         // Light theme: dark text on light background
-        let light = TextColors::light();
-        assert!(light.primary.r() < 50);
-
-        // Dark theme: light text on dark background
-        let dark = TextColors::dark();
-        assert!(dark.primary.r() > 200);
+        assert!(luma(TextColors::light().primary) < 80.0);
+        // Dark theme: light text on dark background (MarkText #abb2bf is not pure white)
+        assert!(luma(TextColors::dark().primary) > 150.0);
     }
 
     #[test]

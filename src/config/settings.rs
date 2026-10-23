@@ -2539,7 +2539,7 @@ impl Default for Settings {
             default_syntax_language: String::new(), // Empty = no default language (auto)
 
             // Maximum Line Width Settings
-            max_line_width: MaxLineWidth::default(), // Off by default (no limit)
+            max_line_width: MaxLineWidth::Custom(720), // MarkText-like centered column
 
             // Logging Settings
             log_level: LogLevel::default(), // Default to Warn level
@@ -3739,15 +3739,16 @@ mod tests {
     #[test]
     fn test_settings_max_line_width_default() {
         let settings = Settings::default();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Col100);
+        // MarkText-style centered column (720 px) instead of full-width text.
+        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(720));
     }
 
     #[test]
     fn test_settings_backward_compatibility_max_line_width() {
-        // Old JSON without max_line_width field should use current default (Col100)
+        // Old JSON without max_line_width keeps the MarkText-style default.
         let json = r#"{"theme": "dark"}"#;
         let settings: Settings = serde_json::from_str(json).unwrap();
-        assert_eq!(settings.max_line_width, MaxLineWidth::Col100);
+        assert_eq!(settings.max_line_width, MaxLineWidth::Custom(720));
     }
 
     #[test]

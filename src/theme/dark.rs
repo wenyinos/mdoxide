@@ -178,10 +178,10 @@ mod tests {
     #[test]
     fn test_dark_visuals_has_dark_background() {
         let visuals = create_dark_visuals_defaults();
-        // Dark theme should have dark panel fill
-        assert!(visuals.panel_fill.r() < 50);
-        assert!(visuals.panel_fill.g() < 50);
-        assert!(visuals.panel_fill.b() < 50);
+        // Dark theme should have dark panel fill (MarkText #282c34 has a blue cast)
+        let c = visuals.panel_fill;
+        let luma = 0.299 * f32::from(c.r()) + 0.587 * f32::from(c.g()) + 0.114 * f32::from(c.b());
+        assert!(luma < 70.0, "panel fill luma {luma} should be dark");
     }
 
     #[test]
