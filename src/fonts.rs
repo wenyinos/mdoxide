@@ -37,10 +37,17 @@ const JETBRAINS_BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMo
 
 /// Bundled Simplified-Chinese fallback (Source Han Sans SC / Noto Sans CJK SC).
 ///
-/// Guarantees readable Chinese on systems without a CJK font installed.
+/// Subset to GB2312 + Latin + punctuation + kana (~8k glyphs, 3.5 MB) so the
+/// binary stays small while covering everyday Chinese text. Rare characters
+/// outside GB2312 fall back to the system CJK font when one is installed.
 /// The system font is preferred when present; this is the safety net.
 const SOURCE_HAN_SANS_SC: &[u8] =
     include_bytes!("../assets/fonts/SourceHanSansSC-Regular.otf");
+
+/// Bundled bold face of the same family, used whenever bold CJK text is drawn
+/// (egui has no synthetic emboldening, so a real bold face is required).
+const SOURCE_HAN_SANS_SC_BOLD: &[u8] =
+    include_bytes!("../assets/fonts/SourceHanSansSC-Bold.otf");
 
 /// Cache for system font list (expensive to compute, do once)
 static SYSTEM_FONTS_CACHE: OnceLock<Vec<String>> = OnceLock::new();
@@ -942,6 +949,8 @@ const FONT_PHOSPHOR: &str = "phosphor";
 /// Keys for dynamically loaded CJK system fonts
 const FONT_CJK_KR: &str = "CJK_KR";
 const FONT_CJK_SC: &str = "CJK_SC";
+/// Bundled bold Simplified-Chinese face (always present).
+const FONT_CJK_SC_BOLD: &str = "CJK_SC_Bold";
 const FONT_CJK_TC: &str = "CJK_TC";
 const FONT_CJK_JP: &str = "CJK_JP";
 
@@ -1005,6 +1014,7 @@ pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
             FONT_JETBRAINS_BOLD => JETBRAINS_BOLD,
             FONT_JETBRAINS_ITALIC => JETBRAINS_ITALIC,
             FONT_JETBRAINS_BOLD_ITALIC => JETBRAINS_BOLD_ITALIC,
+            FONT_CJK_SC_BOLD => SOURCE_HAN_SANS_SC_BOLD,
             FONT_CUSTOM => CUSTOM_FONT_BYTES
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
@@ -1759,6 +1769,12 @@ pub fn create_font_definitions_with_cjk_spec(
         Arc::new(FontData::from_static(INTER_BOLD_ITALIC)),
     );
 
+    // Bundled CJK bold face (OFL) — always available so bold Chinese is real bold
+    fonts.font_data.insert(
+        FONT_CJK_SC_BOLD.to_owned(),
+        Arc::new(FontData::from_static(SOURCE_HAN_SANS_SC_BOLD)),
+    );
+
     // Insert JetBrains Mono font variants
     fonts.font_data.insert(
         FONT_JETBRAINS.to_owned(),
@@ -1896,7 +1912,11 @@ pub fn create_font_definitions_with_cjk_spec(
         .families
         .insert(FontFamily::Name(FONT_INTER.into()), inter_family);
 
-    let mut inter_bold_family = vec![FONT_INTER_BOLD.to_owned(), FONT_JETBRAINS_BOLD.to_owned()];
+    let mut inter_bold_family = vec![
+        FONT_INTER_BOLD.to_owned(),
+        FONT_JETBRAINS_BOLD.to_owned(),
+        FONT_CJK_SC_BOLD.to_owned(),
+    ];
     inter_bold_family.extend(proportional_fallbacks.clone());
     fonts
         .families
@@ -1915,6 +1935,7 @@ pub fn create_font_definitions_with_cjk_spec(
     let mut inter_bold_italic_family = vec![
         FONT_INTER_BOLD_ITALIC.to_owned(),
         FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
+        FONT_CJK_SC_BOLD.to_owned(),
     ];
     inter_bold_italic_family.extend(proportional_fallbacks);
     fonts.families.insert(
@@ -1929,7 +1950,8 @@ pub fn create_font_definitions_with_cjk_spec(
         .families
         .insert(FontFamily::Name(FONT_JETBRAINS.into()), jetbrains_family);
 
-    let mut jetbrains_bold_family = vec![FONT_JETBRAINS_BOLD.to_owned()];
+    let mut jetbrains_bold_family =
+        vec![FONT_JETBRAINS_BOLD.to_owned(), FONT_CJK_SC_BOLD.to_owned()];
     jetbrains_bold_family.extend(monospace_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_JETBRAINS_BOLD.into()),
@@ -1943,7 +1965,8 @@ pub fn create_font_definitions_with_cjk_spec(
         jetbrains_italic_family,
     );
 
-    let mut jetbrains_bold_italic_family = vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned()];
+    let mut jetbrains_bold_italic_family =
+        vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned(), FONT_CJK_SC_BOLD.to_owned()];
     jetbrains_bold_italic_family.extend(monospace_fallbacks);
     fonts.families.insert(
         FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into()),
@@ -1997,6 +2020,12 @@ pub fn create_font_definitions_with_settings(
     fonts.font_data.insert(
         FONT_INTER_BOLD_ITALIC.to_owned(),
         Arc::new(FontData::from_static(INTER_BOLD_ITALIC)),
+    );
+
+    // Bundled CJK bold face (OFL) — always available so bold Chinese is real bold
+    fonts.font_data.insert(
+        FONT_CJK_SC_BOLD.to_owned(),
+        Arc::new(FontData::from_static(SOURCE_HAN_SANS_SC_BOLD)),
     );
 
     // Insert JetBrains Mono font variants
@@ -2147,7 +2176,11 @@ pub fn create_font_definitions_with_settings(
         .families
         .insert(FontFamily::Name(FONT_INTER.into()), inter_family);
 
-    let mut inter_bold_family = vec![FONT_INTER_BOLD.to_owned(), FONT_JETBRAINS_BOLD.to_owned()];
+    let mut inter_bold_family = vec![
+        FONT_INTER_BOLD.to_owned(),
+        FONT_JETBRAINS_BOLD.to_owned(),
+        FONT_CJK_SC_BOLD.to_owned(),
+    ];
     inter_bold_family.extend(proportional_fallbacks.clone());
     fonts
         .families
@@ -2166,6 +2199,7 @@ pub fn create_font_definitions_with_settings(
     let mut inter_bold_italic_family = vec![
         FONT_INTER_BOLD_ITALIC.to_owned(),
         FONT_JETBRAINS_BOLD_ITALIC.to_owned(),
+        FONT_CJK_SC_BOLD.to_owned(),
     ];
     inter_bold_italic_family.extend(proportional_fallbacks);
     fonts.families.insert(
@@ -2180,7 +2214,8 @@ pub fn create_font_definitions_with_settings(
         .families
         .insert(FontFamily::Name(FONT_JETBRAINS.into()), jetbrains_family);
 
-    let mut jetbrains_bold_family = vec![FONT_JETBRAINS_BOLD.to_owned()];
+    let mut jetbrains_bold_family =
+        vec![FONT_JETBRAINS_BOLD.to_owned(), FONT_CJK_SC_BOLD.to_owned()];
     jetbrains_bold_family.extend(monospace_fallbacks.clone());
     fonts.families.insert(
         FontFamily::Name(FONT_JETBRAINS_BOLD.into()),
@@ -2194,7 +2229,8 @@ pub fn create_font_definitions_with_settings(
         jetbrains_italic_family,
     );
 
-    let mut jetbrains_bold_italic_family = vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned()];
+    let mut jetbrains_bold_italic_family =
+        vec![FONT_JETBRAINS_BOLD_ITALIC.to_owned(), FONT_CJK_SC_BOLD.to_owned()];
     jetbrains_bold_italic_family.extend(monospace_fallbacks);
     fonts.families.insert(
         FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into()),
