@@ -2269,63 +2269,8 @@ impl MDOxideEditor {
 
                 // Handle IME events first (for CJK input)
                 if let egui::Event::Ime(ime_event) = event {
-                    match ime_event {
-                        ImeEvent::Enabled => {
-                            self.ime_enabled = true;
-                            self.ime_cursor_range = Some(self.primary_selection());
-                            continue;
-                        }
-                        ImeEvent::Preedit(text_mark) => {
-                            if text_mark == "\n" || text_mark == "\r" {
-                                continue;
-                            }
-
-                            if text_mark.is_empty() {
-                                // Empty preedit = composition cancelled (backspace/escape during IME)
-                                self.ime_preedit = None;
-                            } else {
-                                // Store preedit text for rendering
-                                self.ime_preedit = Some(text_mark.clone());
-                            }
-                            continue;
-                        }
-                        ImeEvent::Commit(prediction) => {
-                            if prediction == "\n" || prediction == "\r" {
-                                continue;
-                            }
-
-                            self.ime_enabled = false;
-                            self.ime_preedit = None;
-
-                            if !prediction.is_empty() {
-                                // Store committed text for CJK font loading check
-                                self.ime_committed_text = Some(prediction.clone());
-
-                                // Delete selection first if any
-                                self.delete_selection();
-
-                                // Insert committed text at primary cursor
-                                let mut cursor = self.primary_selection().head;
-                                let start_line = cursor.line;
-                                super::input::keyboard::insert_text(
-                                    &mut self.buffer,
-                                    &mut cursor,
-                                    prediction,
-                                );
-                                *self.primary_selection_mut() = Selection::collapsed(cursor);
-                                self.mark_lines_dirty(start_line, cursor.line);
-                                self.reset_cursor_blink();
-                                self.view
-                                    .ensure_line_visible(cursor.line, self.buffer.line_count());
-                            }
-                            continue;
-                        }
-                        ImeEvent::Disabled => {
-                            self.ime_enabled = false;
-                            self.ime_preedit = None;
-                            continue;
-                        }
-                    }
+                    self.handle_ime_event(ime_event);
+                    continue;
                 }
 
                 // Skip keyboard and text events during active IME composition.
@@ -3135,6 +3080,66 @@ impl MDOxideEditor {
         }
     }
 
+    /// Applies one IME event to the editor state.
+    ///
+    /// Preedit text is only drawn over the buffer, not inserted into it; the
+    /// committed text is what eventually lands in the document.
+    fn handle_ime_event(&mut self, ime_event: &ImeEvent) {
+        match ime_event {
+            ImeEvent::Enabled => {
+                self.ime_enabled = true;
+                self.ime_cursor_range = Some(self.primary_selection());
+            }
+            ImeEvent::Preedit(text_mark) => {
+                if text_mark == "\n" || text_mark == "\r" {
+                    return;
+                }
+
+                if text_mark.is_empty() {
+                    // Empty preedit = composition cancelled (backspace/escape during IME)
+                    self.ime_preedit = None;
+                } else {
+                    // Store preedit text for rendering
+                    self.ime_preedit = Some(text_mark.clone());
+                }
+            }
+            ImeEvent::Commit(prediction) => {
+                if prediction == "\n" || prediction == "\r" {
+                    return;
+                }
+
+                self.ime_enabled = false;
+                self.ime_preedit = None;
+
+                if !prediction.is_empty() {
+                    // Store committed text for CJK font loading check
+                    self.ime_committed_text = Some(prediction.clone());
+
+                    // Delete selection first if any
+                    self.delete_selection();
+
+                    // Insert committed text at primary cursor
+                    let mut cursor = self.primary_selection().head;
+                    let start_line = cursor.line;
+                    super::input::keyboard::insert_text(
+                        &mut self.buffer,
+                        &mut cursor,
+                        prediction,
+                    );
+                    *self.primary_selection_mut() = Selection::collapsed(cursor);
+                    self.mark_lines_dirty(start_line, cursor.line);
+                    self.reset_cursor_blink();
+                    self.view
+                        .ensure_line_visible(cursor.line, self.buffer.line_count());
+                }
+            }
+            ImeEvent::Disabled => {
+                self.ime_enabled = false;
+                self.ime_preedit = None;
+            }
+        }
+    }
+
     /// Returns whether IME composition is currently active.
     #[must_use]
     pub fn is_ime_active(&self) -> bool {
@@ -3693,6 +3698,194 @@ impl MDOxideEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ime_preedit_then_commit_inserts_text() {
+        let mut editor = MDOxideEditor::new();
+
+        editor.handle_ime_event(&ImeEvent::Enabled);
+        assert!(editor.ime_enabled);
+
+        editor.handle_ime_event(&ImeEvent::Preedit("ni hao".to_string()));
+        assert_eq!(editor.ime_preedit_text(), Some("ni hao"));
+        assert!(editor.is_ime_active());
+        assert_eq!(editor.buffer.to_string(), "", "preedit must not enter the buffer");
+
+        editor.handle_ime_event(&ImeEvent::Commit("你好".to_string()));
+        assert!(!editor.ime_enabled);
+        assert!(!editor.is_ime_active());
+        assert_eq!(editor.ime_preedit_text(), None);
+        assert_eq!(editor.buffer.to_string(), "你好");
+        assert_eq!(editor.cursor(), Cursor::new(0, 2));
+        assert_eq!(editor.take_ime_committed_text(), Some("你好".to_string()));
+        assert_eq!(editor.take_ime_committed_text(), None);
+    }
+
+    #[test]
+    fn test_ime_empty_preedit_cancels_composition_only() {
+        let mut editor = MDOxideEditor::from_string("abc");
+
+        editor.handle_ime_event(&ImeEvent::Enabled);
+        editor.handle_ime_event(&ImeEvent::Preedit("ni".to_string()));
+        assert!(editor.is_ime_active());
+
+        editor.handle_ime_event(&ImeEvent::Preedit(String::new()));
+        assert_eq!(editor.ime_preedit_text(), None);
+        assert!(
+            editor.ime_enabled,
+            "cancelling a composition must not disable the IME"
+        );
+        assert_eq!(editor.buffer.to_string(), "abc");
+    }
+
+    #[test]
+    fn test_ime_commit_replaces_selection() {
+        let mut editor = MDOxideEditor::from_string("hello world");
+        editor.set_selection(Selection::new(Cursor::new(0, 0), Cursor::new(0, 5)));
+
+        editor.handle_ime_event(&ImeEvent::Enabled);
+        editor.handle_ime_event(&ImeEvent::Preedit("ni".to_string()));
+        editor.handle_ime_event(&ImeEvent::Commit("你好".to_string()));
+
+        assert_eq!(editor.buffer.to_string(), "你好 world");
+        assert_eq!(editor.cursor(), Cursor::new(0, 2));
+        assert!(!editor.has_selection());
+    }
+
+    #[test]
+    fn test_ime_disabled_clears_state_without_inserting() {
+        let mut editor = MDOxideEditor::from_string("abc");
+        editor.set_cursor(Cursor::new(0, 3));
+
+        editor.handle_ime_event(&ImeEvent::Enabled);
+        editor.handle_ime_event(&ImeEvent::Preedit("ni".to_string()));
+        editor.handle_ime_event(&ImeEvent::Disabled);
+
+        assert!(!editor.ime_enabled);
+        assert_eq!(editor.ime_preedit_text(), None);
+        assert_eq!(editor.buffer.to_string(), "abc");
+    }
+
+    #[test]
+    fn test_ime_consecutive_compositions() {
+        let mut editor = MDOxideEditor::new();
+
+        // egui-winit sends Disabled after every Commit and Enabled again before
+        // the next Preedit; two committed words must both reach the buffer.
+        for committed in ["你好", "世界"] {
+            editor.handle_ime_event(&ImeEvent::Enabled);
+            editor.handle_ime_event(&ImeEvent::Preedit("shu ru".to_string()));
+            editor.handle_ime_event(&ImeEvent::Commit(committed.to_string()));
+            editor.handle_ime_event(&ImeEvent::Disabled);
+        }
+
+        assert_eq!(editor.buffer.to_string(), "你好世界");
+        assert_eq!(editor.cursor(), Cursor::new(0, 4));
+    }
+
+    #[test]
+    fn test_ime_ui_paints_preedit_and_sets_candidate_rect() {
+        let ctx = egui::Context::default();
+        let mut editor = MDOxideEditor::from_string("abc");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let click_pos = egui::pos2(200.0, 120.0);
+
+        let run_editor = |ctx: &egui::Context,
+                          editor: &mut MDOxideEditor,
+                          events: Vec<egui::Event>| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        editor.ui(ctx, ui);
+                    });
+                },
+            )
+        };
+
+        // Frame 1: lay the editor out so egui knows its interact rect.
+        let _ = run_editor(&ctx, &mut editor, Vec::new());
+
+        // Frame 2: click inside the editor to give it keyboard focus.
+        let _ = run_editor(
+            &ctx,
+            &mut editor,
+            vec![
+                egui::Event::PointerMoved(click_pos),
+                egui::Event::PointerButton {
+                    pos: click_pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                },
+                egui::Event::PointerButton {
+                    pos: click_pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::default(),
+                },
+            ],
+        );
+        assert!(
+            ctx.memory(|m| m.focused()).is_some(),
+            "clicking the editor must focus it"
+        );
+
+        // Put the caret at the start so the commit position is deterministic.
+        editor.set_cursor(Cursor::start());
+
+        // Frame 3: start composing. Input events are handled after the paint
+        // pass, so the preedit itself shows up in the next frame's shapes.
+        let _ = run_editor(
+            &ctx,
+            &mut editor,
+            vec![
+                egui::Event::Ime(egui::ImeEvent::Enabled),
+                egui::Event::Ime(egui::ImeEvent::Preedit("ni hao".to_string())),
+            ],
+        );
+        assert!(editor.is_ime_active(), "preedit state should be active");
+
+        // Frame 4: paint the preedit and publish the candidate-window rect.
+        let output = run_editor(&ctx, &mut editor, Vec::new());
+
+        fn shape_contains_text(shape: &egui::Shape, needle: &str) -> bool {
+            match shape {
+                egui::Shape::Text(text) => text.galley.text().contains(needle),
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().any(|shape| shape_contains_text(shape, needle))
+                }
+                _ => false,
+            }
+        }
+
+        let preedit_painted = output
+            .shapes
+            .iter()
+            .any(|clipped| shape_contains_text(&clipped.shape, "ni hao"));
+        assert!(preedit_painted, "preedit text should be painted");
+
+        let ime_output = output
+            .platform_output
+            .ime
+            .expect("IME output must carry a candidate-window rect");
+        assert!(ime_output.rect.width() > 0.0);
+        assert!(ime_output.cursor_rect.width() > 0.0);
+
+        // Frame 5: commit. The text lands in the buffer exactly once.
+        let _ = run_editor(
+            &ctx,
+            &mut editor,
+            vec![egui::Event::Ime(egui::ImeEvent::Commit("你好".to_string()))],
+        );
+
+        assert_eq!(editor.buffer.to_string(), "你好abc");
+        assert!(!editor.is_ime_active());
+    }
 
     #[test]
     fn test_new_editor() {
