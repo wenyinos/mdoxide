@@ -1196,6 +1196,8 @@ impl MDOxideApp {
 
                                 // Get Zen Mode settings
                                 let zen_max_column_width = self.state.settings.zen_max_column_width;
+                                let focus_mode = self.state.settings.focus_mode;
+                                let typewriter_mode = self.state.settings.typewriter_mode;
 
                                 // Get minimap settings (hidden in Zen Mode for distraction-free editing)
                                 // Disable minimap for large files to avoid per-frame content iteration
@@ -1526,7 +1528,8 @@ impl MDOxideApp {
                                         .id(editor_widget_id)
                                         .scroll_to_line(scroll_to_line)
                                         .max_line_width(max_line_width)
-                                        .zen_mode(zen_mode, zen_max_column_width) // Apply Zen Mode centering
+                                        .zen_mode(zen_mode, zen_max_column_width)
+                                        .typewriter_mode(typewriter_mode) // Apply Zen Mode centering
                                         .transient_highlight(transient_hl)
                                         .highlight_matching_pairs(highlight_matching_pairs)
                                         .syntax_highlighting(
@@ -1911,6 +1914,8 @@ impl MDOxideApp {
                                             .accent_rgb(accent_rgb)
                                             .max_line_width(max_line_width)
                                             .zen_mode(zen_mode, zen_max_column_width)
+                                            .focus_mode(focus_mode)
+                                            .typewriter_mode(typewriter_mode)
                                             .paragraph_indent(paragraph_indent)
                                             .header_spacing(header_spacing)
                                             .wikilink_context(wl_ctx)
@@ -2221,6 +2226,8 @@ impl MDOxideApp {
                                 // Capture settings before mutable borrow
                                 let max_line_width = self.state.settings.max_line_width;
                                 let zen_max_column_width = self.state.settings.zen_max_column_width;
+                                let focus_mode = self.state.settings.focus_mode;
+                                let typewriter_mode = self.state.settings.typewriter_mode;
                                 let paragraph_indent = self.state.settings.paragraph_indent;
                                 let header_spacing = self.state.settings.header_spacing;
                                 let accent_rgb = self.state.settings.accent_color;
@@ -2276,6 +2283,8 @@ impl MDOxideApp {
                                         .accent_rgb(accent_rgb)
                                         .max_line_width(max_line_width)
                                         .zen_mode(zen_mode, zen_max_column_width)
+                                        .focus_mode(focus_mode)
+                                        .typewriter_mode(typewriter_mode)
                                         .paragraph_indent(paragraph_indent)
                                         .header_spacing(header_spacing)
                                         .wikilink_context(wl_ctx)

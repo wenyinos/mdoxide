@@ -1347,6 +1347,13 @@ impl SettingsPanel {
                     changed = true;
                 }
                 if ui
+                    .checkbox(&mut settings.focus_mode, t!("settings.editor.focus_mode"))
+                    .on_hover_text(t!("settings.editor.focus_mode_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
                     .checkbox(&mut settings.show_line_numbers, t!("settings.editor.show_line_numbers"))
                     .on_hover_text(t!("settings.editor.line_numbers_tooltip"))
                     .changed()

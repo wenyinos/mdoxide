@@ -2013,6 +2013,10 @@ pub struct Settings {
     #[serde(default)]
     pub typewriter_mode: bool,
 
+    /// Dim every rendered block except the focused one (MarkText focus mode).
+    #[serde(default)]
+    pub focus_mode: bool,
+
     /// Tab size (number of spaces)
     pub tab_size: u8,
 
@@ -2465,6 +2469,7 @@ impl Default for Settings {
             // Editor Behavior
             word_wrap: true,
             typewriter_mode: false,
+            focus_mode: false,
             tab_size: 4,
             use_spaces: true,
             auto_save_enabled_default: false,

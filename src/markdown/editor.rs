@@ -93,6 +93,11 @@ pub enum EditorMode {
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /// Result of showing the markdown editor widget.
+/// egui temp-data key: source line of the block that currently owns the caret.
+const FOCUS_LINE_ID: &str = "mdoxide.rendered.focus_line";
+/// egui temp-data key: scroll offset to apply next frame for typewriter mode.
+const TYPEWRITER_OFFSET_ID: &str = "mdoxide.rendered.typewriter_offset";
+
 pub struct MarkdownEditorOutput {
     /// The egui response from the editor container.
     pub response: Response,
@@ -693,6 +698,10 @@ pub struct MarkdownEditor<'a> {
     max_line_width: MaxLineWidth,
     /// Whether Zen Mode is enabled (centered text column)
     zen_mode: bool,
+    /// Dim non-focused blocks (focus mode)
+    focus_mode: bool,
+    /// Keep the focused block vertically centred while typing
+    typewriter_mode: bool,
     /// Maximum column width in characters for Zen Mode centering
     zen_max_column_width: f32,
     /// CJK paragraph first-line indentation
@@ -739,6 +748,8 @@ impl<'a> MarkdownEditor<'a> {
             pending_scroll_offset: None,
             max_line_width: MaxLineWidth::Off,
             zen_mode: false,
+            focus_mode: false,
+            typewriter_mode: false,
             zen_max_column_width: 80.0,
             paragraph_indent: ParagraphIndent::Off,
             header_spacing: HeaderSpacing::default(),
@@ -814,6 +825,20 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn max_line_width(mut self, width: MaxLineWidth) -> Self {
         self.max_line_width = width;
+        self
+    }
+
+    /// Dim every block except the focused one.
+    #[must_use]
+    pub fn focus_mode(mut self, enabled: bool) -> Self {
+        self.focus_mode = enabled;
+        self
+    }
+
+    /// Keep the focused block vertically centred while typing.
+    #[must_use]
+    pub fn typewriter_mode(mut self, enabled: bool) -> Self {
+        self.typewriter_mode = enabled;
         self
     }
 
@@ -1156,6 +1181,12 @@ impl<'a> MarkdownEditor<'a> {
             });
         }
 
+        // Previous frame's focused block line (focus mode dims the others).
+        let focus_line_prev = ui.memory(|mem| {
+            mem.data
+                .get_temp::<usize>(egui::Id::new(FOCUS_LINE_ID))
+        });
+
         // Render the document in a scroll area
         let mut scroll_area = ScrollArea::vertical()
             .id_salt(id.with("rendered_scroll"))
@@ -1194,6 +1225,14 @@ impl<'a> MarkdownEditor<'a> {
             scroll_area = scroll_area.vertical_scroll_offset(offset);
             log::debug!("Applied pending scroll offset in rendered mode: {}", offset);
         } else if let Some(offset) = target_scroll_offset {
+            scroll_area = scroll_area.vertical_scroll_offset(offset);
+        } else if let Some(offset) = ui.memory(|mem| {
+            mem.data
+                .get_temp::<f32>(egui::Id::new(TYPEWRITER_OFFSET_ID))
+        }) {
+            ui.memory_mut(|mem| {
+                mem.data.remove::<f32>(egui::Id::new(TYPEWRITER_OFFSET_ID))
+            });
             scroll_area = scroll_area.vertical_scroll_offset(offset);
         }
 
@@ -1327,6 +1366,12 @@ impl<'a> MarkdownEditor<'a> {
                                 let y_before = ui.cursor().top();
                                 let block_left = ui.cursor().left();
 
+                                let dim_block = self.focus_mode
+                                    && focus_line_prev
+                                        .is_some_and(|line| line != node.start_line);
+                                if dim_block {
+                                    ui.set_opacity(0.32);
+                                }
                                 render_node(
                                     ui,
                                     node,
@@ -1340,6 +1385,9 @@ impl<'a> MarkdownEditor<'a> {
                                     self.paragraph_indent,
                                     self.header_spacing,
                                 );
+                                if dim_block {
+                                    ui.set_opacity(1.0);
+                                }
 
                                 let y_after = ui.cursor().top();
                                 let height = (y_after - y_before).max(1.0);
@@ -1540,6 +1588,12 @@ impl<'a> MarkdownEditor<'a> {
                                 let within_budget = new_measures < MAX_NEW_MEASUREMENTS_PER_FRAME;
 
                                 if boot_measured[i] || within_budget {
+                                    let dim_block = self.focus_mode
+                                        && focus_line_prev
+                                            .is_some_and(|line| line != node.start_line);
+                                    if dim_block {
+                                        ui.set_opacity(0.32);
+                                    }
                                     render_node(
                                         ui,
                                         node,
@@ -1553,6 +1607,9 @@ impl<'a> MarkdownEditor<'a> {
                                         self.paragraph_indent,
                                         self.header_spacing,
                                     );
+                                    if dim_block {
+                                        ui.set_opacity(1.0);
+                                    }
                                     let y_after = ui.cursor().top();
                                     let h = (y_after - y_before).max(1.0);
 
@@ -1682,6 +1739,52 @@ impl<'a> MarkdownEditor<'a> {
                     self.content,
                     &mut edit_state,
                 );
+
+                // Publish the focused block line for next frame's focus dimming,
+                // and centre the view when typewriter mode is on.
+                let focus_line = edit_state
+                    .focused_node
+                    .and_then(|id| edit_state.nodes.iter().find(|n| n.id == id))
+                    .map(|n| n.start_line);
+                match focus_line {
+                    Some(line) => ui.memory_mut(|mem| {
+                        mem.data
+                            .insert_temp(egui::Id::new(FOCUS_LINE_ID), line);
+                    }),
+                    None => ui.memory_mut(|mem| {
+                        mem.data.remove::<usize>(egui::Id::new(FOCUS_LINE_ID));
+                    }),
+                }
+
+                if self.typewriter_mode {
+                    if let Some(line) = focus_line {
+                        let typing = ui.input(|i| {
+                            i.events.iter().any(|e| {
+                                matches!(
+                                    e,
+                                    egui::Event::Text(_)
+                                        | egui::Event::Key { pressed: true, .. }
+                                )
+                            })
+                        });
+                        if typing {
+                            if let Some(mapping) = line_mappings
+                                .iter()
+                                .find(|m| line >= m.start_line && line <= m.end_line)
+                            {
+                                let viewport = ui.clip_rect().height();
+                                let target =
+                                    (mapping.rendered_y - viewport / 2.0).max(0.0);
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp(
+                                        egui::Id::new(TYPEWRITER_OFFSET_ID),
+                                        target,
+                                    );
+                                });
+                            }
+                        }
+                    }
+                }
 
                 ui.allocate_response(Vec2::ZERO, egui::Sense::focusable_noninteractive())
                 })
