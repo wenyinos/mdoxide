@@ -10,7 +10,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-v0.1.0 范围内的功能已齐备。M0–M4 均已完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量。M5（打包与发布收尾）进行中。计划与审查报告见 [`docs/plans/`](docs/plans/)。
+**v0.1.0 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物（RPM、DEB、Windows 安装包）由 GitHub Actions 构建。
 
 ## 已具备的能力
 
@@ -25,10 +25,10 @@ v0.1.0 范围内的功能已齐备。M0–M4 均已完成：基座 Fork 与代�
 - 文件树、工作区模式、正则查找替换
 - 10 种界面语言
 
-## 规划中
+## 已知限制
 
-- 发布打包验证（RPM / DEB / Windows NSIS）
-- PDF v1 已知限制：Mermaid 代码块、图片占位、bidi 重排
+- PDF v1：Mermaid 输出为代码块、图片为占位符、未应用 bidi 重排
+- 不支持 macOS
 
 ## 构建
 

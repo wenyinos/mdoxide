@@ -10,7 +10,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-Feature-complete for the v0.1.0 scope. M0–M4 are done: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), and export quality. M5 — packaging and release polish — is in progress. See [`docs/plans/`](docs/plans/) for the implementation plan and audit reports.
+**v0.1.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts (RPM, DEB, Windows installer) are built by GitHub Actions.
 
 ## What works today
 
@@ -25,10 +25,10 @@ Feature-complete for the v0.1.0 scope. M0–M4 are done: baseline fork and audit
 - File tree, workspace mode, find & replace (regex)
 - 10 UI languages
 
-## Planned
+## Known limitations
 
-- Release packaging verification (RPM / DEB / Windows NSIS)
-- PDF v1 limitations: Mermaid blocks, image placeholders, bidi reordering
+- PDF v1: Mermaid blocks render as code blocks, images are placeholders, and bidi reordering is not applied
+- macOS is not supported
 
 ## Build
 
