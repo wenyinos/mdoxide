@@ -74,6 +74,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "new content");
     }
 
+    #[cfg(unix)]
     #[test]
     fn preserves_unix_mode() {
         use std::os::unix::fs::PermissionsExt;
