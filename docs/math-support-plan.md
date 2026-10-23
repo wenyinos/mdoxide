@@ -1,13 +1,13 @@
 # TeX Math Support Plan
 
-> **Project:** Add LaTeX/TeX math rendering to Ferrite  
+> **Project:** Add LaTeX/TeX math rendering to MDOxide  
 > **Status:** Planning  
 > **Target Version:** v0.4.0  
 > **Created:** 2025-01-12
 
 ## Executive Summary
 
-Add native TeX math rendering to Ferrite, enabling users to write and preview mathematical formulas using standard LaTeX syntax (`$...$` for inline, `$$...$$` for display). This addresses the most significant feature gap compared to Typora and makes Ferrite suitable for academic and technical writing.
+Add native TeX math rendering to MDOxide, enabling users to write and preview mathematical formulas using standard LaTeX syntax (`$...$` for inline, `$$...$$` for display). This addresses the most significant feature gap compared to Typora and makes MDOxide suitable for academic and technical writing.
 
 **Constraint:** Pure Rust implementation required. No JavaScript runtimes (KaTeX, MathJax).
 
@@ -17,7 +17,7 @@ Add native TeX math rendering to Ferrite, enabling users to write and preview ma
 
 ### User Feedback
 
-> "The main feature Ferrite is currently lacking to be used for most (all?) applications where I use Typora is a way to easily write and render maths formula."
+> "The main feature MDOxide is currently lacking to be used for most (all?) applications where I use Typora is a way to easily write and render maths formula."
 
 ### Use Cases
 
@@ -34,9 +34,9 @@ Add native TeX math rendering to Ferrite, enabling users to write and preview ma
 | Obsidian | Full TeX | MathJax (JS) |
 | VS Code | Plugin-based | KaTeX (JS) |
 | Zettlr | Full TeX | KaTeX (JS) |
-| **Ferrite** | **Planned** | **Pure Rust** |
+| **MDOxide** | **Planned** | **Pure Rust** |
 
-Ferrite would be unique as a pure-Rust Markdown editor with native math rendering.
+MDOxide would be unique as a pure-Rust Markdown editor with native math rendering.
 
 ---
 
@@ -304,7 +304,7 @@ LaTeX String
 - [ ] Bold math (`\mathbf`)
 - [ ] Calligraphic (`\mathcal`)
 - [ ] Blackboard bold (`\mathbb`)
-- [ ] Integration with Ferrite's font system
+- [ ] Integration with MDOxide's font system
 
 **Font options:**
 - STIX Two Math (open source, comprehensive)
@@ -313,7 +313,7 @@ LaTeX String
 
 ### Phase 4: egui Integration (1-2 weeks)
 
-**Goal:** Render math in Ferrite preview
+**Goal:** Render math in MDOxide preview
 
 - [ ] MathBox → egui Painter calls
 - [ ] Inline math rendering (within text flow)
@@ -325,7 +325,7 @@ LaTeX String
 
 ### Phase 5: WYSIWYG Enhancement (1-2 weeks)
 
-**Goal:** Rich editing experience (depends on FerriteEditor from v0.3.0)
+**Goal:** Rich editing experience (depends on MDOxideEditor from v0.3.0)
 
 - [ ] Inline math preview while typing (Typora-style)
 - [ ] Math input assistance (symbol palette?)
@@ -454,7 +454,7 @@ x^2, x_i, x_i^2
 1. Preview/Split mode only (show raw in Raw mode)
 2. Inline preview in Raw mode (like Typora)
 
-**Recommendation:** Start with Option 1, add Option 2 after FerriteEditor
+**Recommendation:** Start with Option 1, add Option 2 after MDOxideEditor
 - Option 1 works with current egui TextEdit
 - Option 2 requires custom editor (v0.3.0)
 
@@ -495,7 +495,7 @@ x^2, x_i, x_i^2
 
 ### Requires v0.3.0
 
-- **FerriteEditor widget** - For inline math preview in editor
+- **MDOxideEditor widget** - For inline math preview in editor
 - **Modular architecture** - Clean separation of math module
 
 ### External Dependencies (New)
@@ -515,11 +515,11 @@ unicode-math-class = "0.1"  # TeX atom classification
 
 ---
 
-## Future: ferrite-math Crate?
+## Future: mdoxide-math Crate?
 
 Similar to the Mermaid crate extraction, the math rendering engine could potentially become a standalone crate:
 
-- **ferrite-math** or **tex-render**
+- **mdoxide-math** or **tex-render**
 - Backend-agnostic (egui, SVG, PNG)
 - Useful for mdBook, documentation tools, etc.
 

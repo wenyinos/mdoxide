@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Avoid loading a system font until the user **explicitly picks** a family in Settings → Editor → **Custom System Font**. Eliminates spurious “Font failed to load … Reverted to Inter” toasts on some **macOS** setups where the first name from enumeration does not resolve the same way as `font-kit` load ([GitHub #133](https://github.com/OlaProeis/Ferrite/issues/133)).
+Avoid loading a system font until the user **explicitly picks** a family in Settings → Editor → **Custom System Font**. Eliminates spurious “Font failed to load … Reverted to Inter” toasts on some **macOS** setups where the first name from enumeration does not resolve the same way as `font-kit` load ([GitHub #133](https://github.com/OlaProeis/MDOxide/issues/133)).
 
 ## Behavior
 

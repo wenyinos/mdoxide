@@ -1,10 +1,10 @@
-# Ferrite - Simplified Chinese (简体中文)
+# MDOxide - Simplified Chinese (简体中文)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -391,7 +391,7 @@ about:
   # License section
   license: "许可"
   license_type: "MIT 许可协议"
-  copyright: "© 2026 Ferrite Contributors"
+  copyright: "© 2026 MDOxide Contributors"
   version: "版本 %{version}"
 
 # Keyboard shortcuts
@@ -628,7 +628,7 @@ recovery:
     time_label: "最后修改：%{time}"
   session:
     title: "恢复会话"
-    crash_detected: "Ferrite 检测到您之前的会话未正确关闭。"
+    crash_detected: "MDOxide 检测到您之前的会话未正确关闭。"
     restore_question: "您想恢复之前的会话吗？"
     restore: "恢复会话"
     start_fresh: "重新开始"

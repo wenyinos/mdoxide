@@ -11,7 +11,7 @@ tags:
 categories:
   - editor
   - tools
-description: This file tests the visual frontmatter editor panel in Ferrite.
+description: This file tests the visual frontmatter editor panel in MDOxide.
 ---
 
 # Frontmatter Panel Testing Guide
@@ -20,7 +20,7 @@ Use this file to manually test the frontmatter editor panel (Task 32).
 
 ## How to Open the Panel
 
-1. Open this file in Ferrite
+1. Open this file in MDOxide
 2. Press **Ctrl+Shift+M** to toggle the frontmatter panel
 3. The panel should appear on the **right side** of the editor
 

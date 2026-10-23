@@ -1,38 +1,38 @@
-# FerriteEditor Widget
+# MDOxideEditor Widget
 
 ## Overview
 
-`FerriteEditor` is a custom text editor widget that integrates Phase 1 modules for high-performance text editing with virtual scrolling and efficient rendering.
+`MDOxideEditor` is a custom text editor widget that integrates Phase 1 modules for high-performance text editing with virtual scrolling and efficient rendering.
 
 ## Key Files
 
-The Ferrite editor is organized in a modular subfolder structure at `src/editor/ferrite/`:
+The MDOxide editor is organized in a modular subfolder structure at `src/editor/mdoxide/`:
 
 | File | Description |
 |------|-------------|
-| `src/editor/ferrite/mod.rs` | Module exports and re-exports |
-| `src/editor/ferrite/editor.rs` | Main FerriteEditor widget |
-| `src/editor/ferrite/buffer.rs` | TextBuffer - rope-based text storage |
-| `src/editor/ferrite/history.rs` | EditHistory types + diff (`Tab` owns the stack) |
-| `src/editor/ferrite/view.rs` | ViewState - viewport tracking |
-| `src/editor/ferrite/line_cache.rs` | LineCache - galley caching |
-| `src/editor/ferrite/cursor.rs` | Cursor - position tracking |
-| `src/editor/ferrite/input/mod.rs` | InputHandler - event dispatch |
-| `src/editor/ferrite/input/keyboard.rs` | Keyboard input handling |
-| `src/editor/ferrite/input/mouse.rs` | Mouse input handling |
-| `src/editor/ferrite/rendering/mod.rs` | Rendering coordinator |
-| `src/editor/ferrite/rendering/gutter.rs` | Line number gutter rendering |
-| `src/editor/ferrite/rendering/text.rs` | Text galley rendering |
-| `src/editor/ferrite/rendering/cursor.rs` | Cursor/caret rendering |
+| `src/editor/mdoxide/mod.rs` | Module exports and re-exports |
+| `src/editor/mdoxide/editor.rs` | Main MDOxideEditor widget |
+| `src/editor/mdoxide/buffer.rs` | TextBuffer - rope-based text storage |
+| `src/editor/mdoxide/history.rs` | EditHistory types + diff (`Tab` owns the stack) |
+| `src/editor/mdoxide/view.rs` | ViewState - viewport tracking |
+| `src/editor/mdoxide/line_cache.rs` | LineCache - galley caching |
+| `src/editor/mdoxide/cursor.rs` | Cursor - position tracking |
+| `src/editor/mdoxide/input/mod.rs` | InputHandler - event dispatch |
+| `src/editor/mdoxide/input/keyboard.rs` | Keyboard input handling |
+| `src/editor/mdoxide/input/mouse.rs` | Mouse input handling |
+| `src/editor/mdoxide/rendering/mod.rs` | Rendering coordinator |
+| `src/editor/mdoxide/rendering/gutter.rs` | Line number gutter rendering |
+| `src/editor/mdoxide/rendering/text.rs` | Text galley rendering |
+| `src/editor/mdoxide/rendering/cursor.rs` | Cursor/caret rendering |
 
 ## Architecture
 
 ```
-src/editor/ferrite/
-├── mod.rs                    # Re-exports: FerriteEditor, TextBuffer, etc.
-├── editor.rs                 # FerriteEditor struct + ui() coordinator
+src/editor/mdoxide/
+├── mod.rs                    # Re-exports: MDOxideEditor, TextBuffer, etc.
+├── editor.rs                 # MDOxideEditor struct + ui() coordinator
 ├── buffer.rs                 # TextBuffer - rope-based content (ropey)
-├── history.rs                # EditHistory module (owned by Tab, not FerriteEditor)
+├── history.rs                # EditHistory module (owned by Tab, not MDOxideEditor)
 ├── view.rs                   # ViewState - viewport tracking
 ├── line_cache.rs             # LineCache - LRU galley cache (200 entries)
 ├── cursor.rs                 # Cursor - line/column position
@@ -49,7 +49,7 @@ src/editor/ferrite/
 
 **Component Relationships:**
 ```
-FerriteEditor
+MDOxideEditor
 ├── TextBuffer      - Rope-based content storage (ropey)
 ├── (undo via Tab)  - Rope edits synced to tab.content → tab.edit_history
 ├── ViewState       - Viewport tracking, visible line range
@@ -63,7 +63,7 @@ FerriteEditor
 ## Struct Definition
 
 ```rust
-pub struct FerriteEditor {
+pub struct MDOxideEditor {
     buffer: TextBuffer,           // Text content (undo recorded on Tab after sync)
     view: ViewState,              // Viewport state
     line_cache: LineCache,        // Galley cache
@@ -132,10 +132,10 @@ pub struct Selection {
 ## Usage
 
 ```rust
-use ferrite::editor::{FerriteEditor, Cursor};
+use mdoxide::editor::{MDOxideEditor, Cursor};
 
 // Create editor
-let mut editor = FerriteEditor::from_string("Hello\nWorld");
+let mut editor = MDOxideEditor::from_string("Hello\nWorld");
 
 // Set cursor
 editor.set_cursor(Cursor::new(1, 3)); // Line 1, column 3
@@ -149,7 +149,7 @@ egui::CentralPanel::default().show(ctx, |ui| {
 
 ## EditorWidget Integration
 
-FerriteEditor is the default editor in `EditorWidget`.
+MDOxideEditor is the default editor in `EditorWidget`.
 
 **Build:**
 ```bash
@@ -157,15 +157,15 @@ cargo build
 ```
 
 **Integration details (`src/editor/widget.rs`):**
-- `EditorWidget::show()` renders the `FerriteEditor` widget
-- Each tab gets its own FerriteEditor instance stored in egui's memory
+- `EditorWidget::show()` renders the `MDOxideEditor` widget
+- Each tab gets its own MDOxideEditor instance stored in egui's memory
 
 **Content synchronization:**
-- Tab.content → FerriteEditor buffer (automatic on content change)
-- FerriteEditor buffer → Tab.content (Phase 2, after keyboard input)
+- Tab.content → MDOxideEditor buffer (automatic on content change)
+- MDOxideEditor buffer → Tab.content (Phase 2, after keyboard input)
 - Cursor position is preserved across sync operations
 
-**FerriteEditor storage:**
+**MDOxideEditor storage:**
 - Editors are stored in egui's memory keyed by tab ID
 - Content hashes track external changes for re-sync
 - Editors persist across frames (not recreated each render)
@@ -228,7 +228,7 @@ const MAX_DISPLAYED_MATCHES: usize = 1000;  // Search match display cap
 
 ## Input Handling
 
-The input handling is split into modular submodules under `src/editor/ferrite/input/`:
+The input handling is split into modular submodules under `src/editor/mdoxide/input/`:
 - `mod.rs` - `InputHandler` dispatch and `InputResult` enum
 - `keyboard.rs` - Keyboard event processing (arrows, backspace, etc.)
 - `mouse.rs` - Mouse wheel scrolling
@@ -390,7 +390,7 @@ self.render_selection(painter, ...);  // Background first
 render_cursor(painter, ...);          // Cursor last
 ```
 
-**Usage in FerriteEditor:**
+**Usage in MDOxideEditor:**
 ```rust
 // In ui() method, when focused:
 for event in &events {
@@ -416,7 +416,7 @@ for event in &events {
 
 ## Syntax Highlighting
 
-FerriteEditor supports per-line syntax highlighting with efficient caching.
+MDOxideEditor supports per-line syntax highlighting with efficient caching.
 
 ### Configuration
 
@@ -449,7 +449,7 @@ editor.set_syntax_dark_mode(true);
 - `is_dark_mode` (theme selection)
 
 ```rust
-// In widget.rs show_with_ferrite_editor():
+// In widget.rs show_with_mdoxide_editor():
 let syntax_language = if self.syntax_highlighting {
     self.file_path.as_ref().and_then(|p| language_from_path(p))
 } else {
@@ -464,7 +464,7 @@ editor.configure_syntax(
 
 ## Search Highlights
 
-FerriteEditor supports search match highlighting with a distinct current match indicator.
+MDOxideEditor supports search match highlighting with a distinct current match indicator.
 
 ### Configuration
 
@@ -491,7 +491,7 @@ editor.clear_search_matches();
 ### Integration with EditorWidget
 
 ```rust
-// In widget.rs show_with_ferrite_editor():
+// In widget.rs show_with_mdoxide_editor():
 if let Some(ref highlights) = self.search_highlights {
     editor.set_search_matches(
         highlights.matches.clone(),
@@ -505,7 +505,7 @@ if let Some(ref highlights) = self.search_highlights {
 
 ## Bracket Matching
 
-FerriteEditor highlights matching brackets when the cursor is adjacent to one.
+MDOxideEditor highlights matching brackets when the cursor is adjacent to one.
 
 ### Configuration
 

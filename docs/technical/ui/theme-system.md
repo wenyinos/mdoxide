@@ -1,19 +1,19 @@
 # Theme System
 
-This document describes the theming system for Ferrite, covering architecture, color definitions, theme management, and integration with egui.
+This document describes the theming system for MDOxide, covering architecture, color definitions, theme management, and integration with egui.
 
 ## Overview
 
 The theme system provides a comprehensive set of colors, fonts, and spacing values for consistent UI styling. It supports light and dark themes with proper contrast and accessibility, plus a System theme that follows the OS preference.
 
-**Ferrite accent color:** Users can pick a primary accent (RGB) in **Settings → Appearance** and on the **Welcome** screen. It replaces the default blue across most “brand” UI chrome; **hyperlink** colors in rendered markdown stay a fixed classic blue (`theme::accent::standard_link_color`) so links remain recognizable.
+**MDOxide accent color:** Users can pick a primary accent (RGB) in **Settings → Appearance** and on the **Welcome** screen. It replaces the default blue across most “brand” UI chrome; **hyperlink** colors in rendered markdown stay a fixed classic blue (`theme::accent::standard_link_color`) so links remain recognizable.
 
-## Ferrite accent color (user-configurable)
+## MDOxide accent color (user-configurable)
 
 ### Settings and persistence
 
 - **Field:** `Settings.accent_color: [u8; 3]` (serde default matches `theme::accent::DEFAULT_ACCENT_RGB`).
-- **Helper:** `Settings::ferrite_accent_rgb()` → `egui::Color32` for UI code.
+- **Helper:** `Settings::mdoxide_accent_rgb()` → `egui::Color32` for UI code.
 - **Sync:** `ThemeManager::sync_accent_rgb(accent_color)` runs when settings apply so egui `Visuals` (selection, widgets) stay aligned.
 
 ### What uses the accent
@@ -35,7 +35,7 @@ Including but not limited to:
 | Accent math / link constant | `src/theme/accent.rs` |
 | Theme palette + `apply_user_accent` | `src/theme/mod.rs` |
 | Visuals build | `src/theme/dark.rs`, `src/theme/light.rs`, `src/theme/manager.rs` |
-| View picker | `src/ui/view_segment.rs` (`ferrite_accent` argument) |
+| View picker | `src/ui/view_segment.rs` (`mdoxide_accent` argument) |
 | Status bar LSP / branch | `src/app/status_bar.rs` |
 | Productivity Hub | `src/ui/productivity_panel.rs` (`show_content`, floating `show`) |
 
@@ -139,8 +139,8 @@ use crate::config::Theme;
 let colors = ThemeColors::light();
 let colors = ThemeColors::dark();
 
-// Get colors based on user setting and Ferrite accent (from Settings)
-let accent = settings.ferrite_accent_rgb();
+// Get colors based on user setting and MDOxide accent (from Settings)
+let accent = settings.mdoxide_accent_rgb();
 let colors = ThemeColors::from_theme(theme, &ctx.style().visuals, accent);
 
 // Use colors in UI
@@ -158,7 +158,7 @@ let visuals = colors.to_visuals();
 ctx.set_visuals(visuals);
 
 // Or use the convenience method (pass user accent Color32)
-let accent = settings.ferrite_accent_rgb();
+let accent = settings.mdoxide_accent_rgb();
 let visuals =
     ThemeColors::visuals_for_theme(Theme::Dark, &ctx.style().visuals, accent);
 ctx.set_visuals(visuals);

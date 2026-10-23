@@ -30,7 +30,7 @@ Buttons automatically adapt to the current theme:
 
 ## Behavior
 
-### In Raw Editor (FerriteEditor)
+### In Raw Editor (MDOxideEditor)
 
 When clicking a navigation button in the raw editor:
 
@@ -82,7 +82,7 @@ pub enum NavAction {
 
 ### Integration Points
 
-1. **FerriteEditor** (`src/editor/ferrite/editor.rs`):
+1. **MDOxideEditor** (`src/editor/mdoxide/editor.rs`):
    - Navigation buttons are rendered at the end of the `ui()` method
    - Actions are handled by calling `view.scroll_to_line()` and `set_cursor()`
 

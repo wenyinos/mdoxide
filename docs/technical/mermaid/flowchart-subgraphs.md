@@ -1,6 +1,6 @@
 # Flowchart Subgraph Support
 
-This document describes the subgraph (cluster) support implemented in Task 18 for Ferrite's Mermaid flowchart rendering.
+This document describes the subgraph (cluster) support implemented in Task 18 for MDOxide's Mermaid flowchart rendering.
 
 ## Overview
 

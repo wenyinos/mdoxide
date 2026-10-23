@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite supports dragging and dropping image files directly into the editor. Dropped images are automatically:
+MDOxide supports dragging and dropping image files directly into the editor. Dropped images are automatically:
 1. Copied to an `assets/` folder
 2. Renamed with a unique timestamp-based name
 3. Inserted as a markdown image link at the cursor position
@@ -18,7 +18,7 @@ Ferrite supports dragging and dropping image files directly into the editor. Dro
 
 ### Drop Detection
 
-When files are dropped onto the Ferrite window, the application categorizes them:
+When files are dropped onto the MDOxide window, the application categorizes them:
 - **Folders**: Opened as workspace
 - **Images**: Processed via the image handler
 - **Documents**: Opened in new tabs (markdown, csv, json, etc.)

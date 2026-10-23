@@ -1,6 +1,6 @@
 # Sequence Diagram Activation Boxes and Notes
 
-This document describes the activation box and note support implemented in Task 19 for Ferrite's Mermaid sequence diagram rendering.
+This document describes the activation box and note support implemented in Task 19 for MDOxide's Mermaid sequence diagram rendering.
 
 ## Overview
 

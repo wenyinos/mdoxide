@@ -16,7 +16,7 @@ The editor's `Cursor.column` is a char (code point) offset. Before this change, 
 
 ## Solution
 
-### Grapheme helper module (`src/editor/ferrite/grapheme.rs`)
+### Grapheme helper module (`src/editor/mdoxide/grapheme.rs`)
 
 Two core functions that map between char-column offsets and grapheme boundaries:
 

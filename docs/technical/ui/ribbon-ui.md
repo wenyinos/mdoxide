@@ -83,7 +83,7 @@ The ribbon appears below the title bar and above the tab bar:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ 📝 Document.md - Ferrite                       [_][□][×]      │  Title Bar
+│ 📝 Document.md - MDOxide                       [_][□][×]      │  Title Bar
 ├────────────────────────────────────────────────────────────────┤
 │ ◀ | File  📄 📂 💾 📥 | Edit  ↩ ↪ | View  👁 🔢 | Tools 🔍 | ⚙ │  Ribbon
 ├────────────────────────────────────────────────────────────────┤
@@ -162,7 +162,7 @@ let separator_color = if is_dark {
 ## Usage in App
 
 ```rust
-// In FerriteApp struct
+// In MDOxideApp struct
 ribbon: Ribbon,
 
 // In render_ui method

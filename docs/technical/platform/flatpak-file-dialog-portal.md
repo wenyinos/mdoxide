@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite's file dialogs (Open Folder, Open File, Save File) work correctly inside the Flatpak sandbox without requiring broad filesystem permissions. The fix addresses the issue where "Open Folder" failed on fresh launch unless a file from that folder was already open.
+MDOxide's file dialogs (Open Folder, Open File, Save File) work correctly inside the Flatpak sandbox without requiring broad filesystem permissions. The fix addresses the issue where "Open Folder" failed on fresh launch unless a file from that folder was already open.
 
 ## Key Files
 
@@ -40,7 +40,7 @@ The `rfd` crate (used for file dialogs) already uses xdg-desktop-portal by defau
 
 ## Usage / Testing
 
-1. Build and install Ferrite via Flatpak
+1. Build and install MDOxide via Flatpak
 2. Fresh launch (no recent files) → File > Open Folder → portal dialog should appear starting at home directory
 3. Select a folder → workspace opens with file tree
 4. Non-Flatpak builds → unchanged behavior, uses native dialogs

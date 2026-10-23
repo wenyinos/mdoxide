@@ -1,12 +1,12 @@
-# FerriteEditor Memory Optimization
+# MDOxideEditor Memory Optimization
 
 ## Overview
 
-This document describes the memory management strategy for the FerriteEditor, particularly for handling large files efficiently.
+This document describes the memory management strategy for the MDOxideEditor, particularly for handling large files efficiently.
 
 ## Performance Achievements
 
-| Metric | Before (egui TextEdit) | After (FerriteEditor) |
+| Metric | Before (egui TextEdit) | After (MDOxideEditor) |
 |--------|------------------------|----------------------|
 | 30K line file RAM | ~1.5 GB | ~90 MB |
 | Responsiveness | Laggy | Smooth |
@@ -19,7 +19,7 @@ This document describes the memory management strategy for the FerriteEditor, pa
 The editor uses a **rope-based text buffer** (`ropey::Rope`) instead of a flat `String`:
 
 ```
-FerriteEditor
+MDOxideEditor
 ├── buffer: TextBuffer (Rope)     ← O(log n) operations
 ├── line_cache: LineCache         ← 200 cached galleys max
 ├── history: EditHistory          ← Operation-based, not snapshots
@@ -36,13 +36,13 @@ FerriteEditor
 
 ## Tab Closure Cleanup
 
-When a tab is closed, `cleanup_ferrite_editor()` is called to free memory:
+When a tab is closed, `cleanup_mdoxide_editor()` is called to free memory:
 
 ```rust
 // In src/editor/widget.rs
-pub fn cleanup_ferrite_editor(ctx: &egui::Context, tab_id: usize) {
+pub fn cleanup_mdoxide_editor(ctx: &egui::Context, tab_id: usize) {
     ctx.data_mut(|data| {
-        let storage = data.get_temp_mut_or_default::<FerriteEditorStorage>(egui::Id::NULL);
+        let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
         if let Some(mut editor) = storage.editors.remove(&tab_id) {
             // Explicitly clear large data structures before drop
             editor.line_cache.invalidate();
@@ -92,10 +92,10 @@ This is not a leak - opening/closing the same file repeatedly should NOT cause u
 
 ## Related Files
 
-- `src/editor/widget.rs` - EditorWidget, FerriteEditorStorage, cleanup
-- `src/editor/ferrite/buffer.rs` - TextBuffer (Rope wrapper)
-- `src/editor/ferrite/line_cache.rs` - Galley caching with LRU eviction
-- `src/editor/ferrite/history.rs` - Operation-based undo/redo
+- `src/editor/widget.rs` - EditorWidget, MDOxideEditorStorage, cleanup
+- `src/editor/mdoxide/buffer.rs` - TextBuffer (Rope wrapper)
+- `src/editor/mdoxide/line_cache.rs` - Galley caching with LRU eviction
+- `src/editor/mdoxide/history.rs` - Operation-based undo/redo
 - `src/app.rs` - Tab lifecycle, `cleanup_tab_state()`
 
 ## Complexity Tiers

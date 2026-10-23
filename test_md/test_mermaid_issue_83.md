@@ -1,6 +1,6 @@
 # Mermaid Issue #83 — Edge Routing Repros
 
-GitHub: [#83 — Mermaid rendering: lines cross boxes](https://github.com/OlaProeis/Ferrite/issues/83)
+GitHub: [#83 — Mermaid rendering: lines cross boxes](https://github.com/OlaProeis/MDOxide/issues/83)
 
 Open in **Rendered** or **Split** view and compare to [Mermaid Live Editor](https://mermaid.live).
 
@@ -20,7 +20,7 @@ graph TD
 
 **Expected (Mermaid.js):** Edges route around nodes; loops use smooth curves; no line segments through box interiors.
 
-**Known Ferrite gaps:**
+**Known MDOxide gaps:**
 
 - Edges may pass **through** node rectangles (especially `E --> B`, `F --> B`).
 - `interpolate basis` is **ignored** (only `stroke` / `stroke-width` supported in `linkStyle`).
@@ -40,7 +40,7 @@ flowchart TD
 
 **Expected (Mermaid.js):** Car icon + label on node F; edges do not cross unrelated nodes.
 
-**Known Ferrite gaps:**
+**Known MDOxide gaps:**
 
 - `fa:fa-car` prefix is **not** rendered as an icon (raw text or stripped label only).
 - Same class of edge routing issues on dense graphs.

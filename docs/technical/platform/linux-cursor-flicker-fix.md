@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the fix for cursor flicker near the window control buttons (close, maximize, minimize) on Linux when using Ferrite's custom borderless window frame.
+This document describes the fix for cursor flicker near the window control buttons (close, maximize, minimize) on Linux when using MDOxide's custom borderless window frame.
 
 ## Problem
 

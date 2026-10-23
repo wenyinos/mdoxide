@@ -1,10 +1,10 @@
 # Linux File Dialog Portal Requirements
 
-This document explains the xdg-desktop-portal requirements for running Ferrite on Linux desktop environments, particularly minimal window managers and Wayland compositors.
+This document explains the xdg-desktop-portal requirements for running MDOxide on Linux desktop environments, particularly minimal window managers and Wayland compositors.
 
 ## Overview
 
-Ferrite uses the [rfd](https://github.com/PolyMeilex/rfd) crate for native file dialogs. On Linux, rfd uses the **xdg-desktop-portal** standard via the [ashpd](https://github.com/bilelmoussaoui/ashpd) backend to provide secure, sandbox-compatible file dialogs.
+MDOxide uses the [rfd](https://github.com/PolyMeilex/rfd) crate for native file dialogs. On Linux, rfd uses the **xdg-desktop-portal** standard via the [ashpd](https://github.com/bilelmoussaoui/ashpd) backend to provide secure, sandbox-compatible file dialogs.
 
 Some Linux desktop environments (particularly minimal window managers and Wayland compositors) require manual installation of xdg-desktop-portal packages for file dialogs to function.
 
@@ -110,11 +110,11 @@ For minimal window managers, ensure `XDG_CURRENT_DESKTOP` is set correctly:
 export XDG_CURRENT_DESKTOP=sway  # or hyprland, i3, etc.
 ```
 
-## How Ferrite Handles Portal Failures
+## How MDOxide Handles Portal Failures
 
 ### Detection
 
-Ferrite detects the Linux desktop environment by checking the following environment variables:
+MDOxide detects the Linux desktop environment by checking the following environment variables:
 
 1. `XDG_CURRENT_DESKTOP` - Primary detection method
 2. `DESKTOP_SESSION` - Fallback detection
@@ -170,11 +170,11 @@ The portal error handling is implemented in:
 
 ### Flatpak-Specific Issues
 
-If running Ferrite as a Flatpak:
+If running MDOxide as a Flatpak:
 
 1. Ensure the portal service is running on the host system
-2. The portal dialog may need a navigable starting directory (Ferrite falls back to `$HOME`)
-3. Check Flatpak permissions with: `flatpak info --show-permissions dev.ferrite.Ferrite`
+2. The portal dialog may need a navigable starting directory (MDOxide falls back to `$HOME`)
+3. Check Flatpak permissions with: `flatpak info --show-permissions dev.mdoxide.MDOxide`
 
 ## rfd Zenity Fallback
 
@@ -191,7 +191,7 @@ If you need an alternative file dialog without portals, consider:
 |----------|---------|----------------|
 | `XDG_CURRENT_DESKTOP` | Identifies the desktop environment | `hyprland`, `sway`, `gnome`, `kde` |
 | `DESKTOP_SESSION` | Fallback desktop identification | `hyprland`, `sway`, `gnome` |
-| `FLATPAK_ID` | Indicates Flatpak sandbox | `dev.ferrite.Ferrite` |
+| `FLATPAK_ID` | Indicates Flatpak sandbox | `dev.mdoxide.MDOxide` |
 | `WAYLAND_DISPLAY` | Indicates Wayland session | `wayland-1` |
 | `DISPLAY` | Indicates X11 session | `:0` |
 

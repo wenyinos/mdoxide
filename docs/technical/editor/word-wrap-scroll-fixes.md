@@ -6,7 +6,7 @@ Fixed multiple functions in the scroll/viewport pipeline that assumed uniform li
 
 ## Key Files
 
-- `src/editor/ferrite/view.rs` — ViewState: scroll position, viewport, coordinate conversion
+- `src/editor/mdoxide/view.rs` — ViewState: scroll position, viewport, coordinate conversion
 - `src/editor/widget.rs` — EditorWidget: scroll sync, viewport restoration
 
 ## Problem

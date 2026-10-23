@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ensures only one Ferrite window runs at a time. When a second instance is launched (e.g., double-clicking a file in Windows Explorer), it forwards file paths to the already-running instance via local TCP, which opens them as tabs. On Windows, the secondary process also grants the primary process foreground permission before exiting so the existing window can be raised more reliably.
+Ensures only one MDOxide window runs at a time. When a second instance is launched (e.g., double-clicking a file in Windows Explorer), it forwards file paths to the already-running instance via local TCP, which opens them as tabs. On Windows, the secondary process also grants the primary process foreground permission before exiting so the existing window can be raised more reliably.
 
 ## Key Files
 
@@ -43,9 +43,9 @@ Secondary instance                 Primary instance
 ## Protocol
 
 1. **Lock file**: `{config_dir}/instance.lock` contains the TCP port of the running instance as plain text
-   - Windows: `%APPDATA%\ferrite\instance.lock`
-   - Linux: `~/.config/ferrite/instance.lock`
-   - macOS: `~/Library/Application Support/ferrite/instance.lock`
+   - Windows: `%APPDATA%\mdoxide\instance.lock`
+   - Linux: `~/.config/mdoxide/instance.lock`
+   - macOS: `~/Library/Application Support/mdoxide/instance.lock`
 
 2. **PID file**: `{config_dir}/instance.pid` stores the primary process ID
    - Used on Windows so the Explorer-launched secondary process can call `AllowSetForegroundWindow(primary_pid)` before exiting
@@ -115,7 +115,7 @@ Previously, the protocol used per-frame polling of a non-blocking listener on th
 - Uses `ViewportCommand::Focus` plus `ViewportCommand::RequestUserAttention(Informational)` when external paths arrive
 - Uses `instance.pid` + `AllowSetForegroundWindow` on Windows so Explorer-launched secondary processes can transfer foreground rights to the primary window
 - Reuses `state.open_file()` and `state.open_workspace()` for consistent behavior
-- Lock and pid files are stored in the same config directory as other Ferrite config (`get_config_dir()`)
+- Lock and pid files are stored in the same config directory as other MDOxide config (`get_config_dir()`)
 
 ## No New Dependencies
 

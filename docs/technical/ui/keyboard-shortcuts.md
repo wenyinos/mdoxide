@@ -4,7 +4,7 @@
 
 Global keyboard shortcuts for file operations, tab management, and navigation. Implemented in `src/app.rs` using egui's input handling with deferred action execution to avoid borrow conflicts.
 
-**Platform Note:** Ferrite uses standard platform modifiers:
+**Platform Note:** MDOxide uses standard platform modifiers:
 - **macOS:** Command (Cmd) key
 - **Windows/Linux:** Control (Ctrl) key
 

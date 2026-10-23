@@ -53,7 +53,7 @@ This removes the hover tracking overhead while maintaining scroll area functiona
 Added frame rate tracking to help verify the fix works:
 
 ```rust
-// In FerriteApp struct (debug builds only)
+// In MDOxideApp struct (debug builds only)
 #[cfg(debug_assertions)]
 frame_count: u64,
 #[cfg(debug_assertions)]
@@ -89,7 +89,7 @@ To verify the fix works:
 ## Related Files
 
 - Analysis document: `docs/technical/platform/intel-mac-cpu-issue-analysis.md`
-- Original log file: `docs/ferrite_macos_intel_log.txt` (48,926 lines)
+- Original log file: `docs/mdoxide_macos_intel_log.txt` (48,926 lines)
 - Log analysis script: `scripts/analyze_log.py`
 
 ---

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite implements a configurable auto-save feature that saves documents after a configurable idle delay. The feature uses a **temp-file based strategy** to prevent data loss without overwriting the main file prematurely.
+MDOxide implements a configurable auto-save feature that saves documents after a configurable idle delay. The feature uses a **temp-file based strategy** to prevent data loss without overwriting the main file prematurely.
 
 ## Key Features
 
@@ -46,7 +46,7 @@ pub struct Tab {
 
 Auto-save files are stored in:
 ```
-~/.config/ferrite/autosave/
+~/.config/mdoxide/autosave/
 ├── filename_<hash>.md.autosave     # For saved files
 └── untitled_<tab_id>.md.autosave   # For unsaved documents
 ```
@@ -119,6 +119,6 @@ Auto-save temp files are cleaned up:
 
 ### Verify Temp File Location
 
-Windows: `%APPDATA%\ferrite\autosave\`
-Linux: `~/.config/ferrite/autosave/`
-macOS: `~/Library/Application Support/ferrite/autosave/`
+Windows: `%APPDATA%\mdoxide\autosave\`
+Linux: `~/.config/mdoxide/autosave/`
+macOS: `~/Library/Application Support/mdoxide/autosave/`

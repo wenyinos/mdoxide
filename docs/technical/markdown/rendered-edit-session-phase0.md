@@ -48,9 +48,9 @@ Per-tab counter for **external** content invalidation only. Future rendered widg
 
 | Event | Bumps? |
 |-------|--------|
-| Raw FerriteEditor sync | Yes (`record_external_edit_from_snapshot`) |
+| Raw MDOxideEditor sync | Yes (`record_external_edit_from_snapshot`) |
 | `set_content`, undo, redo, `record_edit` | Yes |
-| File reload, find/replace, frontmatter, formatting (Ferrite) | Yes (`notify_external_content_change`) |
+| File reload, find/replace, frontmatter, formatting (MDOxide) | Yes (`notify_external_content_change`) |
 | `finish_loading` (background open) | Yes |
 | Tree viewer edits | Yes (`record_external_edit_from_snapshot`) |
 | Rendered / split rendered WYSIWYG commit | **No** (`record_edit_from_snapshot`) |

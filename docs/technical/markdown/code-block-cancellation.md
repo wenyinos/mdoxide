@@ -51,7 +51,7 @@ Killing the child closes its stdio pipes, which lets the reader threads' blockin
 
 ## Validation
 
-- `cargo test --bin ferrite markdown::code_execution` — covers `Cancelled` glyph, idempotent `cancel(&RunHandle)`, `RunState.timeout_secs` capture, terminal-state assertions.
+- `cargo test --bin mdoxide markdown::code_execution` — covers `Cancelled` glyph, idempotent `cancel(&RunHandle)`, `RunState.timeout_secs` capture, terminal-state assertions.
 - Manual smoke tests:
   - Long-running snippet (`sleep 60`, `while True: pass`) — Stop transitions to `Stopped by user` within ~100 ms; UI scrolls and interacts normally throughout the run.
   - Lower the timeout (e.g. 5s), run an infinite loop — panel reads `Timed out after 5s` once the worker reaps the child.

@@ -31,7 +31,7 @@ Both panes read `Tab::source_epoch()` via `MarkdownEditor::source_epoch(...)`.
 
 | Edit source | Epoch bump? | Undo path |
 |-------------|-------------|-----------|
-| Raw pane (split left) | Yes — `EditorWidget` → `Tab::record_external_edit_from_snapshot()` | Operation diff via FerriteEditor snapshot |
+| Raw pane (split left) | Yes — `EditorWidget` → `Tab::record_external_edit_from_snapshot()` | Operation diff via MDOxideEditor snapshot |
 | Rendered block commit | No — `Tab::record_edit_from_snapshot()` | One logical undo step per block commit — see [undo granularity](./rendered-edit-session-undo.md) |
 | Undo / redo | Yes — `Tab::undo()` / `redo()` | Clears session buffers via epoch |
 

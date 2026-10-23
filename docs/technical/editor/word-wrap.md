@@ -2,32 +2,32 @@
 
 ## Overview
 
-Word wrap support allows long lines to wrap to fit within the available editor width, improving readability without requiring horizontal scrolling. This is implemented in Phase 2 of the Ferrite editor development.
+Word wrap support allows long lines to wrap to fit within the available editor width, improving readability without requiring horizontal scrolling. This is implemented in Phase 2 of the MDOxide editor development.
 
 ## Architecture
 
 ### Key Components
 
-1. **ViewState** (`src/editor/ferrite/view.rs`)
+1. **ViewState** (`src/editor/mdoxide/view.rs`)
    - Tracks wrap width and wrap state
    - Stores per-line wrap information (`WrapInfo`)
    - Calculates cumulative heights for wrapped lines
    - Converts between logical lines/columns and visual rows
 
-2. **LineCache** (`src/editor/ferrite/line_cache.rs`)
+2. **LineCache** (`src/editor/mdoxide/line_cache.rs`)
    - Caches wrapped galleys keyed by content, font, color, AND wrap width
    - Uses egui's `painter.layout()` with wrap width for wrapped text
 
-3. **FerriteEditor** (`src/editor/ferrite/editor.rs`)
+3. **MDOxideEditor** (`src/editor/mdoxide/editor.rs`)
    - Manages wrap enabled state
    - Integrates wrap width from available text area
    - Renders wrapped lines with proper y-positioning
 
-4. **Cursor Rendering** (`src/editor/ferrite/rendering/cursor.rs`)
+4. **Cursor Rendering** (`src/editor/mdoxide/rendering/cursor.rs`)
    - Positions cursor within wrapped galleys
    - Calculates correct visual row for cursor
 
-5. **Keyboard Navigation** (`src/editor/ferrite/input/keyboard.rs`)
+5. **Keyboard Navigation** (`src/editor/mdoxide/input/keyboard.rs`)
    - Visual row-based up/down navigation when wrap is enabled
    - Maintains approximate column position across visual rows
 
@@ -78,7 +78,7 @@ total_content_height: f32,         // Cached total height
 |--------|-------------|
 | `get_galley_wrapped(content, painter, font, color, wrap_width)` | Get or create wrapped galley |
 
-### FerriteEditor
+### MDOxideEditor
 
 | Method | Description |
 |--------|-------------|
@@ -106,7 +106,7 @@ When word wrap is enabled, cursor positioning requires finding:
 
 ### Implementation
 
-The cursor rendering module (`src/editor/ferrite/rendering/cursor.rs`) uses egui's built-in cursor positioning API for accurate results:
+The cursor rendering module (`src/editor/mdoxide/rendering/cursor.rs`) uses egui's built-in cursor positioning API for accurate results:
 
 ```rust
 // Convert cursor column to egui's CCursor (character cursor)
@@ -194,7 +194,7 @@ Word wrap tests cover:
 - Visual row conversion
 - Logical to visual row mapping
 
-See `src/editor/ferrite/view.rs` test module for comprehensive tests.
+See `src/editor/mdoxide/view.rs` test module for comprehensive tests.
 
 ## Future Improvements
 

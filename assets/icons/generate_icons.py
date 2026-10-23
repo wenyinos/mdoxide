@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ferrite Icon Generator
+MDOxide Icon Generator
 
 This script generates application icons at various sizes from an SVG source.
 It also creates platform-specific icon formats (.ico for Windows, .icns for macOS).
@@ -32,7 +32,7 @@ SIZES = [16, 32, 48, 64, 128, 256, 512]
 # macOS iconset sizes (includes @2x retina variants)
 MACOS_SIZES = [16, 32, 64, 128, 256, 512, 1024]
 
-# Ferrite brand colors
+# MDOxide brand colors
 COLORS = {
     'primary': '#2D5A27',      # Forest green - main brand color
     'secondary': '#4A7C43',    # Lighter green - accents
@@ -46,11 +46,11 @@ COLORS = {
 
 def create_placeholder_icon(size: int, output_path: Path):
     """
-    Create a placeholder icon with the Ferrite 'F' logo.
+    Create a placeholder icon with the MDOxide 'F' logo.
     
     The design features:
     - Rounded rectangle background in forest green
-    - Stylized 'F' letter representing Ferrite
+    - Stylized 'F' letter representing MDOxide
     - Clean, modern aesthetic that works at all sizes
     """
     # Create image with transparency
@@ -115,7 +115,7 @@ def create_ico(input_pngs: list, output_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate Ferrite application icons')
+    parser = argparse.ArgumentParser(description='Generate MDOxide application icons')
     parser.add_argument('--source', help='Source SVG file (optional, generates placeholder if not provided)')
     parser.add_argument('--output', default='assets/icons', help='Output directory')
     args = parser.parse_args()
@@ -144,7 +144,7 @@ def main():
     linux_sizes = [16, 32, 48, 64, 128, 256]
     for size in linux_sizes:
         src = output_dir / f'icon_{size}.png'
-        dst = output_dir / 'linux' / f'ferrite_{size}.png'
+        dst = output_dir / 'linux' / f'mdoxide_{size}.png'
         if src.exists():
             Image.open(src).save(dst)
             print(f"Created: {dst}")
@@ -152,7 +152,7 @@ def main():
     print("\n=== Icon Generation Complete ===")
     print(f"PNG icons: {output_dir}/icon_*.png")
     print(f"Windows ICO: {ico_path}")
-    print(f"Linux icons: {output_dir}/linux/ferrite_*.png")
+    print(f"Linux icons: {output_dir}/linux/mdoxide_*.png")
     print("\nFor macOS .icns, use iconutil:")
     print("  mkdir -p AppIcon.iconset")
     print("  cp icon_16.png AppIcon.iconset/icon_16x16.png")

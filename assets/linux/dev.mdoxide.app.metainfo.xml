@@ -10,229 +10,45 @@
     <name>MDOxide contributors</name>
   </developer>
 
-  <branding>
-    <color type="primary" scheme_preference="light">#7eb8da</color>
-    <color type="primary" scheme_preference="dark">#2d5a7b</color>
-  </branding>
-
   <description>
     <p>
-      Ferrite is a fast, native markdown editor with live preview, 
-      syntax highlighting, and native Mermaid diagram rendering.
-      Built with Rust and egui for excellent performance.
+      MDOxide is a native WYSIWYG Markdown editor written in Rust with egui.
+      No WebView, no Electron, no JavaScript runtime.
     </p>
     <p>Features include:</p>
     <ul>
-      <li>Three view modes: Raw editing, Split view, and full WYSIWYG preview</li>
-      <li>Native Mermaid diagram rendering (flowcharts, sequence, class, state, ER, Gantt, pie charts, and more)</li>
-      <li>CSV/TSV viewer with rainbow column coloring and sorting</li>
-      <li>JSON/YAML/TOML tree viewer with collapsible nodes</li>
-      <li>Git integration with visual status indicators in file tree</li>
-      <li>Workspace mode with file tree navigation</li>
-      <li>Find and replace with regex support</li>
-      <li>Synchronized scrolling between editor and preview</li>
-      <li>Customizable syntax highlighting themes (25+ themes)</li>
-      <li>Dark and light application themes</li>
-      <li>Zen mode for distraction-free writing</li>
-      <li>Multi-language interface support</li>
-      <li>Multi-encoding file support with auto-detection</li>
+      <li>WYSIWYG block-level markdown editing</li>
+      <li>CommonMark + GitHub Flavored Markdown</li>
+      <li>Raw, rendered and split view modes</li>
+      <li>Native Mermaid diagram rendering</li>
+      <li>HTML and PDF export</li>
+      <li>Syntax highlighting and regex find &amp; replace</li>
     </ul>
   </description>
 
-  <url type="homepage">https://github.com/OlaProeis/Ferrite</url>
-  <url type="bugtracker">https://github.com/OlaProeis/Ferrite/issues</url>
-  <url type="vcs-browser">https://github.com/OlaProeis/Ferrite</url>
-  <url type="donation">https://github.com/sponsors/OlaProeis</url>
+  <launchable type="desktop-id">dev.mdoxide.app.desktop</launchable>
 
-  <launchable type="desktop-id">io.github.olaproeis.Ferrite.desktop</launchable>
+  <url type="homepage">https://github.com/wenyinos/mdoxide</url>
+  <url type="bugtracker">https://github.com/wenyinos/mdoxide/issues</url>
+  <url type="vcs-browser">https://github.com/wenyinos/mdoxide</url>
 
   <provides>
-    <binary>ferrite</binary>
+    <binary>mdoxide</binary>
   </provides>
-
-  <screenshots>
-    <screenshot type="default">
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.3.0/assets/screenshots/split-dark.png</image>
-      <caption>Ferrite in dark mode with split view showing markdown editing and live preview</caption>
-    </screenshot>
-    <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.3.0/assets/screenshots/raw-dark.png</image>
-      <caption>Raw editing mode with syntax highlighting</caption>
-    </screenshot>
-    <screenshot>
-      <image>https://raw.githubusercontent.com/OlaProeis/Ferrite/v0.3.0/assets/screenshots/zen-dark.png</image>
-      <caption>Zen mode for distraction-free writing</caption>
-    </screenshot>
-  </screenshots>
-
-  <content_rating type="oars-1.1" />
-
-  <releases>
-    <release version="0.3.0" date="2026-05-22">
-      <description>
-        <p>Major platform refresh on egui 0.34.2 with export, WYSIWYG editing, and Mermaid improvements.</p>
-        <ul>
-          <li>Native PDF export, print preview, and themed HTML export</li>
-          <li>Executable fenced code blocks (Run/Stop, opt-in with consent)</li>
-          <li>Rendered edit session: one-click WYSIWYG block switching for headings, paragraphs, lists, and tables</li>
-          <li>Split-view scroll sync (Sync / 2-way) and user-configurable Ferrite accent color</li>
-          <li>Mermaid: insert toolbar, inline validation, flowchart routing/layout polish, state fork/join</li>
-          <li>Full-workspace file index for Ctrl+P and Search in Files</li>
-          <li>Hardened session recovery (path + disk-hash identity)</li>
-          <li>Phosphor icons across UI; Spanish language; quick note workflow (on by default)</li>
-          <li>Platform: egui/eframe 0.34.2, Rust 1.92 MSRV</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.9" date="2026-04-23">
-      <description>
-        <p>Hotfix release for four critical v0.2.8 regressions. No new features.</p>
-        <ul>
-          <li>Fixed crash in Split / Rendered view when opening an empty document (#127)</li>
-          <li>Fixed missing unsaved-changes indicator and missing save prompt on close (data loss)</li>
-          <li>Fixed broken Undo / Redo — "Nothing to undo" after typing</li>
-          <li>Fixed invisible text selection in Light mode (#121)</li>
-          <li>Widened document side panel default so the Outline / Stats / Links / FM / Hub tabs no longer overlap</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.8" date="2026-04-14">
-      <description>
-        <p>Performance, text shaping, command palette, and bug fixes</p>
-        <ul>
-          <li>Command Palette (Alt+Space) — searchable launcher for all actions with fuzzy search</li>
-          <li>HarfRust text shaping for Arabic, Bengali, Devanagari, and other complex scripts</li>
-          <li>Image viewer tabs (PNG, JPEG, GIF, WebP, BMP) with zoom and metadata</li>
-          <li>PDF viewer tabs using hayro (pure Rust PDF renderer)</li>
-          <li>Rendered view performance: AST caching, viewport culling, lazy block estimation</li>
-          <li>Per-frame O(N) elimination for large files, background file loading for 5MB+ files</li>
-          <li>Strict line breaks setting for Obsidian-style newline handling</li>
-          <li>Middle-click to close tabs</li>
-          <li>Fixed custom font crash on Linux, macOS .md file association, 10+ bug fixes</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.7" date="2026-03-11">
-      <description>
-        <p>Major feature release: wikilinks, callouts, Vim mode, new packaging formats, and performance improvements</p>
-        <ul>
-          <li>Wikilinks and backlinks panel for knowledge-base workflows</li>
-          <li>GitHub-style callouts (NOTE, TIP, WARNING, CAUTION, IMPORTANT)</li>
-          <li>Vim mode with Normal/Insert/Visual modes and essential commands</li>
-          <li>Ctrl+Scroll wheel zoom and keyboard zoom (Ctrl++/Ctrl+-/Ctrl+0)</li>
-          <li>Single-instance protocol: files open as tabs in existing window</li>
-          <li>Visual frontmatter editor panel for YAML metadata</li>
-          <li>Welcome page on first run with configuration wizard</li>
-          <li>Lazy font loading for 11 complex script families (Arabic, Hebrew, Devanagari, Thai, and more)</li>
-          <li>Lazy CSV/TSV row parsing for large files (memory reduced from ~200MB to ~8MB for 1M rows)</li>
-          <li>Check for Updates button in Settings</li>
-          <li>New packaging: Linux .deb and .rpm, macOS .app bundles (ARM64 + Intel), Nix flake, PortableApps.com</li>
-          <li>MSI installer with file associations, Explorer context menu, and PATH integration</li>
-          <li>Fixed word wrap scroll correctness, binary file crash, IME backspace, Linux portal dialogs</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.6.1" date="2026-02-06">
-      <description>
-        <p>First code-signed release with integrated terminal, productivity hub, and bug fixes</p>
-        <ul>
-          <li>Integrated terminal workspace with tiling, splitting, and layout persistence</li>
-          <li>Productivity hub panel for quick-access editing tasks</li>
-          <li>Windows code signing via SignPath Foundation (no more SmartScreen warnings)</li>
-          <li>App.rs refactored into ~15 focused modules</li>
-          <li>Tab drag reorder and file watcher auto-reload</li>
-          <li>CJK font lazy loading reduces startup memory by ~80MB</li>
-          <li>Fixed CJK font crash on startup and portable Windows startup crash</li>
-          <li>Fixed duplicate line, smart paste, drag-drop positioning, and 5+ other bugs</li>
-          <li>CJK first-line paragraph indentation for Chinese and Japanese</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.6" date="2026-01-26">
-      <description>
-        <p>Major release: Custom text editor (FerriteEditor) replacing egui's TextEdit</p>
-        <ul>
-          <li>Virtual scrolling enables 100MB+ file editing</li>
-          <li>Memory optimization: 80MB file uses ~80MB RAM (was 460MB+)</li>
-          <li>Rope-based buffer for O(log n) text operations</li>
-          <li>Full selection, clipboard, undo/redo support</li>
-          <li>IME support for Chinese, Japanese, Korean input</li>
-          <li>Code folding and multi-cursor editing</li>
-          <li>Navigation buttons (Top/Middle/Bottom)</li>
-          <li>Box drawing character support</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.5.3" date="2026-01-24">
-      <description>
-        <p>UI improvements, extended syntax support, Linux performance fixes, and Flathub submission</p>
-        <ul>
-          <li>View mode segmented control (Raw/Split/Rendered)</li>
-          <li>100+ additional language syntaxes</li>
-          <li>25+ syntax highlighting themes</li>
-          <li>Fixed Linux folder opening freeze</li>
-          <li>Fixed blockquote/table overflow</li>
-          <li>Flathub desktop and metainfo files</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.5.2" date="2026-01-20">
-      <description>
-        <p>Editor shortcuts, macOS improvements, Linux fixes, i18n cleanup</p>
-        <ul>
-          <li>Delete Line shortcut (Cmd/Ctrl+D)</li>
-          <li>Move Line Up/Down (Alt+Up/Down)</li>
-          <li>macOS file type associations</li>
-          <li>Windows portable build and MSI installer</li>
-          <li>Linux RPM package</li>
-          <li>Fixed Ctrl+X cutting entire document bug</li>
-          <li>Fixed Linux window drag stuck mouse</li>
-          <li>Added Estonian and Norwegian Bokmål translations</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.5.1" date="2026-01-17">
-      <description>
-        <p>Performance and encoding improvements</p>
-        <ul>
-          <li>Tiered idle repaint system reducing CPU usage</li>
-          <li>Multi-encoding file support with auto-detection</li>
-          <li>CJK font lazy loading for reduced memory usage</li>
-          <li>Improved cursor positioning in rendered view</li>
-          <li>Fixed 10% idle CPU usage</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.2.5" date="2026-01-13">
-      <description>
-        <p>Major feature release with Mermaid diagrams and workspace improvements</p>
-      </description>
-    </release>
-  </releases>
-
-  <recommends>
-    <control>keyboard</control>
-    <control>pointing</control>
-  </recommends>
-
-  <requires>
-    <display_length compare="ge">768</display_length>
-  </requires>
-
-  <keywords>
-    <keyword>markdown</keyword>
-    <keyword>editor</keyword>
-    <keyword>notes</keyword>
-    <keyword>mermaid</keyword>
-    <keyword>diagrams</keyword>
-    <keyword>json</keyword>
-    <keyword>yaml</keyword>
-    <keyword>toml</keyword>
-    <keyword>csv</keyword>
-  </keywords>
 
   <categories>
     <category>Office</category>
     <category>TextEditor</category>
   </categories>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-23" type="development">
+      <description>
+        <p>First development snapshot: Upstream fork, project rename, atomic saves,
+        removal of Git integration and Nix support.</p>
+      </description>
+    </release>
+  </releases>
 </component>

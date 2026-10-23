@@ -4,7 +4,7 @@ The `ViewState` module provides viewport tracking and visible line range calcula
 
 ## Overview
 
-`ViewState` is part of Phase 1 of the FerriteEditor custom widget, which focuses on non-wrapping horizontal scroll. It tracks:
+`ViewState` is part of Phase 1 of the MDOxideEditor custom widget, which focuses on non-wrapping horizontal scroll. It tracks:
 
 - **Viewport dimensions** - Height of the visible area in pixels
 - **Scroll position** - First visible line and sub-line offset
@@ -89,7 +89,7 @@ end_line = min(total_lines, first_visible_line + visible_lines + 5)
 
 `ViewState` will be used by:
 
-- **FerriteEditor widget** (Task 6) - Viewport-aware text rendering
+- **MDOxideEditor widget** (Task 6) - Viewport-aware text rendering
 - **Viewport rendering** (Task 7) - Culling non-visible lines
 - **Cursor management** (Task 8) - Ensuring cursor stays visible
 
@@ -160,7 +160,7 @@ Comprehensive unit tests verify:
 Run tests with:
 
 ```bash
-cargo test editor::view --bin ferrite
+cargo test editor::view --bin mdoxide
 ```
 
 ## Related Documentation

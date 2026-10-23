@@ -71,8 +71,8 @@ and adapts automatically to light/dark mode.
 
 ## Persistence
 
-- Tasks: `<workspace>/.ferrite/tasks.json` (atomic write via `.bak` rename)
-- Notes: `<workspace>/.ferrite/notes/<name>.txt`
+- Tasks: `<workspace>/.mdoxide/tasks.json` (atomic write via `.bak` rename)
+- Notes: `<workspace>/.mdoxide/notes/<name>.txt`
 - Without an open workspace the panel shows a yellow info banner and runs
   in-memory only (no save). All state is reset on workspace switch via
   `set_workspace()`.

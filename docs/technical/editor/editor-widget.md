@@ -2,7 +2,7 @@
 
 ## Overview
 
-The EditorWidget provides the main text editing interface for Ferrite. It wraps egui's `TextEdit::multiline` widget with additional functionality for cursor position tracking, scroll persistence, and integration with the application state.
+The EditorWidget provides the main text editing interface for MDOxide. It wraps egui's `TextEdit::multiline` widget with additional functionality for cursor position tracking, scroll persistence, and integration with the application state.
 
 ## Key Files
 
@@ -110,7 +110,7 @@ The four scoped IDs in `src/app/central_panel.rs`:
 - `"split_editor_raw"` — Split view, left (raw) pane
 - `"split_preview_rendered"` — Split view, right (preview) pane
 
-`FerriteEditor` storage (raw editor) is separately keyed by `tab_id` in a `HashMap` inside `FerriteEditorStorage` (see `src/editor/widget.rs`), so its virtual scrolling is already per-tab independent of the widget ID.
+`MDOxideEditor` storage (raw editor) is separately keyed by `tab_id` in a `HashMap` inside `MDOxideEditorStorage` (see `src/editor/widget.rs`), so its virtual scrolling is already per-tab independent of the widget ID.
 
 ## Dependencies Used
 

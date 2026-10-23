@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite v0.3.1 adds AST support for embedded video syntax in markdown. Parsing runs as a post-processing pass after comrak conversion and wikilink extraction. **Rendering** (wry WebView overlay + thumbnail fallback) is a separate follow-up — see task 8 / future `video-embed-rendering.md`.
+MDOxide v0.3.1 adds AST support for embedded video syntax in markdown. Parsing runs as a post-processing pass after comrak conversion and wikilink extraction. **Rendering** (wry WebView overlay + thumbnail fallback) is a separate follow-up — see task 8 / future `video-embed-rendering.md`.
 
 ## Supported Syntax
 
@@ -91,4 +91,4 @@ cargo test video_embed
 ## Related
 
 - PRD §5.3 — [prd-v0.3.1.md](../../ai-workflow/prds/prd-v0.3.1.md)
-- GitHub [#119](https://github.com/OlaProeis/Ferrite/issues/119)
+- GitHub [#119](https://github.com/OlaProeis/MDOxide/issues/119)

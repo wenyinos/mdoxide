@@ -62,8 +62,8 @@ The eviction trade-off is favorable: cache misses are rare after initial warm-up
 
 | File | Changes |
 |------|---------|
-| `src/editor/ferrite/view.rs` | `dirty_from_line` tracking, `cumulative_visual_rows`, incremental rebuild |
-| `src/editor/ferrite/line_cache.rs` | Counter-based LRU, `CacheEntry` struct, `CacheKey::from_layout_job()` |
+| `src/editor/mdoxide/view.rs` | `dirty_from_line` tracking, `cumulative_visual_rows`, incremental rebuild |
+| `src/editor/mdoxide/line_cache.rs` | Counter-based LRU, `CacheEntry` struct, `CacheKey::from_layout_job()` |
 
 ## Task 41: Verification & Scroll Consistency Fix
 

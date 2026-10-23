@@ -8,7 +8,7 @@ a ă â b c d đ e ê g h i k l m n o ô ơ p q r s t u ư v x y
 
 ## 2. Câu mẫu (Sample Sentences)
 Xin chào thế giới.
-Tôi yêu lập trình Ferrite.
+Tôi yêu lập trình MDOxide.
 Cộng hòa xã hội chủ nghĩa Việt Nam.
 
 ## 3. Dấu thanh (Tones)

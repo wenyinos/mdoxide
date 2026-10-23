@@ -1,8 +1,8 @@
-![](assets/20260302-164245-20260302-164117-ferritelogo.jpg)
+![](assets/20260302-164245-20260302-164117-mdoxidelogo.jpg)
 
 # Wikilinks Test File
 
-This file tests the `[[wikilinks]]` feature in Ferrite's rendered/split view.
+This file tests the `[[wikilinks]]` feature in MDOxide's rendered/split view.
 
 ---
 

@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document describes the "Design C" ribbon redesign that streamlines the Ferrite UI by:
+This document describes the "Design C" ribbon redesign that streamlines the MDOxide UI by:
 
 1. Moving view controls to the title bar
 2. Introducing dropdown menus for less-frequently used actions

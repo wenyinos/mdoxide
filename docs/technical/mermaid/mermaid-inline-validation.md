@@ -36,7 +36,7 @@ Implements task **#71** (depends on #57 — egui 0.31 upgrade).
               ▼                                 ▼
    markdown/widgets.rs                 app/central_panel.rs
    ─ MermaidBlock widget               ─ merges with LSP diagnostics
-   ─ warning header banner             ─ feeds FerriteEditor.diagnostics
+   ─ warning header banner             ─ feeds MDOxideEditor.diagnostics
    ─ last-good fallback render         ─ wavy underlines in raw view
 ```
 
@@ -133,7 +133,7 @@ distinguish it from LSP output.
 
 `app/central_panel.rs` appends these to `tab_diagnostics` (the same vec
 already fed to LSP squiggles) for both the single-pane and split-view
-editors, gated to markdown files. `FerriteEditor::render_diagnostic_squiggles`
+editors, gated to markdown files. `MDOxideEditor::render_diagnostic_squiggles`
 draws the wavy underline as it does for LSP diagnostics — **no new
 rendering code** required.
 
@@ -164,7 +164,7 @@ rendering code** required.
 Run with:
 
 ```bash
-cargo test --bin ferrite markdown::mermaid::validation::
+cargo test --bin mdoxide markdown::mermaid::validation::
 ```
 
 ## Files touched

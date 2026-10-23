@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the custom window resize functionality implemented for Ferrite's borderless window mode. Since the application uses `with_decorations(false)` to provide a custom title bar, native OS resize handles are not available. This module provides custom edge/corner detection and resize initiation.
+This document describes the custom window resize functionality implemented for MDOxide's borderless window mode. Since the application uses `with_decorations(false)` to provide a custom title bar, native OS resize handles are not available. This module provides custom edge/corner detection and resize initiation.
 
 ## Architecture
 

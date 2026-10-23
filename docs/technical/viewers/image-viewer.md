@@ -1,6 +1,6 @@
 # Image Viewer Tab
 
-Dedicated image viewer tabs for opening image files (PNG, JPEG, GIF, WebP, BMP) directly in Ferrite, intercepting them before the binary file error path.
+Dedicated image viewer tabs for opening image files (PNG, JPEG, GIF, WebP, BMP) directly in MDOxide, intercepting them before the binary file error path.
 
 ## Architecture
 

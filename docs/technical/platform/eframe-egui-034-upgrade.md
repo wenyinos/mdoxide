@@ -1,7 +1,7 @@
 # eframe / egui 0.31 → 0.34 Upgrade (complete)
 
 This document captures the **v0.3.0** GUI stack upgrade from `eframe` / `egui` 0.31.1
-to 0.34.2, breaking API changes, and migration patterns applied in Ferrite.
+to 0.34.2, breaking API changes, and migration patterns applied in MDOxide.
 
 See also [eframe-egui-031-upgrade.md](./eframe-egui-031-upgrade.md) for the prior
 0.28 → 0.31 migration.
@@ -17,7 +17,7 @@ See also [eframe-egui-031-upgrade.md](./eframe-egui-031-upgrade.md) for the prio
 ### `screen_rect` → `viewport_rect` / `content_rect`
 
 egui 0.34 deprecates `Context::screen_rect()`. The shim maps it to `content_rect()`,
-not the full window. Ferrite uses explicit APIs:
+not the full window. MDOxide uses explicit APIs:
 
 | Use case | API |
 |----------|-----|
@@ -32,14 +32,14 @@ not the full window. Ferrite uses explicit APIs:
 ### ScrollArea (0.34 defaults)
 
 - **Edge fade:** New gradient fade at scroll edges (`ScrollStyle.fade`). Disabled
-  globally in `FerriteApp::new` (`fade.strength = 0.0`) to preserve pre-upgrade look.
+  globally in `MDOxideApp::new` (`fade.strength = 0.0`) to preserve pre-upgrade look.
 - **content_margin:** Comes from `ScrollStyle`; no per-area overrides added.
 - Existing `.auto_shrink([false, false])` on file tree, outline, search, etc. kept.
 
 ### Panels
 
 `SidePanel`, `TopBottomPanel`, and `CentralPanel` remain as type aliases over
-`Panel` with `.show(ctx, …)`. Ferrite already sets explicit `Frame` / margins on
+`Panel` with `.show(ctx, …)`. MDOxide already sets explicit `Frame` / margins on
 title bar, ribbon, central panel, and status bar; no panel API migration in 89.3.
 
 ## Subtask 89.4 — Menus, popups, tooltips
@@ -69,7 +69,7 @@ needed (egui 0.34 menu stack handles close-on-click for leaf items).
 `show_tooltip_at_pointer` → `Tooltip::always_open(…, PopupAnchor::Pointer).show(…)`.
 
 **Updated (89.4):** `markdown/csv_viewer.rs` (truncated cell tooltips),
-`editor/ferrite/editor.rs` (LSP diagnostic hover).
+`editor/mdoxide/editor.rs` (LSP diagnostic hover).
 
 Most tooltips still use `Response::on_hover_text` (unchanged).
 
@@ -77,7 +77,7 @@ Most tooltips still use `Response::on_hover_text` (unchanged).
 
 ### Text backend (egui 0.34 defaults)
 
-- Ferrite depends on `egui = "0.34"` with no extra epaint font features; **skrifa** +
+- MDOxide depends on `egui = "0.34"` with no extra epaint font features; **skrifa** +
   **vello_cpu** are the default layout/raster path (see `Cargo.lock` → `epaint`).
 - No `ab_glyph` in the dependency tree for 0.34. HarfRust (`harfrust`) remains a
   separate shaping path for complex-script cursor/selection and cluster layout.
@@ -111,8 +111,8 @@ row heights can differ when wrap is enabled (unchanged from 0.31).
 ### Files touched (89.5)
 
 - `src/fonts.rs` — `row_height_for_font`
-- `src/editor/ferrite/shaping.rs` — module docs (skrifa vs HarfRust)
-- `src/editor/ferrite/line_cache.rs` — shaped-line height + galley invariant docs
+- `src/editor/mdoxide/shaping.rs` — module docs (skrifa vs HarfRust)
+- `src/editor/mdoxide/line_cache.rs` — shaped-line height + galley invariant docs
 - `src/markdown/cache.rs` — test isolation (`clear_block_height_cache` in unit tests)
 
 ## Subtask 89.6 — HarfRust validation (egui 0.34)
@@ -125,7 +125,7 @@ row heights can differ when wrap is enabled (unchanged from 0.31).
   advances via `shape_line_clusters` / `column_to_x_offset` / `x_to_column`.
 - **Drawing:** egui lays out each cluster substring; clusters are placed at cumulative
   HarfRust `advance`. `debug_assert!(validate_cluster_byte_ranges)` on cache build.
-- **Trace:** if skrifa galley width exceeds advance by >15%, `ferrite::shaping` trace log
+- **Trace:** if skrifa galley width exceeds advance by >15%, `mdoxide::shaping` trace log
   (helps spot ligature/layout drift during manual QA).
 
 ### New API / tests
@@ -151,14 +151,14 @@ See [harfrust-text-shaping.md](../editor/harfrust-text-shaping.md) for full pipe
 
 ### Scope
 
-Audit cross-thread locking after the 0.34 upgrade: `egui::Mutex` usage in Ferrite,
+Audit cross-thread locking after the 0.34 upgrade: `egui::Mutex` usage in MDOxide,
 `std::sync::Mutex` hot spots, and whether any lock is held across `fonts_mut`,
 `Context::run`, or `request_repaint` while waiting on another thread.
 
-### `egui::Mutex` in Ferrite
+### `egui::Mutex` in MDOxide
 
-**Zero usages.** Ferrite uses `std::sync::Mutex` (and `Arc`) everywhere. egui 0.34
-uses `epaint::mutex::Mutex` internally (loaders, plugins, text-edit undoer); Ferrite
+**Zero usages.** MDOxide uses `std::sync::Mutex` (and `Arc`) everywhere. egui 0.34
+uses `epaint::mutex::Mutex` internally (loaders, plugins, text-edit undoer); MDOxide
 does not need to adopt it unless storing large blobs in egui temp memory (see egui
 docs: wrap in `Arc<Mutex<…>>` for cheap clone).
 
@@ -234,7 +234,7 @@ run fenced code block, terminal output while scrolling editor — no hangs obser
 | Rust MSRV | **1.92** (`rust-version` in `Cargo.toml`, `rust-toolchain.toml`) |
 | egui / eframe | **0.34.2** |
 | egui-phosphor | **0.12.0** |
-| Ferrite version | **0.3.0** |
+| MDOxide version | **0.3.0** |
 
 ### CI / packaging
 
@@ -259,7 +259,7 @@ behaviour now set `quick_note_workflow = false` explicitly.
 
 ### `App::update` deferral
 
-Ferrite still implements deprecated `eframe::App::update`; `App::ui` remains an empty stub
+MDOxide still implements deprecated `eframe::App::update`; `App::ui` remains an empty stub
 until a dedicated lifecycle migration (out of Task 89 scope).
 
 ### Verification (89.8)
@@ -275,8 +275,8 @@ cargo test shaping:: # 32/32
 | Topic | Target |
 |-------|--------|
 | `App::update` → `App::ui` / `App::logic` lifecycle | Separate task |
-| Wayland / macOS Sonoma keyboard verification [#106](https://github.com/OlaProeis/Ferrite/issues/106) / [#111](https://github.com/OlaProeis/Ferrite/issues/111) | Community / CI hardware |
-| macOS Developer ID signing [#130](https://github.com/OlaProeis/Ferrite/issues/130) | Blocked on Apple Developer Program enrollment |
+| Wayland / macOS Sonoma keyboard verification [#106](https://github.com/OlaProeis/MDOxide/issues/106) / [#111](https://github.com/OlaProeis/MDOxide/issues/111) | Community / CI hardware |
+| macOS Developer ID signing [#130](https://github.com/OlaProeis/MDOxide/issues/130) | Blocked on Apple Developer Program enrollment |
 
 ## Verification
 

@@ -28,7 +28,7 @@ When the user clicks the styled display:
 
 On the next frame, the edit branch renders the TextEdit, applies the activation (focus + cursor placement), and the caret lands where the user clicked.
 
-> **Implementation note** — `session_active_clicked_key` returns a process-global `Id::new("ferrite_rendered_session_active_clicked")` so writes from any depth (deeply nested `ui.horizontal/vertical` scopes) land on the same key the outer dismiss reads. An earlier `ui.id()`-derived key silently mismatched between writers and the dismiss reader; the formatted display-click path was the only one without a TextEdit able to recover focus on the next frame, so it was the visible regression.
+> **Implementation note** — `session_active_clicked_key` returns a process-global `Id::new("mdoxide_rendered_session_active_clicked")` so writes from any depth (deeply nested `ui.horizontal/vertical` scopes) land on the same key the outer dismiss reads. An earlier `ui.id()`-derived key silently mismatched between writers and the dismiss reader; the formatted display-click path was the only one without a TextEdit able to recover focus on the next frame, so it was the visible regression.
 
 See [Galley cursor positioning](../editor/galley-cursor-positioning.md) for the display→raw mapping details.
 

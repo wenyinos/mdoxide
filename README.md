@@ -4,7 +4,7 @@
 
 A native WYSIWYG Markdown editor written in Rust, built with `egui`/`eframe` — no WebView, no Electron, no JavaScript runtime.
 
-MDOxide is a ground-up Rust reimplementation of [MarkText](https://github.com/marktext/marktext)'s editing experience, forked from [Ferrite](https://github.com/OlaProeis/Ferrite) (MIT).
+MDOxide reimplements [MarkText](https://github.com/marktext/marktext)'s editing experience in Rust. It started from an MIT-licensed egui editor; full attribution is in [`NOTICE`](NOTICE).
 
 The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
@@ -12,7 +12,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 Early development. M0 (baseline fork + rename + code audit) is complete; M1 (module reduction, stability) and M2 (MarkText visual identity) are in progress. See [`docs/plans/`](docs/plans/) for the implementation plan and the M0 audit report.
 
-## What works today (inherited from Ferrite)
+## What works today
 
 - WYSIWYG markdown editing (per-block rendered/editing switch, commit-boundary undo)
 - CommonMark + GFM via `comrak`; syntax highlighting via `syntect`
@@ -41,4 +41,4 @@ cargo build --release      # binary at target/release/mdoxide
 
 ## License
 
-MIT. MDOxide is derived from Ferrite (Copyright © Ola Proeis) and reimplements the UX of MarkText; see [`NOTICE`](NOTICE) for attribution details.
+MIT. MDOxide reimplements the UX of MarkText and contains code derived from an MIT-licensed upstream project; see [`NOTICE`](NOTICE) for attribution details.

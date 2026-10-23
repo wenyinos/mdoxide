@@ -8,19 +8,19 @@ The Windows MSI installer (`wix/main.wxs`) uses WiX Toolset v3 via `cargo-wix`. 
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| **Ferrite Editor** | On (required) | Core `ferrite.exe` binary |
-| Start Menu Shortcut | On | Shortcut in Start Menu > Ferrite |
+| **MDOxide Editor** | On (required) | Core `mdoxide.exe` binary |
+| Start Menu Shortcut | On | Shortcut in Start Menu > MDOxide |
 | Desktop Shortcut | Off | Shortcut on the Desktop |
-| **File Associations** | On | Registers Ferrite in "Open With" and Windows Default Apps |
-| Markdown (.md, .markdown) | On | ProgId `Ferrite.md` |
-| Plain Text (.txt) | On | ProgId `Ferrite.txt` |
-| JSON (.json) | On | ProgId `Ferrite.json` |
-| YAML (.yaml, .yml) | On | ProgId `Ferrite.yaml` |
-| TOML (.toml) | On | ProgId `Ferrite.toml` |
-| CSV (.csv, .tsv) | On | ProgId `Ferrite.csv` |
-| **Explorer Context Menu** | Off | Right-click "Open with Ferrite" |
-| Open with Ferrite (files) | Off | `HKLM\Software\Classes\*\shell\OpenWithFerrite` |
-| Open Folder with Ferrite | Off | `HKLM\Software\Classes\Directory\shell\OpenWithFerrite` + Background |
+| **File Associations** | On | Registers MDOxide in "Open With" and Windows Default Apps |
+| Markdown (.md, .markdown) | On | ProgId `MDOxide.md` |
+| Plain Text (.txt) | On | ProgId `MDOxide.txt` |
+| JSON (.json) | On | ProgId `MDOxide.json` |
+| YAML (.yaml, .yml) | On | ProgId `MDOxide.yaml` |
+| TOML (.toml) | On | ProgId `MDOxide.toml` |
+| CSV (.csv, .tsv) | On | ProgId `MDOxide.csv` |
+| **Explorer Context Menu** | Off | Right-click "Open with MDOxide" |
+| Open with MDOxide (files) | Off | `HKLM\Software\Classes\*\shell\OpenWithMDOxide` |
+| Open Folder with MDOxide | Off | `HKLM\Software\Classes\Directory\shell\OpenWithMDOxide` + Background |
 | **Add to System PATH** | Off | Appends install dir to system PATH |
 
 ## Key Files
@@ -36,19 +36,19 @@ The Windows MSI installer (`wix/main.wxs`) uses WiX Toolset v3 via `cargo-wix`. 
 
 Uses the modern `OpenWithProgids` approach rather than forcefully setting extension defaults:
 
-1. **ProgId registration** at `HKLM\Software\Classes\Ferrite.<ext>` with description, icon, and open command
-2. **OpenWithProgids** entry under each extension (e.g., `HKLM\Software\Classes\.md\OpenWithProgids\Ferrite.md`)
-3. **ApplicationCapabilities** registration at `HKLM\Software\OlaProeis\Ferrite\Capabilities` for Windows Settings > Default Apps
-4. **RegisteredApplications** entry at `HKLM\Software\RegisteredApplications\Ferrite`
+1. **ProgId registration** at `HKLM\Software\Classes\MDOxide.<ext>` with description, icon, and open command
+2. **OpenWithProgids** entry under each extension (e.g., `HKLM\Software\Classes\.md\OpenWithProgids\MDOxide.md`)
+3. **ApplicationCapabilities** registration at `HKLM\Software\OlaProeis\MDOxide\Capabilities` for Windows Settings > Default Apps
+4. **RegisteredApplications** entry at `HKLM\Software\RegisteredApplications\MDOxide`
 
-This is non-invasive -- it adds Ferrite to the "Open With" menu and Default Apps settings without overriding existing defaults.
+This is non-invasive -- it adds MDOxide to the "Open With" menu and Default Apps settings without overriding existing defaults.
 
 ### Explorer Context Menu
 
 Registry entries under `HKLM\Software\Classes`:
-- `*\shell\OpenWithFerrite` -- right-click any file
-- `Directory\shell\OpenWithFerrite` -- right-click a folder
-- `Directory\Background\shell\OpenWithFerrite` -- right-click folder background (uses `%V` for current path)
+- `*\shell\OpenWithMDOxide` -- right-click any file
+- `Directory\shell\OpenWithMDOxide` -- right-click a folder
+- `Directory\Background\shell\OpenWithMDOxide` -- right-click folder background (uses `%V` for current path)
 
 ### PATH Entry
 
@@ -56,7 +56,7 @@ Uses WiX `Environment` element with `Permanent='no'` (removed on uninstall), `Pa
 
 ### Launch After Install
 
-`CustomAction` with `FileKey='ferrite.exe'` and `Return='asyncNoWait'`, triggered from ExitDialog's "Launch Ferrite" checkbox.
+`CustomAction` with `FileKey='mdoxide.exe'` and `Return='asyncNoWait'`, triggered from ExitDialog's "Launch MDOxide" checkbox.
 
 ### UI Flow
 
@@ -64,14 +64,14 @@ Uses `WixUI_FeatureTree` which provides: Welcome -> CustomizeDlg (feature tree +
 
 ### Cross-Feature References
 
-Registry values use `[APPLICATIONFOLDER]ferrite.exe` instead of `[#ferrite.exe]` to avoid ICE69 cross-feature reference warnings. Both resolve to the same path, but `[APPLICATIONFOLDER]` doesn't create a component cross-reference.
+Registry values use `[APPLICATIONFOLDER]mdoxide.exe` instead of `[#mdoxide.exe]` to avoid ICE69 cross-feature reference warnings. Both resolve to the same path, but `[APPLICATIONFOLDER]` doesn't create a component cross-reference.
 
 ## Building
 
 ```bash
 cargo install cargo-wix
 cargo wix                     # full release build + MSI
-cargo wix --no-build          # MSI only (requires existing target/release/ferrite.exe)
+cargo wix --no-build          # MSI only (requires existing target/release/mdoxide.exe)
 ```
 
 WiX Toolset v3 must be installed. Either:

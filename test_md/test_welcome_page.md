@@ -4,11 +4,11 @@ The welcome page is not tested via this file — instead follow these steps:
 
 ## How to Trigger the Welcome Page
 
-1. **Delete Ferrite's config/session data** (to simulate first run):
-   - Windows: Delete `%APPDATA%\ferrite\` folder
-   - Linux: Delete `~/.config/ferrite/` folder
-   - macOS: Delete `~/Library/Application Support/ferrite/` folder
-2. Launch Ferrite **without** any file arguments
+1. **Delete MDOxide's config/session data** (to simulate first run):
+   - Windows: Delete `%APPDATA%\mdoxide\` folder
+   - Linux: Delete `~/.config/mdoxide/` folder
+   - macOS: Delete `~/Library/Application Support/mdoxide/` folder
+2. Launch MDOxide **without** any file arguments
 3. The Welcome tab should appear
 
 ## Welcome Page Checklist
@@ -22,7 +22,7 @@ The welcome page is not tested via this file — instead follow these steps:
 - [ ] Auto-save toggle works
 - [ ] "Get Started" button closes the welcome tab
 - [ ] Welcome page does NOT appear on subsequent launches
-- [ ] Welcome page does NOT appear when Ferrite is opened with a file argument
+- [ ] Welcome page does NOT appear when MDOxide is opened with a file argument
 - [ ] Welcome page does NOT appear when session tabs are restored
 
 ## Settings Persistence

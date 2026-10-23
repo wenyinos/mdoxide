@@ -1,10 +1,10 @@
-# Ferrite - German (Deutsch)
+# MDOxide - German (Deutsch)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -436,7 +436,7 @@ about:
   # License section
   license: "Lizenz"
   license_type: "MIT-Lizenz"
-  copyright: "© 2026 Ferrite-Entwicklungshelfer"
+  copyright: "© 2026 MDOxide-Entwicklungshelfer"
   version: "Version %{version}"
 
 # Keyboard shortcuts
@@ -676,7 +676,7 @@ recovery:
     time_label: "Letzte Änderung: %{time}"
   session:
     title: "Sitzung wiederherstellen"
-    crash_detected: "Ferrite hat erkannt, dass die vorherige Sitzung nicht richtig
+    crash_detected: "MDOxide hat erkannt, dass die vorherige Sitzung nicht richtig
       beendet wurde."
     restore_question: "Letzte Sitzung wiederherstellen?"
     restore: "Sitzung wiederherstellen"
@@ -905,7 +905,7 @@ terminal:
     macros: Makros
   filter:
     terminal_layout: Terminal-Layout
-    ferrite_workspace: Ferrite-Arbeitsordner
+    mdoxide_workspace: MDOxide-Arbeitsordner
   error:
     shell_not_found: Überprüfe, dass die Shell installiert und der Pfad korrekt 
       ist

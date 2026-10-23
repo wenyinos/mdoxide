@@ -1,6 +1,6 @@
 # Light Mode Color Contrast Documentation
 
-This document describes the light theme color tokens in Ferrite and their WCAG 2.1 contrast compliance.
+This document describes the light theme color tokens in MDOxide and their WCAG 2.1 contrast compliance.
 
 ## WCAG 2.1 Level AA Requirements
 

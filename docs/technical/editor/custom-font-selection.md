@@ -1,10 +1,10 @@
 # Custom Font Selection
 
-This document describes the custom font selection feature in Ferrite, which allows users to choose their preferred fonts for the editor and configure CJK regional glyph preferences.
+This document describes the custom font selection feature in MDOxide, which allows users to choose their preferred fonts for the editor and configure CJK regional glyph preferences.
 
 ## Overview
 
-Ferrite supports three types of font configurations:
+MDOxide supports three types of font configurations:
 
 1. **Built-in Fonts**: Inter (proportional) and JetBrains Mono (monospace) are bundled with the application
 2. **Custom System Fonts**: Users can select any font installed on their system
@@ -27,7 +27,7 @@ Users can select any system font from Settings → Appearance → Font.
 
 1. The system font list is enumerated using `font-kit` crate on application startup
 2. Fonts are cached to avoid re-enumeration on each settings panel open
-3. Choosing **Custom** sets `EditorFont::Custom` with an **empty name** until the user picks a row in the combo; font reload runs **without** a custom primary face until then (Inter stays active). This avoids immediately loading the first sorted family name, which can fail on some macOS setups where enumeration names do not resolve the same way as `select_best_match` / path reads (GitHub [#133](https://github.com/OlaProeis/Ferrite/issues/133)).
+3. Choosing **Custom** sets `EditorFont::Custom` with an **empty name** until the user picks a row in the combo; font reload runs **without** a custom primary face until then (Inter stays active). This avoids immediately loading the first sorted family name, which can fail on some macOS setups where enumeration names do not resolve the same way as `select_best_match` / path reads (GitHub [#133](https://github.com/OlaProeis/MDOxide/issues/133)).
 4. When a custom font is selected, it's loaded dynamically and added to the font fallback chain
 5. The custom font name is stored in `config.json`
 
@@ -134,5 +134,5 @@ Font settings are stored in `config.json`:
 
 ## Related
 
-- GitHub Issue: [#15](https://github.com/OlaProeis/Ferrite/issues/15) - CJK regional glyph preferences
+- GitHub Issue: [#15](https://github.com/OlaProeis/MDOxide/issues/15) - CJK regional glyph preferences
 - Dependencies: `font-kit` 0.14.3 for system font enumeration

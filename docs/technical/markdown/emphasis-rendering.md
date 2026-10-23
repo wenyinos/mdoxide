@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite supports bold, italic, and strikethrough text formatting in the WYSIWYG (Rendered) view mode. This document describes how emphasis markdown is parsed and rendered, including support for nested/combined formatting.
+MDOxide supports bold, italic, and strikethrough text formatting in the WYSIWYG (Rendered) view mode. This document describes how emphasis markdown is parsed and rendered, including support for nested/combined formatting.
 
 ## Supported Syntax
 

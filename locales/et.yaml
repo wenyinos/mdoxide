@@ -1,10 +1,10 @@
-# Ferrite - Estonian (Eesti)
+# MDOxide - Estonian (Eesti)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 
@@ -451,7 +451,7 @@ terminal:
   menu:
     workspaces: Tööalad
   filter:
-    ferrite_workspace: Ferrite'i tööala
+    mdoxide_workspace: MDOxide'i tööala
 productivity:
   workspace_hint: Ava tööala ning ülesanded ja märked säilivad
 view_mode:
@@ -480,7 +480,7 @@ about:
   issue_tooltip: Ava veahaldus veebibrauseris
   built_with: Kompileerimisel oli kasutusel
   license_type: MIT litsents
-  copyright: © 2026 Ferrite'i kaasautorid
+  copyright: © 2026 MDOxide'i kaasautorid
   version: Versioon %{version}
 notification:
   restored_auto_save: Taastatud automaatsest salvestusest

@@ -32,7 +32,7 @@ Lines 0–4999, 5001+ retain their cached galleys
 
 ### 3. Dirty range tracking in the editor
 
-`FerriteEditor` accumulates a `dirty_range: Option<(usize, usize)>` across edits within a frame:
+`MDOxideEditor` accumulates a `dirty_range: Option<(usize, usize)>` across edits within a frame:
 
 | Edit path | Tracking |
 |-----------|----------|
@@ -80,8 +80,8 @@ The shaped-line cache scales similarly at `max(100, visible_lines)`.
 
 | File | Changes |
 |------|---------|
-| `src/editor/ferrite/line_cache.rs` | Dynamic `max_cache_entries` / `max_shaped_entries` fields; `update_capacity()`, `register_line()`, `register_line_highlighted()`, `invalidate_range()`, `clear_line_keys()`, `tracked_lines()`; 11 new tests |
-| `src/editor/ferrite/editor.rs` | `dirty_range` field; `mark_lines_dirty()` helper; targeted invalidation in `ui()`; `update_capacity()` call after visible range computed; `register_line()` call during rendering; removed redundant double-invalidation from undo/redo |
+| `src/editor/mdoxide/line_cache.rs` | Dynamic `max_cache_entries` / `max_shaped_entries` fields; `update_capacity()`, `register_line()`, `register_line_highlighted()`, `invalidate_range()`, `clear_line_keys()`, `tracked_lines()`; 11 new tests |
+| `src/editor/mdoxide/editor.rs` | `dirty_range` field; `mark_lines_dirty()` helper; targeted invalidation in `ui()`; `update_capacity()` call after visible range computed; `register_line()` call during rendering; removed redundant double-invalidation from undo/redo |
 
 ## Performance Impact
 

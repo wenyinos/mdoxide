@@ -59,7 +59,7 @@ pub struct TableEditState {
 
 ### Empty cells — display hit area (v0.3.0+)
 
-Cells that are not focused paint their body in **display mode** (formatted galley instead of raw `TextEdit`). An empty markdown cell layouts to a galley with no extent; a clickable `Label` built from it had **zero interactive size**, so users could not click into new empty slots (new row/column) even though row height and striping drew a visible cell ([issue #131](https://github.com/OlaProeis/Ferrite/issues/131)). `EditableTable` now reserves the padded inner rectangle with `allocate_exact_size(.., Sense::click())` and paints the galley there. **Edit mode** still uses `TextEdit::multiline(&mut cell.text)` keyed by `(row, col)`; an empty buffer is represented as `String::new()` on `TableCellData`, matching the deferred “commit on leaving the table” model.
+Cells that are not focused paint their body in **display mode** (formatted galley instead of raw `TextEdit`). An empty markdown cell layouts to a galley with no extent; a clickable `Label` built from it had **zero interactive size**, so users could not click into new empty slots (new row/column) even though row height and striping drew a visible cell ([issue #131](https://github.com/OlaProeis/MDOxide/issues/131)). `EditableTable` now reserves the padded inner rectangle with `allocate_exact_size(.., Sense::click())` and paints the galley there. **Edit mode** still uses `TextEdit::multiline(&mut cell.text)` keyed by `(row, col)`; an empty buffer is represented as `String::new()` on `TableCellData`, matching the deferred “commit on leaving the table” model.
 
 ## Architecture
 

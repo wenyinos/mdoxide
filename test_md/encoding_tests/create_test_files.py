@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Creates test files in various encodings for testing Ferrite's multi-encoding support.
+Creates test files in various encodings for testing MDOxide's multi-encoding support.
 Run this script to regenerate the test files.
 """
 

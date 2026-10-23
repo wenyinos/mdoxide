@@ -11,26 +11,26 @@ This document describes the debug logging added to diagnose the list item click-
 
 ## Enabling Debug Logging
 
-Run Ferrite with the `RUST_LOG` environment variable set:
+Run MDOxide with the `RUST_LOG` environment variable set:
 
 ### Windows (PowerShell)
 ```powershell
-$env:RUST_LOG="debug"; .\target\debug\ferrite.exe
+$env:RUST_LOG="debug"; .\target\debug\mdoxide.exe
 ```
 
 ### Windows (CMD)
 ```cmd
-set RUST_LOG=debug && target\debug\ferrite.exe
+set RUST_LOG=debug && target\debug\mdoxide.exe
 ```
 
 ### Linux/macOS
 ```bash
-RUST_LOG=debug ./target/debug/ferrite
+RUST_LOG=debug ./target/debug/mdoxide
 ```
 
 ### Filter to Only List Debug Messages
 ```bash
-RUST_LOG="ferrite::markdown::editor=debug" ./target/debug/ferrite
+RUST_LOG="mdoxide::markdown::editor=debug" ./target/debug/mdoxide
 ```
 
 ## Debug Log Prefixes
@@ -39,7 +39,7 @@ All list-related debug messages are prefixed with `[LIST_DEBUG]` for easy filter
 
 ```bash
 # Filter output with grep/findstr
-RUST_LOG=debug ./target/debug/ferrite 2>&1 | grep "\[LIST_DEBUG\]"
+RUST_LOG=debug ./target/debug/mdoxide 2>&1 | grep "\[LIST_DEBUG\]"
 ```
 
 ## Key Log Messages

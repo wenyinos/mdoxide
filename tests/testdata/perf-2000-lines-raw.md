@@ -2,7 +2,7 @@
 
 This file has ~2000 lines for testing RAW mode editor performance.
 
-The FerriteEditor uses virtual scrolling - only visible lines should render.
+The MDOxideEditor uses virtual scrolling - only visible lines should render.
 
 
 ## Section 1

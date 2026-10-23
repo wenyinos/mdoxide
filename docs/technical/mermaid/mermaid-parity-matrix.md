@@ -1,6 +1,6 @@
 # Mermaid Parity Matrix
 
-Living map of Ferrite's **native** Mermaid renderer vs Mermaid.js / common real-world usage.
+Living map of MDOxide's **native** Mermaid renderer vs Mermaid.js / common real-world usage.
 Use this to pick pre-0.3.0 rendering work, track GitHub issues, and avoid re-discovering gaps.
 
 **Last updated:** 2026-05-18  
@@ -33,17 +33,17 @@ Use this to pick pre-0.3.0 rendering work, track GitHub issues, and avoid re-dis
 
 | Issue | Summary | Matrix area | Status in tree | Target |
 |-------|---------|-------------|----------------|--------|
-| [#4](https://github.com/OlaProeis/Ferrite/issues/4) | Insert toolbar + Help syntax | Authoring UX | **Shipped** (0.3.0 first wave) | Close on release |
-| [#83](https://github.com/OlaProeis/Ferrite/issues/83) | Edges draw through node boxes | Flowchart → edge routing | **Open** — see P0 below | Pre-0.3.0 candidate |
-| [#129](https://github.com/OlaProeis/Ferrite/issues/129) | Consecutive fenced blocks hidden | Widget layout (not routing) | **Fixed** | Close on release |
+| [#4](https://github.com/OlaProeis/MDOxide/issues/4) | Insert toolbar + Help syntax | Authoring UX | **Shipped** (0.3.0 first wave) | Close on release |
+| [#83](https://github.com/OlaProeis/MDOxide/issues/83) | Edges draw through node boxes | Flowchart → edge routing | **Open** — see P0 below | Pre-0.3.0 candidate |
+| [#129](https://github.com/OlaProeis/MDOxide/issues/129) | Consecutive fenced blocks hidden | Widget layout (not routing) | **Fixed** | Close on release |
 
 ---
 
 ## Diagram type coverage
 
-Ferrite implements **11** native types. Mermaid.js / [mmdr](https://github.com/1jehuang/mermaid-rs-renderer) cover **~23**.
+MDOxide implements **11** native types. Mermaid.js / [mmdr](https://github.com/1jehuang/mermaid-rs-renderer) cover **~23**.
 
-| Diagram | Header keyword(s) | Ferrite module | Overall | Notes |
+| Diagram | Header keyword(s) | MDOxide module | Overall | Notes |
 |---------|-------------------|----------------|---------|-------|
 | Flowchart | `flowchart`, `graph` | `flowchart/` | **Partial** | Strong layout; weak edge routing (#83) |
 | Sequence | `sequenceDiagram` | `sequence.rs` | **Partial** | Control blocks, activations, notes — see docs |

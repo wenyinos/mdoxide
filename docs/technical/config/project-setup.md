@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the initial project setup and dependency configuration for Ferrite. The project was initialized as a Rust binary application using Cargo, with all required dependencies specified and verified.
+This document describes the initial project setup and dependency configuration for MDOxide. The project was initialized as a Rust binary application using Cargo, with all required dependencies specified and verified.
 
 ## Key Files
 

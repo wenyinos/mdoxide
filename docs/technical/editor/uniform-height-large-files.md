@@ -12,7 +12,7 @@ Files with more than 100,000 lines activate **uniform height mode** in `ViewStat
 
 ### Threshold
 
-The constant `LARGE_FILE_THRESHOLD` in `view.rs` is set to 100,000 lines. `configure_for_file_size(total_lines)` is called every frame in `FerriteEditor::ui()`.
+The constant `LARGE_FILE_THRESHOLD` in `view.rs` is set to 100,000 lines. `configure_for_file_size(total_lines)` is called every frame in `MDOxideEditor::ui()`.
 
 ### When Activated
 
@@ -58,8 +58,8 @@ The user's wrap preference (`self.wrap_enabled`) is preserved — wrap re-enable
 
 | File | Changes |
 |------|---------|
-| `src/editor/ferrite/view.rs` | `configure_for_file_size()` re-enabled with threshold + vector cleanup; `rebuild_height_cache()` early-returns in uniform mode |
-| `src/editor/ferrite/editor.rs` | `effective_wrap_enabled` computed after `configure_for_file_size()`; used in wrap setup, render loop, scrollbar, and cursor positioning |
+| `src/editor/mdoxide/view.rs` | `configure_for_file_size()` re-enabled with threshold + vector cleanup; `rebuild_height_cache()` early-returns in uniform mode |
+| `src/editor/mdoxide/editor.rs` | `effective_wrap_enabled` computed after `configure_for_file_size()`; used in wrap setup, render loop, scrollbar, and cursor positioning |
 
 ## Tests
 

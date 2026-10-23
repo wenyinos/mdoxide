@@ -1,10 +1,10 @@
 # SignPath Code Signing Integration
 
-This document describes how Ferrite uses SignPath for Windows code signing.
+This document describes how MDOxide uses SignPath for Windows code signing.
 
 ## Overview
 
-Ferrite uses [SignPath](https://signpath.io/) for code signing Windows artifacts. SignPath provides free code signing for open source projects, which helps:
+MDOxide uses [SignPath](https://signpath.io/) for code signing Windows artifacts. SignPath provides free code signing for open source projects, which helps:
 
 - Prevent Windows Defender false positives (e.g., `Trojan:Win32/Bearfoos.B!ml`)
 - Establish trust with users downloading the application
@@ -21,7 +21,7 @@ Ferrite uses [SignPath](https://signpath.io/) for code signing Windows artifacts
            ▼
 ┌─────────────────────┐
 │  Unsigned Artifacts │
-│  - ferrite.exe      │
+│  - mdoxide.exe      │
 │  - MSI installer    │
 │  - Portable zip     │
 └──────────┬──────────┘
@@ -41,7 +41,7 @@ Ferrite uses [SignPath](https://signpath.io/) for code signing Windows artifacts
            ▼
 ┌─────────────────────┐
 │   Signed Artifacts  │
-│  - ferrite.exe ✓    │
+│  - mdoxide.exe ✓    │
 │  - MSI installer ✓  │
 │  - Portable zip ✓   │
 └──────────┬──────────┘
@@ -63,11 +63,11 @@ Defines the structure of artifacts to sign:
 ```xml
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <zip-file path="ferrite-portable-windows-x64.zip">
-      <pe-file path="ferrite.exe" />
+    <zip-file path="mdoxide-portable-windows-x64.zip">
+      <pe-file path="mdoxide.exe" />
     </zip-file>
-    <msi-file path="ferrite-windows-x64.msi">
-      <pe-file path="ferrite.exe" />
+    <msi-file path="mdoxide-windows-x64.msi">
+      <pe-file path="mdoxide.exe" />
     </msi-file>
   </zip-file>
 </artifact-configuration>
@@ -100,14 +100,14 @@ Add these secrets to your GitHub repository:
 
 ### 2. Project Configuration
 
-1. Create a project named `ferrite`
+1. Create a project named `mdoxide`
 2. Add the artifact configuration (copy from `.signpath/artifact-configuration.xml`)
 3. Create a signing policy named `release-signing`
 
 ### 3. Trusted Build System
 
 1. Add the predefined "GitHub.com" trusted build system to your organization
-2. Link it to the Ferrite project
+2. Link it to the MDOxide project
 3. Install the [SignPath GitHub App](https://github.com/apps/signpath) and allow access to the repository
 
 ## Testing

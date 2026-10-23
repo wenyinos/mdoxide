@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite uses a **unified, operation-based** undo/redo system. A single `EditHistory` instance per tab records minimal diffs (insert/delete operations) rather than full content snapshots. Raw mode (`EditorWidget` / FerriteEditor), rendered mode (`MarkdownEditor`), tree viewer, and legacy toolbar paths all record into the same `tab.edit_history`.
+MDOxide uses a **unified, operation-based** undo/redo system. A single `EditHistory` instance per tab records minimal diffs (insert/delete operations) rather than full content snapshots. Raw mode (`EditorWidget` / MDOxideEditor), rendered mode (`MarkdownEditor`), tree viewer, and legacy toolbar paths all record into the same `tab.edit_history`.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ tab.record_edit_from_snapshot();  // Diff snapshot vs current → record_operati
 
 `prepare_undo_snapshot_hashed()` avoids cloning every frame — see [Undo Hash Change Detection](./undo-hash-change-detection.md).
 
-**Raw mode:** `EditorWidget::show` calls the same snapshot + diff path when FerriteEditor reports `is_content_dirty()` and syncs the rope into `tab.content`.
+**Raw mode:** `EditorWidget::show` calls the same snapshot + diff path when MDOxideEditor reports `is_content_dirty()` and syncs the rope into `tab.content`.
 
 **Rendered / split preview / tree viewer:** `central_panel.rs` calls the same APIs when `MarkdownEditor` or `TreeViewer` reports `changed`.
 
@@ -92,7 +92,7 @@ impl Tab {
 
 ### Content Version
 
-`content_version` is bumped on every undo/redo and on each recorded edit. `EditorWidget` detects external changes (including undo) via content length/hash and calls `FerriteEditor::set_content()` to re-sync the rope buffer.
+`content_version` is bumped on every undo/redo and on each recorded edit. `EditorWidget` detects external changes (including undo) via content length/hash and calls `MDOxideEditor::set_content()` to re-sync the rope buffer.
 
 ## Keyboard Shortcuts
 
@@ -127,7 +127,7 @@ Each call to `EditHistory::record_operations` (or `record_operation`) pushes **o
 - **Redo stack clearing**: New edits clear the redo stack (standard behavior).
 - **Tab independence**: Each tab has its own `EditHistory`. Closing a tab discards it.
 - **Save interaction**: Saving does not clear undo history.
-- **Cursor restoration**: Undo/redo set `pending_cursor_restore` (char index). FerriteEditor cursor sync from this field is not fully wired yet — scroll position is preserved via `pending_scroll_offset`.
+- **Cursor restoration**: Undo/redo set `pending_cursor_restore` (char index). MDOxideEditor cursor sync from this field is not fully wired yet — scroll position is preserved via `pending_scroll_offset`.
 - **Scroll preservation**: `handle_undo` / `handle_redo` in `navigation.rs` preserve scroll offset across operations.
 - **Rendered undo UI**: After undo, egui edit buffers for in-flight blocks may be stale until focus changes; see rendered commit rules above.
 

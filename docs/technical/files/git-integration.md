@@ -1,12 +1,12 @@
 # Git Integration (Phase 1)
 
-This document describes the Git integration feature in Ferrite, which provides Git-aware UI elements when working in Git repositories.
+This document describes the Git integration feature in MDOxide, which provides Git-aware UI elements when working in Git repositories.
 
 ## Features
 
 ### 1. Branch Display in Status Bar
 
-When Ferrite opens a workspace (folder) that is part of a Git repository, the current branch name is displayed in the status bar on the right side.
+When MDOxide opens a workspace (folder) that is part of a Git repository, the current branch name is displayed in the status bar on the right side.
 
 **Display format:**
 - Normal branch: `⎇ main` or `⎇ feature/xyz`

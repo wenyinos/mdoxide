@@ -15,7 +15,7 @@ The panel is accessible as a "Links" tab within the existing outline panel (alon
 | `src/ui/outline_panel.rs` | Hosts the "Links" tab in `OutlinePanelTab` enum, passes through to `BacklinksPanel` |
 | `src/app/navigation.rs` | `refresh_backlinks()` — smart refresh strategy based on workspace size |
 | `src/app/file_ops.rs` | Triggers incremental index update on file save, clears index on workspace close |
-| `src/app/mod.rs` | `backlinks_panel` field on `FerriteApp`, tab-switch detection via `last_active_tab_for_backlinks` |
+| `src/app/mod.rs` | `backlinks_panel` field on `MDOxideApp`, tab-switch detection via `last_active_tab_for_backlinks` |
 
 ## Implementation Details
 

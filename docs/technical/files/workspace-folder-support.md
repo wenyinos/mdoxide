@@ -178,7 +178,7 @@ These buttons are only visible when a workspace/folder is open. The emoji icons 
 
 ## Persistence
 
-Workspace state is saved to `.ferrite/` directory within the workspace root:
+Workspace state is saved to `.mdoxide/` directory within the workspace root:
 
 - `settings.json` - Workspace-specific settings
 - `state.json` - UI state (expanded folders, recent files, panel width)

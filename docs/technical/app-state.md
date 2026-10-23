@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `state.rs` module provides comprehensive application state management for Ferrite. It defines the central `AppState` struct that manages all runtime data including open tabs, user settings, and UI state.
+The `state.rs` module provides comprehensive application state management for MDOxide. It defines the central `AppState` struct that manages all runtime data including open tabs, user settings, and UI state.
 
 ## Key Files
 
@@ -130,7 +130,7 @@ pub enum AppMode {
     SingleFile,              // Traditional single-file editing
     Workspace {              // Folder-based project mode
         root: PathBuf,
-        settings_path: PathBuf,  // .ferrite/ directory
+        settings_path: PathBuf,  // .mdoxide/ directory
     },
 }
 ```

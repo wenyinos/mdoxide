@@ -155,7 +155,7 @@ Another paragraph after a thematic break. This tests that horizontal rules are c
 
 ```toml
 [package]
-name = "ferrite"
+name = "mdoxide"
 version = "0.2.7"
 edition = "2021"
 

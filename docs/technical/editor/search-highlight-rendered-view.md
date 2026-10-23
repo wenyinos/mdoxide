@@ -8,7 +8,7 @@ Search highlights now appear in the **rendered** markdown view (including table 
 
 ### Problem
 
-Search highlights (from Ctrl+F) only appeared in the **raw** editor (FerriteEditor). The **rendered** WYSIWYG view and **split preview** pane showed no search match highlighting, making it difficult to locate matches when viewing formatted content — especially in tables where cell geometry differs from raw source lines.
+Search highlights (from Ctrl+F) only appeared in the **raw** editor (MDOxideEditor). The **rendered** WYSIWYG view and **split preview** pane showed no search match highlighting, making it difficult to locate matches when viewing formatted content — especially in tables where cell geometry differs from raw source lines.
 
 ### Solution
 

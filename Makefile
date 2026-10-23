@@ -1,4 +1,4 @@
-# Ferrite Build Makefile
+# MDOxide Build Makefile
 # Simple build automation for local development
 
 .PHONY: build release run clean check fmt clippy test all
@@ -52,14 +52,14 @@ precommit: fmt clippy test build
 # Show binary size after release build
 size: release
 ifeq ($(OS),Windows_NT)
-	@dir /s target\release\ferrite.exe 2>nul || echo "Binary not found"
+	@dir /s target\release\mdoxide.exe 2>nul || echo "Binary not found"
 else
-	@ls -lh target/release/ferrite 2>/dev/null || echo "Binary not found"
+	@ls -lh target/release/mdoxide 2>/dev/null || echo "Binary not found"
 endif
 
 # Help
 help:
-	@echo "Ferrite Build Targets:"
+	@echo "MDOxide Build Targets:"
 	@echo "  make build      - Debug build"
 	@echo "  make release    - Release build (optimized)"
 	@echo "  make run        - Run debug build"

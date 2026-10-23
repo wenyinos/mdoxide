@@ -4,7 +4,7 @@ The `LineCache` module provides efficient caching of egui `Galley` objects (text
 
 ## Overview
 
-`LineCache` is part of Phase 1 of the FerriteEditor custom widget. It addresses a key performance issue: egui's `Galley` (text layout) is expensive to create, and without caching, we'd recreate galleys for every visible line on every frame.
+`LineCache` is part of Phase 1 of the MDOxideEditor custom widget. It addresses a key performance issue: egui's `Galley` (text layout) is expensive to create, and without caching, we'd recreate galleys for every visible line on every frame.
 
 With caching:
 - **Content-hash based keys** - Same content = cache hit
@@ -94,7 +94,7 @@ Cache miss → Create galley, evict oldest if at capacity, add to back
 `LineCache` will be used by:
 
 - **Viewport rendering** (Task 7) - Efficiently render visible lines
-- **FerriteEditor widget** (Task 6) - Line-by-line text rendering
+- **MDOxideEditor widget** (Task 6) - Line-by-line text rendering
 
 ## When to Invalidate
 

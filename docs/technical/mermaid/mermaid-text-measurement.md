@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implemented accurate text measurement for Mermaid diagrams in Ferrite, replacing hardcoded character-based width estimation with actual egui font metrics. This ensures node labels, edge labels, and other text elements render without clipping or overlap across all diagram types.
+Implemented accurate text measurement for Mermaid diagrams in MDOxide, replacing hardcoded character-based width estimation with actual egui font metrics. This ensures node labels, edge labels, and other text elements render without clipping or overlap across all diagram types.
 
 ## Key Files
 

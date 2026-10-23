@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes Ferrite's idle mode system that significantly reduces CPU usage when the application is not being actively used. This optimization applies to **all platforms** (Windows, Linux, macOS).
+This document describes MDOxide's idle mode system that significantly reduces CPU usage when the application is not being actively used. This optimization applies to **all platforms** (Windows, Linux, macOS).
 
 ## Problem
 
@@ -15,7 +15,7 @@ GUI applications using immediate-mode rendering (like egui) typically repaint at
 
 ## Solution: Tiered Idle Mode
 
-Ferrite implements a **tiered idle repaint system** that adjusts the refresh rate based on user activity:
+MDOxide implements a **tiered idle repaint system** that adjusts the refresh rate based on user activity:
 
 ### Repaint States
 
@@ -106,7 +106,7 @@ In debug builds, idle state is logged every 5 seconds:
 
 ### Manual Verification
 
-1. Open Ferrite and let it sit idle for 5+ seconds
+1. Open MDOxide and let it sit idle for 5+ seconds
 2. Open Task Manager (Windows), Activity Monitor (macOS), or `top` (Linux)
 3. CPU usage should be near 0% (typically <1%)
 4. Move mouse or type - CPU briefly increases

@@ -14,7 +14,7 @@ A memory-efficient text buffer backed by the `ropey` rope data structure, design
 ## Module Location
 
 ```
-src/editor/ferrite/buffer.rs
+src/editor/mdoxide/buffer.rs
 ```
 
 ## API Reference
@@ -185,9 +185,9 @@ This is achieved through:
 - No need for contiguous memory allocation
 - Efficient structural sharing for undo/redo (planned)
 
-## Usage in FerriteEditor
+## Usage in MDOxideEditor
 
-`TextBuffer` is the foundation of the custom FerriteEditor widget:
+`TextBuffer` is the foundation of the custom MDOxideEditor widget:
 
 ```
 TextBuffer (this module)
@@ -196,7 +196,7 @@ EditHistory (Task 3) - undo/redo using buffer operations
     ↓
 ViewState (Task 4) - virtual scrolling with line indexing
     ↓
-FerriteEditor (Task 6) - custom editor widget
+MDOxideEditor (Task 6) - custom editor widget
 ```
 
 ## Testing
@@ -213,7 +213,7 @@ cargo test test_large_file -- --ignored
 ## Related Documentation
 
 - [Editor Widget](./editor-widget.md) - Current egui TextEdit wrapper
-- [Custom Editor Plan](../planning/custom-editor-widget-plan.md) - FerriteEditor architecture
+- [Custom Editor Plan](../planning/custom-editor-widget-plan.md) - MDOxideEditor architecture
 - [Memory Optimization Plan](../planning/memory-optimization.md) - Memory reduction strategies
 
 ## Dependencies

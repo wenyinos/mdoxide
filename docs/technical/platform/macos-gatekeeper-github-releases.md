@@ -2,9 +2,9 @@
 
 ## Purpose
 
-CI-built macOS artifacts (`Ferrite.app` inside `.dmg` / `.tar.gz`) ship **without** Apple Developer ID signing or notarization through **v0.3.0**. Gatekeeper—especially on **macOS 15.x**—may block or warn. This document maps **where** that behavior is documented and **what** maintainers ship.
+CI-built macOS artifacts (`MDOxide.app` inside `.dmg` / `.tar.gz`) ship **without** Apple Developer ID signing or notarization through **v0.3.0**. Gatekeeper—especially on **macOS 15.x**—may block or warn. This document maps **where** that behavior is documented and **what** maintainers ship.
 
-**Tracking:** [GitHub #130](https://github.com/OlaProeis/Ferrite/issues/130). Signed GitHub releases depend on Apple Developer Program enrollment and CI wiring — no release date committed.
+**Tracking:** [GitHub #130](https://github.com/OlaProeis/MDOxide/issues/130). Signed GitHub releases depend on Apple Developer Program enrollment and CI wiring — no release date committed.
 
 ## User-facing
 

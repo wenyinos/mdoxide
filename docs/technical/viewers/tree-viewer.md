@@ -1,6 +1,6 @@
 # Tree Viewer for Structured Files
 
-This document describes the JSON/YAML/TOML tree viewer implementation in Ferrite.
+This document describes the JSON/YAML/TOML tree viewer implementation in MDOxide.
 
 ## Overview
 
@@ -116,7 +116,7 @@ if let Some(file_type) = get_structured_file_type(path) {
 
 ### State Management
 
-Tree viewer state is stored per-tab using a `HashMap<usize, TreeViewerState>` in `FerriteApp`:
+Tree viewer state is stored per-tab using a `HashMap<usize, TreeViewerState>` in `MDOxideApp`:
 - Keyed by tab ID
 - Preserves expansion state, editing state, etc.
 - Cleaned up automatically when tabs are closed

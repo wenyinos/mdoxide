@@ -1,6 +1,6 @@
 # Bracket and Markdown Emphasis Matching
 
-This document describes the bracket and emphasis pair matching feature in Ferrite's editor.
+This document describes the bracket and emphasis pair matching feature in MDOxide's editor.
 
 ## Overview
 
@@ -110,9 +110,9 @@ if let Some(pair) = matcher.find_match(cursor_pos) {
 
 ## Performance
 
-### FerriteEditor (Windowed Search)
+### MDOxideEditor (Windowed Search)
 
-FerriteEditor bracket matching uses a **windowed search** algorithm:
+MDOxideEditor bracket matching uses a **windowed search** algorithm:
 
 - **Window size**: Cursor line ±100 lines (`MAX_BRACKET_SEARCH_LINES`)
 - **Complexity**: O(window) instead of O(N)
@@ -131,9 +131,9 @@ let matcher = DelimiterMatcher::new(&window_content);
 
 ### Standard Editor (Full Content)
 
-Without FerriteEditor, matching scans the full content:
+Without MDOxideEditor, matching scans the full content:
 - Stack-based algorithm is O(k) where k is the distance to the matching bracket
-- For very large files, consider using FerriteEditor
+- For very large files, consider using MDOxideEditor
 - Emphasis matching uses string `find()` which is optimized
 
 ## Edge Cases

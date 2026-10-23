@@ -2,19 +2,19 @@
 
 ## Overview
 
-Line number display for the FerriteEditor, showing line numbers alongside editor content with toggleable visibility. The gutter area is dynamically calculated based on which features are enabled (line numbers and/or fold indicators).
+Line number display for the MDOxideEditor, showing line numbers alongside editor content with toggleable visibility. The gutter area is dynamically calculated based on which features are enabled (line numbers and/or fold indicators).
 
 ## Key Files
 
-- `src/editor/ferrite/rendering/gutter.rs` - Gutter width calculation and rendering functions
-- `src/editor/ferrite/editor.rs` - FerriteEditor struct with `show_line_numbers` and `show_fold_indicators` flags
-- `src/editor/widget.rs` - EditorWidget passes settings to FerriteEditor
+- `src/editor/mdoxide/rendering/gutter.rs` - Gutter width calculation and rendering functions
+- `src/editor/mdoxide/editor.rs` - MDOxideEditor struct with `show_line_numbers` and `show_fold_indicators` flags
+- `src/editor/widget.rs` - EditorWidget passes settings to MDOxideEditor
 - `src/config/settings.rs` - `show_line_numbers` setting
 
 ## Related Documentation
 
 - [Code Folding](./code-folding.md) - Fold indicators in the gutter
-- [Architecture](./architecture.md) - FerriteEditor design overview
+- [Architecture](./architecture.md) - MDOxideEditor design overview
 
 ## Implementation Details
 
@@ -107,7 +107,7 @@ if self.show_line_numbers {
 
 ### Settings Integration
 
-The `show_line_numbers` setting flows from config through EditorWidget to FerriteEditor:
+The `show_line_numbers` setting flows from config through EditorWidget to MDOxideEditor:
 
 ```rust
 // In EditorWidget::show()
@@ -132,7 +132,7 @@ EditorWidget::new(tab)
 | `render_line_number(painter, line_idx, x, y, width, font_id, color)` | Render a single line number (right-aligned) |
 | `render_fold_indicator(painter, x, y, line_height, is_collapsed, color)` | Render fold indicator (▶/▼) |
 
-### FerriteEditor Methods
+### MDOxideEditor Methods
 
 | Method | Description |
 |--------|-------------|
@@ -231,7 +231,7 @@ cargo test gutter
 
 ## History
 
-- **v0.2.x**: Migrated from egui TextEdit to custom FerriteEditor
+- **v0.2.x**: Migrated from egui TextEdit to custom MDOxideEditor
 - **Task 27**: Added `show_line_numbers` and `show_fold_indicators` toggle support
   - Fixed gray gap bug when fold indicators disabled
   - Dynamic gutter width calculation based on enabled features

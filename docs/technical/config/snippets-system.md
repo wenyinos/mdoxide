@@ -1,6 +1,6 @@
 # Snippets/Abbreviation System
 
-This document describes the snippets/abbreviation system implemented in Ferrite v0.2.5 (Task 23).
+This document describes the snippets/abbreviation system implemented in MDOxide v0.2.5 (Task 23).
 
 ## Overview
 
@@ -8,7 +8,7 @@ The snippets system provides user-defined text expansions with built-in date/tim
 
 ## Built-in Snippets
 
-Ferrite includes four built-in date/time snippets:
+MDOxide includes four built-in date/time snippets:
 
 | Trigger | Expansion | Example |
 |---------|-----------|---------|
@@ -21,9 +21,9 @@ Ferrite includes four built-in date/time snippets:
 
 Custom snippets can be defined in a JSON configuration file located at the platform-specific config directory:
 
-- **Linux**: `~/.config/ferrite/snippets.json`
-- **macOS**: `~/Library/Application Support/ferrite/snippets.json`
-- **Windows**: `%APPDATA%\ferrite\snippets.json`
+- **Linux**: `~/.config/mdoxide/snippets.json`
+- **macOS**: `~/Library/Application Support/mdoxide/snippets.json`
+- **Windows**: `%APPDATA%\mdoxide\snippets.json`
 
 ### Configuration File Format
 
@@ -106,7 +106,7 @@ pub struct SnippetMatch {
 - `SnippetConfig::get_expansion(trigger)` - Get expansion for any trigger
 - `find_trigger_at_cursor(text, cursor_pos, manager)` - Find trigger word at cursor
 - `apply_snippet(text, snippet_match)` - Apply expansion to text
-- `FerriteApp::try_expand_snippet(tab_index)` - Main expansion entry point
+- `MDOxideApp::try_expand_snippet(tab_index)` - Main expansion entry point
 
 ## Settings
 

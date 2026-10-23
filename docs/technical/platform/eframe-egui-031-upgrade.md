@@ -216,7 +216,7 @@ incrementally:
 | `cargo check --features lsp`                    | clean |
 | `cargo check --all-features`                    | clean |
 | `cargo test`                                    | 1407 passed, 0 failed, 3 ignored |
-| HarfRust shaping tests (`editor::ferrite::shaping`) | 24/24 pass — Latin, Arabic contextual shaping, Bengali conjuncts intact |
+| HarfRust shaping tests (`editor::mdoxide::shaping`) | 24/24 pass — Latin, Arabic contextual shaping, Bengali conjuncts intact |
 
 ## Files touched
 
@@ -224,7 +224,7 @@ incrementally:
 - Fonts: `src/fonts.rs`
 - App shell: `src/app/{title_bar,mod,navigation}.rs`
 - Editor: `src/editor/{find_replace,minimap,widget}.rs`,
-  `src/editor/ferrite/{highlights,editor}.rs`
+  `src/editor/mdoxide/{highlights,editor}.rs`
 - Markdown: `src/markdown/editor.rs`, `src/markdown/widgets.rs`
 - Mermaid renderers: `src/markdown/mermaid/{class_diagram,er_diagram,
   journey,mindmap,sequence,state,timeline,flowchart/render/{edges,nodes,

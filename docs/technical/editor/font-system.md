@@ -2,7 +2,7 @@
 
 ## Overview
 
-Custom font loading and selection system for Ferrite. Provides user-selectable fonts with proper support for bold, italic, and combined styling through explicit font family variants.
+Custom font loading and selection system for MDOxide. Provides user-selectable fonts with proper support for bold, italic, and combined styling through explicit font family variants.
 
 ## Key Files
 

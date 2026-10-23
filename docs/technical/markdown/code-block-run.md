@@ -50,7 +50,7 @@ Each Run launches a background worker via [`spawn_run`](../../../src/markdown/co
 - **Status header:** rotating Braille spinner + "Running" while live, then ✓ "Exit 0", ✗ "Exit N", "Timed out after Ns", "Stopped by user", or "Failed".
 - **Elapsed time** (`123ms` / `4.2s` / `1m 12s`).
 - **Stdout** and (if non-empty) a separated **stderr** section.
-- **ANSI colors** parsed via [`ansi_render`](../../../src/markdown/ansi_render.rs), which wraps `vte::Parser` with a small `Perform` adapter and reuses [`crate::terminal::AnsiColor`] / `TerminalTheme::ferrite_dark|light` so colors match the integrated terminal.
+- **ANSI colors** parsed via [`ansi_render`](../../../src/markdown/ansi_render.rs), which wraps `vte::Parser` with a small `Perform` adapter and reuses [`crate::terminal::AnsiColor`] / `TerminalTheme::mdoxide_dark|light` so colors match the integrated terminal.
 - **Windows line endings:** Many CLIs (including Python’s `print` on Windows) emit **CRLF** (`\r\n`). The parser treats a lone **carriage return** as “clear this line” (for progress-style `\r` overwrites). Before parsing, [`ansi_render::parse`](../../../src/markdown/ansi_render.rs) therefore **normalizes `\r\n` → `\n`**, so the panel shows the same text as **Copy** / raw bytes. Standalone `\r` (not followed by `\n`) is unchanged.
 - **Live action:** **Stop** (kills the running child via the cancellation token; the slot becomes Dismiss once the run is no longer `Running`).
 - **Post-run actions:** **Copy** (clipboard, ANSI-stripped), **Insert as block** (appends a fenced ` ```output ` block right after the source), **Dismiss** (clears the panel state).
@@ -61,7 +61,7 @@ When `code_execution_show_inline_output` is **off**, the panel is hidden and com
 
 `spawn_run` spawns one worker thread per Run. The worker:
 
-1. Writes a temp script (`ferrite_code_<nanos>.sh|.ps1|.bat|.py`) into `std::env::temp_dir`, with cross-platform interpreter selection.
+1. Writes a temp script (`mdoxide_code_<nanos>.sh|.ps1|.bat|.py`) into `std::env::temp_dir`, with cross-platform interpreter selection.
 2. Spawns the child process with `Stdio::piped()` for stdout/stderr; on Windows we set `CREATE_NO_WINDOW` to avoid a console flash.
 3. Spawns dedicated **reader threads** for stdout and stderr so blocking `read()` never starves the timeout/`try_wait` loop. Each reader pushes raw bytes into the shared `RunState`. Killing the child closes the pipes, which lets `read()` return `Ok(0)` and the readers join cleanly — no zombie threads.
 4. **Polls the cancellation token** (`RunState.cancel: Arc<AtomicBool>`) every ~20 ms inside `wait_child`. The worker holds its own clone of the `Arc<AtomicBool>` so it never has to lock the outer `Mutex<RunState>` to check the flag. When the flag flips it kills the child, joins reader threads, and returns `RunError::Cancelled`.
@@ -100,8 +100,8 @@ Manual regression on Windows passed using [`test_md/test_code_execution.md`](../
 
 ## Validation
 
-- `cargo test --bin ferrite markdown::ansi_render` covers the SGR parser (plain text, basic colors, 256-color, truecolor, bold/reset, carriage return rewrite, **CRLF vs bare `\r`**, empty input, trailing newline).
-- `cargo test --bin ferrite markdown::code_execution` covers language classification (incl. `pwsh`), Run-button visibility flags, status glyph mapping (incl. `Cancelled`), `RunState.timeout_secs` capture, and the idempotent `cancel(&RunHandle)` helper.
+- `cargo test --bin mdoxide markdown::ansi_render` covers the SGR parser (plain text, basic colors, 256-color, truecolor, bold/reset, carriage return rewrite, **CRLF vs bare `\r`**, empty input, trailing newline).
+- `cargo test --bin mdoxide markdown::code_execution` covers language classification (incl. `pwsh`), Run-button visibility flags, status glyph mapping (incl. `Cancelled`), `RunState.timeout_secs` capture, and the idempotent `cancel(&RunHandle)` helper.
 - Manual: full checklist in [`test_md/test_code_execution.md`](../../../test_md/test_code_execution.md). Spot checks:
   - Enable Settings → Editor → Code execution; open a markdown file containing shell or python fences; click Run and verify the inline panel reports stdout/stderr with colors and an accurate exit indicator.
   - Long-running snippet (`sleep 60`, `while True: pass`): click **Stop** and confirm the panel transitions to `Stopped by user` within ~100 ms, the spinner stops rotating, and the UI scrolls/interacts normally throughout.

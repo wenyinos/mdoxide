@@ -117,4 +117,4 @@ Unit tests in `src/ui/window.rs`:
 
 ## Related Issues
 
-- [#15](https://github.com/OlaProeis/Ferrite/issues/15) - Windows borderless window issues
+- [#15](https://github.com/OlaProeis/MDOxide/issues/15) - Windows borderless window issues

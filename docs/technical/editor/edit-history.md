@@ -2,9 +2,9 @@
 
 ## Overview
 
-`EditHistory` (`src/editor/ferrite/history.rs`) is the **sole undo/redo engine** for the entire application. Each `Tab` in `state.rs` owns one instance. It stores discrete edit operations (insert/delete) rather than full content snapshots, making memory usage proportional to edit size, not file size.
+`EditHistory` (`src/editor/mdoxide/history.rs`) is the **sole undo/redo engine** for the entire application. Each `Tab` in `state.rs` owns one instance. It stores discrete edit operations (insert/delete) rather than full content snapshots, making memory usage proportional to edit size, not file size.
 
-FerriteEditor does **not** embed its own `EditHistory`; the rope buffer is edited in place and changes are diffed into `tab.edit_history` via `EditorWidget`.
+MDOxideEditor does **not** embed its own `EditHistory`; the rope buffer is edited in place and changes are diffed into `tab.edit_history` via `EditorWidget`.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ Ctrl+Z
     → navigation::handle_undo()
     → tab.undo() → edit_history.undo_string(&mut tab.content)
     → content_version bumped
-    → EditorWidget re-syncs FerriteEditor via set_content()
+    → EditorWidget re-syncs MDOxideEditor via set_content()
 ```
 
 ## Edit Operations

@@ -1,11 +1,11 @@
 # Intel Mac 100% CPU Usage Analysis
 
 ## Problem Summary
-Users on Intel Macs experience 100% CPU usage when using Ferrite, particularly in Rendered (WYSIWYG) mode.
+Users on Intel Macs experience 100% CPU usage when using MDOxide, particularly in Rendered (WYSIWYG) mode.
 
 ## Log Analysis Results
 
-From the 48,926-line debug log (`ferrite_macos_intel_log.txt`):
+From the 48,926-line debug log (`mdoxide_macos_intel_log.txt`):
 
 | Metric | Value |
 |--------|-------|
@@ -17,7 +17,7 @@ From the 48,926-line debug log (`ferrite_macos_intel_log.txt`):
 | Peak messages/sec | 6,367 |
 
 ### Module Distribution
-- `ferrite::markdown::editor`: **99.9%** (48,850 messages)
+- `mdoxide::markdown::editor`: **99.9%** (48,850 messages)
 - All other modules combined: 0.1%
 
 ### Top Repeated Messages

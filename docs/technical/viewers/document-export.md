@@ -1,6 +1,6 @@
 # Document Export System
 
-Technical documentation for the document export functionality in Ferrite.
+Technical documentation for the document export functionality in MDOxide.
 
 ## Overview
 
@@ -10,7 +10,7 @@ The export system allows users to export markdown documents to standalone HTML f
 
 - **Main API:** `generate_html_document_export` in `src/export/html.rs`. `generate_html_document` is a thin wrapper with fixed defaults for older call sites.
 - **Options:** `HtmlExportOptions` and `HtmlExportThemeChoice` in `src/export/html_options.rs`, persisted on `Settings.html_export_options`. The modal is `render_html_export_dialog` (`src/app/dialogs.rs`); `UiState.show_html_export_dialog` gates visibility.
-- **Markdown → HTML:** comrak with `FerriteHtmlHighlighter` implementing `SyntaxHighlighterAdapter` (syntect via `get_highlighter()`, building inline HTML per line into a `String` buffer then writing to the comrak output stream).
+- **Markdown → HTML:** comrak with `MDOxideHtmlHighlighter` implementing `SyntaxHighlighterAdapter` (syntect via `get_highlighter()`, building inline HTML per line into a `String` buffer then writing to the comrak output stream).
 - **Theme CSS:** `HtmlThemeResolution` supports a single palette or light+dark with `@media (prefers-color-scheme)` for Auto. Colors come from `ThemeColors` / accent-aware rules in `html.rs`.
 - **Mermaid:** Fenced `mermaid` code blocks are replaced with placeholders before comrak, then `inject_mermaid_exports`. Flowcharts use SVG from `try_flowchart_svg_snippet` (`src/export/flowchart_svg.rs`) and `FlowchartColors`; other diagram types use a fallback figure with highlighted source. Shared types are re-exported from `markdown/mermaid/mod.rs` and `detect_mermaid_diagram_type` / `MermaidDiagramType` from `markdown/mod.rs`.
 - **Images and links:** `postprocess_images` and `postprocess_links` honor `ImageHandling` (`src/export/options.rs`), optional link base path, and self-contained / linked modes.
@@ -91,7 +91,7 @@ fn color32_to_css(color: Color32) -> String {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="generator" content="Ferrite">
+    <meta name="generator" content="MDOxide">
     <title>{title}</title>
     <style>
         /* Base CSS */

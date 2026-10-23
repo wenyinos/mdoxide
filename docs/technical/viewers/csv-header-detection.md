@@ -81,7 +81,7 @@ Popup menu options:
 
 ## Usage
 
-1. Open any CSV/TSV file in Ferrite
+1. Open any CSV/TSV file in MDOxide
 2. Header detection runs automatically on first render
 3. Click "Headers: ✓/✗" in status bar to toggle or override
 4. Select "Auto-detect" to return to automatic behavior

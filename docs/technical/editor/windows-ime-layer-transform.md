@@ -2,15 +2,15 @@
 
 ## Overview
 
-`FerriteEditor` reports IME cursor geometry to the OS via `egui::output::IMEOutput`. Those rectangles must be in **screen space** (after the widget layer’s transform). This matches egui’s built-in `TextEdit` and fixes misaligned IME candidate windows on Windows when the editor lives in scaled or transformed UI (e.g. custom title bar).
+`MDOxideEditor` reports IME cursor geometry to the OS via `egui::output::IMEOutput`. Those rectangles must be in **screen space** (after the widget layer’s transform). This matches egui’s built-in `TextEdit` and fixes misaligned IME candidate windows on Windows when the editor lives in scaled or transformed UI (e.g. custom title bar).
 
 ## Key Files
 
-- `src/editor/ferrite/editor.rs` — Sets `IMEOutput` after painting cursors and preedit; applies layer `TSTransform` to `rect` and `cursor_rect`.
+- `src/editor/mdoxide/editor.rs` — Sets `IMEOutput` after painting cursors and preedit; applies layer `TSTransform` to `rect` and `cursor_rect`.
 
 ## Implementation Details
 
-egui **0.28.1** does not provide `layer_transform_to_global()` (that name does not exist in this release). Upstream `TextEdit` reads `ui.memory(|m| m.layer_transforms.get(&ui.layer_id()))`, then uses `transform * rect` and `transform * cursor_rect`. Ferrite uses the same pattern so OS-level IME positioning stays consistent with egui’s coordinate system.
+egui **0.28.1** does not provide `layer_transform_to_global()` (that name does not exist in this release). Upstream `TextEdit` reads `ui.memory(|m| m.layer_transforms.get(&ui.layer_id()))`, then uses `transform * rect` and `transform * cursor_rect`. MDOxide uses the same pattern so OS-level IME positioning stays consistent with egui’s coordinate system.
 
 If candidate **z-order** or placement is still wrong after this, further work may require Win32-specific behavior outside egui’s portable output.
 

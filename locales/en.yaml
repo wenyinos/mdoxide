@@ -1,4 +1,4 @@
-# Ferrite - English (Base Language)
+# MDOxide - English (Base Language)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
@@ -8,7 +8,7 @@ print_preview:
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -78,7 +78,7 @@ dialog:
     dont_save: "Don't Save"
   code_execution_consent:
     title: "Allow running code from this document?"
-    body_intro: "Running a fenced snippet starts a real subprocess on your computer using your user privileges. Ferrite does not sandbox runners or filter network access."
+    body_intro: "Running a fenced snippet starts a real subprocess on your computer using your user privileges. MDOxide does not sandbox runners or filter network access."
     body_settings_echo: "Same caveats as in Settings → Editor → Code execution: no sandbox — only use with documents you trust."
     enable_and_run: "Enable & run"
     enable_and_run_tooltip: "Turn on code execution, remember this choice, and run the snippet you clicked."
@@ -269,7 +269,7 @@ settings:
     title: "Files"
     restore_session_tooltip: "When enabled, restores previously open tabs on startup. When disabled, starts with a single empty tab. Session data is always saved."
     quick_note_workflow: "Quick note workflow (ephemeral untitled tabs)"
-    quick_note_workflow_tooltip: "Pathless tabs close without a save prompt, and a modified untitled tab no longer blocks quitting. Unsaved text is still stored in the session recovery folder under your Ferrite config directory when Restore session is on."
+    quick_note_workflow_tooltip: "Pathless tabs close without a save prompt, and a modified untitled tab no longer blocks quitting. Unsaved text is still stored in the session recovery folder under your MDOxide config directory when Restore session is on."
     quick_note_workflow_hint: "Double-click an untitled tab to set its display name. Turn off to restore the usual save confirmation for new tabs."
     enable_auto_save: "Enable Auto-Save by Default"
     auto_save_tooltip: "New documents will have auto-save enabled. Uses temp files to prevent data loss."
@@ -282,7 +282,7 @@ settings:
     files_count: "%{count} files"
   appearance:
     title: "Appearance"
-    accent_color: "Ferrite accent"
+    accent_color: "MDOxide accent"
     accent_color_hint: "Rendered headings (H1–H6), selection tint, tabs, and highlighted controls. Hyperlinks stay standard blue."
     accent_reset: "Reset color"
     language: "Language"
@@ -494,7 +494,7 @@ about:
   # License section
   license: "License"
   license_type: "MIT License"
-  copyright: "© 2026 Ferrite Contributors"
+  copyright: "© 2026 MDOxide Contributors"
   version: "Version %{version}"
 
 # Keyboard shortcuts
@@ -738,7 +738,7 @@ recovery:
     time_label: "Last modified: %{time}"
   session:
     title: "Session Recovery"
-    crash_detected: "Ferrite detected that your previous session was not closed properly."
+    crash_detected: "MDOxide detected that your previous session was not closed properly."
     restore_question: "Would you like to restore your previous session?"
     restore: "Restore Session"
     start_fresh: "Start Fresh"
@@ -923,11 +923,11 @@ welcome:
     files: "Files"
   label:
     theme: "Theme"
-    accent_color: "Ferrite accent color"
+    accent_color: "MDOxide accent color"
     language: "Language"
   line_width_hint: "Limits how wide text lines can grow. Set a value for centered text in Zen Mode (F11)."
   show_on_empty_launch: "Show welcome on empty launch"
-  show_on_empty_launch_hint: "Open this page when Ferrite starts with no documents loaded. Uncheck to start with a blank tab instead."
+  show_on_empty_launch_hint: "Open this page when MDOxide starts with no documents loaded. Uncheck to start with a blank tab instead."
 
 # Terminal panel
 terminal:
@@ -984,7 +984,7 @@ terminal:
     macros: "Macros"
   filter:
     terminal_layout: "Terminal Layout"
-    ferrite_workspace: "Ferrite Workspace"
+    mdoxide_workspace: "MDOxide Workspace"
   error:
     shell_not_found: "Check that the shell is installed and the path is correct"
     pty_failed: "PTY allocation failed. Try closing other terminals or restarting the app"

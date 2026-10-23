@@ -1,6 +1,6 @@
 # Encoding Test Files
 
-This folder contains test files in various character encodings for testing Ferrite's multi-encoding support.
+This folder contains test files in various character encodings for testing MDOxide's multi-encoding support.
 
 ## Test Files
 
@@ -19,7 +19,7 @@ This folder contains test files in various character encodings for testing Ferri
 
 ## Testing Procedure
 
-1. Open each file in Ferrite
+1. Open each file in MDOxide
 2. Check that the encoding is correctly detected (shown in status bar)
 3. Verify content displays correctly (no mojibake/garbled text)
 4. Try changing encoding via status bar dropdown

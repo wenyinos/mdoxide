@@ -2,13 +2,13 @@
 
 ## Overview
 
-Optional modal editing mode that adds Vim-style keybindings to FerriteEditor. Disabled by default to preserve standard editing behavior. When enabled, provides Normal/Insert/Visual/Visual Line modes with essential Vim commands.
+Optional modal editing mode that adds Vim-style keybindings to MDOxideEditor. Disabled by default to preserve standard editing behavior. When enabled, provides Normal/Insert/Visual/Visual Line modes with essential Vim commands.
 
 ## Key Files
 
 - `src/config/settings.rs` - `vim_mode: bool` setting (default: `false`)
-- `src/editor/ferrite/vim.rs` - `VimState` struct, `VimMode` enum, `handle_key()` dispatcher
-- `src/editor/ferrite/editor.rs` - Event loop interception, `set_vim_mode()`/`vim_mode()` methods
+- `src/editor/mdoxide/vim.rs` - `VimState` struct, `VimMode` enum, `handle_key()` dispatcher
+- `src/editor/mdoxide/editor.rs` - Event loop interception, `set_vim_mode()`/`vim_mode()` methods
 - `src/editor/widget.rs` - `vim_mode` builder method, `vim_mode_label` on `EditorOutput`
 - `src/app/central_panel.rs` - Propagates setting to EditorWidget, surfaces mode to UiState
 - `src/app/status_bar.rs` - Renders `[NORMAL]`/`[INSERT]`/`[VISUAL]`/`[V-LINE]` indicator
@@ -20,7 +20,7 @@ Optional modal editing mode that adds Vim-style keybindings to FerriteEditor. Di
 ### Data Flow
 
 ```
-Settings.vim_mode ──► EditorWidget.vim_mode() ──► FerriteEditor.set_vim_mode()
+Settings.vim_mode ──► EditorWidget.vim_mode() ──► MDOxideEditor.set_vim_mode()
                                                         │
                                                    VimState.handle_key()
                                                         │
@@ -44,7 +44,7 @@ Settings.vim_mode ──► EditorWidget.vim_mode() ──► FerriteEditor.set_
 
 ### Event Loop Integration
 
-In `FerriteEditor::ui()`, when `vim_mode_enabled` is true:
+In `MDOxideEditor::ui()`, when `vim_mode_enabled` is true:
 
 1. `Event::Key` events are intercepted by `VimState::handle_key()` before normal processing.
 2. Returns `VimKeyResult::Handled(result)` if Vim consumed the key, `Passthrough` if not.

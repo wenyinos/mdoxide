@@ -4,7 +4,7 @@ Rendered GFM tables use `EditableTable` in `src/markdown/widgets.rs`. This note 
 
 For general table behavior (deferred commits, toolbar, markdown sync), see [`editable-tables.md`](./editable-tables.md). For **session-triggered commit** when leaving a table for another block type, see [`rendered-edit-session-tables.md`](./rendered-edit-session-tables.md).
 
-## Empty cells — display hit area ([issue #131](https://github.com/OlaProeis/Ferrite/issues/131))
+## Empty cells — display hit area ([issue #131](https://github.com/OlaProeis/MDOxide/issues/131))
 
 While a cell is **not** focused, it draws in display mode using a formatted galley. Empty text yields a galley with no extent; an interactive `Label` had **zero click size**, so users could not click into new empty slots. The widget now allocates the padded inner rectangle with `allocate_exact_size(.., Sense::click())` and paints the galley at that rect’s origin so the visible cell accepts clicks like populated cells.
 

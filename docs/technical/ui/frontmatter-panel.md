@@ -8,7 +8,7 @@ Visual editor for YAML frontmatter in markdown files. Displayed as the **"FM" ta
 
 - `src/ui/frontmatter_panel.rs` - Content widget, YAML parsing/serialization, form rendering
 - `src/ui/outline_panel.rs` - Hosts the FM tab via `OutlinePanelTab::Frontmatter`
-- `src/app/mod.rs` - `FrontmatterPanel` field on `FerriteApp`, content update + output handling
+- `src/app/mod.rs` - `FrontmatterPanel` field on `MDOxideApp`, content update + output handling
 - `src/app/types.rs` - `KeyboardAction::ToggleFrontmatter`
 - `src/app/keyboard.rs` - Shortcut wiring (`Ctrl+Shift+M` opens outline panel and switches to FM tab)
 - `src/ui/ribbon.rs` - `RibbonAction::ToggleFrontmatter`

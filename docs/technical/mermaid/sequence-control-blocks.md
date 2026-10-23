@@ -2,7 +2,7 @@
 
 ## Overview
 
-Task 17 implements control-flow blocks (`loop`, `alt`, `opt`, `par`) for sequence diagrams in Ferrite's native Mermaid renderer.
+Task 17 implements control-flow blocks (`loop`, `alt`, `opt`, `par`) for sequence diagrams in MDOxide's native Mermaid renderer.
 
 ## Supported Syntax
 

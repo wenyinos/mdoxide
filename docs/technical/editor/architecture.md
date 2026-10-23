@@ -1,8 +1,8 @@
-# Ferrite Editor Architecture
+# MDOxide Editor Architecture
 
 ## Overview
 
-This document defines the architectural principles and constraints for the Ferrite editor component. **All editor features must follow these guidelines** to ensure consistent performance across file sizes from 1KB to 100MB+.
+This document defines the architectural principles and constraints for the MDOxide editor component. **All editor features must follow these guidelines** to ensure consistent performance across file sizes from 1KB to 100MB+.
 
 ## Core Principles
 
@@ -16,7 +16,7 @@ This document defines the architectural principles and constraints for the Ferri
 ├─────────────────────────────────────────────────────────────┤
 │  Tab.content: String (80MB)                                 │
 │       ↓ sync                                                │
-│  FerriteEditor.buffer: Rope (80MB)                          │
+│  MDOxideEditor.buffer: Rope (80MB)                          │
 │                                                             │
 │  Total: 160MB for an 80MB file (2x memory)                  │
 └─────────────────────────────────────────────────────────────┘
@@ -24,7 +24,7 @@ This document defines the architectural principles and constraints for the Ferri
 ┌─────────────────────────────────────────────────────────────┐
 │                     Target (CORRECT)                        │
 ├─────────────────────────────────────────────────────────────┤
-│  FerriteEditor.buffer: Rope (80-100MB)  ← Single source     │
+│  MDOxideEditor.buffer: Rope (80-100MB)  ← Single source     │
 │       ↓ on-demand (save only)                               │
 │  String conversion                                          │
 │                                                             │
@@ -33,7 +33,7 @@ This document defines the architectural principles and constraints for the Ferri
 ```
 
 **Rules:**
-- `Tab.content: String` should be removed or made optional (only for non-Ferrite mode)
+- `Tab.content: String` should be removed or made optional (only for non-MDOxide mode)
 - All content reads go through `TextBuffer` methods
 - String conversion (`to_string()`) only happens on:
   - File save
@@ -110,16 +110,16 @@ let search_end = (cursor_line + 100).min(total_lines);
 
 ### Modular `impl` Pattern
 
-FerriteEditor uses Rust's ability to split `impl` blocks across files. The struct is defined in `editor.rs`, but methods are distributed across logical modules:
+MDOxideEditor uses Rust's ability to split `impl` blocks across files. The struct is defined in `editor.rs`, but methods are distributed across logical modules:
 
 ```
-src/editor/ferrite/
-├── editor.rs       # struct FerriteEditor { ... } + ui() + core methods
-├── selection.rs    # impl FerriteEditor { render_selection(), select_all(), ... }
-├── highlights.rs   # impl FerriteEditor { render_search_highlights(), ... }
-├── find_replace.rs # impl FerriteEditor { replace_current_match(), ... }
-├── mouse.rs        # impl FerriteEditor { pos_to_cursor(), ... }
-└── search.rs       # impl FerriteEditor { search_matches(), set_search_matches(), ... }
+src/editor/mdoxide/
+├── editor.rs       # struct MDOxideEditor { ... } + ui() + core methods
+├── selection.rs    # impl MDOxideEditor { render_selection(), select_all(), ... }
+├── highlights.rs   # impl MDOxideEditor { render_search_highlights(), ... }
+├── find_replace.rs # impl MDOxideEditor { replace_current_match(), ... }
+├── mouse.rs        # impl MDOxideEditor { pos_to_cursor(), ... }
+└── search.rs       # impl MDOxideEditor { search_matches(), set_search_matches(), ... }
 ```
 
 **Benefits:**
@@ -131,9 +131,9 @@ src/editor/ferrite/
 **Pattern:**
 ```rust
 // In selection.rs
-use super::editor::FerriteEditor;
+use super::editor::MDOxideEditor;
 
-impl FerriteEditor {
+impl MDOxideEditor {
     pub fn select_all(&mut self) { ... }
     pub(crate) fn render_selection(&self, ...) { ... }
 }
@@ -264,7 +264,7 @@ Tab {
     ...
 }
 
-FerriteEditor {
+MDOxideEditor {
     buffer: TextBuffer,     // 80MB - authoritative
     cursor: Cursor,
     ...
@@ -283,11 +283,11 @@ Tab {
     ...
 }
 
-FerriteEditorStorage {
-    editors: HashMap<usize, FerriteEditor>,
+MDOxideEditorStorage {
+    editors: HashMap<usize, MDOxideEditor>,
 }
 
-FerriteEditor {
+MDOxideEditor {
     buffer: TextBuffer,     // Single source of truth
     cursor: Cursor,
     view: ViewState,
@@ -341,7 +341,7 @@ FerriteEditor {
 ### Phase 3: Remove Content Duplication ✅ (v0.2.6)
 - [x] `Tab.content` still exists but is synced lazily (not per-frame)
 - [x] Save/export get content from `Tab.content` (synced from editor buffer)
-- [x] FerriteEditor.buffer is the authoritative source during editing
+- [x] MDOxideEditor.buffer is the authoritative source during editing
 - [ ] *Future:* Make `Tab.content` optional for full memory optimization
 
 ### Phase 4: Validate ✅ (v0.2.6)

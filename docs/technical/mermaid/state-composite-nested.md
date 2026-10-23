@@ -1,8 +1,8 @@
-# Composite/Nested States in Ferrite State Diagrams
+# Composite/Nested States in MDOxide State Diagrams
 
 ## Overview
 
-Task 20 implemented support for composite (nested) states in Ferrite's native Mermaid state diagram renderer. This enables hierarchical state machines where states can contain child states with their own transitions.
+Task 20 implemented support for composite (nested) states in MDOxide's native Mermaid state diagram renderer. This enables hierarchical state machines where states can contain child states with their own transitions.
 
 ## Syntax Support
 

@@ -18,7 +18,7 @@ This is a known winit bug introduced after winit 0.27.2 (specifically [winit PR 
 Tracked in:
 - [emilk/egui #2770](https://github.com/emilk/egui/issues/2770) — same GPU, same symptoms
 - [rust-windowing/winit #2109](https://github.com/rust-windowing/winit/issues/2109) — size bug with `set_decorations(false)`
-- [OlaProeis/Ferrite #112](https://github.com/OlaProeis/Ferrite/issues/112) — our user report
+- [OlaProeis/MDOxide #112](https://github.com/OlaProeis/MDOxide/issues/112) — our user report
 
 ## Fix
 
@@ -28,7 +28,7 @@ Add `.with_transparent(true)` to the `ViewportBuilder` in `src/main.rs`:
 let mut viewport = eframe::egui::ViewportBuilder
     ::default()
     .with_title(APP_NAME)
-    .with_app_id("ferrite")
+    .with_app_id("mdoxide")
     .with_decorations(false)
     .with_transparent(true)  // <-- fixes DWM compositing offset
     .with_inner_size([window_size.width, window_size.height])

@@ -122,7 +122,7 @@ fn bump_font_generation() {
 
 ---
 
-### 4. Cache Invalidation (src/editor/ferrite/editor.rs)
+### 4. Cache Invalidation (src/editor/mdoxide/editor.rs)
 
 The editor correctly checks font generation and invalidates cache:
 

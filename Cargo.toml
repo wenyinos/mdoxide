@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.92"
 description = "A native WYSIWYG Markdown editor built with Rust and egui (MarkText-compatible reimplementation)"
-repository = "https://github.com/OlaProeis/Ferrite"
+repository = "https://github.com/wenyinos/mdoxide"
 license = "MIT"
 authors = ["OlaProeis", "MDOxide contributors"]
 keywords = ["markdown", "editor", "text-editor", "egui"]
@@ -157,17 +157,16 @@ opt-level = 2         # Optimize dependencies in dev builds
 # Build with: cargo deb
 # ============================================================================
 [package.metadata.deb]
-name = "ferrite-editor"
-maintainer = "OlaProeis <olaproeis@users.noreply.github.com>"
-copyright = "2024-2026, OlaProeis"
+name = "mdoxide-editor"
+maintainer = "wenyinos <wenyinos@users.noreply.github.com>"
+copyright = "2026, MDOxide contributors"
 license-file = ["LICENSE", "0"]
-extended-description = """Ferrite is a fast, lightweight text editor built with Rust and egui.
+extended-description = """MDOxide is a native WYSIWYG Markdown editor built with Rust and egui.
 Features include:
 - Markdown editing with live preview
 - Split view (raw + rendered side-by-side)
 - JSON/YAML/TOML tree viewer
 - MermaidJS diagram rendering
-- Git integration with file status indicators
 - Syntax highlighting for code blocks
 - Zen mode for distraction-free writing
 - Session persistence and auto-save"""
@@ -176,20 +175,20 @@ priority = "optional"
 depends = "$auto"
 assets = [
     # Binary
-    ["target/release/ferrite", "usr/bin/ferrite", "755"],
+    ["target/release/mdoxide", "usr/bin/mdoxide", "755"],
     # Desktop entry
-    ["assets/icons/linux/ferrite.desktop", "usr/share/applications/ferrite.desktop", "644"],
+    ["assets/icons/linux/dev.mdoxide.app.desktop", "usr/share/applications/dev.mdoxide.app.desktop", "644"],
     # Icons at various sizes
-    ["assets/icons/icon_16.png", "usr/share/icons/hicolor/16x16/apps/ferrite.png", "644"],
-    ["assets/icons/icon_32.png", "usr/share/icons/hicolor/32x32/apps/ferrite.png", "644"],
-    ["assets/icons/icon_48.png", "usr/share/icons/hicolor/48x48/apps/ferrite.png", "644"],
-    ["assets/icons/icon_64.png", "usr/share/icons/hicolor/64x64/apps/ferrite.png", "644"],
-    ["assets/icons/icon_128.png", "usr/share/icons/hicolor/128x128/apps/ferrite.png", "644"],
-    ["assets/icons/icon_256.png", "usr/share/icons/hicolor/256x256/apps/ferrite.png", "644"],
-    ["assets/icons/icon_512.png", "usr/share/icons/hicolor/512x512/apps/ferrite.png", "644"],
+    ["assets/icons/icon_16.png", "usr/share/icons/hicolor/16x16/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_32.png", "usr/share/icons/hicolor/32x32/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_48.png", "usr/share/icons/hicolor/48x48/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_64.png", "usr/share/icons/hicolor/64x64/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_128.png", "usr/share/icons/hicolor/128x128/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_256.png", "usr/share/icons/hicolor/256x256/apps/dev.mdoxide.app.png", "644"],
+    ["assets/icons/icon_512.png", "usr/share/icons/hicolor/512x512/apps/dev.mdoxide.app.png", "644"],
     # Documentation
-    ["README.md", "usr/share/doc/ferrite-editor/README.md", "644"],
-    ["LICENSE", "usr/share/doc/ferrite-editor/LICENSE", "644"],
+    ["README.md", "usr/share/doc/mdoxide-editor/README.md", "644"],
+    ["LICENSE", "usr/share/doc/mdoxide-editor/LICENSE", "644"],
 ]
 
 # ============================================================================
@@ -197,26 +196,26 @@ assets = [
 # Build with: cargo generate-rpm
 # ============================================================================
 [package.metadata.generate-rpm]
-name = "ferrite-editor"
+name = "mdoxide-editor"
 license = "MIT"
-summary = "A fast, lightweight text editor for Markdown, JSON, and more"
-url = "https://github.com/OlaProeis/Ferrite"
+summary = "A native WYSIWYG Markdown editor built with Rust and egui"
+url = "https://github.com/wenyinos/mdoxide"
 assets = [
     # Binary
-    { source = "target/release/ferrite", dest = "/usr/bin/ferrite", mode = "755" },
+    { source = "target/release/mdoxide", dest = "/usr/bin/mdoxide", mode = "755" },
     # Desktop entry
-    { source = "assets/icons/linux/ferrite.desktop", dest = "/usr/share/applications/ferrite.desktop", mode = "644" },
+    { source = "assets/icons/linux/dev.mdoxide.app.desktop", dest = "/usr/share/applications/dev.mdoxide.app.desktop", mode = "644" },
     # Icons at various sizes
-    { source = "assets/icons/icon_16.png", dest = "/usr/share/icons/hicolor/16x16/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_32.png", dest = "/usr/share/icons/hicolor/32x32/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_48.png", dest = "/usr/share/icons/hicolor/48x48/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_64.png", dest = "/usr/share/icons/hicolor/64x64/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_128.png", dest = "/usr/share/icons/hicolor/128x128/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_256.png", dest = "/usr/share/icons/hicolor/256x256/apps/ferrite.png", mode = "644" },
-    { source = "assets/icons/icon_512.png", dest = "/usr/share/icons/hicolor/512x512/apps/ferrite.png", mode = "644" },
+    { source = "assets/icons/icon_16.png", dest = "/usr/share/icons/hicolor/16x16/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_32.png", dest = "/usr/share/icons/hicolor/32x32/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_48.png", dest = "/usr/share/icons/hicolor/48x48/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_64.png", dest = "/usr/share/icons/hicolor/64x64/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_128.png", dest = "/usr/share/icons/hicolor/128x128/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_256.png", dest = "/usr/share/icons/hicolor/256x256/apps/dev.mdoxide.app.png", mode = "644" },
+    { source = "assets/icons/icon_512.png", dest = "/usr/share/icons/hicolor/512x512/apps/dev.mdoxide.app.png", mode = "644" },
     # Documentation
-    { source = "README.md", dest = "/usr/share/doc/ferrite-editor/README.md", mode = "644", doc = true },
-    { source = "LICENSE", dest = "/usr/share/doc/ferrite-editor/LICENSE", mode = "644", doc = true },
+    { source = "README.md", dest = "/usr/share/doc/mdoxide-editor/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/doc/mdoxide-editor/LICENSE", mode = "644", doc = true },
 ]
 
 # ============================================================================
@@ -224,23 +223,8 @@ assets = [
 # Build with: cargo wix
 # ============================================================================
 [package.metadata.wix]
-name = "Ferrite"
-manufacturer = "OlaProeis"
+name = "MDOxide"
+manufacturer = "MDOxide contributors"
 product-icon = "assets/icons/windows/app.ico"
 license = false
 eula = false
-
-# ============================================================================
-# macOS .app bundle configuration (cargo-bundle)
-# Build with: cargo bundle --release
-# ============================================================================
-[package.metadata.bundle]
-name = "Ferrite"
-identifier = "com.olaproeis.ferrite"
-icon = ["assets/icons/macos/Ferrite.icns"]
-short_description = "A fast, lightweight text editor"
-long_description = """Ferrite is a fast, lightweight text editor built with Rust and egui.
-Features include Markdown editing with live preview, JSON/YAML/TOML tree viewer,
-Git integration, and syntax highlighting."""
-category = "public.app-category.developer-tools"
-osx_info_plist_exts = ["assets/macos/info_plist_ext.xml"]

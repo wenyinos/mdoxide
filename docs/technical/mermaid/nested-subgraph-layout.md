@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the implementation of nested subgraph support in Ferrite's flowchart renderer. Mermaid supports subgraphs that can contain other subgraphs, creating a hierarchical structure.
+This document describes the implementation of nested subgraph support in MDOxide's flowchart renderer. Mermaid supports subgraphs that can contain other subgraphs, creating a hierarchical structure.
 
 ## Key Changes (Task 56)
 

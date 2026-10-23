@@ -6,15 +6,15 @@ The main application window implementation using eframe/egui. Handles window lif
 
 ## Key Files
 
-- `src/app.rs` - Main `FerriteApp` struct implementing `eframe::App`
+- `src/app.rs` - Main `MDOxideApp` struct implementing `eframe::App`
 - `src/main.rs` - Application entry point with `eframe::run_native`
 
 ## Implementation Details
 
-### FerriteApp Structure
+### MDOxideApp Structure
 
 ```rust
-pub struct FerriteApp {
+pub struct MDOxideApp {
     state: AppState,              // Central application state
     should_exit: bool,            // Exit flag after confirmation
     last_window_size: Option<egui::Vec2>,  // For detecting changes
@@ -41,9 +41,9 @@ The window title updates reactively based on the active tab:
 
 | State | Title Format |
 |-------|-------------|
-| New file | `Untitled - Ferrite` |
-| Saved file | `filename.md - Ferrite` |
-| Modified | `filename.md* - Ferrite` |
+| New file | `Untitled - MDOxide` |
+| Saved file | `filename.md - MDOxide` |
+| Modified | `filename.md* - MDOxide` |
 
 Implementation uses `ViewportCommand::Title`:
 ```rust

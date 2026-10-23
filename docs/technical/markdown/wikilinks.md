@@ -63,7 +63,7 @@ Supports spaces in filenames (e.g., `[[My Note]]` resolves to `My Note.md`).
 
 When a wikilink is clicked:
 1. `central_panel.rs` captures the target from `MarkdownEditorOutput.wikilink_clicked`
-2. After UI rendering completes (to avoid borrow conflicts), calls `FerriteApp::navigate_wikilink()`
+2. After UI rendering completes (to avoid borrow conflicts), calls `MDOxideApp::navigate_wikilink()`
 3. The method resolves the target path and calls `state.open_file()` to open in a new or existing tab
 4. If resolution fails, an error toast is displayed
 
@@ -75,7 +75,7 @@ No new dependencies. Uses existing:
 
 ## Usage
 
-Open `test_md/test_wikilinks.md` in Ferrite's rendered or split view to test all wikilink scenarios. The test file includes:
+Open `test_md/test_wikilinks.md` in MDOxide's rendered or split view to test all wikilink scenarios. The test file includes:
 - Basic wikilinks and display text variants
 - Spaces in filenames
 - Broken/missing link indicators

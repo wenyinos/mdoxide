@@ -20,7 +20,7 @@ Default-on editor mode (`Settings.quick_note_workflow`, **Settings → Files**):
 
 ## Caveats
 
-- This is the same in **dev** (`cargo run`) and **installed** builds: persistence uses your Ferrite [config directory](./config-persistence.md), not the project folder.
+- This is the same in **dev** (`cargo run`) and **installed** builds: persistence uses your MDOxide [config directory](./config-persistence.md), not the project folder.
 - On **clean exit**, the app saves `session.json` **and** per-tab bodies under `recovery/`. Older versions deleted `recovery/` on exit, which broke restoring pathless tabs; that is fixed by keeping recovery content and only removing the crash snapshot file (`session.recovery.json`).
 - Closing a modified untitled tab via **Don't save** discards that buffer from the open session; **Save** runs Save As. Other open scratch tabs remain in the session for the next run.
 - Turning **Quick note workflow** off restores the original save prompts for new tabs; existing session data is unchanged.

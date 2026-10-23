@@ -1,12 +1,12 @@
 # Code Folding UI Changes
 
-**Issue:** [#12](https://github.com/OlaProeis/Ferrite/issues/12) - Misleading code folding UI  
+**Issue:** [#12](https://github.com/OlaProeis/MDOxide/issues/12) - Misleading code folding UI  
 **Version:** v0.2.2  
 **Status:** Implemented
 
 ## Problem
 
-The code folding feature in Ferrite displays fold indicators (▶/▼) in the editor gutter for JSON/YAML files and Markdown documents. However, clicking these indicators does **not** collapse the content - the collapse functionality is not yet implemented. This caused user confusion as the visual indicators suggested interactive functionality that didn't exist.
+The code folding feature in MDOxide displays fold indicators (▶/▼) in the editor gutter for JSON/YAML files and Markdown documents. However, clicking these indicators does **not** collapse the content - the collapse functionality is not yet implemented. This caused user confusion as the visual indicators suggested interactive functionality that didn't exist.
 
 Additionally, the Rendered view for JSON/YAML files had a "Raw View" button that showed non-editable raw text, which was confusing since users should use the view mode selector to switch to Raw mode for editing.
 

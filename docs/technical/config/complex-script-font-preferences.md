@@ -4,7 +4,7 @@ This document describes the per-script font preference settings for complex scri
 
 ## Overview
 
-Ferrite supports lazy loading of complex script fonts when files containing those scripts are opened. Users can pre-select preferred system fonts for each script family. When a script is detected in text, the user's preferred font (if set) is tried first before falling back to platform-specific defaults.
+MDOxide supports lazy loading of complex script fonts when files containing those scripts are opened. Users can pre-select preferred system fonts for each script family. When a script is detected in text, the user's preferred font (if set) is tried first before falling back to platform-specific defaults.
 
 ## Feature Details
 

@@ -1,6 +1,6 @@
 # Sync Scrolling
 
-Ferrite keeps document position aligned between **Raw**, **Rendered**, and **Split** (raw + preview side-by-side) views. Two mechanisms share the same hybrid top/bottom/middle strategy but run at different times.
+MDOxide keeps document position aligned between **Raw**, **Rendered**, and **Split** (raw + preview side-by-side) views. Two mechanisms share the same hybrid top/bottom/middle strategy but run at different times.
 
 | Mechanism | When | Setting |
 |-----------|------|---------|
@@ -34,7 +34,7 @@ Constants: `SCROLL_BOUNDARY_PX = 5.0` in `src/preview/sync_scroll.rs`.
 
 ## Mode-toggle sync (Ctrl+E)
 
-**Entry:** `FerriteApp::handle_toggle_view_mode()` in `src/app/navigation.rs`.
+**Entry:** `MDOxideApp::handle_toggle_view_mode()` in `src/app/navigation.rs`.
 
 Only runs when `sync_scroll_enabled` and switching between **Raw** and **Rendered** (not Split).
 
@@ -47,7 +47,7 @@ Only runs when `sync_scroll_enabled` and switching between **Raw** and **Rendere
 | `pending_scroll_to_line` | 1-based line for Raw→Rendered lookup |
 | `pending_scroll_anchor` | `(line, fraction)` for split / rendered→raw |
 | `rendered_line_mappings` | `(start_line, end_line, rendered_y)` per block |
-| `raw_line_height` | From Ferrite editor for raw scroll math |
+| `raw_line_height` | From MDOxide editor for raw scroll math |
 
 `Tab::clear_sync_pending_scroll()` clears offset, anchor, ratio, and `pending_scroll_to_line` (not app-level outline `pending_scroll_to_line`).
 
@@ -88,7 +88,7 @@ Sync OFF
 
 ### Anchors
 
-- **Raw:** `EditorOutput.scroll_anchor_line` + `scroll_anchor_fraction` from Ferrite `ViewState` (wrap-aware).
+- **Raw:** `EditorOutput.scroll_anchor_line` + `scroll_anchor_fraction` from MDOxide `ViewState` (wrap-aware).
 - **Preview:** `LineMapping` list from rendered pass; `SyncScrollState::source_anchor_to_preview_y` / `preview_y_to_source_anchor` in `src/preview/sync_scroll.rs`.
 
 ### Bidirectional

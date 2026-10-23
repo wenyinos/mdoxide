@@ -6,7 +6,7 @@ This document describes the idle repaint optimization added to address high CPU 
 
 ## Problem
 
-Issue [#24](https://github.com/OlaProeis/Ferrite/issues/24) reported that Ferrite exhibited high CPU usage on Intel-based Macs, even when the application was idle. This was caused by egui's default repaint behavior combined with the app's periodic checks (auto-save, git refresh, toast messages, etc.) which could cause unnecessary continuous repainting.
+Issue [#24](https://github.com/OlaProeis/MDOxide/issues/24) reported that MDOxide exhibited high CPU usage on Intel-based Macs, even when the application was idle. This was caused by egui's default repaint behavior combined with the app's periodic checks (auto-save, git refresh, toast messages, etc.) which could cause unnecessary continuous repainting.
 
 Intel Macs have different power management behavior compared to Apple Silicon, and may keep the CPU at higher frequencies when the app appears "busy" even for minor operations.
 
@@ -110,14 +110,14 @@ In debug builds, FPS and idle state are logged every 5 seconds:
 
 ### Verification Steps
 
-1. Open Ferrite and let it sit idle for 5+ seconds
+1. Open MDOxide and let it sit idle for 5+ seconds
 2. Check Task Manager/Activity Monitor - CPU should be <1%
 3. Move mouse or type - CPU should briefly increase
 4. Stop interaction - CPU should drop back to <1% after ~2 seconds
 
 ## Related Issues
 
-- [#24](https://github.com/OlaProeis/Ferrite/issues/24) - macOS Intel: High CPU usage, broken sync scroll, wrong window icons
+- [#24](https://github.com/OlaProeis/MDOxide/issues/24) - macOS Intel: High CPU usage, broken sync scroll, wrong window icons
 
 ## Version History
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ferrite Log Analyzer - Analyzes debug logs for performance issues
+MDOxide Log Analyzer - Analyzes debug logs for performance issues
 Specifically designed to identify continuous re-rendering loops and CPU spikes
 """
 
@@ -11,7 +11,7 @@ from datetime import datetime
 
 def parse_log_line(line):
     """Parse a log line and extract timestamp, level, module, and message."""
-    # Pattern: [2026-01-17T05:59:26Z INFO  ferrite] Message
+    # Pattern: [2026-01-17T05:59:26Z INFO  mdoxide] Message
     pattern = r'\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\s+(\w+)\s+([^\]]+)\]\s*(.*)'
     match = re.match(pattern, line.strip())
     if match:
@@ -164,7 +164,7 @@ def analyze_log(filepath):
     print(f"\n[ROOT CAUSE ANALYSIS]")
     
     # Check if it's the markdown editor re-rendering
-    editor_count = module_counts.get('ferrite::markdown::editor', 0)
+    editor_count = module_counts.get('mdoxide::markdown::editor', 0)
     if editor_count > 10000:
         print("""
    The markdown editor is continuously re-rendering list items.
@@ -178,7 +178,7 @@ def analyze_log(filepath):
    Key evidence:
    - Same list items (line 6, 7, 8, 9, etc.) rendered repeatedly
    - ~2000+ messages per second
-   - All from ferrite::markdown::editor module
+   - All from mdoxide::markdown::editor module
    
    Suggested fixes:
    1. Add dirty flag to only re-render when content changes
@@ -197,7 +197,7 @@ def analyze_log(filepath):
 def main():
     if len(sys.argv) < 2:
         # Default to the Intel Mac log file
-        filepath = "docs/ferrite_macos_intel_log.txt"
+        filepath = "docs/mdoxide_macos_intel_log.txt"
     else:
         filepath = sys.argv[1]
     

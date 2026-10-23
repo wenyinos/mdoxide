@@ -2,7 +2,7 @@
 
 ## Overview
 
-Undo recording uses **blake3 hash-based change detection** on `tab.content` so Ferrite avoids unnecessary per-frame `String` clones when taking a diff baseline. The same `Tab::edit_history` stack serves **all** view modes; only the snapshot path differs by mode.
+Undo recording uses **blake3 hash-based change detection** on `tab.content` so MDOxide avoids unnecessary per-frame `String` clones when taking a diff baseline. The same `Tab::edit_history` stack serves **all** view modes; only the snapshot path differs by mode.
 
 ## Problem
 
@@ -29,7 +29,7 @@ Called before editors that may mutate `tab.content`:
 3. **If hash matches**: skip clone — existing snapshot still valid.
 4. **If hash differs**: update snapshot via `clone_from` (reuses buffer capacity) or fresh `clone` if none exists.
 
-**Raw mode** (`EditorWidget::show`): snapshot at frame start; after FerriteEditor marks `content_dirty`, sync rope → `tab.content` → `record_edit_from_snapshot()`.
+**Raw mode** (`EditorWidget::show`): snapshot at frame start; after MDOxideEditor marks `content_dirty`, sync rope → `tab.content` → `record_edit_from_snapshot()`.
 
 **Rendered / tree / split preview** (`central_panel.rs`): same pattern when the widget reports `changed`.
 
@@ -67,7 +67,7 @@ Net effect: eliminates fresh `String` allocations during idle/scrolling when con
 | `src/state.rs` | `undo_content_hash`, `prepare_undo_snapshot_hashed()`, `record_edit_from_snapshot`, `undo`, `redo` |
 | `src/editor/widget.rs` | Raw mode: snapshot + diff on `content_dirty` |
 | `src/app/central_panel.rs` | Rendered / tree / split: snapshot + diff on `changed` |
-| `src/editor/ferrite/history.rs` | `EditHistory`, `compute_edit_ops` |
+| `src/editor/mdoxide/history.rs` | `EditHistory`, `compute_edit_ops` |
 
 ## Related
 

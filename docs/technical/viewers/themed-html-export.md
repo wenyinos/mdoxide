@@ -14,7 +14,7 @@ Standalone HTML export that tracks the editor theme, optional `prefers-color-sch
 |--------|----------|
 | Full document assembly | `generate_html_document_export`, `generate_html_document` (`src/export/html.rs`) |
 | Theme resolution (single / auto light+dark) | `HtmlThemeResolution`, `resolve_html_theme_for_export`, `theme_rules_inner` (`html.rs`) |
-| Syntax highlighting in fences | `FerriteHtmlHighlighter` — `SyntaxHighlighterAdapter`, syntect `append_highlighted_html_for_styled_line` into a `String` then write (`html.rs`) |
+| Syntax highlighting in fences | `MDOxideHtmlHighlighter` — `SyntaxHighlighterAdapter`, syntect `append_highlighted_html_for_styled_line` into a `String` then write (`html.rs`) |
 | Mermaid | `extract_mermaid_fences`, `inject_mermaid_exports`; flowchart SVG `try_flowchart_svg_snippet` (`src/export/flowchart_svg.rs`) |
 | Flowchart types for SVG | Re-exported from `src/markdown/mermaid/mod.rs`; diagram kind `detect_mermaid_diagram_type` from `src/markdown/mod.rs` |
 | Images / relative links | `postprocess_images`, `postprocess_links` (`html.rs`); shared enums in `src/export/options.rs` |

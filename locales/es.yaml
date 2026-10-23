@@ -1,10 +1,10 @@
-# Ferrite - English (Base Language)
+# MDOxide - English (Base Language)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -736,7 +736,7 @@ recovery:
     time_label: 'Último modificado: %{time}'
   session:
     title: Recuperación de sesión
-    crash_detected: Ferrite ha detectado que su sesión anterior no fue cerrada 
+    crash_detected: MDOxide ha detectado que su sesión anterior no fue cerrada 
       apropiadamente.
     restore_question: ¿Le gustaría restaurar su sesión anterior?
     restore: Restaurar Sesión
@@ -780,7 +780,7 @@ about:
     serde: Entramando de serialización
   license: Licencia
   license_type: Licencia MIT
-  copyright: © 2026 Contribuidores de Ferrite
+  copyright: © 2026 Contribuidores de MDOxide
   version: Versión %{version}
 stats:
   no_data: Ninguna estadística disponible
@@ -962,7 +962,7 @@ terminal:
     macros: Macros
   filter:
     terminal_layout: Distribución de terminal
-    ferrite_workspace: Pupitre Ferrite
+    mdoxide_workspace: Pupitre MDOxide
   error:
     shell_not_found: Compruebe que el intérprete esté instalado y la ruta sea 
       correcta

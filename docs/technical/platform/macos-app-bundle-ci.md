@@ -2,7 +2,7 @@
 
 ## Overview
 
-macOS releases are packaged as proper `.app` bundles instead of raw binaries so Finder, Spotlight, and document associations behave like a normal Mac app. **GitHub CI builds are not Developer ID signed or notarized**, so Gatekeeper may still warn or block on downloaded artifacts—see **[macOS install & Gatekeeper](../../install/macos.md)** and [#130](https://github.com/OlaProeis/Ferrite/issues/130).
+macOS releases are packaged as proper `.app` bundles instead of raw binaries so Finder, Spotlight, and document associations behave like a normal Mac app. **GitHub CI builds are not Developer ID signed or notarized**, so Gatekeeper may still warn or block on downloaded artifacts—see **[macOS install & Gatekeeper](../../install/macos.md)** and [#130](https://github.com/OlaProeis/MDOxide/issues/130).
 
 ## Key Changes
 
@@ -12,7 +12,7 @@ Both macOS build jobs (ARM64 and Intel) now:
 
 1. **Install cargo-bundle**: `cargo install cargo-bundle`
 2. **Build app bundle**: `cargo bundle --release` (with `--target` for Intel cross-compile)
-3. **Package `.app` directory**: Copy `target/release/bundle/osx/Ferrite.app` to release archive
+3. **Package `.app` directory**: Copy `target/release/bundle/osx/MDOxide.app` to release archive
 
 ### ARM64 Build (Apple Silicon)
 
@@ -26,8 +26,8 @@ Both macOS build jobs (ARM64 and Intel) now:
 - name: Create release archive
   run: |
     mkdir release
-    cp -R target/release/bundle/osx/Ferrite.app release/
-    tar -czvf ferrite-macos-arm64.tar.gz -C release .
+    cp -R target/release/bundle/osx/MDOxide.app release/
+    tar -czvf mdoxide-macos-arm64.tar.gz -C release .
 ```
 
 ### Intel Build (x86_64)
@@ -42,19 +42,19 @@ Both macOS build jobs (ARM64 and Intel) now:
 - name: Create release archive
   run: |
     mkdir release
-    cp -R target/x86_64-apple-darwin/release/bundle/osx/Ferrite.app release/
-    tar -czvf ferrite-macos-x64.tar.gz -C release .
+    cp -R target/x86_64-apple-darwin/release/bundle/osx/MDOxide.app release/
+    tar -czvf mdoxide-macos-x64.tar.gz -C release .
 ```
 
 ## Bundle Configuration (`Cargo.toml`)
 
 ```toml
 [package.metadata.bundle]
-name = "Ferrite"
-identifier = "com.olaproeis.ferrite"
-icon = ["assets/icons/macos/Ferrite.icns"]
+name = "MDOxide"
+identifier = "com.olaproeis.mdoxide"
+icon = ["assets/icons/macos/MDOxide.icns"]
 short_description = "A fast, lightweight text editor"
-long_description = """Ferrite is a fast, lightweight text editor built with Rust and egui..."""
+long_description = """MDOxide is a fast, lightweight text editor built with Rust and egui..."""
 category = "public.app-category.developer-tools"
 osx_info_plist_exts = ["assets/macos/info_plist_ext.xml"]
 ```
@@ -64,13 +64,13 @@ osx_info_plist_exts = ["assets/macos/info_plist_ext.xml"]
 The generated `.app` bundle contains:
 
 ```
-Ferrite.app/
+MDOxide.app/
 ├── Contents/
 │   ├── Info.plist          # Bundle metadata, file type associations
 │   ├── MacOS/
-│   │   └── ferrite         # Main binary executable
+│   │   └── mdoxide         # Main binary executable
 │   └── Resources/
-│       └── Ferrite.icns    # Application icon
+│       └── MDOxide.icns    # Application icon
 ```
 
 ## File Type Associations
@@ -87,9 +87,9 @@ The `assets/macos/info_plist_ext.xml` extends `Info.plist` with document type de
 
 ### For Users
 
-1. Download `ferrite-macos-arm64.tar.gz` (Apple Silicon) or `ferrite-macos-x64.tar.gz` (Intel)
+1. Download `mdoxide-macos-arm64.tar.gz` (Apple Silicon) or `mdoxide-macos-x64.tar.gz` (Intel)
 2. Extract the archive
-3. Drag `Ferrite.app` to Applications folder
+3. Drag `MDOxide.app` to Applications folder
 4. Launch the app (if Gatekeeper intervenes on downloaded builds, see [`docs/install/macos.md`](../../install/macos.md))
 
 ### For Developers (Local Testing)
@@ -100,7 +100,7 @@ cargo install cargo-bundle
 cargo bundle --release
 
 # The .app will be at:
-# target/release/bundle/osx/Ferrite.app
+# target/release/bundle/osx/MDOxide.app
 ```
 
 ## Dependencies Used
@@ -114,6 +114,6 @@ cargo bundle --release
 | [`docs/install/macos.md`](../../install/macos.md) | User-facing Gatekeeper / quarantine troubleshooting |
 | `.github/workflows/release.yml` | CI workflow for building releases |
 | `Cargo.toml` | Bundle metadata configuration |
-| `assets/icons/macos/Ferrite.icns` | Application icon |
+| `assets/icons/macos/MDOxide.icns` | Application icon |
 | `assets/icons/macos/app.iconset/` | Icon source files |
 | `assets/macos/info_plist_ext.xml` | File type associations |

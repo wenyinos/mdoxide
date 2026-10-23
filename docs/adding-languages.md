@@ -1,6 +1,6 @@
-# Adding Languages to Ferrite
+# Adding Languages to MDOxide
 
-This guide explains how to add new translations to Ferrite and set up community translation workflows.
+This guide explains how to add new translations to MDOxide and set up community translation workflows.
 
 ## Current Status
 
@@ -34,7 +34,7 @@ Edit the new file and translate each string value. Keep the keys (left side) unc
 ```yaml
 # locales/zh-CN.yaml
 app:
-  name: "Ferrite"                        # Keep product name
+  name: "MDOxide"                        # Keep product name
   tagline: "快速、轻量的 Markdown 文本编辑器"
 
 menu:
@@ -116,8 +116,8 @@ cargo test settings::tests::test_language
 
 ### Step 5: Test in the Application
 
-1. Delete `%APPDATA%\ferrite\config.json` (Windows) or `~/.config/ferrite/config.json` (Linux/macOS)
-2. Launch Ferrite - should detect system locale
+1. Delete `%APPDATA%\mdoxide\config.json` (Windows) or `~/.config/mdoxide/config.json` (Linux/macOS)
+2. Launch MDOxide - should detect system locale
 3. Go to Settings → Appearance → Language
 4. Select the new language
 5. Verify all UI strings are translated
@@ -147,7 +147,7 @@ For community-driven translations, consider these platforms:
 
 **Crowdin Config (`.crowdin.yml`):**
 ```yaml
-project_id: "ferrite"
+project_id: "mdoxide"
 api_token_env: "CROWDIN_API_TOKEN"
 base_path: "."
 base_url: "https://api.crowdin.com"
@@ -208,7 +208,7 @@ files:
    ```
 
 3. **Don't translate:**
-   - Product name "Ferrite"
+   - Product name "MDOxide"
    - Technical terms when no good equivalent exists
    - Keyboard shortcuts (Ctrl, Shift, etc.)
 
@@ -333,7 +333,7 @@ The `en.yaml` file is organized into these categories:
 
 ### rust-i18n Crate
 
-Ferrite uses [rust-i18n](https://crates.io/crates/rust-i18n) for internationalization:
+MDOxide uses [rust-i18n](https://crates.io/crates/rust-i18n) for internationalization:
 
 ```rust
 // In src/main.rs

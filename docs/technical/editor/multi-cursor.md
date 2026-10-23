@@ -2,7 +2,7 @@
 
 ## Overview
 
-Multi-cursor editing allows users to edit text at multiple positions simultaneously. This implementation lives entirely within `FerriteEditor` and supports:
+Multi-cursor editing allows users to edit text at multiple positions simultaneously. This implementation lives entirely within `MDOxideEditor` and supports:
 
 - **Ctrl+Click**: Add cursor at clicked position
 - **Simultaneous typing**: Text inserted at all cursor positions
@@ -14,15 +14,15 @@ Multi-cursor editing allows users to edit text at multiple positions simultaneou
 
 | File | Purpose |
 |------|---------|
-| `src/editor/ferrite/editor.rs` | Main implementation - `selections: Vec<Selection>`, edit methods |
-| `src/editor/ferrite/cursor.rs` | `Selection` and `Cursor` types |
+| `src/editor/mdoxide/editor.rs` | Main implementation - `selections: Vec<Selection>`, edit methods |
+| `src/editor/mdoxide/cursor.rs` | `Selection` and `Cursor` types |
 
 ## Implementation Details
 
 ### Data Structure
 
 ```rust
-// In FerriteEditor struct
+// In MDOxideEditor struct
 pub(crate) selections: Vec<Selection>,
 pub(crate) primary_selection_index: usize,
 ```

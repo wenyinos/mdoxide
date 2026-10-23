@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite v0.2.2 introduces a configurable default view mode, allowing users to choose which view mode (Raw, Rendered, or Split) new tabs open in. This addresses [GitHub Issue #3](https://github.com/OlaProeis/Ferrite/issues/3).
+MDOxide v0.2.2 introduces a configurable default view mode, allowing users to choose which view mode (Raw, Rendered, or Split) new tabs open in. This addresses [GitHub Issue #3](https://github.com/OlaProeis/MDOxide/issues/3).
 
 ## Key Files
 
@@ -119,4 +119,4 @@ Tests cover:
 ## Related
 
 - [Settings & Config](./settings-config.md) - Settings system overview
-- [GitHub Issue #3](https://github.com/OlaProeis/Ferrite/issues/3) - Original feature request
+- [GitHub Issue #3](https://github.com/OlaProeis/MDOxide/issues/3) - Original feature request

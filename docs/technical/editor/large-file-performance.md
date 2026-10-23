@@ -157,5 +157,5 @@ Expected behavior:
 
 ## Related Documentation
 
-- [FerriteEditor Technical Docs](ferrite-editor.md)
+- [MDOxideEditor Technical Docs](mdoxide-editor.md)
 - [Memory Optimization Plan](../planning/memory-optimization.md)

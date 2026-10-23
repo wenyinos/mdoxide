@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite v0.2.5 adds support for viewing CSV and TSV files as formatted tables. When opening `.csv` or `.tsv` files, the Rendered view mode displays the data as a scrollable table with fixed-width columns and header highlighting.
+MDOxide v0.2.5 adds support for viewing CSV and TSV files as formatted tables. When opening `.csv` or `.tsv` files, the Rendered view mode displays the data as a scrollable table with fixed-width columns and header highlighting.
 
 ## Key Files
 
@@ -76,7 +76,7 @@ The `CsvViewer` widget provides:
 
 CSV/TSV files follow the same pattern as structured files (JSON/YAML/TOML):
 
-- **Raw mode**: Plain text editor (FerriteEditor) — always editable, including files ≥ 1 MB
+- **Raw mode**: Plain text editor (MDOxideEditor) — always editable, including files ≥ 1 MB
 - **Rendered mode**: Table viewer with inline cell editing for files **&lt; 1 MB**
 - **Split mode**: Left pane raw editor, right pane table viewer (same editing rules as Rendered)
 

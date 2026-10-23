@@ -6,8 +6,8 @@ Ctrl+Mouse Wheel zoom support for the editor, mapped to the same `egui::gui_zoom
 
 ## Key Files
 
-- `src/editor/ferrite/editor.rs` - Hover scroll handler detects Ctrl+scroll via raw `MouseWheel` events, calls `egui::gui_zoom::zoom_in/zoom_out`; event loop skips Ctrl+MouseWheel to prevent double-processing as scroll
-- `src/editor/ferrite/input/mouse.rs` - `handle_mouse_wheel()` returns `NoChange` when `modifiers.command` is true
+- `src/editor/mdoxide/editor.rs` - Hover scroll handler detects Ctrl+scroll via raw `MouseWheel` events, calls `egui::gui_zoom::zoom_in/zoom_out`; event loop skips Ctrl+MouseWheel to prevent double-processing as scroll
+- `src/editor/mdoxide/input/mouse.rs` - `handle_mouse_wheel()` returns `NoChange` when `modifiers.command` is true
 - `src/config/settings.rs` - `ShortcutCommand::ZoomIn/ZoomOut/ResetZoom` enum variants, display names, categories, default bindings (Ctrl+=, Ctrl+-, Ctrl+0)
 - `src/app/keyboard.rs` - Keyboard shortcut dispatch for zoom actions via `egui::gui_zoom`
 - `src/app/types.rs` - `KeyboardAction::ZoomIn/ZoomOut/ResetZoom` variants

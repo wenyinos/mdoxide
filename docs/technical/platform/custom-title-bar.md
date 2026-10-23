@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite uses a custom title bar instead of native OS window decorations. This provides a consistent look across Windows, macOS, and Linux, and allows for integrated menu placement.
+MDOxide uses a custom title bar instead of native OS window decorations. This provides a consistent look across Windows, macOS, and Linux, and allows for integrated menu placement.
 
 ## Key Files
 
@@ -29,7 +29,7 @@ The title bar and menu bar are combined into a single `TopBottomPanel`:
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│ 📝 Filename - Ferrite                                  [_][□][×]  │
+│ 📝 Filename - MDOxide                                  [_][□][×]  │
 │ File  View  Help                                                   │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -39,7 +39,7 @@ The title bar and menu bar are combined into a single `TopBottomPanel`:
 | Element | Description |
 |---------|-------------|
 | App Icon | 📝 emoji placeholder |
-| Window Title | Dynamic: "Filename - Ferrite" |
+| Window Title | Dynamic: "Filename - MDOxide" |
 | Drag Area | Empty space allows window dragging |
 | Minimize | `−` line button, triggers `ViewportCommand::Minimized` |
 | Maximize/Restore | `□`/`❐` button, toggles `ViewportCommand::Maximized` |

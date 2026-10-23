@@ -174,7 +174,7 @@ Get-Location | Select-Object -ExpandProperty Path
 Split-Path -Leaf (Get-Location)
 ```
 
-**Expected:** ✓ Path ends with `test_md` (or parent folder where this file lives) · **not** Ferrite install dir
+**Expected:** ✓ Path ends with `test_md` (or parent folder where this file lives) · **not** MDOxide install dir
 
 ```python
 import os

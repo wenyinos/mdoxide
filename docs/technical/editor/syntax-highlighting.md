@@ -1,10 +1,10 @@
 # Syntax Highlighting
 
-Full-file syntax highlighting for source code files in Ferrite's raw editor mode.
+Full-file syntax highlighting for source code files in MDOxide's raw editor mode.
 
 ## Overview
 
-Ferrite now supports syntax highlighting for source code files (Rust, Python, JavaScript, etc.) in the raw editor mode. This feature uses the existing `syntect` library that was previously only used for code blocks in markdown preview.
+MDOxide now supports syntax highlighting for source code files (Rust, Python, JavaScript, etc.) in the raw editor mode. This feature uses the existing `syntect` library that was previously only used for code blocks in markdown preview.
 
 ## Supported Languages
 
@@ -32,7 +32,7 @@ The setting is enabled by default.
 
 ### How It Works
 
-- When you open a source code file, Ferrite detects the language from the file extension
+- When you open a source code file, MDOxide detects the language from the file extension
 - If syntax highlighting is enabled and the language is recognized, the editor applies colored text formatting
 - Syntax colors automatically adapt to light/dark theme (using `base16-ocean.dark` for dark mode and `InspiredGitHub` for light mode)
 - Markdown files are handled separately by the rendered/WYSIWYG editor, so syntax highlighting only affects other file types in raw mode

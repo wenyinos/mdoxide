@@ -1,6 +1,6 @@
 # Flowchart Layout Algorithm
 
-This document describes the Sugiyama-style layered graph layout algorithm implemented in Task 22 for Ferrite's Mermaid flowchart rendering.
+This document describes the Sugiyama-style layered graph layout algorithm implemented in Task 22 for MDOxide's Mermaid flowchart rendering.
 
 ## Overview
 

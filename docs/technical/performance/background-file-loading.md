@@ -26,7 +26,7 @@ open_file_smart()
 | `LoadingProgress` | `state.rs` | Tracks path, bytes_loaded, total_size |
 | `FileLoadMsg` | `app/types.rs` | Channel message: Progress, Complete, Error |
 
-### Fields on `FerriteApp`
+### Fields on `MDOxideApp`
 
 | Field | Type | Purpose |
 |-------|------|---------|
@@ -61,7 +61,7 @@ When a loading tab is closed, `cleanup_tab_state()` removes the `JoinHandle` fro
 
 ## Entry Points
 
-`open_file_smart()` on `FerriteApp` (in `file_ops.rs`) is the unified entry point. It's called from:
+`open_file_smart()` on `MDOxideApp` (in `file_ops.rs`) is the unified entry point. It's called from:
 - File > Open dialog
 - File tree click
 - Drag and drop

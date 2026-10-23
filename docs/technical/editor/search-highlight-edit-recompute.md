@@ -62,6 +62,6 @@ if content_changed_in_editor
 |------|------|
 | `src/app/central_panel.rs` | Recomputation trigger after edit detection in all 3 view modes |
 | `src/editor/find_replace.rs` | `FindState::find_matches()` — the search engine |
-| `src/editor/widget.rs` | `SearchHighlights` struct passed to `FerriteEditor` |
-| `src/editor/ferrite/search.rs` | `set_search_matches()` — converts byte ranges to `SearchMatch` with pre-computed line numbers |
-| `src/editor/ferrite/highlights.rs` | `render_search_highlights()` — paints highlight rectangles |
+| `src/editor/widget.rs` | `SearchHighlights` struct passed to `MDOxideEditor` |
+| `src/editor/mdoxide/search.rs` | `set_search_matches()` — converts byte ranges to `SearchMatch` with pre-computed line numbers |
+| `src/editor/mdoxide/highlights.rs` | `render_search_highlights()` — paints highlight rectangles |

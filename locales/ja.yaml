@@ -1,10 +1,10 @@
-# Ferrite - Japanese (日本語)
+# MDOxide - Japanese (日本語)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -93,7 +93,7 @@ dialog:
   code_execution_consent:
     title: このドキュメントからコードを実行することを許可しますか？
     body_intro: 
-      フェンス付きスニペットを実行すると、ユーザー権限を使用してコンピュータ上で実際のサブプロセスが開始されます。Ferriteはランナーをサンドボックス化したり、ネットワークアクセスをフィルタリングしたりしません。
+      フェンス付きスニペットを実行すると、ユーザー権限を使用してコンピュータ上で実際のサブプロセスが開始されます。MDOxideはランナーをサンドボックス化したり、ネットワークアクセスをフィルタリングしたりしません。
     body_settings_echo: 
       「設定」→「エディタ」→「コードの実行」と同様の注意点があります。サンドボックス機能はありませんので、信頼できるドキュメントでのみ使用してください。
     enable_and_run: 有効化して実行
@@ -272,7 +272,7 @@ settings:
     syntax_theme: "構文テーマ"
     syntax_theme_hint: "コードの構文強調表示用のカラーテーマ"
     syntax_theme_auto: "自動 (アプリのテーマに合わせる)"
-    accent_color: Ferrite アクセント
+    accent_color: MDOxide アクセント
     accent_color_hint: 見出し 
       (H1～H6）、選択時の色、タブ、およびハイライト表示されたコントロール。ハイパーリンクは標準の青色のままです。
     accent_reset: 色をリセット
@@ -289,7 +289,7 @@ settings:
     conflict_with: "競合 :"
     click_to_change: "クリックしてショートカットを変更"
   about:
-    title: "Ferrite について"
+    title: "MDOxide について"
     description: "Markdown,JSON などに対応した高速で軽量なテキスト エディタ"
     updates: "アップデート"
     check_for_updates: "更新の確認"
@@ -435,9 +435,9 @@ search:
 
 # About dialog
 about:
-  title: "Ferrite について / ヘルプ"
+  title: "MDOxide について / ヘルプ"
   tab:
-    about: "Ferrite について"
+    about: "MDOxide について"
     shortcuts: "ショートカット"
     mermaid: "Mermaid"
   description: "Markdown、JSON などに対応した高速で軽量なテキストエディタです。"
@@ -461,7 +461,7 @@ about:
   # License section
   license: "ライセンス"
   license_type: "MIT ライセンス"
-  copyright: "© 2026 Ferrite Contributors"
+  copyright: "© 2026 MDOxide Contributors"
   version: "バージョン %{version}"
 
 # Keyboard shortcuts
@@ -556,7 +556,7 @@ shortcuts:
     toggle_fold: "折りたたみの切り替え"
     # Other
     open_settings: "設定を開く"
-    open_about: "Ferrite について / ヘルプ"
+    open_about: "MDOxide について / ヘルプ"
     export_html: "HTML をエクスポート"
     insert_toc: "目次を挿入"
   # File shortcuts (for help panel)
@@ -593,7 +593,7 @@ shortcuts:
     zoom_out: "縮小"
     reset_zoom: "ズームをリセット"
     settings: "設定"
-    about: "Ferrite について / ヘルプ"
+    about: "MDOxide について / ヘルプ"
   # Formatting shortcuts (for help panel)
   format:
     bold: "太字"
@@ -727,7 +727,7 @@ recovery:
     time_label: "最終更新 : %{time}"
   session:
     title: "セッションの復元"
-    crash_detected: "Ferrite は、前回のセッションが正常に終了していなかったことを検出しました。"
+    crash_detected: "MDOxide は、前回のセッションが正常に終了していなかったことを検出しました。"
     restore_question: "前回のセッションを復元しますか?"
     restore: "セッションを復元"
     start_fresh: "新しく開始"
@@ -883,7 +883,7 @@ tooltip:
   fullscreen_enter: "全画面表示 (F10)"
   settings: "設定 (Ctrl+,)"
   recent_items: "最近使ったファイルとフォルダーを表示\nShift+クリックでバックグラウンドで開く"
-  about_help: "Ferrite について / ヘルプ (F1)"
+  about_help: "MDOxide について / ヘルプ (F1)"
   git_branch: "現在の Git ブランチ"
   new_tab: "新しいタブ"
 
@@ -913,7 +913,7 @@ welcome:
   label:
     theme: "テーマ"
     language: "言語"
-    accent_color: Ferrite アクセントカラー
+    accent_color: MDOxide アクセントカラー
   line_width_hint: "テキスト行の幅を制限します。Zenモード (F11) でテキストを中央揃えにする場合の値を設定します。"
 
 # Terminal panel
@@ -971,7 +971,7 @@ terminal:
     macros: "マクロ"
   filter:
     terminal_layout: "ターミナルのレイアウト"
-    ferrite_workspace: "Ferrite ワークスペース"
+    mdoxide_workspace: "MDOxide ワークスペース"
   error:
     shell_not_found: "シェルがインストールされ、パスが正しいことを確認してください"
     pty_failed: "PTYの割り当てに失敗しました。他のターミナルを閉じるか、アプリを再起動してください"

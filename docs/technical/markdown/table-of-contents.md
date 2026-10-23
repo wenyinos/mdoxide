@@ -1,10 +1,10 @@
 # Table of Contents Generation
 
-This document describes the Table of Contents (TOC) generation feature in Ferrite.
+This document describes the Table of Contents (TOC) generation feature in MDOxide.
 
 ## Overview
 
-Ferrite can automatically generate a navigable Table of Contents from markdown headings. The TOC is inserted as markdown links that correspond to the document's heading structure.
+MDOxide can automatically generate a navigable Table of Contents from markdown headings. The TOC is inserted as markdown links that correspond to the document's heading structure.
 
 ## Usage
 

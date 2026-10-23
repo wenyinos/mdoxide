@@ -2,13 +2,13 @@
 
 ## Overview
 
-Ferrite supports MermaidJS diagram blocks with **native diagram rendering**. When you create a fenced code block with the `mermaid` language tag, Ferrite parses and renders the diagram visualization inline using egui's native drawing primitives.
+MDOxide supports MermaidJS diagram blocks with **native diagram rendering**. When you create a fenced code block with the `mermaid` language tag, MDOxide parses and renders the diagram visualization inline using egui's native drawing primitives.
 
 ## Features
 
 ### Native Diagram Rendering
 
-Ferrite renders mermaid diagrams natively without any external dependencies:
+MDOxide renders mermaid diagrams natively without any external dependencies:
 - **Zero network requirements** - Works completely offline
 - **Real-time rendering** - Diagrams update as you type (great for split view!)
 - **Theme integration** - Diagrams automatically adapt to light/dark mode
@@ -16,7 +16,7 @@ Ferrite renders mermaid diagrams natively without any external dependencies:
 
 ### Automatic Diagram Type Detection
 
-Ferrite automatically detects the type of Mermaid diagram from the source code and displays an appropriate icon and label. Supported diagram types include:
+MDOxide automatically detects the type of Mermaid diagram from the source code and displays an appropriate icon and label. Supported diagram types include:
 
 | Type | Keyword | Icon |
 |------|---------|------|

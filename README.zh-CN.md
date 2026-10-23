@@ -4,7 +4,7 @@
 
 用 Rust 编写的原生所见即所得 Markdown 编辑器，基于 `egui`/`eframe` —— 不使用 WebView、不打包 Electron、不依赖 JavaScript 运行时。
 
-MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 Rust 重实现，代码基座来自 [Ferrite](https://github.com/OlaProeis/Ferrite)（MIT 协议）。
+MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 Rust 重实现，从一个 MIT 协议的 egui 编辑器基座起步，完整署名见 [`NOTICE`](NOTICE)。
 
 名字来源：**Oxide**（Rust 生态的氧化层意象）+ **MD**（Markdown）。
 
@@ -12,7 +12,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 早期开发阶段。M0（基座 Fork + 改名 + 代码审查）已完成，正在推进 M1（模块裁减与稳定性）与 M2（MarkText 外观重塑）。计划与审查报告见 [`docs/plans/`](docs/plans/)。
 
-## 已具备的能力（继承自 Ferrite）
+## 已具备的能力（继承自 上游）
 
 - 所见即所得 Markdown 编辑：按块切换渲染/编辑态，提交边界撤销
 - CommonMark + GFM（`comrak`），代码高亮（`syntect`）
@@ -41,4 +41,4 @@ cargo build --release      # 产物：target/release/mdoxide
 
 ## 许可证
 
-MIT。MDOxide 派生自 Ferrite（版权所有 © Ola Proeis），并参考 MarkText 的交互设计；完整署名见 [`NOTICE`](NOTICE)。
+MIT。MDOxide 派生自 上游（版权所有 © Ola Proeis），并参考 MarkText 的交互设计；完整署名见 [`NOTICE`](NOTICE)。

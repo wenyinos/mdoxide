@@ -1,11 +1,11 @@
-# Ferrite Command Line Interface
+# MDOxide Command Line Interface
 
-Ferrite supports command-line arguments for opening files and directories directly from the terminal.
+MDOxide supports command-line arguments for opening files and directories directly from the terminal.
 
 ## Usage
 
 ```bash
-ferrite [OPTIONS] [PATH]...
+mdoxide [OPTIONS] [PATH]...
 ```
 
 ## Arguments
@@ -18,19 +18,19 @@ Pass one or more file paths to open them as tabs, or a directory to open it as a
 
 ```bash
 # Open a single file
-ferrite README.md
+mdoxide README.md
 
 # Open multiple files as tabs
-ferrite file1.md file2.md notes.md
+mdoxide file1.md file2.md notes.md
 
 # Open current directory as workspace
-ferrite .
+mdoxide .
 
 # Open a specific directory as workspace
-ferrite ~/projects/my-project
+mdoxide ~/projects/my-project
 
 # Mix of files (first file gets focus)
-ferrite README.md CHANGELOG.md docs/getting-started.md
+mdoxide README.md CHANGELOG.md docs/getting-started.md
 ```
 
 ## Options
@@ -40,8 +40,8 @@ ferrite README.md CHANGELOG.md docs/getting-started.md
 Print help information and exit.
 
 ```bash
-ferrite --help
-ferrite -h
+mdoxide --help
+mdoxide -h
 ```
 
 ### `-V, --version`
@@ -49,8 +49,8 @@ ferrite -h
 Print version information and exit.
 
 ```bash
-ferrite --version
-ferrite -V
+mdoxide --version
+mdoxide -V
 ```
 
 ### `--log-level <LEVEL>`
@@ -61,16 +61,16 @@ Valid values: `debug`, `info`, `warn`, `error`, `off`
 
 ```bash
 # Enable debug logging
-ferrite --log-level debug
+mdoxide --log-level debug
 
 # Show only errors
-ferrite --log-level error
+mdoxide --log-level error
 
 # Disable all logging
-ferrite --log-level off
+mdoxide --log-level off
 
 # Combine with file arguments
-ferrite --log-level debug README.md
+mdoxide --log-level debug README.md
 ```
 
 **Log Level Precedence:**
@@ -116,13 +116,13 @@ When both files and a directory are provided:
 
 ```bash
 # Start with empty editor
-ferrite
+mdoxide
 
 # Edit a markdown file
-ferrite ~/Documents/notes.md
+mdoxide ~/Documents/notes.md
 
 # Open project as workspace
-ferrite ~/projects/my-rust-project
+mdoxide ~/projects/my-rust-project
 ```
 
 ### Shell Integration
@@ -130,35 +130,35 @@ ferrite ~/projects/my-rust-project
 ```bash
 # Open file from pipe (not directly supported, use temp file)
 # Instead, use shell redirection:
-cat file.md | ferrite /dev/stdin  # Linux/macOS
+cat file.md | mdoxide /dev/stdin  # Linux/macOS
 
 # Edit git commit message
-GIT_EDITOR="ferrite" git commit
+GIT_EDITOR="mdoxide" git commit
 
 # Open all markdown files in current directory
-ferrite *.md
+mdoxide *.md
 ```
 
 ### Scripting
 
 ```bash
 # Check version in scripts
-VERSION=$(ferrite --version)
+VERSION=$(mdoxide --version)
 echo "Using $VERSION"
 
 # Conditional launch
 if [ -f "README.md" ]; then
-    ferrite README.md
+    mdoxide README.md
 fi
 ```
 
 ## Environment Variables
 
-Ferrite reads log configuration from `config.json` and supports CLI overrides. The `RUST_LOG` environment variable is no longer used; use `--log-level` instead.
+MDOxide reads log configuration from `config.json` and supports CLI overrides. The `RUST_LOG` environment variable is no longer used; use `--log-level` instead.
 
 | Method | Example | Priority |
 |--------|---------|----------|
-| CLI flag | `ferrite --log-level debug` | Highest |
+| CLI flag | `mdoxide --log-level debug` | Highest |
 | Config file | `"log_level": "debug"` in config.json | Medium |
 | Built-in default | `warn` | Lowest |
 
@@ -168,23 +168,23 @@ Ferrite reads log configuration from `config.json` and supports CLI overrides. T
 
 ```powershell
 # PowerShell
-.\ferrite.exe README.md
+.\mdoxide.exe README.md
 
 # CMD
-ferrite.exe README.md
+mdoxide.exe README.md
 
 # Open current directory
-ferrite.exe .
+mdoxide.exe .
 ```
 
 ### Linux/macOS
 
 ```bash
 # Standard usage
-./ferrite README.md
+./mdoxide README.md
 
 # If installed to PATH
-ferrite README.md
+mdoxide README.md
 ```
 
 ## Related

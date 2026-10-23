@@ -57,7 +57,7 @@ See [`rendered-widget-identity.md`](./rendered-widget-identity.md) and [`rendere
 | Event | Bumps `source_epoch`? |
 |-------|------------------------|
 | Rendered block commit (session close/switch) | **No** |
-| Raw FerriteEditor edit (same tab) | **Yes** |
+| Raw MDOxideEditor edit (same tab) | **Yes** |
 | Undo / redo / file reload / find-replace | **Yes** |
 | Split raw pane edit | **Yes** (rendered pane reloads buffers on next frame) |
 | Rendered keystrokes while block stays active | **No** |

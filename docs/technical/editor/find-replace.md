@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Find and Replace feature provides comprehensive search and replace functionality for Ferrite. It includes real-time incremental search, match highlighting, keyboard navigation, and integration with the undo/redo system.
+The Find and Replace feature provides comprehensive search and replace functionality for MDOxide. It includes real-time incremental search, match highlighting, keyboard navigation, and integration with the undo/redo system.
 
 ## Architecture
 

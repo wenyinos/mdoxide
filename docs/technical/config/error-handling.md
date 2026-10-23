@@ -2,7 +2,7 @@
 
 ## Overview
 
-Centralized error handling module providing a unified error type, custom Result alias, logging integration, and graceful degradation utilities for Ferrite.
+Centralized error handling module providing a unified error type, custom Result alias, logging integration, and graceful degradation utilities for MDOxide.
 
 ## Key Files
 

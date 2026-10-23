@@ -4,7 +4,7 @@
 
 Code folding with gutter fold indicators and content hiding. Supports hierarchical folding for Markdown files (headings, code blocks, lists) and indentation-based folding for code/data files.
 
-**Status:** Fully functional with FerriteEditor.
+**Status:** Fully functional with MDOxideEditor.
 
 ## Key Files
 
@@ -12,9 +12,9 @@ Code folding with gutter fold indicators and content hiding. Supports hierarchic
 |------|---------|
 | `src/state.rs` | `FoldKind`, `FoldRegion`, `FoldState` data structures |
 | `src/editor/folding.rs` | Fold region detection algorithms |
-| `src/editor/widget.rs` | Fold state sync between Tab and FerriteEditor |
-| `src/editor/ferrite/editor.rs` | Click handling, y-position calculation for hidden lines |
-| `src/editor/ferrite/rendering/gutter.rs` | Fold indicator rendering (▶/▼) |
+| `src/editor/widget.rs` | Fold state sync between Tab and MDOxideEditor |
+| `src/editor/mdoxide/editor.rs` | Click handling, y-position calculation for hidden lines |
+| `src/editor/mdoxide/rendering/gutter.rs` | Fold indicator rendering (▶/▼) |
 | `src/config/settings.rs` | Folding configuration settings |
 
 ## Data Structures
@@ -98,19 +98,19 @@ pub fold_indentation: bool,         // Detect indentation folds
 - ✅ Keyboard shortcuts for fold operations
 - ✅ Settings UI for enabling/disabling fold types
 - ✅ **Text hiding** - Collapsed regions hide content and space collapses
-- ✅ Fold state synced between Tab and FerriteEditor
+- ✅ Fold state synced between Tab and MDOxideEditor
 
 ## Implementation Notes
 
 ### Fold Toggle Flow
 
 1. User clicks fold indicator in gutter
-2. `FerriteEditor.ui()` detects click in fold indicator area
+2. `MDOxideEditor.ui()` detects click in fold indicator area
 3. `y_to_line()` converts click position to line number
-4. `fold_state.toggle_at_line()` toggles the fold in FerriteEditor
+4. `fold_state.toggle_at_line()` toggles the fold in MDOxideEditor
 5. `widget.rs` syncs fold state back to Tab: `tab.fold_state = editor.fold_state().clone()`
 
-**Important:** The toggle happens in FerriteEditor and is synced to Tab. Do NOT toggle again in app.rs.
+**Important:** The toggle happens in MDOxideEditor and is synced to Tab. Do NOT toggle again in app.rs.
 
 ### Hidden Line Handling
 

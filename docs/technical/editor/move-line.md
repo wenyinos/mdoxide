@@ -63,7 +63,7 @@ To ensure the cursor follows the moved line, the implementation sets `tab.pendin
 1. Calculate new cursor position (new line start + original column)
 2. Set `tab.pending_cursor_restore = Some(new_cursor_char)`
 
-**Note:** `EditorWidget` should apply this char index to FerriteEditor on the next frame; wiring is incomplete as of v0.3.0 — cursor may lag until a future fix. Line/column on `Tab` is still updated for outline sync.
+**Note:** `EditorWidget` should apply this char index to MDOxideEditor on the next frame; wiring is incomplete as of v0.3.0 — cursor may lag until a future fix. Line/column on `Tab` is still updated for outline sync.
 
 ## Behavior
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite integrates **[harfrust](https://crates.io/crates/harfrust) 0.5.2** (pure-Rust HarfBuzz) for OpenType shaping: GSUB/GPOS, Arabic contextual forms, Indic clusters, etc. The pipeline produces glyph runs with cluster mapping and advances in points.
+MDOxide integrates **[harfrust](https://crates.io/crates/harfrust) 0.5.2** (pure-Rust HarfBuzz) for OpenType shaping: GSUB/GPOS, Arabic contextual forms, Indic clusters, etc. The pipeline produces glyph runs with cluster mapping and advances in points.
 
 **egui 0.34:** Text is rasterized via epaint's **skrifa** / **vello_cpu** backend. HarfRust does **not** replace that stack — it supplies **horizontal advances and cluster boundaries** for complex-script lines while egui still builds per-cluster mini-galleys for drawing.
 
@@ -10,14 +10,14 @@ Ferrite integrates **[harfrust](https://crates.io/crates/harfrust) 0.5.2** (pure
 
 | File | Role |
 |------|------|
-| `src/editor/ferrite/shaping.rs` | `shape_text`, `shape_line_clusters`, `validate_cluster_byte_ranges`, `ShapedCluster`, position-mapping helpers |
+| `src/editor/mdoxide/shaping.rs` | `shape_text`, `shape_line_clusters`, `validate_cluster_byte_ranges`, `ShapedCluster`, position-mapping helpers |
 | `src/fonts.rs` | `ttf_bytes_for_font_id_shaping`, `row_height_for_font`, `needs_complex_script_fonts` |
-| `src/editor/ferrite/line_cache.rs` | `get_shaped_line` — shaped-line LRU cache; `ShapedLine`, `ClusterGalley` |
-| `src/editor/ferrite/editor.rs` | Rendering: `get_shaped_line` before `render_line`; IME cursor x via shaped advances |
-| `src/editor/ferrite/rendering/cursor.rs` | Unwrapped cursor x for complex scripts |
-| `src/editor/ferrite/mouse.rs` | Click-to-column via `shaped_x_to_column` (non-wrapped) |
-| `src/editor/ferrite/selection.rs` | Selection rects via `column_to_x_offset` (non-wrapped) |
-| `src/editor/ferrite/mod.rs` | `mod shaping`; re-exports `ClusterGalley`, `ShapedLine` |
+| `src/editor/mdoxide/line_cache.rs` | `get_shaped_line` — shaped-line LRU cache; `ShapedLine`, `ClusterGalley` |
+| `src/editor/mdoxide/editor.rs` | Rendering: `get_shaped_line` before `render_line`; IME cursor x via shaped advances |
+| `src/editor/mdoxide/rendering/cursor.rs` | Unwrapped cursor x for complex scripts |
+| `src/editor/mdoxide/mouse.rs` | Click-to-column via `shaped_x_to_column` (non-wrapped) |
+| `src/editor/mdoxide/selection.rs` | Selection rects via `column_to_x_offset` (non-wrapped) |
+| `src/editor/mdoxide/mod.rs` | `mod shaping`; re-exports `ClusterGalley`, `ShapedLine` |
 
 ## Architecture
 
@@ -39,7 +39,7 @@ line text
 
 ### Fallback
 
-If shaping is skipped or fails, the standard `get_galley` / `render_line` path runs. Log at `debug` (`ferrite::shaping`).
+If shaping is skipped or fails, the standard `get_galley` / `render_line` path runs. Log at `debug` (`mdoxide::shaping`).
 
 ## Implementation Details
 
@@ -57,7 +57,7 @@ If shaping is skipped or fails, the standard `get_galley` / `render_line` path r
 
 ```bash
 cargo test shaping::          # 31+ unit tests (shape, clusters, roundtrips, validate)
-RUST_LOG=ferrite::shaping=trace cargo run
+RUST_LOG=mdoxide::shaping=trace cargo run
 ```
 
 ## Current scope (post egui 0.34 / task 89.6)

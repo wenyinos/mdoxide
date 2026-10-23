@@ -87,7 +87,7 @@ Test file: `test_md/test_korean.md`
 
 ## Configuration
 
-Settings stored in: `~/.config/ferrite/settings.json` (Linux/macOS) or `%APPDATA%\ferrite\settings.json` (Windows)
+Settings stored in: `~/.config/mdoxide/settings.json` (Linux/macOS) or `%APPDATA%\mdoxide\settings.json` (Windows)
 
 ```json
 {

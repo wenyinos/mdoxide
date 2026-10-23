@@ -92,7 +92,7 @@ tmp/
 temp/
 
 # Local workspace state (should not be committed)
-**/.ferrite/
+**/.mdoxide/
 
 # Build script artifacts
 *.d

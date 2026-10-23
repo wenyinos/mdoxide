@@ -1,4 +1,4 @@
-# Ferrite - English (Base Language)
+# MDOxide - English (Base Language)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
@@ -840,7 +840,7 @@ terminal:
     macros: ""
   filter:
     terminal_layout: ""
-    ferrite_workspace: ""
+    mdoxide_workspace: ""
   error:
     shell_not_found: ""
     pty_failed: ""

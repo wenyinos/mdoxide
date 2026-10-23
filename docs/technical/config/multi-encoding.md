@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite v0.2.6 adds comprehensive character encoding support, allowing users to open, edit, and save files in various encodings beyond UTF-8. The encoding is auto-detected on file open and can be manually changed via the status bar.
+MDOxide v0.2.6 adds comprehensive character encoding support, allowing users to open, edit, and save files in various encodings beyond UTF-8. The encoding is auto-detected on file open and can be manually changed via the status bar.
 
 ## Key Files
 

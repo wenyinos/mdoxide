@@ -4,7 +4,7 @@ Automatic Git status refreshing for file tree indicators and status bar branch d
 
 ## Overview
 
-Ferrite automatically refreshes Git status information to keep the UI in sync with the actual repository state. This ensures that file tree status badges and the branch indicator remain accurate without requiring manual refresh.
+MDOxide automatically refreshes Git status information to keep the UI in sync with the actual repository state. This ensures that file tree status badges and the branch indicator remain accurate without requiring manual refresh.
 
 ## Refresh Triggers
 
@@ -12,7 +12,7 @@ Ferrite automatically refreshes Git status information to keep the UI in sync wi
 When a file is saved (Ctrl+S or File > Save), git status is refreshed to update indicators for the saved file and any dependent status (e.g., staging area changes).
 
 ### 2. On Window Focus
-When the Ferrite window regains focus (e.g., after switching back from another application), git status is refreshed. This catches changes made by external tools like `git add`, `git commit`, or other editors.
+When the MDOxide window regains focus (e.g., after switching back from another application), git status is refreshed. This catches changes made by external tools like `git add`, `git commit`, or other editors.
 
 ### 3. Periodic Refresh (Every 10 Seconds)
 While a workspace is open with a git repository, status is refreshed every 10 seconds. This catches external changes from:
@@ -107,7 +107,7 @@ Located in `src/vcs/git.rs`:
 |------|-------|----------|
 | Auto-refresh | 1. Open workspace with git repo<br>2. Modify a file externally<br>3. Wait up to 10 seconds | File tree badge updates |
 | Save trigger | 1. Modify and save a file | Status badge updates immediately |
-| Focus trigger | 1. Switch to terminal, run `git add .`<br>2. Switch back to Ferrite | Badges update on focus |
+| Focus trigger | 1. Switch to terminal, run `git add .`<br>2. Switch back to MDOxide | Badges update on focus |
 | Debounce | 1. Save files rapidly | Only one refresh executes |
 
 ## Related Documentation

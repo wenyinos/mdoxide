@@ -5,7 +5,7 @@
 
 ## Overview
 
-Ferrite now supports YAML frontmatter in Mermaid diagrams, allowing users to specify diagram titles and configuration options. This follows the [Mermaid.js frontmatter specification](https://mermaid.js.org/config/frontmatter.html).
+MDOxide now supports YAML frontmatter in Mermaid diagrams, allowing users to specify diagram titles and configuration options. This follows the [Mermaid.js frontmatter specification](https://mermaid.js.org/config/frontmatter.html).
 
 ## Syntax
 
@@ -25,7 +25,7 @@ flowchart TD
 
 ### Title Display
 
-When a `title` is specified in the frontmatter, Ferrite displays it above the diagram:
+When a `title` is specified in the frontmatter, MDOxide displays it above the diagram:
 
 - **Font size:** 1.3x the diagram font size
 - **Style:** Bold

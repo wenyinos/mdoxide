@@ -1,6 +1,6 @@
 # Command Palette
 
-Searchable command launcher accessible via **Alt+Space** (configurable). Addresses [#59](https://github.com/OlaProeis/Ferrite/issues/59) as an alternative to traditional text menus — all application actions are discoverable through fuzzy search.
+Searchable command launcher accessible via **Alt+Space** (configurable). Addresses [#59](https://github.com/OlaProeis/MDOxide/issues/59) as an alternative to traditional text menus — all application actions are discoverable through fuzzy search.
 
 ## Architecture
 

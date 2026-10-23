@@ -1,10 +1,10 @@
-# Ferrite - Norwegian Bokmål (Norsk bokmål)
+# MDOxide - Norwegian Bokmål (Norsk bokmål)
 # This file contains all user-facing strings for internationalization.
 # Naming convention: category.subcategory.key (e.g., menu.file.open)
 
 # Application metadata
 app:
-  name: "Ferrite"
+  name: "MDOxide"
 
 # Menu bar items
 menu:
@@ -186,7 +186,7 @@ about:
   # License section
   license: "Lisens"
   license_type: "MIT-lisens"
-  copyright: "© 2026 Ferrite-bidragsytere"
+  copyright: "© 2026 MDOxide-bidragsytere"
   version: "Versjon %{version}"
 
 # Keyboard shortcuts

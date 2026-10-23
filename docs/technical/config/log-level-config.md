@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite v0.2.2 introduces configurable log levels, allowing users to control the verbosity of log output. This addresses [GitHub Issue #11](https://github.com/OlaProeis/Ferrite/issues/11).
+MDOxide v0.2.2 introduces configurable log levels, allowing users to control the verbosity of log output. This addresses [GitHub Issue #11](https://github.com/OlaProeis/MDOxide/issues/11).
 
 ## Key Files
 
@@ -40,7 +40,7 @@ pub enum LogLevel {
 
 Log level is determined in this order (highest priority first):
 
-1. **CLI flag** - `ferrite --log-level debug`
+1. **CLI flag** - `mdoxide --log-level debug`
 2. **Config file** - `"log_level": "debug"` in config.json
 3. **Built-in default** - `warn`
 
@@ -68,16 +68,16 @@ env_logger::Builder::new()
 
 ```bash
 # Enable debug logging
-ferrite --log-level debug
+mdoxide --log-level debug
 
 # Show only errors  
-ferrite --log-level error
+mdoxide --log-level error
 
 # Disable all logging
-ferrite --log-level off
+mdoxide --log-level off
 
 # Combine with file arguments
-ferrite --log-level debug README.md
+mdoxide --log-level debug README.md
 ```
 
 ### Config File
@@ -117,4 +117,4 @@ Tests cover:
 
 - [CLI Reference](../cli.md) - Full CLI documentation
 - [Settings & Config](./settings-config.md) - Settings system overview
-- [GitHub Issue #11](https://github.com/OlaProeis/Ferrite/issues/11) - Original feature request
+- [GitHub Issue #11](https://github.com/OlaProeis/MDOxide/issues/11) - Original feature request

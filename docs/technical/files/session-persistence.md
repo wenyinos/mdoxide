@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ferrite implements crash-safe session persistence that saves and restores the full editor session state (open tabs, active tab, scroll positions, cursor positions, and unsaved content) across restarts and after crashes.
+MDOxide implements crash-safe session persistence that saves and restores the full editor session state (open tabs, active tab, scroll positions, cursor positions, and unsaved content) across restarts and after crashes.
 
 ## Architecture
 
@@ -50,9 +50,9 @@ The session persistence system consists of three main components:
 
 All session files are stored in the user's config directory:
 
-- **Windows**: `%APPDATA%\ferrite\`
-- **macOS**: `~/Library/Application Support/ferrite/`
-- **Linux**: `~/.config/ferrite/`
+- **Windows**: `%APPDATA%\mdoxide\`
+- **macOS**: `~/Library/Application Support/mdoxide/`
+- **Linux**: `~/.config/mdoxide/`
 
 Files:
 - `session.json` - Clean session state (saved on normal shutdown)
@@ -121,7 +121,7 @@ When crash recovery is detected with unsaved changes, a modal dialog appears off
 - **Restore Session**: Restores all tabs from the previous session, including recovered unsaved content
 - **Start Fresh**: Discards the recovery data and starts with an empty editor
 
-If Ferrite was launched with file paths (e.g. double-click while the app was closed), those paths are **deferred** until the user answers the dialog, then opened afterward (existing tabs with the same path are focused, not duplicated).
+If MDOxide was launched with file paths (e.g. double-click while the app was closed), those paths are **deferred** until the user answers the dialog, then opened afterward (existing tabs with the same path are focused, not duplicated).
 
 ### Recovery vs. Disk Conflict Banner (task 106.5)
 
@@ -155,7 +155,7 @@ content in three layers, in order:
 
 1. **Legacy bypass.** Pre-task-106 files have neither `path` nor
    `original_content_hash` set. They fall back to historical "tab id only"
-   matching so users upgrading from older Ferrite versions don't lose
+   matching so users upgrading from older MDOxide versions don't lose
    recovered text. No conflict banner can be raised in this branch.
 2. **Path equality.** `recovered.path` must equal `session_tab.path` (covers
    untitled tabs via `None == None`). A mismatch indicates a reused tab id and

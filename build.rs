@@ -1,4 +1,4 @@
-//! Build script for Ferrite
+//! Build script for MDOxide
 //!
 //! This script handles platform-specific build tasks:
 //! - Windows: Embeds the application icon into the executable

@@ -34,7 +34,7 @@ While indexing, Ctrl+P and Ctrl+Shift+F show an **animated progress bar** and **
 
 ## File List Selection
 
-`FerriteApp::workspace_files_for_search`:
+`MDOxideApp::workspace_files_for_search`:
 
 | State | File list |
 |-------|-----------|
