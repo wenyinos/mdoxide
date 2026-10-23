@@ -329,6 +329,32 @@ impl MDOxideApp {
                     egui::Sense::hover()
                 );
 
+                // Compute the + button slot first: it participates in the last row's width.
+                let (plus_x, plus_row) = if tab_positions.is_empty() || tab_widths.is_empty() {
+                    (0.0, 0usize)
+                } else {
+                    let last_pos = tab_positions.last().unwrap();
+                    let last_width = *tab_widths.last().unwrap();
+                    if last_pos.0 + last_width + tab_spacing + plus_btn_width > available_width {
+                        (0.0, last_pos.1 + 1)
+                    } else {
+                        (last_pos.0 + last_width + tab_spacing, last_pos.1)
+                    }
+                };
+
+                // MarkText centers the tab strip: centre each row independently.
+                let mut row_extents: Vec<f32> = vec![0.0; total_rows];
+                for ((x_pos, row), tab_width) in tab_positions.iter().zip(tab_widths.iter()) {
+                    row_extents[*row] = row_extents[*row].max(*x_pos + *tab_width);
+                }
+                if let Some(extent) = row_extents.get_mut(plus_row) {
+                    *extent = extent.max(plus_x + plus_btn_width);
+                }
+                let row_offsets: Vec<f32> = row_extents
+                    .iter()
+                    .map(|width| ((available_width - width) / 2.0).max(0.0))
+                    .collect();
+
                 // Render tabs
                 let is_dark = ui.visuals().dark_mode;
                 let selected_bg = ui.visuals().selection.bg_fill;
@@ -347,8 +373,10 @@ impl MDOxideApp {
                     // Use pre-calculated tab width for consistency
                     let tab_width = *tab_width;
 
+                    let row_offset = row_offsets.get(*row).copied().unwrap_or(0.0);
                     let tab_rect = egui::Rect::from_min_size(
-                        tab_bar_rect.min + egui::vec2(*x_pos, (*row as f32) * (tab_height + 2.0)),
+                        tab_bar_rect.min
+                            + egui::vec2(row_offset + *x_pos, (*row as f32) * (tab_height + 2.0)),
                         egui::vec2(tab_width, tab_height)
                     );
 
@@ -468,30 +496,12 @@ impl MDOxideApp {
                     }
                 }
 
-                // Draw + button - use pre-calculated tab widths for consistency
-                let plus_x = if tab_positions.is_empty() || tab_widths.is_empty() {
-                    0.0
-                } else {
-                    let last_pos = tab_positions.last().unwrap();
-                    let last_width = *tab_widths.last().unwrap();
-
-                    if last_pos.0 + last_width + tab_spacing + plus_btn_width > available_width {
-                        0.0 // Wrap to next row
-                    } else {
-                        last_pos.0 + last_width + tab_spacing
-                    }
-                };
-                let plus_row = if tab_positions.is_empty() {
-                    0
-                } else if plus_x == 0.0 && !tab_positions.is_empty() {
-                    tab_positions.last().unwrap().1 + 1
-                } else {
-                    tab_positions.last().unwrap().1
-                };
-
+                // Draw + button in the centred last row
+                let plus_offset = row_offsets.get(plus_row).copied().unwrap_or(0.0);
                 let plus_rect = egui::Rect::from_min_size(
-                    tab_bar_rect.min + egui::vec2(plus_x, (plus_row as f32) * (tab_height + 2.0)),
-                    egui::vec2(plus_btn_width, tab_height)
+                    tab_bar_rect.min
+                        + egui::vec2(plus_offset + plus_x, (plus_row as f32) * (tab_height + 2.0)),
+                    egui::vec2(plus_btn_width, tab_height),
                 );
                 let plus_response = ui.interact(
                     plus_rect,
