@@ -10,7 +10,7 @@
   - ✅ 打字机/专注模式、选区浮动格式条、标题/引用源码标记淡显
   - ✅ MarkText 键位表（Ctrl+B/I/K、Ctrl+1–6、Ctrl+Shift+B/N、Ctrl+Q）
   - ✅ IME 组合输入：预编辑/提交/取消状态机、预编辑绘制、候选窗定位（6 项自动化测试覆盖，含 `ui()` 端到端路径）
-  - ⏳ 真机 fcitx5 走查按 [`docs/plans/M3-走查清单.md`](docs/plans/M3-走查清单.md) 手工确认
+  - ✅ fcitx5 真机走查（Wayland）：预编辑、候选窗、组合中 Backspace、空格提交、Esc 取消、连续组合均通过；未覆盖项见 [`docs/plans/M3-走查清单.md`](docs/plans/M3-走查清单.md)
 
 ## 进行中
 
