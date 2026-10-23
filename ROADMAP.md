@@ -18,7 +18,7 @@
 
 ## 计划中
 
-- **M3 交互对齐**：光标所在块源码标记淡显、选区浮动格式条、打字机/专注模式、MarkText 键位表、fcitx5 IME 验证
+- **M3 交互对齐**：打字机/专注模式、选区浮动格式条、MarkText 键位表（Ctrl+B/I/K、Ctrl+1–6、Ctrl+Shift+B/N、Ctrl+Q 均已接线）已完成；待办：光标所在块源码标记淡显、fcitx5 IME 手工走查
 - **M4 导出与扩展**：HTML/PDF 导出质量走查（hayro → typst 备选）、front matter、emoji；数学公式与 PlantUML 首版降级
 - **M5 发布**：RPM / DEB / Windows NSIS 打包脚本与 release 工作流已就位（`scripts/package-linux.sh`、`installer/windows/mdoxide.nsi`）；偏好设置面板、拼写检查、大文件性能仍待完成
 

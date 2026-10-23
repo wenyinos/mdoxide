@@ -3032,10 +3032,28 @@ fn render_heading(
     }
 
     let available_width = ui.available_width();
+    // MarkText fades the source marker in only while the block is being edited.
+    let show_marker = session.active == Some(block_ref);
+    let marker = "#".repeat(match level {
+        HeadingLevel::H1 => 1,
+        HeadingLevel::H2 => 2,
+        HeadingLevel::H3 => 3,
+        HeadingLevel::H4 => 4,
+        HeadingLevel::H5 => 5,
+        HeadingLevel::H6 => 6,
+    });
     let (has_focus, selection) = ui
         .horizontal(|ui| {
             ui.set_max_width(available_width);
             ui.add_space(4.0);
+
+            if show_marker {
+                ui.label(
+                    RichText::new(format!("{marker} "))
+                        .font(FontId::new(font_size * 0.75, font_family.clone()))
+                        .color(colors.blockquote_text.gamma_multiply(0.55)),
+                );
+            }
 
             let mut output = {
                 let block_state = session
@@ -3357,9 +3375,23 @@ fn render_blockquote_with_structural_keys(
     const BORDER_GAP: f32 = 8.0;
 
     let available_width = ui.available_width();
+    // Show a faint ">" while the caret is inside this quote (MarkText behaviour).
+    let quote_focused = edit_state
+        .focused_node
+        .and_then(|id| edit_state.nodes.iter().find(|n| n.id == id))
+        .is_some_and(|n| n.start_line >= node.start_line && n.start_line <= node.end_line);
     let group_response = ui.horizontal(|ui| {
         ui.set_max_width(available_width);
         ui.add_space(BASE_INDENT + BORDER_WIDTH + BORDER_GAP);
+
+        if quote_focused {
+            ui.label(
+                RichText::new(">")
+                    .font(FontId::new(font_size, fonts::get_base_font_family(editor_font)))
+                    .color(colors.quote_border),
+            );
+            ui.add_space(4.0);
+        }
 
         ui.vertical(|ui| {
             for child in &node.children {

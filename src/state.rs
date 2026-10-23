@@ -2208,7 +2208,8 @@ impl Tab {
         }
 
         if self.is_modified() {
-            format!("{}*", name)
+            // MarkText uses a dot rather than an asterisk for unsaved changes.
+            format!("{} ●", name)
         } else {
             name
         }
