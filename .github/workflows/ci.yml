@@ -1,8 +1,11 @@
-# PR CI — compile and test with project MSRV (rust-toolchain.toml)
+# CI — compile and test with the project toolchain (rust-toolchain.toml)
 name: CI
 
 on:
+  push:
+    branches: [master]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

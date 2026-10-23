@@ -2,7 +2,6 @@
 //!
 //! This module provides a collapsible left sidebar that displays
 //! the workspace file tree with icons, expand/collapse, and click-to-open.
-//! Supports Git status badges when in a Git repository.
 
 // Allow dead code - includes panel sizing methods and constants for future
 // configurable panel width and drag-to-resize functionality
@@ -11,12 +10,10 @@
 use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
 use crate::ui::icons::{phosphor_font, phosphor_rich_text};
 use crate::ui::phosphor_icons::{CARET_DOWN, CARET_RIGHT, FOLDER, X};
-use crate::vcs::GitFileStatus;
 use crate::workspaces::{FileTreeNode, FileTreeNodeKind};
 use eframe::egui::{self, Color32, RichText, Sense, Ui, Vec2};
 use rust_i18n::t;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Default width of the file tree panel.
 const DEFAULT_PANEL_WIDTH: f32 = 250.0;
@@ -121,14 +118,12 @@ impl FileTreePanel {
     /// * `file_tree` - The file tree root node
     /// * `workspace_name` - Name to display in the panel header
     /// * `is_dark` - Whether dark theme is active
-    /// * `git_statuses` - Optional map of file paths to Git statuses
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         file_tree: &FileTreeNode,
         workspace_name: &str,
         is_dark: bool,
-        git_statuses: Option<&HashMap<PathBuf, GitFileStatus>>,
     ) -> FileTreeOutput {
         let mut output = FileTreeOutput::default();
 
@@ -202,7 +197,7 @@ impl FileTreePanel {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.add_space(4.0);
-                        self.render_tree_node(ui, file_tree, 0, is_dark, &mut output, git_statuses);
+                        self.render_tree_node(ui, file_tree, 0, is_dark, &mut output);
                         ui.add_space(4.0);
                     });
 
@@ -220,7 +215,6 @@ impl FileTreePanel {
         depth: usize,
         is_dark: bool,
         output: &mut FileTreeOutput,
-        git_statuses: Option<&HashMap<PathBuf, GitFileStatus>>,
     ) {
         let indent = depth as f32 * INDENT_PER_LEVEL;
 
@@ -251,18 +245,6 @@ impl FileTreePanel {
 
         // Check if this directory needs to be loaded
         let needs_loading = matches!(node.kind, FileTreeNodeKind::DirectoryNotLoaded);
-
-        // Get Git status for this node
-        let git_status = git_statuses
-            .and_then(|statuses| {
-                if is_dir {
-                    // For directories, aggregate child statuses
-                    Self::get_directory_status(&node.path, statuses)
-                } else {
-                    statuses.get(&node.path).copied()
-                }
-            })
-            .unwrap_or(GitFileStatus::Clean);
 
         // Calculate row height for consistent sizing
         let row_height = 20.0;
@@ -309,14 +291,12 @@ impl FileTreePanel {
         );
         content_pos.x += 18.0; // Space for icon
 
-        // Name - color based on Git status
-        let name_color = Self::get_status_color(git_status, text_color, is_dark);
         ui.painter().text(
             content_pos,
             egui::Align2::LEFT_TOP,
             &node.name,
             egui::FontId::proportional(12.0),
-            name_color,
+            text_color,
         );
 
         // Calculate name width for badge positioning
@@ -328,18 +308,6 @@ impl FileTreePanel {
             )
         });
         content_pos.x += name_galley.size().x + 4.0;
-
-        // Git status badge (if not clean)
-        if git_status.is_visible() {
-            let badge_color = Self::get_badge_color(git_status, is_dark);
-            ui.painter().text(
-                content_pos,
-                egui::Align2::LEFT_TOP,
-                git_status.icon(),
-                egui::FontId::proportional(10.0),
-                badge_color,
-            );
-        }
 
         // Handle click
         if row_response.clicked() {
@@ -357,13 +325,7 @@ impl FileTreePanel {
             }
         }
 
-        // Context menu with Git status tooltip
-        let tooltip = if git_status.is_visible() {
-            format!("{} ({})", node.name, Self::status_description(git_status))
-        } else {
-            node.name.clone()
-        };
-        row_response.clone().on_hover_text(&tooltip);
+        row_response.clone().on_hover_text(&node.name);
 
         row_response.context_menu(|ui| {
             self.render_context_menu(ui, node, output);
@@ -373,198 +335,11 @@ impl FileTreePanel {
         if let FileTreeNodeKind::Directory { children } = &node.kind {
             if node.is_expanded {
                 for child in children {
-                    self.render_tree_node(ui, child, depth + 1, is_dark, output, git_statuses);
+                    self.render_tree_node(ui, child, depth + 1, is_dark, output);
                 }
             }
         }
         // Note: DirectoryNotLoaded nodes won't render children until loaded
-    }
-
-    /// Get the Git status color for file/folder names.
-    fn get_status_color(status: GitFileStatus, default: Color32, is_dark: bool) -> Color32 {
-        match status {
-            GitFileStatus::Clean => default,
-            GitFileStatus::Modified | GitFileStatus::StagedModified => {
-                if is_dark {
-                    Color32::from_rgb(230, 180, 80) // Yellow/orange for dark
-                } else {
-                    Color32::from_rgb(180, 120, 0) // Darker orange for light
-                }
-            }
-            GitFileStatus::Staged => {
-                if is_dark {
-                    Color32::from_rgb(100, 200, 120) // Green for dark
-                } else {
-                    Color32::from_rgb(40, 140, 60) // Darker green for light
-                }
-            }
-            GitFileStatus::Untracked => {
-                if is_dark {
-                    Color32::from_rgb(150, 200, 150) // Light green for dark
-                } else {
-                    Color32::from_rgb(80, 140, 80) // Medium green for light
-                }
-            }
-            GitFileStatus::Ignored => {
-                if is_dark {
-                    Color32::from_rgb(120, 120, 120) // Gray for dark
-                } else {
-                    Color32::from_rgb(160, 160, 160) // Gray for light
-                }
-            }
-            GitFileStatus::Deleted => {
-                if is_dark {
-                    Color32::from_rgb(220, 100, 100) // Red for dark
-                } else {
-                    Color32::from_rgb(180, 60, 60) // Darker red for light
-                }
-            }
-            GitFileStatus::Renamed => {
-                if is_dark {
-                    Color32::from_rgb(130, 180, 240) // Blue for dark
-                } else {
-                    Color32::from_rgb(50, 100, 170) // Darker blue for light
-                }
-            }
-            GitFileStatus::Conflict => {
-                if is_dark {
-                    Color32::from_rgb(240, 80, 80) // Bright red for dark
-                } else {
-                    Color32::from_rgb(200, 40, 40) // Red for light
-                }
-            }
-        }
-    }
-
-    /// Get the badge color for Git status icons.
-    fn get_badge_color(status: GitFileStatus, is_dark: bool) -> Color32 {
-        match status {
-            GitFileStatus::Clean => Color32::TRANSPARENT,
-            GitFileStatus::Modified => {
-                if is_dark {
-                    Color32::from_rgb(255, 200, 100) // Yellow
-                } else {
-                    Color32::from_rgb(200, 140, 0)
-                }
-            }
-            GitFileStatus::Staged => {
-                if is_dark {
-                    Color32::from_rgb(100, 220, 100) // Green
-                } else {
-                    Color32::from_rgb(40, 160, 40)
-                }
-            }
-            GitFileStatus::StagedModified => {
-                if is_dark {
-                    Color32::from_rgb(200, 180, 100) // Yellow-green
-                } else {
-                    Color32::from_rgb(160, 140, 40)
-                }
-            }
-            GitFileStatus::Untracked => {
-                if is_dark {
-                    Color32::from_rgb(160, 220, 160) // Light green
-                } else {
-                    Color32::from_rgb(100, 160, 100)
-                }
-            }
-            GitFileStatus::Ignored => {
-                if is_dark {
-                    Color32::from_rgb(140, 140, 140) // Gray
-                } else {
-                    Color32::from_rgb(120, 120, 120)
-                }
-            }
-            GitFileStatus::Deleted => {
-                if is_dark {
-                    Color32::from_rgb(255, 120, 120) // Red
-                } else {
-                    Color32::from_rgb(200, 60, 60)
-                }
-            }
-            GitFileStatus::Renamed => {
-                if is_dark {
-                    Color32::from_rgb(140, 190, 255) // Blue
-                } else {
-                    Color32::from_rgb(60, 120, 200)
-                }
-            }
-            GitFileStatus::Conflict => {
-                if is_dark {
-                    Color32::from_rgb(255, 80, 80) // Bright red
-                } else {
-                    Color32::from_rgb(220, 40, 40)
-                }
-            }
-        }
-    }
-
-    /// Get a human-readable description for a Git status.
-    fn status_description(status: GitFileStatus) -> String {
-        match status {
-            GitFileStatus::Clean => t!("git.tracked").to_string(),
-            GitFileStatus::Modified => t!("git.modified").to_string(),
-            GitFileStatus::Staged => t!("git.staged").to_string(),
-            GitFileStatus::StagedModified => t!("git.staged_modified").to_string(),
-            GitFileStatus::Untracked => t!("git.untracked").to_string(),
-            GitFileStatus::Ignored => t!("git.ignored").to_string(),
-            GitFileStatus::Deleted => t!("git.deleted").to_string(),
-            GitFileStatus::Renamed => t!("git.renamed").to_string(),
-            GitFileStatus::Conflict => t!("git.conflict").to_string(),
-        }
-    }
-
-    /// Get the aggregated Git status for a directory.
-    ///
-    /// Returns the "worst" status among all files in the directory.
-    fn get_directory_status(
-        dir_path: &Path,
-        statuses: &HashMap<PathBuf, GitFileStatus>,
-    ) -> Option<GitFileStatus> {
-        let mut worst = GitFileStatus::Clean;
-        let mut found_any = false;
-
-        for (path, status) in statuses {
-            if path.starts_with(dir_path) {
-                found_any = true;
-                worst = Self::worse_status(worst, *status);
-                // Conflict is worst, can stop early
-                if matches!(worst, GitFileStatus::Conflict) {
-                    break;
-                }
-            }
-        }
-
-        if found_any && worst.is_visible() {
-            Some(worst)
-        } else {
-            None
-        }
-    }
-
-    /// Compare two statuses and return the "worse" one for aggregation.
-    fn worse_status(a: GitFileStatus, b: GitFileStatus) -> GitFileStatus {
-        use GitFileStatus::*;
-
-        let priority = |s: GitFileStatus| -> u8 {
-            match s {
-                Clean => 0,
-                Ignored => 1,
-                Untracked => 2,
-                Deleted => 3,
-                Renamed => 4,
-                Modified => 5,
-                Staged => 6,
-                StagedModified => 7,
-                Conflict => 8,
-            }
-        };
-
-        if priority(a) >= priority(b) {
-            a
-        } else {
-            b
-        }
     }
 
     /// Render the context menu for a tree node.

@@ -513,18 +513,6 @@ impl MDOxideApp {
                         self.state.toggle_about();
                     }
 
-                    // Git branch display (if in a git repository)
-                    if let Some(branch) = self.state.git_service.current_branch() {
-                        ui.separator();
-
-                        ui.label(
-                            egui::RichText::new(format!("⎇ {}", branch))
-                                .color(status_accent)
-                                .size(12.0),
-                        )
-                        .on_hover_text(t!("tooltip.git_branch").to_string());
-                    }
-
                     // Vim mode indicator (shown before tab-specific items)
                     if let Some(vim_label) = self.state.ui.vim_mode_indicator {
                         ui.separator();

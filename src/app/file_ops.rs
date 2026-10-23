@@ -14,7 +14,7 @@ use crate::files::dialogs::{
 use crate::state::{is_binary_content, FileType};
 use crate::ui::{FileOperationDialog, FileTreeContextAction, SearchNavigationTarget};
 use eframe::egui;
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 use rust_i18n::t;
 use std::path::{Path, PathBuf};
 
@@ -334,7 +334,6 @@ impl MDOxideApp {
                     }
 
                     // Trigger git status refresh after successful save
-                    self.request_git_refresh();
 
                     // Update backlink index incrementally for the saved file
                     if let Some(path) = self.state.active_tab().and_then(|t| t.path.clone()) {
@@ -432,8 +431,7 @@ impl MDOxideApp {
                 }
 
                 // Trigger git status refresh after successful save
-                self.request_git_refresh();
-
+    
                 // Update backlink index incrementally and refresh backlinks
                 if self.state.backlink_index.is_built {
                     self.state.backlink_index.update_file(&path);
@@ -1176,7 +1174,6 @@ impl MDOxideApp {
         if need_tree_refresh {
             self.refresh_workspace_tree();
             // Also request git refresh since files changed
-            self.request_git_refresh();
         }
 
         // Reload externally modified files that are open in tabs
@@ -1262,41 +1259,6 @@ impl MDOxideApp {
                 .to_string()
             };
             self.state.show_toast(msg, time, 3.0);
-        }
-    }
-
-    /// Handle automatic Git status refresh.
-    ///
-    /// This method manages:
-    /// - Refresh on window focus gained
-    /// - Periodic refresh every 10 seconds when a workspace is open
-    /// - Debounced refresh requests (e.g., after file save)
-    pub(crate) fn handle_git_auto_refresh(&mut self, ctx: &egui::Context) {
-        // Get window focus state
-        let is_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
-
-        // Update focus state and detect focus gained
-        self.git_auto_refresh.update_focus(is_focused);
-
-        // Check if git service is active (workspace with git repo)
-        let git_active = self.state.git_service.is_open();
-
-        // Tick the auto-refresh manager
-        if self.git_auto_refresh.tick(git_active) {
-            // Perform the actual refresh
-            self.state.git_service.refresh_status();
-            self.git_auto_refresh.mark_refreshed();
-            trace!("Git status auto-refreshed");
-        }
-    }
-
-    /// Request a Git status refresh.
-    ///
-    /// This triggers a debounced refresh - multiple rapid calls will be batched
-    /// into a single refresh after a short delay (500ms).
-    pub(crate) fn request_git_refresh(&mut self) {
-        if self.state.git_service.is_open() {
-            self.git_auto_refresh.request_refresh();
         }
     }
 

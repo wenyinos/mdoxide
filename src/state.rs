@@ -13,7 +13,6 @@ use crate::config::{load_config, save_config_silent, Settings, TabInfo, ViewMode
 use crate::editor::{compute_edit_ops, EditHistory, TextStats};
 use crate::lsp::{DiagnosticMap, LspManager};
 use crate::ui::TabPipelineState;
-use crate::vcs::GitService;
 use crate::workspaces::{filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher};
 use egui;
 use log::{debug, info, warn};
@@ -3598,8 +3597,6 @@ pub struct AppState {
     workspace_watcher: Option<WorkspaceWatcher>,
     /// Pending file events from the watcher that need to be processed
     pub pending_file_events: Vec<WorkspaceEvent>,
-    /// Git integration service
-    pub git_service: GitService,
     /// Backlink index for tracking which files link to which
     pub backlink_index: BacklinkIndex,
     /// Language server processes and channels (background thread).
@@ -3645,7 +3642,6 @@ impl AppState {
             workspace: None,
             workspace_watcher: None,
             pending_file_events: Vec::new(),
-            git_service: GitService::new(),
             backlink_index: BacklinkIndex::new(),
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
@@ -3822,7 +3818,6 @@ impl AppState {
             workspace: None,
             workspace_watcher: None,
             pending_file_events: Vec::new(),
-            git_service: GitService::new(),
             backlink_index: BacklinkIndex::new(),
             lsp: LspManager::new(),
             diagnostics: DiagnosticMap::new(),
@@ -4514,21 +4509,6 @@ impl AppState {
         self.workspace_watcher = watcher;
         self.pending_file_events.clear();
 
-        // Initialize Git service for the workspace
-        match self.git_service.open(&root) {
-            Ok(true) => {
-                if let Some(branch) = self.git_service.current_branch() {
-                    info!("Git repository detected, branch: {}", branch);
-                }
-            }
-            Ok(false) => {
-                debug!("No Git repository in workspace");
-            }
-            Err(e) => {
-                warn!("Error checking for Git repository: {}", e);
-            }
-        }
-
         // LSP servers are started on demand when a tab with a matching
         // file extension becomes active (see sync_active_doc_to_lsp).
 
@@ -4558,9 +4538,6 @@ impl AppState {
         self.workspace = None;
         self.workspace_watcher = None;
         self.pending_file_events.clear();
-
-        // Close Git service
-        self.git_service.close();
 
         info!("Workspace closed, returned to single-file mode");
     }

@@ -64,7 +64,6 @@ fuzzy-matcher = "0.3"
 walkdir = "2"
 
 # Git integration (no SSH/HTTPS - we only need local repo status)
-git2 = { version = "0.19", default-features = false }
 
 # Icon loading + markdown image rendering (PNG, JPEG, GIF, WebP, BMP)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }

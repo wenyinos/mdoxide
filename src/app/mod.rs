@@ -49,7 +49,6 @@ use crate::ui::{
     FrontmatterPanel, OutlinePanel, ProductivityPanel, QuickSwitcher, Ribbon, RibbonAction,
     SearchPanel, SettingsPanel, TerminalPanel, TerminalPanelState, WelcomePanel, WindowResizeState,
 };
-use crate::vcs::GitAutoRefresh;
 
 #[cfg(feature = "async-workers")]
 use crate::workers::{echo_worker, WorkerCommand, WorkerHandle, WorkerResponse};
@@ -149,7 +148,6 @@ pub struct MDOxideApp {
     /// Session save throttle for crash recovery persistence
     session_save_throttle: crate::config::SessionSaveThrottle,
     /// Git auto-refresh manager for automatic status updates
-    git_auto_refresh: GitAutoRefresh,
     /// Whether we're showing the crash recovery dialog
     show_recovery_dialog: bool,
     /// Pending session restore result (set on startup if crash recovery detected)
@@ -464,7 +462,6 @@ impl MDOxideApp {
             lsp_idle_since: std::collections::HashMap::new(),
             window_resize_state: WindowResizeState::new(),
             session_save_throttle: SessionSaveThrottle::default(),
-            git_auto_refresh: GitAutoRefresh::new(),
             show_recovery_dialog,
             pending_recovery,
             pending_startup_paths: Vec::new(),
@@ -1891,13 +1888,6 @@ impl MDOxideApp {
         let mut file_tree_context_action: Option<FileTreeContextAction> = None;
 
         if self.state.should_show_file_tree() && !zen_mode {
-            // Get Git statuses first (needs mutable borrow)
-            let git_statuses = if self.state.git_service.is_open() {
-                Some(self.state.git_service.get_all_statuses())
-            } else {
-                None
-            };
-
             if let Some(workspace) = &self.state.workspace {
                 let workspace_name = workspace
                     .root_path
@@ -1910,7 +1900,6 @@ impl MDOxideApp {
                     &workspace.file_tree,
                     workspace_name,
                     is_dark,
-                    git_statuses.as_ref(),
                 );
 
                 file_tree_file_clicked = output.file_clicked;
@@ -2692,8 +2681,6 @@ impl eframe::App for MDOxideApp {
         self.handle_lsp_events(ctx);
 
         // Handle automatic Git status refresh (focus, periodic, debounced)
-        self.handle_git_auto_refresh(ctx);
-
         // Periodic session save for crash recovery
         self.update_session_recovery();
 

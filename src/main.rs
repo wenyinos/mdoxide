@@ -53,7 +53,6 @@ mod terminal;
 mod theme;
 mod ui;
 mod update;
-mod vcs;
 #[cfg(feature = "async-workers")]
 mod workers;
 mod workspaces;
