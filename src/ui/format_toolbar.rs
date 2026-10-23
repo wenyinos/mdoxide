@@ -601,3 +601,70 @@ pub fn side_panel_toggle_strip(ui: &mut egui::Ui, is_dark: bool, blocks_clicks: 
 
     clicked
 }
+
+impl FormatToolbar {
+    /// Render a compact floating toolbar anchored near the pointer.
+    ///
+    /// Used while a text selection exists in the raw editor, mirroring
+    /// MarkText's bubble format bar. Returns the chosen command, if any.
+    pub fn show_bubble(
+        ctx: &egui::Context,
+        formatting_state: Option<&FormattingState>,
+        is_dark: bool,
+        anchor: egui::Pos2,
+    ) -> Option<MarkdownFormatCommand> {
+        let mut chosen: Option<MarkdownFormatCommand> = None;
+
+        egui::Area::new(egui::Id::new("mdoxide_format_bubble"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(anchor + egui::vec2(-56.0, -46.0))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(egui::Margin::symmetric(4, 2))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.0;
+
+                            let is_bold = formatting_state.map(|s| s.is_bold).unwrap_or(false);
+                            let is_italic = formatting_state.map(|s| s.is_italic).unwrap_or(false);
+                            let is_code =
+                                formatting_state.map(|s| s.is_inline_code).unwrap_or(false);
+                            let is_strike =
+                                formatting_state.map(|s| s.is_strikethrough).unwrap_or(false);
+                            let is_link = formatting_state.map(|s| s.is_link).unwrap_or(false);
+
+                            let buttons = [
+                                (TEXT_B, MarkdownFormatCommand::Bold, is_bold, true),
+                                (TEXT_ITALIC, MarkdownFormatCommand::Italic, is_italic, true),
+                                (
+                                    "S̶",
+                                    MarkdownFormatCommand::Strikethrough,
+                                    is_strike,
+                                    false,
+                                ),
+                                (CODE, MarkdownFormatCommand::InlineCode, is_code, true),
+                                (LINK, MarkdownFormatCommand::Link, is_link, true),
+                            ];
+
+                            for (icon, cmd, active, use_phosphor) in buttons {
+                                if format_button(
+                                    ui,
+                                    icon,
+                                    &cmd.tooltip(),
+                                    true,
+                                    active,
+                                    is_dark,
+                                    use_phosphor,
+                                )
+                                .clicked()
+                                {
+                                    chosen = Some(cmd);
+                                }
+                            }
+                        });
+                    });
+            });
+
+        chosen
+    }
+}

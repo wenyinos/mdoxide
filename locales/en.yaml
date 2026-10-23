@@ -192,6 +192,8 @@ settings:
     typewriter_tooltip: "Keep the cursor line vertically centred while typing"
     focus_mode: "Focus mode"
     focus_mode_tooltip: "Dim all rendered blocks except the one being edited"
+    bubble_toolbar: "Selection toolbar"
+    bubble_toolbar_tooltip: "Show a floating format bar next to selected text"
     word_wrap_tooltip: "Wrap long lines instead of horizontal scrolling"
     show_line_numbers: "Show Line Numbers"
     line_numbers_tooltip: "Display line numbers in the editor gutter"

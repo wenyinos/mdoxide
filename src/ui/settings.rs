@@ -1354,6 +1354,13 @@ impl SettingsPanel {
                     changed = true;
                 }
                 if ui
+                    .checkbox(&mut settings.bubble_toolbar, t!("settings.editor.bubble_toolbar"))
+                    .on_hover_text(t!("settings.editor.bubble_toolbar_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
                     .checkbox(&mut settings.show_line_numbers, t!("settings.editor.show_line_numbers"))
                     .on_hover_text(t!("settings.editor.line_numbers_tooltip"))
                     .changed()

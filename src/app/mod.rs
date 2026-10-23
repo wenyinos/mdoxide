@@ -2247,6 +2247,38 @@ impl MDOxideApp {
 
         // Central panel for editor content
         let central_deferred = self.render_central_panel(ui, is_dark);
+
+        // MarkText-style bubble format bar, shown while a raw-editor selection exists.
+        if self.state.settings.bubble_toolbar {
+            if let Some(tab_id) = self.state.active_tab().map(|t| t.id) {
+                let has_selection = crate::editor::get_mdoxide_editor_mut(
+                    ui.ctx(),
+                    tab_id,
+                    |editor| editor.has_selection(),
+                )
+                .unwrap_or(false);
+                if has_selection {
+                    let anchor_pos = ui.ctx().input(|i| i.pointer.interact_pos());
+                    if let Some(anchor_pos) = anchor_pos {
+                        let formatting = self.state.active_tab().map(|t| {
+                            helpers::get_formatting_state_for(
+                                &t.content,
+                                t.cursor_position.0,
+                                t.cursor_position.1,
+                            )
+                        });
+                        if let Some(cmd) = crate::ui::FormatToolbar::show_bubble(
+                            ui.ctx(),
+                            formatting.as_ref(),
+                            is_dark,
+                            anchor_pos,
+                        ) {
+                            self.handle_format_command(ui.ctx(), cmd);
+                        }
+                    }
+                }
+            }
+        }
         if central_deferred.is_some() {
             deferred_format_action = central_deferred;
         }

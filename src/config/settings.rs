@@ -2017,6 +2017,10 @@ pub struct Settings {
     #[serde(default)]
     pub focus_mode: bool,
 
+    /// Show a floating format bar next to the selection (MarkText bubble bar).
+    #[serde(default = "default_true")]
+    pub bubble_toolbar: bool,
+
     /// Tab size (number of spaces)
     pub tab_size: u8,
 
@@ -2470,6 +2474,7 @@ impl Default for Settings {
             word_wrap: true,
             typewriter_mode: false,
             focus_mode: false,
+            bubble_toolbar: true,
             tab_size: 4,
             use_spaces: true,
             auto_save_enabled_default: false,
