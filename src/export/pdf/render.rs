@@ -29,6 +29,7 @@ use krilla::surface::Surface;
 use krilla::text::{Font, TextDirection};
 use krilla::Document;
 use std::path::Path;
+use std::sync::Arc;
 
 use super::fonts::{load_bundled_fonts, FontLoadError, FontStyle, PdfFonts};
 use super::options::PdfExportOptions;
@@ -127,6 +128,13 @@ enum DrawOp {
         width: f32,
         color: rgb::Color,
     },
+    Image {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        png: Arc<Vec<u8>>,
+    },
 }
 
 /// Everything we know about a single page before flushing it to krilla.
@@ -154,6 +162,16 @@ struct InlineRun {
     strike: bool,
     /// External URL for this run, if it sits inside a link.
     link: Option<String>,
+    /// Rendered formula image; when set, `text` is empty and this is drawn instead.
+    formula: Option<FormulaImage>,
+}
+
+/// A formula rasterized by RaTeX, with its display size in PDF points.
+#[derive(Clone)]
+struct FormulaImage {
+    png: Arc<Vec<u8>>,
+    width: f32,
+    height: f32,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,6 +287,7 @@ impl<'a> Renderer<'a> {
         comrak_opts.extension.autolink = true;
         comrak_opts.extension.tasklist = true;
         comrak_opts.extension.footnotes = true;
+        comrak_opts.extension.math_dollars = true;
         comrak_opts.extension.front_matter_delimiter = Some("---".to_string());
         comrak_opts.render.unsafe_ = true;
 
@@ -386,10 +405,22 @@ impl<'a> Renderer<'a> {
                 self.render_heading(node, h.level);
             }
             NodeValue::Paragraph => {
-                let runs =
-                    self.collect_inline_runs(node, FontStyle::Regular, false, None, false, None);
-                self.render_text_block(&runs, BODY_FONT_SIZE);
-                self.cursor_y += PARAGRAPH_GAP;
+                // A paragraph that contains only a display-math node is the
+                // block form (`$$...$$`): lay it out centred on its own line.
+                if let Some(latex) = single_display_math(node) {
+                    self.render_math_block(&latex, true);
+                } else {
+                    let runs = self.collect_inline_runs(
+                        node,
+                        FontStyle::Regular,
+                        false,
+                        None,
+                        false,
+                        None,
+                    );
+                    self.render_text_block(&runs, BODY_FONT_SIZE);
+                    self.cursor_y += PARAGRAPH_GAP;
+                }
             }
             NodeValue::ThematicBreak => {
                 self.render_hr();
@@ -403,6 +434,9 @@ impl<'a> Renderer<'a> {
             NodeValue::CodeBlock(cb) => {
                 self.render_code_block(&cb.literal, &cb.info);
             }
+            NodeValue::Math(math) => {
+                self.render_math_block(&math.literal, math.display_math);
+            }
             NodeValue::Table(_) => {
                 self.render_table(node);
             }
@@ -414,6 +448,7 @@ impl<'a> Renderer<'a> {
                     color: Some(self.theme.muted),
                     strike: false,
                     link: None,
+                    formula: None,
                 }];
                 self.render_text_block(&runs, BODY_FONT_SIZE * 0.9);
                 self.cursor_y += PARAGRAPH_GAP;
@@ -579,10 +614,12 @@ impl<'a> Renderer<'a> {
 
         // Marker, drawn at the current cursor on the line of the first paragraph.
         let marker_text = if let NodeValue::TaskItem(check) = item.data.borrow().value.clone() {
+            // U+2611/U+2610 are missing from Source Han Sans; use glyphs that
+            // CJK fonts reliably carry.
             if check.is_some() {
-                "☑".to_string()
+                "√".to_string()
             } else {
-                "☐".to_string()
+                "□".to_string()
             }
         } else if ordered {
             format!("{}.", index)
@@ -806,9 +843,10 @@ impl<'a> Renderer<'a> {
                     text,
                     style,
                     mono,
-                    color: color.or_else(|| link.as_ref().map(|_| self.theme.link)),
+                    color: link.as_ref().map(|_| self.theme.link).or(color),
                     strike,
                     link: link.clone(),
+                    formula: None,
                 });
             }
             NodeValue::Code(code) => {
@@ -819,6 +857,7 @@ impl<'a> Renderer<'a> {
                     color: color.or(Some(self.theme.code_inline)),
                     strike,
                     link: link.clone(),
+                    formula: None,
                 });
             }
             NodeValue::SoftBreak | NodeValue::LineBreak => {
@@ -829,6 +868,7 @@ impl<'a> Renderer<'a> {
                     color,
                     strike,
                     link: link.clone(),
+                    formula: None,
                 });
             }
             NodeValue::Strong => {
@@ -868,7 +908,31 @@ impl<'a> Renderer<'a> {
                     color: color.or(Some(self.theme.muted)),
                     strike,
                     link: link.clone(),
+                    formula: None,
                 });
+            }
+            NodeValue::Math(math) => {
+                let run_color = color.unwrap_or(self.theme.body);
+                match render_formula_image(&math.literal, BODY_FONT_SIZE, run_color) {
+                    Some(formula) => out.push(InlineRun {
+                        text: String::new(),
+                        style,
+                        mono: false,
+                        color: Some(run_color),
+                        strike: false,
+                        link: link.clone(),
+                        formula: Some(formula),
+                    }),
+                    None => out.push(InlineRun {
+                        text: math.literal,
+                        style,
+                        mono: false,
+                        color: Some(run_color),
+                        strike: false,
+                        link: link.clone(),
+                        formula: None,
+                    }),
+                }
             }
             NodeValue::HtmlInline(_) => {
                 // Skip raw HTML inline.
@@ -888,16 +952,35 @@ impl<'a> Renderer<'a> {
             return;
         }
         let max_width = self.content_width();
-        let line_height = font_size * LINE_HEIGHT_FACTOR;
         let lines = wrap_runs(runs, max_width, font_size);
         let body_color = self.theme.body;
 
         for line in lines {
+            // Grow the line when it carries formulas so their images start
+            // inside the line box instead of bleeding into the line above.
+            let formula_height = line
+                .iter()
+                .filter_map(|run| run.formula.as_ref())
+                .map(|formula| formula.height + 2.0)
+                .fold(0.0_f32, f32::max);
+            let baseline_offset = (font_size * 0.85).max(formula_height);
+            let line_height = baseline_offset + font_size * 0.25;
             let y_top = self.reserve(line_height);
-            let baseline_y = y_top + font_size * 0.85;
+            let baseline_y = y_top + baseline_offset;
             let mut x = self.margin_l;
             for run in line {
                 let color = run.color.unwrap_or(body_color);
+                if let Some(formula) = &run.formula {
+                    self.push_op(DrawOp::Image {
+                        x,
+                        y: baseline_y - formula.height,
+                        width: formula.width,
+                        height: formula.height,
+                        png: formula.png.clone(),
+                    });
+                    x += formula.width;
+                    continue;
+                }
                 let w = approx_text_width(&run.text, font_size, run.mono);
                 self.push_op(DrawOp::Text {
                     x,
@@ -918,16 +1001,99 @@ impl<'a> Renderer<'a> {
                     ) {
                         self.push_link(rect, url.clone());
                     }
+                    // Underline links so they remain distinguishable when the
+                    // surrounding text is also coloured.
+                    self.push_op(DrawOp::HorizontalRule {
+                        x1: x,
+                        x2: x + w,
+                        y: baseline_y + 1.5,
+                        width: 0.5,
+                        color,
+                    });
                 }
                 x += w;
             }
         }
+    }
+
+    fn render_math_block(&mut self, latex: &str, display: bool) {
+        let size = if display {
+            BODY_FONT_SIZE * 1.15
+        } else {
+            BODY_FONT_SIZE
+        };
+        let Some(mut formula) = render_formula_image(latex, size, self.theme.body) else {
+            let runs = vec![InlineRun {
+                text: latex.to_string(),
+                style: FontStyle::Regular,
+                mono: false,
+                color: Some(self.theme.muted),
+                strike: false,
+                link: None,
+                formula: None,
+            }];
+            self.render_text_block(&runs, BODY_FONT_SIZE);
+            self.cursor_y += PARAGRAPH_GAP;
+            return;
+        };
+
+        let max_width = self.content_width();
+        if formula.width > max_width && formula.width > 0.0 {
+            let scale = max_width / formula.width;
+            formula.width *= scale;
+            formula.height *= scale;
+        }
+
+        if display {
+            self.cursor_y += PARAGRAPH_GAP * 0.5;
+        }
+        let y_top = self.reserve(formula.height);
+        let x = self.margin_l + (max_width - formula.width) * 0.5;
+        self.push_op(DrawOp::Image {
+            x,
+            y: y_top,
+            width: formula.width,
+            height: formula.height,
+            png: formula.png,
+        });
+        self.cursor_y += PARAGRAPH_GAP;
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Replay: DrawOp → krilla Surface
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Returns the TeX literal when `node` is a paragraph holding only a
+/// display-math node (`$$...$$`).
+fn single_display_math<'b>(node: &'b AstNode<'b>) -> Option<String> {
+    let mut children = node.children();
+    let first = children.next()?;
+    if children.next().is_some() {
+        return None;
+    }
+    match &first.data.borrow().value {
+        NodeValue::Math(math) if math.display_math => Some(math.literal.clone()),
+        _ => None,
+    }
+}
+
+/// Rasterize a LaTeX formula at 2x and convert pixels back to PDF points.
+fn render_formula_image(latex: &str, font_size: f32, color: rgb::Color) -> Option<FormulaImage> {
+    let png = crate::markdown::math_render::render_latex_png(
+        latex,
+        font_size,
+        [color.red(), color.green(), color.blue()],
+        2.0,
+    )
+    .ok()?;
+    let (width, height) = crate::export::png_dimensions(&png)?;
+    Some(FormulaImage {
+        png: Arc::new(png),
+        width: width as f32 / 2.0,
+        height: height as f32 / 2.0,
+    })
+}
 
 fn replay_op(surface: &mut Surface<'_>, fonts: &PdfFonts, op: &DrawOp) {
     match op {
@@ -960,6 +1126,22 @@ fn replay_op(surface: &mut Surface<'_>, fonts: &PdfFonts, op: &DrawOp) {
         } => {
             paint_horizontal_rule(surface, *x1, *x2, *y, *width, *color);
         }
+        DrawOp::Image {
+            x,
+            y,
+            width,
+            height,
+            png,
+        } => {
+            let data = krilla::Data::from(png.clone());
+            if let Ok(image) = krilla::image::Image::from_png(data, true) {
+                if let Some(size) = Size::from_wh(*width, *height) {
+                    surface.push_transform(&krilla::geom::Transform::from_translate(*x, *y));
+                    surface.draw_image(image, size);
+                    surface.pop();
+                }
+            }
+        }
     }
 }
 
@@ -978,7 +1160,16 @@ fn draw_text_run(
     if text.is_empty() {
         return;
     }
-    let family = if mono { &fonts.mono } else { &fonts.body };
+    // krilla's simple-text path performs no font fallback, so a run containing
+    // CJK characters must use the CJK face for the whole run. Source Han Sans
+    // also carries Latin glyphs, which keeps mixed runs readable.
+    let family = if text.chars().any(is_wide_char) {
+        &fonts.cjk
+    } else if mono {
+        &fonts.mono
+    } else {
+        &fonts.body
+    };
     let font: Font = family.pick(style);
 
     surface.set_fill(Some(Fill {
@@ -1021,6 +1212,7 @@ fn paint_filled_rect(surface: &mut Surface<'_>, rect: Rect, color: rgb::Color) {
             opacity: NormalizedF32::ONE,
             rule: FillRule::NonZero,
         }));
+        surface.set_stroke(None);
         surface.draw_path(&path);
     }
 }
@@ -1029,6 +1221,9 @@ fn paint_rect_outline(surface: &mut Surface<'_>, rect: Rect, width: f32, color: 
     let mut pb = PathBuilder::new();
     pb.push_rect(rect);
     if let Some(path) = pb.finish() {
+        // Paths are filled with the currently active fill, so clear the fill
+        // left behind by the previous text run or cell background.
+        surface.set_fill(None);
         surface.set_stroke(Some(Stroke {
             paint: color.into(),
             width,
@@ -1050,6 +1245,7 @@ fn paint_horizontal_rule(
     pb.move_to(x1, y);
     pb.line_to(x2, y);
     if let Some(path) = pb.finish() {
+        surface.set_fill(None);
         surface.set_stroke(Some(Stroke {
             paint: color.into(),
             width,
@@ -1063,9 +1259,102 @@ fn paint_horizontal_rule(
 // Word‑wrapping helpers (approximate widths; see roadmap Phase 5)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Full-width characters: CJK ideographs/kana plus the halfwidth-and-fullwidth
+/// forms block, which is where full-width punctuation such as `，` lives.
+fn is_wide_char(c: char) -> bool {
+    crate::fonts::is_cjk_char(c) || matches!(c, '\u{FF00}'..='\u{FFEF}')
+}
+
+fn char_width(c: char, font_size: f32, mono: bool) -> f32 {
+    if is_wide_char(c) {
+        font_size
+    } else {
+        font_size * if mono { 0.6 } else { 0.5 }
+    }
+}
+
 fn approx_text_width(text: &str, font_size: f32, mono: bool) -> f32 {
-    let factor = if mono { 0.6 } else { 0.5 };
-    text.chars().count() as f32 * font_size * factor
+    // A run containing wide characters is drawn with the proportional CJK
+    // face even when it is inline code, so measure it proportionally.
+    let mono = mono && !text.chars().any(is_wide_char);
+    text.chars().map(|c| char_width(c, font_size, mono)).sum()
+}
+
+/// Closing punctuation that must not start a line (CJK line-start prohibition).
+fn is_line_start_forbidden(c: char) -> bool {
+    matches!(
+        c,
+        '，' | '。'
+            | '、'
+            | '；'
+            | '：'
+            | '！'
+            | '？'
+            | '）'
+            | '》'
+            | '」'
+            | '』'
+            | '】'
+            | '〕'
+            | '〉'
+            | '”'
+            | '’'
+            | '…'
+            | '·'
+            | ','
+            | '.'
+            | ';'
+            | ':'
+            | '!'
+            | '?'
+            | ')'
+            | ']'
+            | '}'
+    )
+}
+
+/// Split a token that cannot fit on a line into chunks no wider than `max_width`.
+///
+/// CJK text has no spaces, so without this a whole paragraph becomes one
+/// "word" and runs past the right margin.
+fn split_long_token(token: &str, max_width: f32, font_size: f32, mono: bool) -> Vec<String> {
+    if approx_text_width(token, font_size, mono) <= max_width {
+        return vec![token.to_string()];
+    }
+
+    let mut chunks: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut width = 0.0;
+    for ch in token.chars() {
+        let ch_w = char_width(ch, font_size, mono);
+        if !current.is_empty() && width + ch_w > max_width {
+            if is_line_start_forbidden(ch) {
+                // Carry the preceding character down with the punctuation so
+                // the new line does not start with a comma/period.
+                if let Some(prev) = current.pop() {
+                    width -= char_width(prev, font_size, mono);
+                    chunks.push(std::mem::take(&mut current));
+                    current.push(prev);
+                    width += char_width(prev, font_size, mono);
+                } else {
+                    chunks.push(std::mem::take(&mut current));
+                    width = 0.0;
+                }
+            } else {
+                chunks.push(std::mem::take(&mut current));
+                width = 0.0;
+            }
+        }
+        current.push(ch);
+        width += ch_w;
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    if chunks.is_empty() {
+        chunks.push(String::new());
+    }
+    chunks
 }
 
 fn wrap_plain_text(text: &str, max_width: f32, font_size: f32, mono: bool) -> Vec<String> {
@@ -1075,18 +1364,20 @@ fn wrap_plain_text(text: &str, max_width: f32, font_size: f32, mono: bool) -> Ve
     let mut lines: Vec<String> = Vec::new();
     let mut current = String::new();
     for word in text.split_whitespace() {
-        let candidate = if current.is_empty() {
-            word.to_string()
-        } else {
-            format!("{} {}", current, word)
-        };
-        if approx_text_width(&candidate, font_size, mono) <= max_width {
-            current = candidate;
-        } else {
-            if !current.is_empty() {
-                lines.push(std::mem::take(&mut current));
+        for chunk in split_long_token(word, max_width, font_size, mono) {
+            let candidate = if current.is_empty() {
+                chunk.clone()
+            } else {
+                format!("{} {}", current, chunk)
+            };
+            if approx_text_width(&candidate, font_size, mono) <= max_width {
+                current = candidate;
+            } else {
+                if !current.is_empty() {
+                    lines.push(std::mem::take(&mut current));
+                }
+                current = chunk;
             }
-            current = word.to_string();
         }
     }
     if !current.is_empty() {
@@ -1104,41 +1395,63 @@ fn wrap_runs(runs: &[InlineRun], max_width: f32, font_size: f32) -> Vec<Vec<Inli
     let mut current_width = 0.0_f32;
 
     for run in runs {
-        for token in tokenize_for_wrap(&run.text) {
-            let tok_w = approx_text_width(&token, font_size, run.mono);
-            if current_width + tok_w > max_width
-                && !current_line.is_empty()
-                && token.trim().is_empty()
-            {
+        // Formula images are atomic: they cannot be split across lines.
+        if let Some(formula) = &run.formula {
+            if current_width + formula.width > max_width && !current_line.is_empty() {
                 lines.push(std::mem::take(&mut current_line));
                 current_width = 0.0;
-                continue;
-            }
-            if current_width + tok_w > max_width && !current_line.is_empty() {
-                lines.push(std::mem::take(&mut current_line));
-                current_width = 0.0;
-            }
-            if let Some(last) = current_line.last_mut() {
-                if last.style == run.style
-                    && last.mono == run.mono
-                    && last.color == run.color
-                    && last.strike == run.strike
-                    && last.link == run.link
-                {
-                    last.text.push_str(&token);
-                    current_width += tok_w;
-                    continue;
-                }
             }
             current_line.push(InlineRun {
-                text: token,
+                text: String::new(),
                 style: run.style,
-                mono: run.mono,
+                mono: false,
                 color: run.color,
-                strike: run.strike,
+                strike: false,
                 link: run.link.clone(),
+                formula: Some(formula.clone()),
             });
-            current_width += tok_w;
+            current_width += formula.width;
+            continue;
+        }
+        for token in tokenize_for_wrap(&run.text) {
+            for token in split_long_token(&token, max_width, font_size, run.mono) {
+                let tok_w = approx_text_width(&token, font_size, run.mono);
+                if current_width + tok_w > max_width
+                    && !current_line.is_empty()
+                    && token.trim().is_empty()
+                {
+                    lines.push(std::mem::take(&mut current_line));
+                    current_width = 0.0;
+                    continue;
+                }
+                if current_width + tok_w > max_width && !current_line.is_empty() {
+                    lines.push(std::mem::take(&mut current_line));
+                    current_width = 0.0;
+                }
+                if let Some(last) = current_line.last_mut() {
+                    if last.formula.is_none()
+                        && last.style == run.style
+                        && last.mono == run.mono
+                        && last.color == run.color
+                        && last.strike == run.strike
+                        && last.link == run.link
+                    {
+                        last.text.push_str(&token);
+                        current_width += tok_w;
+                        continue;
+                    }
+                }
+                current_line.push(InlineRun {
+                    text: token,
+                    style: run.style,
+                    mono: run.mono,
+                    color: run.color,
+                    strike: run.strike,
+                    link: run.link.clone(),
+                    formula: None,
+                });
+                current_width += tok_w;
+            }
         }
     }
 
@@ -1212,14 +1525,85 @@ mod tests {
     }
 
     #[test]
-    fn wrap_plain_text_handles_long_word() {
-        let lines = wrap_plain_text("supercalifragilisticexpialidocious", 50.0, 11.0, false);
-        assert_eq!(lines.len(), 1);
+    fn wrap_plain_text_breaks_long_word() {
+        let word = "supercalifragilisticexpialidocious";
+        let lines = wrap_plain_text(word, 50.0, 11.0, false);
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(approx_text_width(line, 11.0, false) <= 50.0);
+        }
+        assert_eq!(lines.concat(), word);
+    }
+
+    #[test]
+    fn wrap_plain_text_breaks_cjk_paragraph() {
+        let text = "天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。";
+        let lines = wrap_plain_text(text, 100.0, 11.0, false);
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(approx_text_width(line, 11.0, false) <= 100.0);
+        }
+        assert_eq!(lines.concat(), text);
+    }
+
+    #[test]
+    fn cjk_glyphs_are_full_width() {
+        assert_eq!(approx_text_width("中", 10.0, false), 10.0);
+        assert_eq!(approx_text_width("，", 10.0, false), 10.0);
+        assert_eq!(approx_text_width("a", 10.0, false), 5.0);
+        assert_eq!(approx_text_width("i", 10.0, true), 6.0);
     }
 
     #[test]
     fn tokenize_alternates_words_and_spaces() {
         let tokens = tokenize_for_wrap("hello world  foo");
         assert_eq!(tokens, vec!["hello", " ", "world", "  ", "foo"]);
+    }
+
+    #[test]
+    fn formula_image_has_display_size() {
+        let image = render_formula_image(r"\frac{a}{b}", 12.0, PdfTheme::print_default().body)
+            .expect("formula must render");
+        assert!(image.width > 0.0);
+        assert!(image.height >= 12.0);
+        assert_eq!(&image.png[..8], b"\x89PNG\r\n\x1a\n");
+    }
+
+    #[test]
+    fn math_renders_as_embedded_image() {
+        let opts = PdfExportOptions::default();
+        let theme = PdfTheme::print_default();
+        let with_math = render_markdown_to_pdf(
+            "Inline $x^2$ math.\n\n$$\n\\frac{a}{b}\n$$\n",
+            &opts,
+            &theme,
+            None,
+        )
+        .unwrap();
+        let plain =
+            render_markdown_to_pdf("Inline math.\n", &opts, &theme, None).unwrap();
+        assert!(
+            with_math.len() > plain.len() + 500,
+            "formula images should add bytes: {} vs {}",
+            with_math.len(),
+            plain.len()
+        );
+    }
+
+    #[test]
+    #[ignore = "manual walkthrough; writes a sample PDF to the temp dir"]
+    fn walkthrough_render_sample() {
+        let dir = std::env::temp_dir().join("mdoxide-export-walkthrough");
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdf = render_markdown_to_pdf(
+            crate::export::WALKTHROUGH_MARKDOWN,
+            &PdfExportOptions::default(),
+            &PdfTheme::print_default(),
+            None,
+        )
+        .expect("walkthrough render must succeed");
+        let path = dir.join("walkthrough.pdf");
+        std::fs::write(&path, &pdf).unwrap();
+        println!("wrote {} ({} bytes)", path.display(), pdf.len());
     }
 }

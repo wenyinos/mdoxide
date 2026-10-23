@@ -427,7 +427,7 @@ fn is_han_char(c: char) -> bool {
 
 /// Check if a character is any CJK character.
 #[inline]
-fn is_cjk_char(c: char) -> bool {
+pub(crate) fn is_cjk_char(c: char) -> bool {
     let cp = c as u32;
     in_range(cp, CJK_UNIFIED)
         || in_range(cp, HIRAGANA)

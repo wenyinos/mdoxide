@@ -7,6 +7,9 @@
 ### 新增
 
 - 保存原子化：`files::atomic::write_atomic`（临时文件 → fsync → 原子替换，保留权限），Save / Save As 全部接入
+- 数学公式导出：HTML 与 PDF 均通过 RaTeX 渲染为内联 PNG；HTML 暗色主题自动反色
+- PDF 导出嵌入思源黑体，中文不再缺字
+- 手动导出走查测试（`cargo test --bin mdoxide walkthrough -- --ignored`）
 
 ### 变更
 
@@ -25,6 +28,7 @@
 
 - 会话恢复：无身份恢复文件不得覆盖有路径的标签（数据丢失缺陷）
 - 上游 42 个测试编译错误（`TextBuffer` 导入、Mermaid 测试路径、图标常量、`expand_rect` 导入、`Task::to_markdown` 缺失）
+- PDF 导出：表格边框误填充为深色（绘制状态泄漏）、中文长段落不换行且溢出右边距、行首标点、行内公式撑破行高、链接颜色被正文色覆盖、任务列表标记缺字
 
 ## [0.1.0] - 未发布
 

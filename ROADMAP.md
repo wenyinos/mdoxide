@@ -23,7 +23,13 @@
 
 ## 计划中
 
-- **M4 导出与扩展**：emoji 短代码渲染已完成；数学公式选型定为 **RaTeX**（纯 Rust、KaTeX 兼容、SVG/PNG 输出）；待办：HTML/PDF 导出质量走查（hayro → typst 备选）
+- **M4 导出与扩展**：
+  - ✅ emoji 短代码渲染
+  - ✅ RaTeX 数学公式：编辑器内渲染 + HTML/PDF 导出（PNG 嵌入；暗色 HTML 自动反色）
+  - ✅ 导出走查：中文、代码块、表格、链接、任务列表、公式、Mermaid（HTML flowchart SVG）均通过视觉验收
+  - ✅ PDF 修复：内置思源黑体、CJK 断行与行首禁则、绘制状态泄漏、行内公式行高、链接颜色与下划线
+  - ⏳ PDF v1 限制：Mermaid 输出为代码块、图片为占位符、无 bidi 重排
+  - 决策：保留 krilla 后端，不切换 typst
 - **M5 发布**：RPM / DEB / Windows NSIS 打包脚本与 release 工作流已就位（`scripts/package-linux.sh`、`installer/windows/mdoxide.nsi`）；偏好设置面板、大文件性能仍待完成
 
 ## 明确不做

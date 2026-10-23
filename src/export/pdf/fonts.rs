@@ -20,6 +20,10 @@ const JETBRAINS_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/JetBrainsM
 const JETBRAINS_BOLD_ITALIC: &[u8] =
     include_bytes!("../../../assets/fonts/JetBrainsMono-BoldItalic.ttf");
 
+// Bundled Source Han Sans SC (CJK fallback; no italic faces).
+const CJK_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/SourceHanSansSC-Regular.otf");
+const CJK_BOLD: &[u8] = include_bytes!("../../../assets/fonts/SourceHanSansSC-Bold.otf");
+
 /// Logical text style needed by the markdown renderer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FontStyle {
@@ -54,6 +58,8 @@ impl FontFamily {
 pub(crate) struct PdfFonts {
     pub body: FontFamily,
     pub mono: FontFamily,
+    /// Source Han Sans SC, used for runs containing CJK characters.
+    pub cjk: FontFamily,
 }
 
 /// Errors produced while loading a bundled font into krilla.
@@ -82,12 +88,14 @@ fn make_font(bytes: &'static [u8], name: &'static str) -> Result<Font, FontLoadE
     Font::new(data.into(), 0).ok_or(FontLoadError::Invalid(name))
 }
 
-/// Load all four bundled font families into krilla `Font` handles.
+/// Load all bundled font families into krilla `Font` handles.
 ///
-/// This allocates roughly 5–7 MB of font data per export (one shared copy per
+/// This allocates roughly 9–10 MB of font data per export (one shared copy per
 /// face), which is dropped as soon as `document.finish()` returns. We do not
 /// cache it across calls: PDF export is a user‑initiated, infrequent action.
 pub(crate) fn load_bundled_fonts() -> Result<PdfFonts, FontLoadError> {
+    let cjk_regular = make_font(CJK_REGULAR, "SourceHanSansSC-Regular")?;
+    let cjk_bold = make_font(CJK_BOLD, "SourceHanSansSC-Bold")?;
     Ok(PdfFonts {
         body: FontFamily {
             regular: make_font(INTER_REGULAR, "Inter-Regular")?,
@@ -100,6 +108,12 @@ pub(crate) fn load_bundled_fonts() -> Result<PdfFonts, FontLoadError> {
             bold: make_font(JETBRAINS_BOLD, "JetBrainsMono-Bold")?,
             italic: make_font(JETBRAINS_ITALIC, "JetBrainsMono-Italic")?,
             bold_italic: make_font(JETBRAINS_BOLD_ITALIC, "JetBrainsMono-BoldItalic")?,
+        },
+        cjk: FontFamily {
+            regular: cjk_regular.clone(),
+            bold: cjk_bold.clone(),
+            italic: cjk_regular,
+            bold_italic: cjk_bold,
         },
     })
 }
@@ -114,5 +128,7 @@ mod tests {
         // Sanity check via units_per_em.
         assert!(fonts.body.regular.units_per_em() > 0.0);
         assert!(fonts.mono.regular.units_per_em() > 0.0);
+        assert!(fonts.cjk.regular.units_per_em() > 0.0);
+        assert!(fonts.cjk.bold.units_per_em() > 0.0);
     }
 }

@@ -233,11 +233,169 @@ fn extract_mermaid_fences(markdown: &str) -> (String, Vec<String>) {
     (out, blocks)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Math spans
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Render one formula to a self-contained `<img>` (or block wrapper).
+fn render_math_for_html(latex: &str, display: bool) -> Option<String> {
+    const DPR: f32 = 2.0;
+    const FONT_SIZE: f32 = 16.0;
+    let png = crate::markdown::math_render::render_latex_png(
+        latex,
+        FONT_SIZE,
+        [33, 37, 41],
+        DPR,
+    )
+    .ok()?;
+    let (_, height) = crate::export::png_dimensions(&png)?;
+    let b64 = base64_std_encode(&png);
+    let alt = html_escape(latex.trim());
+    if display {
+        Some(format!(
+            r#"<div class="mdoxide-math-block"><img src="data:image/png;base64,{b64}" alt="{alt}"></div>"#
+        ))
+    } else {
+        let css_height = height as f32 / DPR;
+        Some(format!(
+            r#"<img class="mdoxide-math-inline" src="data:image/png;base64,{b64}" alt="{alt}" style="height:{css_height:.1}px;vertical-align:middle">"#
+        ))
+    }
+}
+
+/// Replace `$...$` and `$$...$$` spans with rendered images.
+///
+/// Fenced code blocks and inline code are copied verbatim. If RaTeX cannot
+/// parse a span, the original TeX is kept so the export never fails.
+fn replace_math_with_images(markdown: &str) -> String {
+    let chars: Vec<char> = markdown.chars().collect();
+    let mut out = String::with_capacity(markdown.len());
+    let mut i = 0;
+    let mut in_fence = false;
+    let mut in_inline_code = false;
+    let mut at_line_start = true;
+
+    while i < chars.len() {
+        let c = chars[i];
+
+        // Fences toggle only at the start of a line. Copy the whole marker
+        // line so its backticks are not mistaken for inline code.
+        if at_line_start && !in_inline_code {
+            let mut j = i;
+            while j < chars.len() && matches!(chars[j], ' ' | '\t') {
+                j += 1;
+            }
+            let is_fence = j + 2 < chars.len()
+                && ((chars[j] == '`' && chars[j + 1] == '`' && chars[j + 2] == '`')
+                    || (chars[j] == '~' && chars[j + 1] == '~' && chars[j + 2] == '~'));
+            if is_fence {
+                in_fence = !in_fence;
+                while i < chars.len() {
+                    let ch = chars[i];
+                    out.push(ch);
+                    i += 1;
+                    if ch == '\n' {
+                        break;
+                    }
+                }
+                at_line_start = true;
+                continue;
+            }
+        }
+        at_line_start = false;
+
+        if in_fence {
+            out.push(c);
+            if c == '\n' {
+                at_line_start = true;
+            }
+            i += 1;
+            continue;
+        }
+
+        if c == '`' {
+            in_inline_code = !in_inline_code;
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        if in_inline_code {
+            out.push(c);
+            if c == '\n' {
+                at_line_start = true;
+            }
+            i += 1;
+            continue;
+        }
+
+        // Display math: $$ ... $$
+        if c == '$' && i + 1 < chars.len() && chars[i + 1] == '$' {
+            if let Some(end) = find_char_seq(&chars, i + 2, &['$', '$']) {
+                let latex: String = chars[i + 2..end].iter().collect();
+                match render_math_for_html(&latex, true) {
+                    Some(html) => out.push_str(&html),
+                    None => out.extend(&chars[i..end + 2]),
+                }
+                i = end + 2;
+                continue;
+            }
+        }
+
+        // Inline math: $ ... $ on one line, non-empty and not whitespace-padded.
+        if c == '$' && i + 1 < chars.len() && !chars[i + 1].is_whitespace() {
+            let mut j = i + 1;
+            let mut end = None;
+            while j < chars.len() {
+                if chars[j] == '\n' {
+                    break;
+                }
+                if chars[j] == '$' && chars[j - 1] != '\\' {
+                    end = Some(j);
+                    break;
+                }
+                j += 1;
+            }
+            if let Some(end) = end {
+                let latex: String = chars[i + 1..end].iter().collect();
+                if !latex.trim().is_empty() {
+                    match render_math_for_html(&latex, false) {
+                        Some(html) => out.push_str(&html),
+                        None => out.extend(&chars[i..=end]),
+                    }
+                    i = end + 1;
+                    continue;
+                }
+            }
+        }
+
+        out.push(c);
+        if c == '\n' {
+            at_line_start = true;
+        }
+        i += 1;
+    }
+
+    out
+}
+
+fn find_char_seq(chars: &[char], from: usize, seq: &[char]) -> Option<usize> {
+    if seq.is_empty() {
+        return Some(from);
+    }
+    let mut i = from;
+    while i + seq.len() <= chars.len() {
+        if &chars[i..i + seq.len()] == seq {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 fn inject_mermaid_exports(
     html: &str,
     blocks: &[String],
-    diagram_w: f32,
-    flowchart_colors: &FlowchartColors,
+    diagram_w: f32,    flowchart_colors: &FlowchartColors,
     theme_name: &str,
     dark: bool,
 ) -> String {
@@ -501,7 +659,7 @@ fn build_header_comment(opts: &HtmlExportOptions, source_path: Option<&Path>) ->
 }
 
 fn theme_rules_inner(colors: &ThemeColors) -> String {
-    format!(
+    let rules = format!(
         r#"
 body {{
     background-color: {bg};
@@ -576,7 +734,15 @@ body {{
         } else {
             "rgba(0,0,0,0.03)".to_string()
         },
-    )
+    );
+    // Formulas are rasterized once in near-black; invert them on dark themes.
+    if colors.is_dark() {
+        format!(
+            "{rules}\n.mdoxide-math-inline, .mdoxide-math-block img {{ filter: invert(1); }}"
+        )
+    } else {
+        rules
+    }
 }
 
 fn generate_theme_styles(resolution: &HtmlThemeResolution) -> String {
@@ -702,6 +868,9 @@ body {
 .markdown-body del { text-decoration: line-through; }
 .mdoxide-mermaid { margin: 1rem 0; }
 .mdoxide-mermaid svg { max-width: 100%; height: auto; display: block; }
+.mdoxide-math-block { margin: 1rem 0; text-align: center; }
+.mdoxide-math-block img { max-width: 100%; }
+.mdoxide-math-inline { display: inline-block; }
 .mdoxide-mermaid-fallback .mermaid-caption { font-size: 0.85rem; color: var(--muted, #666); margin-bottom: 0.5rem; }
 .markdown-toc { margin-bottom: 2rem; padding: 1rem 1.25rem; border-radius: 8px; }
 .markdown-toc .toc-title { margin-top: 0; font-size: 1.1rem; }
@@ -765,6 +934,7 @@ pub fn generate_html_document_export(
     };
 
     let (md2, mermaids) = extract_mermaid_fences(markdown);
+    let md2 = replace_math_with_images(&md2);
 
     let mut comrak_opts = Options::default();
     comrak_opts.extension.strikethrough = true;
@@ -926,7 +1096,8 @@ pub fn generate_html_fragment(markdown: &str) -> Result<String, HtmlExportError>
     comrak_opts.extension.footnotes = true;
     comrak_opts.extension.header_ids = Some(String::new());
     comrak_opts.render.unsafe_ = true;
-    Ok(comrak::markdown_to_html(markdown, &comrak_opts))
+    let markdown = replace_math_with_images(markdown);
+    Ok(comrak::markdown_to_html(&markdown, &comrak_opts))
 }
 
 pub fn export_to_html_file(
@@ -978,5 +1149,58 @@ mod tests {
     fn test_color32_to_css() {
         let c = eframe::egui::Color32::from_rgb(1, 2, 3);
         assert!(color32_to_css(c).contains("1"));
+    }
+
+    #[test]
+    fn math_spans_become_inline_images() {
+        let html = replace_math_with_images("inline $x^2$ and\n\n$$\n\\frac{a}{b}\n$$\n");
+        assert!(html.contains("mdoxide-math-inline"));
+        assert!(html.contains("mdoxide-math-block"));
+        assert!(html.contains("data:image/png;base64,"));
+        assert!(!html.contains("$x^2$"));
+    }
+
+    #[test]
+    fn math_inside_code_is_untouched() {
+        let md = "```\n$x$\n```\n\n`$y$`\n";
+        assert_eq!(replace_math_with_images(md), md);
+    }
+
+    #[test]
+    #[ignore = "manual walkthrough; writes a mermaid sample to the temp dir"]
+    fn walkthrough_render_mermaid_sample() {
+        let markdown = "# Mermaid\n\n```mermaid\nflowchart TD\n    A[开始] --> B{判断}\n    B -->|是| C[执行]\n    B -->|否| D[结束]\n```\n";
+        let dir = std::env::temp_dir().join("mdoxide-export-walkthrough");
+        std::fs::create_dir_all(&dir).unwrap();
+        let html = generate_html_document(
+            markdown,
+            Some("Mermaid"),
+            &ThemeColors::light(),
+            true,
+            ParagraphIndent::Off,
+        )
+        .expect("mermaid HTML generation must succeed");
+        let path = dir.join("walkthrough-mermaid.html");
+        std::fs::write(&path, &html).unwrap();
+        println!("wrote {} ({} bytes)", path.display(), html.len());
+        assert!(html.contains("<svg"), "flowchart should be embedded as SVG");
+    }
+
+    #[test]
+    #[ignore = "manual walkthrough; writes a sample HTML file to the temp dir"]
+    fn walkthrough_render_sample() {
+        let dir = std::env::temp_dir().join("mdoxide-export-walkthrough");
+        std::fs::create_dir_all(&dir).unwrap();
+        let html = generate_html_document(
+            crate::export::WALKTHROUGH_MARKDOWN,
+            Some("导出走查"),
+            &ThemeColors::light(),
+            true,
+            ParagraphIndent::Off,
+        )
+        .expect("walkthrough HTML generation must succeed");
+        let path = dir.join("walkthrough.html");
+        std::fs::write(&path, &html).unwrap();
+        println!("wrote {} ({} bytes)", path.display(), html.len());
     }
 }
