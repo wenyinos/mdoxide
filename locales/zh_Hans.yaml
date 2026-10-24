@@ -157,6 +157,8 @@ dialog:
     page_numbers: 包含页码
     use_theme_colors: 使用当前编辑器主题（否则在白纸上打印）
     open_after_export: 导出后打开文件
+    allow_active_content: "允许活动内容（脚本、iframe）"
+    allow_active_content_tooltip: "原样保留 HTML。仅对可信文档启用。"
     export: 导出…
   html_export:
     title: 导出为 HTML

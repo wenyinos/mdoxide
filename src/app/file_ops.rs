@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 /// File size threshold (bytes) above which background thread loading is used.
 /// Files below this threshold are loaded synchronously (fast enough for UI).
-const BACKGROUND_LOAD_THRESHOLD: u64 = 5 * 1024 * 1024; // 5 MB
+const BACKGROUND_LOAD_THRESHOLD: u64 = crate::config::BACKGROUND_LOAD_BYTES;
 
 /// Chunk size for background file reading (controls progress update granularity).
 const LOAD_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB

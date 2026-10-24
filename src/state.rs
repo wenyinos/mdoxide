@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 /// File size threshold (bytes) above which a performance warning toast is shown on open.
 /// Kept as a constant for now; can be moved to settings later.
-const LARGE_FILE_THRESHOLD_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+const LARGE_FILE_THRESHOLD_BYTES: u64 = crate::config::LARGE_FILE_WARNING_BYTES;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content Hashing Helper
@@ -1041,7 +1041,7 @@ impl FoldState {
 /// Large files:
 /// - Use hash-based modification detection instead of storing full original_content
 /// - Clear original_bytes after initial load to save memory
-pub const LARGE_FILE_THRESHOLD: usize = 1_000_000; // 1MB
+pub const LARGE_FILE_THRESHOLD: usize = crate::config::DOCUMENT_LARGE_BYTES;
 
 /// Reduced max undo groups for large files (operations are tiny, but cap defensively).
 const LARGE_FILE_MAX_UNDO_GROUPS: usize = 200;
@@ -7602,7 +7602,8 @@ mod tests {
         ];
         settings.active_tab_index = 1; // Second tab active
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file1);
@@ -7651,7 +7652,8 @@ mod tests {
         ];
         settings.active_tab_index = 1;
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Clean up
         let _ = std::fs::remove_file(&temp_file);
@@ -8075,5 +8077,60 @@ mod tests {
 
         // Clean up
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+    #[test]
+    fn test_replace_from_disk_updates_anchor_and_revision() {
+        let mut tab = Tab::new(1);
+        let before = tab.content_version();
+        tab.replace_from_disk(b"hello external".to_vec());
+        assert_eq!(tab.content, "hello external");
+        assert!(!tab.is_modified());
+        assert!(tab.content_version() > before);
+    }
+
+    #[test]
+    fn test_replace_from_disk_utf8_bom() {
+        let mut tab = Tab::new(2);
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("bom text".as_bytes());
+        tab.replace_from_disk(bytes);
+        assert_eq!(tab.content, "bom text");
+        assert!(tab.had_bom);
+        assert_eq!(tab.current_encoding, "UTF-8");
+    }
+
+    #[test]
+    fn test_replace_from_disk_equal_length_large_file() {
+        let mut tab = Tab::new(3);
+        let a = "a".repeat(crate::config::DOCUMENT_LARGE_BYTES + 32);
+        tab.replace_from_disk(a.into_bytes());
+        assert!(tab.is_large_file());
+        let b = "b".repeat(crate::config::DOCUMENT_LARGE_BYTES + 32);
+        tab.replace_from_disk(b.clone().into_bytes());
+        assert_eq!(tab.content, b);
+        assert!(!tab.is_modified());
+    }
+
+    #[test]
+    fn test_restore_failure_keeps_existing_tabs() {
+        let mut state = AppState::with_settings(Settings::default());
+        state.new_tab();
+        let existing_id = state.active_tab().unwrap().id;
+
+        let mut session = crate::config::SessionState::default();
+        session.tabs.push(crate::config::SessionTabState {
+            tab_id: 99,
+            path: Some(PathBuf::from("/nonexistent/mdoxide/restore.md")),
+            ..Default::default()
+        });
+        let result = crate::config::SessionRestoreResult {
+            session: Some(session),
+            is_crash_recovery: false,
+            recovered_content: std::collections::HashMap::new(),
+        };
+
+        assert!(!state.restore_from_session_result(&result));
+        assert_eq!(state.tab_count(), 1);
+        assert_eq!(state.active_tab().unwrap().id, existing_id);
     }
 }

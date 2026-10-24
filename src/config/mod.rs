@@ -12,10 +12,12 @@
 
 mod persistence;
 mod session;
+mod size_policy;
 mod settings;
 mod snippets;
 
 pub use persistence::*;
 pub use session::*;
+pub use size_policy::*;
 pub use settings::*;
 pub use snippets::*;

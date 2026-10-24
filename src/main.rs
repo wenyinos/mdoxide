@@ -341,7 +341,7 @@ fn main() -> eframe::Result<()> {
         native_options,
         Box::new(move |cc| {
             diag::trace("eframe CreationContext — MDOxideApp::new");
-            let mut app = MDOxideApp::new(cc);
+            let mut app = MDOxideApp::new(cc, settings);
             diag::trace("MDOxideApp::new finished");
 
             // Store the single-instance listener for polling in the update loop

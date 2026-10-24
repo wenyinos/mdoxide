@@ -2704,7 +2704,7 @@ impl Default for Settings {
                 r"PS.*>\s*$".to_string(),
             ],
             terminal_breathing_color: egui::Color32::from_rgb(100, 149, 237),
-            terminal_auto_load_layout: true,
+            terminal_auto_load_layout: false,
             terminal_auto_save_layout: true,
             terminal_macros: std::collections::HashMap::new(),
             terminal_sound_enabled: false, // Sound notification disabled by default

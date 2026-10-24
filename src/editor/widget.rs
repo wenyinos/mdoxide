@@ -106,7 +106,7 @@ pub fn cleanup_mdoxide_editor(ctx: &egui::Context, tab_id: usize) {
 }
 
 /// File size threshold above which some features are disabled (5MB)
-const LARGE_FILE_THRESHOLD: usize = 5 * 1024 * 1024;
+const LARGE_FILE_THRESHOLD: usize = crate::config::EDITOR_LARGE_BYTES;
 
 /// Result of showing the editor widget.
 pub struct EditorOutput {

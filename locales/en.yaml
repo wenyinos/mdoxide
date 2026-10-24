@@ -160,6 +160,8 @@ dialog:
     page_numbers: "Include page numbers"
     use_theme_colors: "Use the active editor theme (otherwise print on white)"
     open_after_export: "Open the file after export"
+    allow_active_content: "Allow active content (scripts, iframes)"
+    allow_active_content_tooltip: "Pass raw HTML through. Enable only for documents you trust."
     export: "Export…"
   html_export:
     title: "Export to HTML"

@@ -69,6 +69,9 @@ pub struct HtmlExportOptions {
     pub use_theme_colors: bool,
     /// Extra user stylesheet appended at end of `<style>`.
     pub custom_css: Option<String>,
+    /// Pass raw HTML through to the exported file. Off by default so exporting
+    /// untrusted Markdown cannot inject scripts into a browser.
+    pub allow_active_content: bool,
 }
 
 impl Default for HtmlExportOptions {
@@ -85,6 +88,7 @@ impl Default for HtmlExportOptions {
             open_after_export: false,
             use_theme_colors: true,
             custom_css: None,
+            allow_active_content: false,
         }
     }
 }

@@ -944,7 +944,7 @@ pub fn generate_html_document_export(
     comrak_opts.extension.footnotes = true;
     comrak_opts.extension.header_ids = Some(String::new());
     comrak_opts.extension.front_matter_delimiter = Some("---".to_string());
-    comrak_opts.render.unsafe_ = true;
+    comrak_opts.render.unsafe_ = options.allow_active_content;
     comrak_opts.render.sourcepos = options.include_html_comments;
 
     let adapter = MDOxideHtmlHighlighter {

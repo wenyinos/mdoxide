@@ -250,6 +250,33 @@ impl MDOxideApp {
     ) -> Option<DeferredFormatAction> {
         let ctx = ui.ctx().clone();
         let zen_mode = self.state.is_zen_mode();
+
+        // Mermaid diagnostics only depend on the active document revision.
+        // Compute once per revision instead of cloning + hashing the whole
+        // buffer on every frame (the report's P1 per-frame scan).
+        let active_is_markdown = self
+            .state
+            .active_tab()
+            .map(|t| t.file_type() == crate::state::FileType::Markdown)
+            .unwrap_or(false);
+        if active_is_markdown {
+            let key = self
+                .state
+                .active_tab()
+                .map(|t| (t.id, t.content_version()));
+            if self.cached_mermaid_key != key {
+                if let Some(tab) = self.state.active_tab() {
+                    self.cached_mermaid_diagnostics =
+                        crate::markdown::compute_mermaid_diagnostics(&tab.content);
+                    self.cached_mermaid_key = key;
+                }
+            }
+        } else {
+            self.cached_mermaid_diagnostics.clear();
+            self.cached_mermaid_key = None;
+        }
+        let mermaid_diagnostics = self.cached_mermaid_diagnostics.clone();
+
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
         let mut pending_wikilink_target: Option<String> = None;
 
@@ -791,13 +818,35 @@ impl MDOxideApp {
                             // Get tab data needed for minimap before mutable borrow
                             // For semantic: structure-based minimap with headings
                             // For pixel: code overview minimap
+                            // The semantic minimap outline only depends on the
+                            // document revision; cache it instead of re-parsing
+                            // the whole file on every frame.
+                            if minimap_enabled && use_semantic_minimap {
+                                if let Some(tab) = self.state.active_tab() {
+                                    let key = (tab.id, tab.content_version());
+                                    let stale = self
+                                        .cached_minimap_outline
+                                        .as_ref()
+                                        .map(|(id, ver, _)| (*id, *ver) != key)
+                                        .unwrap_or(true);
+                                    if stale {
+                                        let outline = crate::editor::extract_outline_for_file(
+                                            &tab.content,
+                                            tab.path.as_deref(),
+                                        );
+                                        self.cached_minimap_outline =
+                                            Some((key.0, key.1, outline));
+                                    }
+                                }
+                            }
+                            let semantic_outline = self
+                                .cached_minimap_outline
+                                .as_ref()
+                                .map(|(_, _, outline)| outline.clone())
+                                .unwrap_or_default();
                             let semantic_minimap_data = if minimap_enabled && use_semantic_minimap {
                                 self.state.active_tab().map(|t| {
-                                    // Extract outline for semantic minimap
-                                    let outline = crate::editor::extract_outline_for_file(
-                                        &t.content,
-                                        t.path.as_deref()
-                                    );
+                                    let outline = semantic_outline;
                                     let total_lines = t.content.lines().count();
                                     (
                                         outline,
@@ -861,14 +910,7 @@ impl MDOxideApp {
                             // for markdown files so the raw editor shows
                             // squiggles under broken ```mermaid``` blocks.
                             if is_markdown_file {
-                                if let Some(content) = self.state
-                                    .active_tab()
-                                    .map(|t| t.content.clone())
-                                {
-                                    tab_diagnostics.extend(
-                                        crate::markdown::compute_mermaid_diagnostics(&content),
-                                    );
-                                }
+                                tab_diagnostics.extend(mermaid_diagnostics.iter().cloned());
                             }
 
                             // Raw mode: MDOxideEditor owns undo via EditHistory

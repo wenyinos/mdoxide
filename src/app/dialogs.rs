@@ -417,6 +417,11 @@ impl MDOxideApp {
                     t!("dialog.pdf_export.use_theme_colors").to_string(),
                 );
                 ui.checkbox(
+                    &mut opts.allow_active_content,
+                    t!("dialog.html_export.allow_active_content").to_string(),
+                )
+                .on_hover_text(t!("dialog.html_export.allow_active_content_tooltip").to_string());
+                ui.checkbox(
                     &mut opts.open_after_export,
                     t!("dialog.html_export.open_after_export").to_string(),
                 );

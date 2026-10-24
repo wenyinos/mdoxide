@@ -94,6 +94,11 @@ pub struct MDOxideApp {
     pipeline_panel: crate::ui::PipelinePanel,
     /// Cached document outline (updated when content changes)
     cached_outline: DocumentOutline,
+    /// Mermaid diagnostics cached by (tab id, content revision).
+    cached_mermaid_diagnostics: Vec<crate::lsp::state::DiagnosticEntry>,
+    cached_mermaid_key: Option<(usize, u64)>,
+    /// Semantic minimap outline cached by (tab id, content revision).
+    cached_minimap_outline: Option<(usize, u64, DocumentOutline)>,
     /// Cached document statistics for markdown files (updated when content changes)
     cached_doc_stats: Option<DocumentStats>,
     /// Hash of the last content used to generate outline (for change detection)
@@ -207,7 +212,7 @@ impl MDOxideApp {
     /// This initializes the application state from the config file and applies
     /// the saved theme preference. It also checks for crash recovery and
     /// restores the previous session if needed.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, settings: crate::config::Settings) -> Self {
         use crate::config::{create_lock_file, load_session_state, SessionSaveThrottle};
 
         info!("Initializing MDOxide");
@@ -261,7 +266,7 @@ impl MDOxideApp {
                 .unwrap_or(false);
 
         crate::log_memory("Before AppState::new()");
-        let mut state = AppState::new();
+        let mut state = AppState::with_settings(settings);
         crate::log_memory("After AppState::new()");
 
         // If we have a valid session to restore (but no crash with unsaved changes),
@@ -426,6 +431,9 @@ impl MDOxideApp {
             search_panel: SearchPanel::new(),
             pipeline_panel,
             cached_outline: DocumentOutline::new(),
+            cached_mermaid_diagnostics: Vec::new(),
+            cached_mermaid_key: None,
+            cached_minimap_outline: None,
             cached_doc_stats: None,
             last_outline_content_hash: 0,
             pending_scroll_to_line: None,
