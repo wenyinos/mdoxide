@@ -47,7 +47,7 @@ const DEFAULT_FONT_SIZE: f32 = 15.0;
 
 /// Fixed line height for Phase 1 rendering.
 /// This provides consistent vertical spacing regardless of font metrics.
-const FIXED_LINE_HEIGHT: f32 = 20.0;
+const FIXED_LINE_HEIGHT: f32 = 22.0;
 
 /// A search match with pre-computed metadata for efficient rendering.
 ///
@@ -4086,7 +4086,7 @@ mod tests {
     #[test]
     fn test_fixed_line_height() {
         // Verify the fixed line height constant is 20.0
-        assert!((FIXED_LINE_HEIGHT - 20.0).abs() < 0.01);
+        assert!((FIXED_LINE_HEIGHT - 22.0).abs() < 0.01);
     }
 
     #[test]

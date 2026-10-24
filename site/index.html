@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MDOxide — 原生 Rust Markdown 编辑器</title>
+  <meta name="description" content="MDOxide 是用 Rust 重实现的 MarkText 风格所见即所得 Markdown 编辑器：无 WebView、无 Electron、无 JavaScript 运行时。">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <header class="hero">
+    <img class="icon" src="assets/icon.png" alt="MDOxide 图标">
+    <p class="eyebrow">RUST · EGUI · NATIVE</p>
+    <h1>MDOxide</h1>
+    <p class="tagline">原生 Rust Markdown 编辑器</p>
+    <p class="sub">MarkText 的编辑体验，用 Rust 重新实现。<br>无 WebView、无 Electron、无 JavaScript 运行时。</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/wenyinos/mdoxide/releases/latest">下载 v0.2.0</a>
+      <a class="btn" href="https://github.com/wenyinos/mdoxide">GitHub</a>
+    </div>
+    <p class="platforms">Linux · Windows</p>
+  </header>
+
+  <main>
+    <section class="section">
+      <h2>能力</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>所见即所得</h3>
+          <p>按块切换渲染与编辑态，提交边界撤销；源码 / 渲染 / 分屏三种视图。</p>
+        </article>
+        <article class="card">
+          <h3>MarkText 风格界面</h3>
+          <p>无边框标题栏、居中标签页、三页签侧边栏、选区浮动格式条、专注与打字机模式。</p>
+        </article>
+        <article class="card">
+          <h3>图表与公式</h3>
+          <p>原生 Mermaid 渲染（11 种图表）与 RaTeX 数学公式，编辑器内直接显示。</p>
+        </article>
+        <article class="card">
+          <h3>HTML / PDF 导出</h3>
+          <p>内嵌中文字体、表格、代码块、链接与公式图片；HTML 自包含，暗色主题自动反色。</p>
+        </article>
+        <article class="card">
+          <h3>中文输入</h3>
+          <p>fcitx5 预编辑、候选窗、组合中 Backspace、提交与 Esc 取消已在 Wayland 真机验证。</p>
+        </article>
+        <article class="card">
+          <h3>Duskfox Blurred</h3>
+          <p>直接读取 Zed 的 nvim-nightfox 色号，半透明表面，可配合 KWin 窗口模糊。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section theme-section">
+      <div>
+        <h2>Duskfox Blurred</h2>
+        <p class="muted">背景 <code>#232136E3</code> · 正文 <code>#E0DEF4</code> · 强调 <code>#65B1CD</code></p>
+        <div class="palette">
+          <span style="background:#232136"></span>
+          <span style="background:#E0DEF4"></span>
+          <span style="background:#65B1CD"></span>
+          <span style="background:#EA9A97"></span>
+          <span style="background:#C4A7E7"></span>
+          <span style="background:#F6C177"></span>
+          <span style="background:#A3BE8C"></span>
+        </div>
+      </div>
+      <img class="poster" src="assets/poster.png" alt="MDOxide v0.2.0 海报">
+    </section>
+
+    <section class="section">
+      <h2>安装</h2>
+      <div class="install-grid">
+        <article class="card">
+          <h3>Fedora / RHEL / openSUSE</h3>
+          <pre><code>sudo dnf install ./mdoxide-editor-0.2.0-1.x86_64.rpm</code></pre>
+        </article>
+        <article class="card">
+          <h3>Debian / Ubuntu</h3>
+          <pre><code>sudo apt install ./mdoxide-editor_0.2.0-1_amd64.deb</code></pre>
+        </article>
+        <article class="card">
+          <h3>Windows x64</h3>
+          <p>运行 <code>MDOxide-0.2.0-setup.exe</code>；SmartScreen 提示时选「更多信息 → 仍要运行」。</p>
+        </article>
+      </div>
+      <p class="muted small">发布页提供 <code>checksums.txt</code>，可用 <code>sha256sum -c checksums.txt</code> 校验。</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>wenyinos/mdoxide</span>
+    <span>MIT License</span>
+    <span>基于上游 v0.3.0 与 MarkText 交互设计</span>
+  </footer>
+</body>
+</html>

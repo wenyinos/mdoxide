@@ -107,6 +107,7 @@ impl WidgetColors {
         let is_dark = match theme {
             Theme::Dark => true,
             Theme::Light => false,
+            Theme::DuskfoxBlurred => true,
             Theme::System => visuals.dark_mode,
         };
 
@@ -1049,6 +1050,7 @@ pub(crate) fn build_inline_markdown_layout_job(
             egui::text::TextFormat {
                 font_id: FontId::new(font_size, family),
                 color: text_color,
+                line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
                 ..Default::default()
             },
         );
@@ -1230,6 +1232,7 @@ fn build_cell_layout_job_with_base_bold(
             egui::text::TextFormat {
                 font_id: FontId::new(font_size, family),
                 color: text_color,
+                line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
                 ..Default::default()
             },
         );
@@ -1299,6 +1302,7 @@ fn append_link_span(
         font_id: FontId::new(font_size, family),
         color: link_color,
         underline: egui::Stroke::new(1.0, link_color),
+        line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
         ..Default::default()
     };
     if italic {
@@ -1506,6 +1510,7 @@ fn parse_inline_markdown(
                         font_id: FontId::new(font_size * 0.9, FontFamily::Monospace),
                         color: text_color,
                         background: code_bg,
+                        line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
                         ..Default::default()
                     },
                 );
@@ -1589,6 +1594,7 @@ fn flush_plain(
     let mut fmt = egui::text::TextFormat {
         font_id: FontId::new(font_size, family),
         color: text_color,
+        line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
         ..Default::default()
     };
     if italic {
@@ -2286,7 +2292,7 @@ impl<'a> EditableTable<'a> {
         let _char_width = self.font_size * 0.6;
         let cell_h_pad = 8.0_f32;
         let cell_v_pad = 6.0_f32;
-        let line_height = self.font_size * 1.4;
+        let line_height = self.font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR;
 
         // Use the explicit max_width if provided, otherwise fall back to available
         let frame_h_margin = 4.0 * 2.0;

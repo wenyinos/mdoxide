@@ -320,7 +320,7 @@ impl MDOxideApp {
                 );
                 state.settings.font_family = crate::config::EditorFont::default();
                 state.pending_toast =
-                    Some(format!("Font failed to load: {reason}. Reverted to Inter."));
+                    Some(t!("error.font_load_reverted", reason = reason).to_string());
             } else {
                 info!("Loaded custom font: {:?}", state.settings.font_family);
             }
@@ -1288,7 +1288,9 @@ impl MDOxideApp {
                 ui.add_space(4.0);
 
                 if let Some(path) = &recovery_info.path {
-                    ui.label(format!("File: {}", path.display()));
+                    ui.label(
+                        t!("recovery.file_path", path = path.display().to_string()).to_string(),
+                    );
                 } else {
                     ui.label(t!("recovery.untitled").to_string());
                 }
@@ -2210,9 +2212,7 @@ impl MDOxideApp {
 
                     ui.separator();
                     ui.label(t!("echo.replacement_note").to_string());
-                    ui.label(
-                        "Demonstrates: lazy worker spawn, mpsc communication, non-blocking UI.",
-                    );
+                    ui.label(t!("echo.demo_note").to_string());
                 });
         }
 
@@ -2503,6 +2503,12 @@ impl MDOxideApp {
 }
 
 impl eframe::App for MDOxideApp {
+    fn clear_color(&self, _visuals: &eframe::egui::Visuals) -> [f32; 4] {
+        // Transparent clear: opaque themes paint their own background, while
+        // Duskfox Blurred lets the compositor background show through.
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
 

@@ -26,6 +26,18 @@ impl HtmlExportThemeChoice {
         }
     }
 
+    pub fn label_localized(&self) -> String {
+        match self {
+            HtmlExportThemeChoice::FollowEditor => {
+                rust_i18n::t!("dialog.html_export.theme_follow_editor")
+            }
+            HtmlExportThemeChoice::Light => rust_i18n::t!("dialog.html_export.theme_light"),
+            HtmlExportThemeChoice::Dark => rust_i18n::t!("dialog.html_export.theme_dark"),
+            HtmlExportThemeChoice::Auto => rust_i18n::t!("dialog.html_export.theme_auto"),
+        }
+        .to_string()
+    }
+
     pub fn all() -> &'static [HtmlExportThemeChoice] {
         &[
             HtmlExportThemeChoice::FollowEditor,

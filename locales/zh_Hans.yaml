@@ -29,9 +29,19 @@ view_mode:
   raw_desc: 纯 Markdown 文本编辑
   rendered_desc: 所见即所得渲染编辑
   split_desc: 源代码编辑器 + 渲染预览并排显示
+  cycle_hint: '%{label}（%{shortcut}+E 循环切换）'
+  unavailable_hint: '%{label}（此文件类型不可用）'
+  toggle_hint: '%{label}（%{shortcut}+E 切换）'
+backlinks:
+  count_one: 1 条反向链接
+  count_many: '%{count} 条反向链接'
+  no_file: 打开文件后查看反向链接
+  no_links: 没有文件链接到此文档
 format_toolbar:
   format_label: 格式
   show_toolbar_tooltip: 显示格式工具栏
+  hide_toolbar_tooltip: 隐藏格式工具栏
+  show_side_panel_tooltip: 显示侧边栏
   mermaid_menu: Mermaid…
   mermaid_entry_tooltip: 在光标处插入 Mermaid 图表
   mermaid_flowchart: 流程图
@@ -46,6 +56,8 @@ format_toolbar:
   mermaid_timeline: 时间线
   mermaid_gitgraph: Git 图
 status:
+  errors: '%{count} 个错误'
+  warnings: '%{count} 个警告'
   untitled: 未命名
   no_file: 无文件打开
   vim_mode: Vim 编辑模式（Esc = 普通模式，i = 插入模式）
@@ -125,6 +137,12 @@ dialog:
     description: 将当前文档渲染为自包含的 PDF 文件。
     page_size: 页面大小
     margins: 页边距
+    margin_narrow: 窄（10 毫米）
+    margin_comfortable: 适中（19 毫米）
+    margin_wide: 宽（25 毫米）
+    margin_custom: 自定义…
+    page_size_us_letter: 美式 Letter
+    page_size_us_legal: 美式 Legal
     custom_margins_hint: 上 / 右 / 下 / 左（PDF 点）
     page_break_h1: 每个一级标题另起一页
     page_numbers: 包含页码
@@ -136,6 +154,16 @@ dialog:
     description: 生成带主题的 HTML 文件，可选大纲、注释与资源内嵌。
     self_contained: 自包含（内嵌本地图片；查看时无需网络）
     image_paths: 链接图片
+    image_embed_base64: 内嵌为 Base64
+    image_relative_paths: 相对路径
+    image_absolute_paths: 绝对路径
+    image_embed_base64_desc: 图片内嵌到 HTML（自包含，文件更大）
+    image_relative_paths_desc: 保持图片路径相对于文档
+    image_absolute_paths_desc: 转换为绝对文件路径
+    theme_follow_editor: 跟随编辑器
+    theme_light: 浅色
+    theme_dark: 深色
+    theme_auto: 自动（跟随系统）
     include_outline: 包含大纲（目录）
     include_comments: 包含 HTML 注释 / 源码标记
     link_base: 相对链接的基础目录（留空则使用文档所在目录）
@@ -159,10 +187,16 @@ settings:
     theme_dark: 深色
     theme_light: 浅色
     theme_system: 跟随系统
+    theme_duskfox_blurred: Duskfox 模糊
     restore_session: 启动时恢复之前的会话
   editor:
     language_servers: 语言服务器
     language_servers_hint: 为每个检测到的服务器指定可执行文件路径，留空则使用 PATH。
+    language_server_default_path: 使用 PATH 默认值
+    strict_line_breaks: 严格换行
+    strict_line_breaks_tooltip: 在渲染视图中将单个换行视为硬换行
+    lsp_enabled: LSP（语言服务器）
+    lsp_enabled_tooltip: 自动检测并启动语言服务器以提供代码智能（需要服务器位于 PATH）
     title: 编辑器
     font_family: 字体
     font_size: 字体尺寸
@@ -704,6 +738,7 @@ a11y:
   close_button: 关闭
   minimize_button: 最小化
 recovery:
+  file_path: '文件：%{path}'
   auto_save:
     title: 自动保存恢复
     backup_found: 已找到该文件的自动保存备份。
@@ -801,6 +836,7 @@ csv:
   large_file_warning: 文件较大（%{size} MB）。显示原始内容。
   editing_disabled_large: 文件较大（%{size} MB）。单元格编辑已禁用——切换到源码视图（Ctrl+E）进行编辑。
 pipeline:
+  exit_code: '退出码：%{code}'
   title: ⚡ 实时管道
   command_placeholder: jq '.items[]' 或 yq '.data' ...
   run: ▶ 运行
@@ -860,6 +896,17 @@ tooltip:
   git_branch: 当前 Git 分支
   new_tab: 新标签页
 ribbon:
+  new_tooltip: 新建（%{shortcut}+N）
+  open_file_tooltip: 打开文件（%{shortcut}+O）
+  open_folder_tooltip: 打开文件夹（%{shortcut}+Shift+O）
+  close_workspace: 关闭工作区
+  search_in_files_tooltip: 在文件中搜索（%{shortcut}+Shift+F）
+  quick_switcher_tooltip: 快速切换文件（%{shortcut}+P）
+  save_tooltip: 保存（%{shortcut}+S）
+  save_as_tooltip: 另存为（%{shortcut}+Shift+S）
+  find_replace_tooltip: 查找/替换（%{shortcut}+F）
+  toggle_terminal_tooltip: 切换终端（%{shortcut}+`）
+  pipeline_tooltip: '%{label}（%{shortcut}+Shift+L）'
   format_document: 格式化文档（美化打印）
   validate_syntax: 验证语法
   pipeline: 实时管道...
@@ -872,6 +919,7 @@ ribbon:
   coming_soon: 即将推出
   heading_level: 标题 %{level}
 welcome:
+  custom_shortcut: '自定义：%{binding}'
   command_palette: 命令面板
   quick_access: 快速访问所有命令。按下快捷键打开可搜索的命令列表。
   shortcut: 快捷键
@@ -1007,6 +1055,16 @@ title_bar:
   restore: 还原
   maximize: 最大化
 error:
+  read_failed: '读取失败：%{error}'
+  decode_failed: '解码失败：%{error}'
+  read_file_failed: '读取文件失败：%{error}'
+  parse_pdf_failed: '解析 PDF 失败：%{error}'
+  load_image_failed: '加载图片失败：%{error}'
+  load_pdf_failed: '加载 PDF 失败：%{error}'
+  render_page_failed: '渲染页面失败：%{error}'
+  font_load_reverted: '字体加载失败：%{reason}。已恢复为 Inter。'
+  export_failed: '导出失败：%{error}'
+  open_failed: '打开失败：%{error}'
   save_failed: '保存文件失败：
 
     %{error}'
@@ -1038,6 +1096,9 @@ error:
 
     %{error}'
   encoding_failed: 更改编码失败：%{error}
+viewer:
+  loading: '正在加载 %{name}'
+  pdf_status: 'PDF  |  %{size}  |  %{zoom}%'
 file_dialog:
   open_workspace: 打开工作区文件夹
   open_files: 打开文件
@@ -1053,6 +1114,7 @@ file_dialog:
     all: 所有文件
     html: HTML 文件
 command_palette:
+  input_hint: 输入命令...
   no_matching_commands: 没有匹配的命令
   recent: 最近
 command:
@@ -1071,6 +1133,11 @@ frontmatter:
   add_button: 添加 frontmatter
   add: 添加
   new_key_hint: 新键…
+  remove_field: 删除字段
+  value_hint: 值
+  number_hint: 数字
+  remove_tag: 删除标签
+  add_tag_hint: 添加标签…
 editor:
   pdf_no_pages: PDF 没有页面
   file_load_failed: 文件加载失败

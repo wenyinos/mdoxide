@@ -166,7 +166,7 @@ impl MDOxideApp {
                 Err(e) => {
                     let _ = tx.send(FileLoadMsg::Error {
                         tab_id,
-                        error: format!("Failed to open: {}", e),
+                        error: t!("error.open_failed", error = e.to_string()).to_string(),
                     });
                     return;
                 }
@@ -190,7 +190,7 @@ impl MDOxideApp {
                     Err(e) => {
                         let _ = tx.send(FileLoadMsg::Error {
                             tab_id,
-                            error: format!("Read error: {}", e),
+                            error: t!("error.read_failed", error = e.to_string()).to_string(),
                         });
                         return;
                     }

@@ -706,13 +706,17 @@ impl PipelinePanel {
                         truncated,
                     } = &tab_state.status
                     {
-                        ui.label(RichText::new(format!("Exit: {}", exit_code)).small().color(
-                            if *exit_code == 0 {
+                        ui.label(
+                            RichText::new(
+                                t!("pipeline.exit_code", code = exit_code).to_string(),
+                            )
+                            .small()
+                            .color(if *exit_code == 0 {
                                 success_color
                             } else {
                                 error_color
-                            },
-                        ));
+                            }),
+                        );
                         ui.label(
                             RichText::new(format!("{}ms", duration_ms))
                                 .small()

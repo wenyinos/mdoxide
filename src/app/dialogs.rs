@@ -371,10 +371,10 @@ impl MDOxideApp {
                 if !opts.self_contained {
                     ui.label(t!("dialog.html_export.image_paths").to_string());
                     egui::ComboBox::from_id_salt("html_img_handling")
-                        .selected_text(opts.image_handling.label())
+                        .selected_text(opts.image_handling.label_localized())
                         .show_ui(ui, |ui| {
                             for h in ImageHandling::all() {
-                                ui.selectable_value(&mut opts.image_handling, *h, h.label());
+                                ui.selectable_value(&mut opts.image_handling, *h, h.label_localized());
                             }
                         });
                 }
@@ -396,10 +396,10 @@ impl MDOxideApp {
                 ui.horizontal(|ui| {
                     ui.label(t!("dialog.html_export.theme").to_string());
                     egui::ComboBox::from_id_salt("html_export_theme")
-                        .selected_text(opts.theme.label())
+                        .selected_text(opts.theme.label_localized())
                         .show_ui(ui, |ui| {
                             for c in HtmlExportThemeChoice::all() {
-                                ui.selectable_value(&mut opts.theme, *c, c.label());
+                                ui.selectable_value(&mut opts.theme, *c, c.label_localized());
                             }
                         });
                 });
@@ -483,23 +483,23 @@ impl MDOxideApp {
                     .show(ui, |ui| {
                         ui.label(t!("dialog.pdf_export.page_size").to_string());
                         egui::ComboBox::from_id_salt("pdf_page_size")
-                            .selected_text(opts.page_size.label())
+                            .selected_text(opts.page_size.label_localized())
                             .show_ui(ui, |ui| {
                                 for size in PdfPageSize::all() {
-                                    ui.selectable_value(&mut opts.page_size, *size, size.label());
+                                    ui.selectable_value(&mut opts.page_size, *size, size.label_localized());
                                 }
                             });
                         ui.end_row();
 
                         ui.label(t!("dialog.pdf_export.margins").to_string());
                         egui::ComboBox::from_id_salt("pdf_margins")
-                            .selected_text(opts.margin_preset.label())
+                            .selected_text(opts.margin_preset.label_localized())
                             .show_ui(ui, |ui| {
                                 for preset in PdfMarginPreset::all() {
                                     ui.selectable_value(
                                         &mut opts.margin_preset,
                                         *preset,
-                                        preset.label(),
+                                        preset.label_localized(),
                                     );
                                 }
                             });

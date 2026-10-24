@@ -120,6 +120,7 @@ impl ThemeManager {
             Theme::Light => Theme::Dark,
             Theme::Dark => Theme::Light,
             Theme::System => Theme::Dark, // System -> Dark as starting point
+            Theme::DuskfoxBlurred => Theme::Light,
         };
         self.set_theme(new_theme);
         new_theme
@@ -131,7 +132,8 @@ impl ThemeManager {
     pub fn cycle(&mut self) -> Theme {
         let new_theme = match self.current_theme {
             Theme::Light => Theme::Dark,
-            Theme::Dark => Theme::Light,
+            Theme::Dark => Theme::DuskfoxBlurred,
+            Theme::DuskfoxBlurred => Theme::Light,
             Theme::System => Theme::Light, // If somehow on System, go to Light
         };
         self.set_theme(new_theme);
@@ -179,6 +181,10 @@ impl ThemeManager {
 
         match self.current_theme {
             Theme::Dark => {
+                ctx.set_theme(egui::ThemePreference::Dark);
+                ctx.set_visuals_of(egui::Theme::Dark, visuals);
+            }
+            Theme::DuskfoxBlurred => {
                 ctx.set_theme(egui::ThemePreference::Dark);
                 ctx.set_visuals_of(egui::Theme::Dark, visuals);
             }
@@ -238,6 +244,9 @@ impl ThemeManager {
         let visuals = match self.current_theme {
             Theme::Light => light::create_light_visuals(acc),
             Theme::Dark => dark::create_dark_visuals(acc),
+            Theme::DuskfoxBlurred => {
+                dark::visuals_from_palette(&ThemeColors::duskfox())
+            }
             Theme::System => {
                 // Follow system preference
                 let system_dark = ctx.global_style().visuals.dark_mode;
@@ -273,6 +282,7 @@ impl ThemeManager {
         match self.current_theme {
             Theme::Dark => true,
             Theme::Light => false,
+            Theme::DuskfoxBlurred => true,
             Theme::System => ctx.global_style().visuals.dark_mode,
         }
     }
@@ -283,6 +293,7 @@ impl ThemeManager {
             Theme::Light => "Light",
             Theme::Dark => "Dark",
             Theme::System => "System",
+            Theme::DuskfoxBlurred => "Duskfox Blurred",
         }
     }
 
@@ -293,6 +304,7 @@ impl ThemeManager {
             Theme::Light => SUN,
             Theme::Dark => MOON,
             Theme::System => DESKTOP,
+            Theme::DuskfoxBlurred => MOON,
         }
     }
 
@@ -301,6 +313,7 @@ impl ThemeManager {
         match self.current_theme {
             Theme::Light => "Light theme".to_string(),
             Theme::Dark => "Dark theme".to_string(),
+            Theme::DuskfoxBlurred => "Duskfox Blurred theme (translucent)".to_string(),
             Theme::System => {
                 let effective = if ctx.global_style().visuals.dark_mode {
                     "dark"

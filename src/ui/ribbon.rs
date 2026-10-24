@@ -213,7 +213,7 @@ impl Ribbon {
             if icon_button(
                 ui,
                 FILE_PLUS,
-                &format!("New ({}+N)", modifier_symbol()),
+                &t!("ribbon.new_tooltip", shortcut = modifier_symbol()).to_string(),
                 true,
                 is_dark,
             )
@@ -226,7 +226,7 @@ impl Ribbon {
             if icon_button(
                 ui,
                 FILE_TEXT,
-                &format!("Open File ({}+O)", modifier_symbol()),
+                &t!("ribbon.open_file_tooltip", shortcut = modifier_symbol()).to_string(),
                 true,
                 is_dark,
             )
@@ -237,14 +237,21 @@ impl Ribbon {
 
             // Open Workspace / Close Workspace button
             if is_workspace_mode {
-                if icon_button(ui, FOLDER_SIMPLE_MINUS, "Close Workspace", true, is_dark).clicked()
+                if icon_button(
+                    ui,
+                    FOLDER_SIMPLE_MINUS,
+                    &t!("ribbon.close_workspace").to_string(),
+                    true,
+                    is_dark,
+                )
+                .clicked()
                 {
                     action = Some(RibbonAction::CloseWorkspace);
                 }
             } else if icon_button(
                 ui,
                 FOLDERS,
-                &format!("Open Folder ({}+Shift+O)", modifier_symbol()),
+                &t!("ribbon.open_folder_tooltip", shortcut = modifier_symbol()).to_string(),
                 true,
                 is_dark,
             )
@@ -258,7 +265,8 @@ impl Ribbon {
                 if icon_button(
                     ui,
                     FILE_MAGNIFYING_GLASS,
-                    &format!("Search in Files ({}+Shift+F)", modifier_symbol()),
+                    &t!("ribbon.search_in_files_tooltip", shortcut = modifier_symbol())
+                        .to_string(),
                     true,
                     is_dark,
                 )
@@ -270,7 +278,8 @@ impl Ribbon {
                 if icon_button(
                     ui,
                     LIGHTNING,
-                    &format!("Quick File Switcher ({}+P)", modifier_symbol()),
+                    &t!("ribbon.quick_switcher_tooltip", shortcut = modifier_symbol())
+                        .to_string(),
                     true,
                     is_dark,
                 )
@@ -287,14 +296,18 @@ impl Ribbon {
                 .show_ui(ui, |ui| {
                     if ui
                         .selectable_label(false, t!("menu.file.save"))
-                        .on_hover_text(format!("Save ({}+S)", modifier_symbol()))
+                        .on_hover_text(
+                            t!("ribbon.save_tooltip", shortcut = modifier_symbol()).to_string(),
+                        )
                         .clicked()
                     {
                         action = Some(RibbonAction::Save);
                     }
                     if ui
                         .selectable_label(false, format!("{}...", t!("menu.file.save_as")))
-                        .on_hover_text(format!("Save As ({}+Shift+S)", modifier_symbol()))
+                        .on_hover_text(
+                            t!("ribbon.save_as_tooltip", shortcut = modifier_symbol()).to_string(),
+                        )
                         .clicked()
                     {
                         action = Some(RibbonAction::SaveAs);
@@ -335,7 +348,12 @@ impl Ribbon {
                     if icon_button(
                         ui,
                         LIGHTNING,
-                        &format!("{} ({}+Shift+L)", t!("ribbon.pipeline"), modifier_symbol()),
+                        &t!(
+                            "ribbon.pipeline_tooltip",
+                            label = t!("ribbon.pipeline"),
+                            shortcut = modifier_symbol()
+                        )
+                        .to_string(),
                         has_editor && pipeline_enabled,
                         is_dark,
                     )
@@ -354,7 +372,7 @@ impl Ribbon {
             if icon_button(
                 ui,
                 MAGNIFYING_GLASS,
-                &format!("Find/Replace ({}+F)", modifier_symbol()),
+                &t!("ribbon.find_replace_tooltip", shortcut = modifier_symbol()).to_string(),
                 true,
                 is_dark,
             )
@@ -371,7 +389,7 @@ impl Ribbon {
                 if icon_button(
                     ui,
                     TERMINAL_WINDOW,
-                    &format!("Toggle Terminal ({}+`)", modifier_symbol()),
+                    &t!("ribbon.toggle_terminal_tooltip", shortcut = modifier_symbol()).to_string(),
                     true,
                     is_dark,
                 )

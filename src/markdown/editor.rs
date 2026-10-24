@@ -423,6 +423,7 @@ impl EditorColors {
         let mut c = match theme {
             Theme::Dark => Self::dark(),
             Theme::Light => Self::light(),
+            Theme::DuskfoxBlurred => Self::dark(),
             Theme::System => {
                 if visuals.dark_mode {
                     Self::dark()
@@ -434,10 +435,13 @@ impl EditorColors {
         let dark = match theme {
             Theme::Dark => true,
             Theme::Light => false,
+            Theme::DuskfoxBlurred => true,
             Theme::System => visuals.dark_mode,
         };
-        c.heading = accent;
-        c.checkbox = accent;
+        if theme != Theme::DuskfoxBlurred {
+            c.heading = accent;
+            c.checkbox = accent;
+        }
         c.link = crate::theme::accent::standard_link_color(dark);
         c
     }
@@ -967,20 +971,20 @@ impl<'a> MarkdownEditor<'a> {
                 let mut layouter = move |ui: &Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
                     let text = buf.as_str();
                     let font_id = FontId::new(font_size, font_family_clone.clone());
-                    let layout_job = if word_wrap {
-                        egui::text::LayoutJob::simple(
-                            text.to_owned(),
+                    let mut layout_job = egui::text::LayoutJob::default();
+                    layout_job.wrap.max_width = if word_wrap { wrap_width } else { f32::INFINITY };
+                    layout_job.append(
+                        text,
+                        0.0,
+                        egui::text::TextFormat {
                             font_id,
-                            ui.visuals().text_color(),
-                            wrap_width,
-                        )
-                    } else {
-                        egui::text::LayoutJob::simple_singleline(
-                            text.to_owned(),
-                            font_id,
-                            ui.visuals().text_color(),
-                        )
-                    };
+                            color: ui.visuals().text_color(),
+                            line_height: Some(
+                                font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR,
+                            ),
+                            ..Default::default()
+                        },
+                    );
                     ui.fonts_mut(|f| f.layout_job(layout_job))
                 };
 
@@ -2631,6 +2635,7 @@ fn render_session_formatted_edit_text(
             egui::text::TextFormat {
                 font_id: FontId::new(font_size, font_family_clone.clone()),
                 color: text_color,
+                line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
                 ..Default::default()
             },
         );
@@ -2860,6 +2865,7 @@ fn render_session_plain_text_block(
             egui::text::TextFormat {
                 font_id: FontId::new(font_size, font_family_clone.clone()),
                 color: text_color,
+                line_height: Some(font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR),
                 ..Default::default()
             },
         );

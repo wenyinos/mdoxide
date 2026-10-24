@@ -107,8 +107,12 @@ impl ThemeColors {
                     Self::light()
                 }
             }
+            crate::config::Theme::DuskfoxBlurred => Self::duskfox(),
         };
-        palette.apply_user_accent(accent);
+        // Duskfox keeps its own accent so the palette matches Zed.
+        if theme != crate::config::Theme::DuskfoxBlurred {
+            palette.apply_user_accent(accent);
+        }
         palette
     }
 
@@ -131,6 +135,67 @@ impl ThemeColors {
             editor: EditorThemeColors::dark(),
             syntax: SyntaxColors::dark(),
             ui: UiColors::dark(),
+        }
+    }
+
+    /// Zed's “Duskfox - blurred”: nightfox dusk palette with translucent
+    /// surfaces so the compositor background shows through.
+    pub fn duskfox() -> Self {
+        fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color32 {
+            Color32::from_rgba_unmultiplied(r, g, b, a)
+        }
+
+        Self {
+            base: BaseColors {
+                background: rgba(0x23, 0x21, 0x36, 0xE3),
+                background_secondary: rgba(0x19, 0x17, 0x26, 0xE3),
+                background_tertiary: rgba(0x43, 0x3C, 0x59, 0xE3),
+                border: rgba(0x2D, 0x2A, 0x45, 0x8C),
+                border_subtle: rgba(0x2D, 0x2A, 0x45, 0x57),
+                hover: rgba(0x43, 0x3C, 0x59, 0x8C),
+                selected: rgba(0x63, 0x57, 0x7D, 0xD9),
+            },
+            text: TextColors {
+                primary: rgba(0xE0, 0xDE, 0xF4, 0xFF),
+                secondary: rgba(0xCD, 0xCB, 0xE0, 0xFF),
+                muted: rgba(0x81, 0x7C, 0x9C, 0xFF),
+                disabled: rgba(0x6E, 0x6A, 0x86, 0xFF),
+                link: rgba(0x65, 0xB1, 0xCD, 0xFF),
+                code: rgba(0xF6, 0xC1, 0x77, 0xFF),
+            },
+            editor: EditorThemeColors {
+                heading: rgba(0xEA, 0x9A, 0x97, 0xFF),
+                blockquote_border: rgba(0x63, 0x57, 0x7D, 0xFF),
+                blockquote_text: rgba(0xCD, 0xCB, 0xE0, 0xFF),
+                code_block_bg: rgba(0x19, 0x17, 0x26, 0xE3),
+                code_block_border: rgba(0x2D, 0x2A, 0x45, 0x8C),
+                horizontal_rule: rgba(0x4B, 0x46, 0x73, 0xFF),
+                list_marker: rgba(0xA6, 0xDA, 0xE3, 0xFF),
+                checkbox: rgba(0x65, 0xB1, 0xCD, 0xFF),
+                table_border: rgba(0x4B, 0x46, 0x73, 0xFF),
+                table_header_bg: rgba(0x43, 0x3C, 0x59, 0xE3),
+            },
+            syntax: SyntaxColors {
+                keyword: rgba(0xC4, 0xA7, 0xE7, 0xFF),
+                string: rgba(0xA3, 0xBE, 0x8C, 0xFF),
+                number: rgba(0xEA, 0x9A, 0x97, 0xFF),
+                comment: rgba(0x81, 0x7C, 0x9C, 0xFF),
+                function: rgba(0x65, 0xB1, 0xCD, 0xFF),
+                type_name: rgba(0xF6, 0xC1, 0x77, 0xFF),
+                variable: rgba(0xE0, 0xDE, 0xF4, 0xFF),
+                operator: rgba(0xCD, 0xCB, 0xE0, 0xFF),
+                punctuation: rgba(0xCD, 0xCB, 0xE0, 0xFF),
+            },
+            ui: UiColors {
+                accent: rgba(0x65, 0xB1, 0xCD, 0xFF),
+                accent_hover: rgba(0xA6, 0xDA, 0xE3, 0xFF),
+                success: rgba(0xA3, 0xBE, 0x8C, 0xFF),
+                warning: rgba(0xF6, 0xC1, 0x77, 0xFF),
+                error: rgba(0xEB, 0x6F, 0x92, 0xFF),
+                info: rgba(0x56, 0x9F, 0xBA, 0xFF),
+                matching_bracket_bg: rgba(0x63, 0x57, 0x7D, 0x60),
+                matching_bracket_border: rgba(0x9C, 0xCF, 0xD8, 0xFF),
+            },
         }
     }
 

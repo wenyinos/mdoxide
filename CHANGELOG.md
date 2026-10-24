@@ -2,6 +2,26 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.2.0] - 2026-10-24
+
+### 新增
+
+- Duskfox Blurred 主题：色号读取自 Zed 的 `nvim-nightfox` 扩展（`Duskfox - blurred`），半透明表面并支持窗口透明
+- 重新设计应用图标：duskfox 配色、透明圆角，覆盖 16–1024 PNG 与 Windows 多尺寸 ICO
+- GitHub Pages 项目主页与竖版项目海报（海报仅标注 `wenyinos/mdoxide`）
+- Release 发布页模板与 `checksums.txt`：由 release workflow 汇总 Linux/Windows 产物后统一发布
+
+### 变更
+
+- 界面汉化补全：中英文 989 个翻译键完全对齐，命令名、命令分类、设置项、错误提示全部本地化
+- 启动语言默认跟随系统区域设置，用户显式选择后固定
+- 默认字号 15px、1.5 倍行高；中文界面优先思源黑体
+
+### 修复
+
+- Windows NSIS 安装包：相对路径按脚本目录解析、版本号去除 `v` 前缀
+- 界面残余英文：ribbon、视图切换、反向链接、状态栏、PDF/图片错误提示等
+
 ## [0.1.2] - 2026-10-24
 
 ### 新增

@@ -318,7 +318,7 @@ impl FormatToolbar {
                 if btn.clicked() {
                     toggle_visibility = true;
                 }
-                btn.on_hover_text("Hide formatting toolbar");
+                btn.on_hover_text(t!("format_toolbar.hide_toolbar_tooltip"));
             });
 
             FormatToolbarOutput {
@@ -596,7 +596,7 @@ pub fn side_panel_toggle_strip(ui: &mut egui::Ui, is_dark: bool, blocks_clicks: 
                 clicked = true;
             }
 
-            response.on_hover_text("Show side panel");
+            response.on_hover_text(t!("format_toolbar.show_side_panel_tooltip"));
         });
 
     clicked

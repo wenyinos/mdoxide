@@ -1,5 +1,5 @@
 !ifndef VERSION
-!define VERSION "0.1.2"
+!define VERSION "0.2.0"
 !endif
 
 !define APPNAME "MDOxide"

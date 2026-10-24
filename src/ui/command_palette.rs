@@ -220,7 +220,7 @@ impl CommandPalette {
 
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.query)
-                                    .hint_text("Type a command...")
+                                    .hint_text(t!("command_palette.input_hint").to_string())
                                     .frame(egui::Frame::NONE)
                                     .desired_width(470.0)
                                     .font(egui::TextStyle::Body),

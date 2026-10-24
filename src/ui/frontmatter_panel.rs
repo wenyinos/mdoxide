@@ -419,7 +419,7 @@ impl FrontmatterPanel {
                                         .small_button(
                                             phosphor_rich_text(TRASH, 11.0).color(muted_color),
                                         )
-                                        .on_hover_text("Remove field")
+                                        .on_hover_text(t!("frontmatter.remove_field"))
                                         .clicked()
                                     {
                                         remove_idx = Some(idx);
@@ -434,7 +434,7 @@ impl FrontmatterPanel {
                                 let resp = ui.add(
                                     egui::TextEdit::singleline(s)
                                         .desired_width(ui.available_width())
-                                        .hint_text("value"),
+                                        .hint_text(t!("frontmatter.value_hint").to_string()),
                                 );
                                 if resp.changed() {
                                     changed = true;
@@ -449,7 +449,7 @@ impl FrontmatterPanel {
                                 let resp = ui.add(
                                     egui::TextEdit::singleline(n)
                                         .desired_width(ui.available_width())
-                                        .hint_text("number"),
+                                        .hint_text(t!("frontmatter.number_hint").to_string()),
                                 );
                                 if resp.changed() {
                                     changed = true;
@@ -568,7 +568,7 @@ impl FrontmatterPanel {
                         ui.label(RichText::new(tag).size(11.5).color(chip_text));
                         if ui
                             .small_button(phosphor_rich_text(X, 11.0).color(muted_color))
-                            .on_hover_text("Remove tag")
+                            .on_hover_text(t!("frontmatter.remove_tag"))
                             .clicked()
                         {
                             remove_tag = Some(tag_idx);
@@ -590,7 +590,7 @@ impl FrontmatterPanel {
             let resp = ui.add(
                 egui::TextEdit::singleline(buf)
                     .desired_width(ui.available_width() - 40.0)
-                    .hint_text("add tag…"),
+                    .hint_text(t!("frontmatter.add_tag_hint").to_string()),
             );
             let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if (ui.small_button("+").clicked() || enter) && !buf.trim().is_empty() {

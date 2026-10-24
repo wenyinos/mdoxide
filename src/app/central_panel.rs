@@ -42,8 +42,10 @@ struct ImageViewerTexture {
 }
 
 fn load_viewer_image(ctx: &egui::Context, path: &Path) -> Result<ImageViewerTexture, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read: {}", e))?;
-    let img = image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode: {}", e))?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| t!("error.read_failed", error = e.to_string()).to_string())?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| t!("error.decode_failed", error = e.to_string()).to_string())?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
 
@@ -103,7 +105,9 @@ fn render_pdf_page(
                 height: 0,
                 _page_index: page_index,
                 _zoom: zoom,
-                error: Some(format!("Failed to read file: {}", e)),
+                error: Some(
+                    t!("error.read_file_failed", error = e.to_string()).to_string(),
+                ),
             }
         }
     };
@@ -118,7 +122,9 @@ fn render_pdf_page(
                 height: 0,
                 _page_index: page_index,
                 _zoom: zoom,
-                error: Some(format!("Failed to parse PDF: {:?}", e)),
+                error: Some(
+                    t!("error.parse_pdf_failed", error = format!("{:?}", e)).to_string(),
+                ),
             }
         }
     };
@@ -2480,8 +2486,9 @@ impl MDOxideApp {
                         }
                         Err(e) => {
                             warn!("Failed to open file: {}", e);
-                            self.state
-                                .show_error(format!("Failed to open file:\n{}", e));
+                            self.state.show_error(
+                                t!("error.open_file_failed", error = e.to_string()).to_string(),
+                            );
                         }
                     }
                 }
@@ -2643,7 +2650,7 @@ impl MDOxideApp {
                             self.state.mark_settings_dirty();
                             let time = self.get_app_time();
                             self.state.show_toast(
-                                format!("Font failed to load: {reason}. Reverted to Inter."),
+                                t!("error.font_load_reverted", reason = reason).to_string(),
                                 time,
                                 5.0,
                             );
@@ -2799,7 +2806,9 @@ impl MDOxideApp {
         if let Some(ref error_msg) = load_result.error {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new(format!("Failed to load image: {}", error_msg))
+                    egui::RichText::new(
+                        t!("error.load_image_failed", error = error_msg).to_string(),
+                    )
                         .color(ui.visuals().error_fg_color)
                         .size(16.0),
                 );
@@ -2950,7 +2959,9 @@ impl MDOxideApp {
         if let Some(ref error_msg) = viewer_state.error {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new(format!("Failed to load PDF: {}", error_msg))
+                    egui::RichText::new(
+                        t!("error.load_pdf_failed", error = error_msg).to_string(),
+                    )
                         .color(ui.visuals().error_fg_color)
                         .size(16.0),
                 );
@@ -2990,7 +3001,9 @@ impl MDOxideApp {
         if let Some(ref error_msg) = page_texture.error {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new(format!("Failed to render page: {}", error_msg))
+                    egui::RichText::new(
+                        t!("error.render_page_failed", error = error_msg).to_string(),
+                    )
                         .color(ui.visuals().error_fg_color)
                         .size(16.0),
                 );
@@ -3167,7 +3180,9 @@ impl MDOxideApp {
             let zoom_pct = (zoom * 100.0).round() as u32;
 
             ui.label(
-                egui::RichText::new(format!("PDF  |  {}  |  {}%", size_text, zoom_pct))
+                egui::RichText::new(
+                    t!("viewer.pdf_status", size = size_text, zoom = zoom_pct).to_string(),
+                )
                     .small()
                     .color(ui.visuals().text_color().gamma_multiply(0.7)),
             );
@@ -3200,7 +3215,9 @@ impl MDOxideApp {
                     ui.add_space(12.0);
 
                     ui.label(
-                        egui::RichText::new(format!("Loading {}", file_name))
+                        egui::RichText::new(
+                            t!("viewer.loading", name = file_name).to_string(),
+                        )
                             .size(18.0)
                             .strong(),
                     );

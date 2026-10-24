@@ -470,10 +470,10 @@ impl MDOxideApp {
                     };
                     let mut parts = Vec::new();
                     if err_count > 0 {
-                        parts.push(format!("{} err", err_count));
+                        parts.push(t!("status.errors", count = err_count).to_string());
                     }
                     if warn_count > 0 {
-                        parts.push(format!("{} warn", warn_count));
+                        parts.push(t!("status.warnings", count = warn_count).to_string());
                     }
                     let primary_color = if err_count > 0 { err_color } else { warn_color };
                     ui.label(
@@ -543,7 +543,10 @@ impl MDOxideApp {
 
                         // Cursor position
                         let (line, col) = tab.cursor_position;
-                        ui.label(format!("Ln {}, Col {}", line + 1, col + 1));
+                        ui.label(
+                            t!("status.cursor_position", line = line + 1, col = col + 1)
+                                .to_string(),
+                        );
 
                         // Delimiter picker for CSV/TSV files in rendered or split mode
                         if tab.view_mode == ViewMode::Rendered || tab.view_mode == ViewMode::Split {

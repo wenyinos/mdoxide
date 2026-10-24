@@ -1616,6 +1616,9 @@ pub enum Theme {
     Light,
     Dark,
     System,
+    /// Zed's “Duskfox - blurred” palette with translucent surfaces.
+    #[serde(rename = "duskfox-blurred")]
+    DuskfoxBlurred,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -238,9 +238,14 @@ impl ViewModeSegment {
 
             // Tooltip with keyboard shortcut
             let tooltip_text = if *enabled {
-                format!("{} ({}+E to cycle)", tooltip, modifier_symbol())
+                t!(
+                    "view_mode.cycle_hint",
+                    label = tooltip,
+                    shortcut = modifier_symbol()
+                )
+                .to_string()
             } else {
-                format!("{} (not available for this file type)", tooltip)
+                t!("view_mode.unavailable_hint", label = tooltip).to_string()
             };
             segment_response.on_hover_text(tooltip_text);
 
@@ -385,7 +390,12 @@ impl ViewModeSegment {
                 action = Some(*segment_action);
             }
 
-            let tooltip_text = format!("{} ({}+E to toggle)", tooltip, modifier_symbol());
+            let tooltip_text = t!(
+                "view_mode.toggle_hint",
+                label = tooltip,
+                shortcut = modifier_symbol()
+            )
+            .to_string();
             segment_response.on_hover_text(tooltip_text);
 
             x_offset += SEGMENT_WIDTH;

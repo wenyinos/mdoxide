@@ -98,9 +98,9 @@ impl BacklinksPanel {
             ui.add_space(8.0);
             let count = self.cached_backlinks.len();
             let label = if count == 1 {
-                "1 backlink".to_string()
+                t!("backlinks.count_one").to_string()
             } else {
-                format!("{} backlinks", count)
+                t!("backlinks.count_many", count = count).to_string()
             };
             ui.label(RichText::new(label).size(10.0).color(muted_color));
         });
@@ -115,9 +115,9 @@ impl BacklinksPanel {
                     ui.add_space(20.0);
                     ui.vertical_centered(|ui| {
                         let message = if self.cached_for_file.is_some() {
-                            "No files link to this document"
+                            t!("backlinks.no_links").to_string()
                         } else {
-                            "Open a file to see backlinks"
+                            t!("backlinks.no_file").to_string()
                         };
                         ui.label(
                             RichText::new(message)

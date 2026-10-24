@@ -879,12 +879,20 @@ impl SettingsPanel {
         ui.label(RichText::new(t!("settings.general.theme")).strong());
         ui.add_space(4.0);
 
-        ui.horizontal(|ui| {
-            for theme in [Theme::Light, Theme::Dark, Theme::System] {
+        ui.horizontal_wrapped(|ui| {
+            for theme in [
+                Theme::Light,
+                Theme::Dark,
+                Theme::System,
+                Theme::DuskfoxBlurred,
+            ] {
                 let label = match theme {
                     Theme::Light => format!("{} {}", SUN, t!("settings.general.theme_light")),
                     Theme::Dark => format!("{} {}", MOON, t!("settings.general.theme_dark")),
                     Theme::System => format!("{} {}", DESKTOP, t!("settings.general.theme_system")),
+                    Theme::DuskfoxBlurred => {
+                        format!("{} {}", MOON, t!("settings.general.theme_duskfox_blurred"))
+                    }
                 };
                 if ui
                     .selectable_value(&mut settings.theme, theme, label)
@@ -1423,8 +1431,11 @@ impl SettingsPanel {
                     changed = true;
                 }
                 if ui
-                    .checkbox(&mut settings.strict_line_breaks, "Strict Line Breaks")
-                    .on_hover_text("Treat single newlines as hard line breaks in rendered view")
+                    .checkbox(
+                        &mut settings.strict_line_breaks,
+                        t!("settings.editor.strict_line_breaks").to_string(),
+                    )
+                    .on_hover_text(t!("settings.editor.strict_line_breaks_tooltip"))
                     .changed()
                 {
                     changed = true;
@@ -1433,8 +1444,11 @@ impl SettingsPanel {
 
                 // Row 6: LSP (Language Server Protocol)
                 if ui
-                    .checkbox(&mut settings.lsp_enabled, "LSP (Language Servers)")
-                    .on_hover_text("Auto-detect and start language servers for code intelligence (requires servers on PATH)")
+                    .checkbox(
+                        &mut settings.lsp_enabled,
+                        t!("settings.editor.lsp_enabled").to_string(),
+                    )
+                    .on_hover_text(t!("settings.editor.lsp_enabled_tooltip"))
                     .changed()
                 {
                     changed = true;
@@ -1599,7 +1613,7 @@ impl SettingsPanel {
                 let desired = f32::max(120.0, f32::min(ui.available_width() - 72.0, 420.0));
                 let te = egui::TextEdit::singleline(&mut path)
                     .desired_width(desired)
-                    .hint_text("default from PATH");
+                    .hint_text(t!("settings.editor.language_server_default_path").to_string());
                 if ui.add(te).changed() {
                     if path.trim().is_empty() {
                         settings.lsp_server_overrides.remove(&key);

@@ -37,11 +37,23 @@ view_mode:
   raw_desc: "Plain markdown text editing"
   rendered_desc: "WYSIWYG rendered editing"
   split_desc: "Raw editor + rendered preview side by side"
+  cycle_hint: "%{label} (%{shortcut}+E to cycle)"
+  unavailable_hint: "%{label} (not available for this file type)"
+  toggle_hint: "%{label} (%{shortcut}+E to toggle)"
+
+# Backlinks panel
+backlinks:
+  count_one: "1 backlink"
+  count_many: "%{count} backlinks"
+  no_file: "Open a file to see backlinks"
+  no_links: "No files link to this document"
 
 # Bottom markdown format toolbar (Raw / Split raw pane)
 format_toolbar:
   format_label: "Format"
   show_toolbar_tooltip: "Show formatting toolbar"
+  hide_toolbar_tooltip: "Hide formatting toolbar"
+  show_side_panel_tooltip: "Show side panel"
   mermaid_menu: "Mermaid…"
   mermaid_entry_tooltip: "Insert a Mermaid diagram at the cursor"
   mermaid_flowchart: "Flowchart"
@@ -58,6 +70,8 @@ format_toolbar:
 
 # Status bar
 status:
+  errors: "%{count} err"
+  warnings: "%{count} warn"
   untitled: "Untitled"
   no_file: "No file open"
   vim_mode: "Vim editing mode (Esc = Normal, i = Insert)"
@@ -126,6 +140,12 @@ dialog:
     description: "Render the current document to a self-contained PDF file."
     page_size: "Page size"
     margins: "Margins"
+    margin_narrow: "Narrow (10 mm)"
+    margin_comfortable: "Comfortable (19 mm)"
+    margin_wide: "Wide (25 mm)"
+    margin_custom: "Custom…"
+    page_size_us_letter: "US Letter"
+    page_size_us_legal: "US Legal"
     custom_margins_hint: "Top / Right / Bottom / Left (in PDF points)"
     page_break_h1: "Start each top-level heading on a new page"
     page_numbers: "Include page numbers"
@@ -137,6 +157,16 @@ dialog:
     description: "Generate a themed HTML file with optional outline, comments, and asset embedding."
     self_contained: "Self-contained (embed local images; no network at view time)"
     image_paths: "Linked images"
+    image_embed_base64: "Embed as Base64"
+    image_relative_paths: "Relative Paths"
+    image_absolute_paths: "Absolute Paths"
+    image_embed_base64_desc: "Images embedded in HTML (standalone, larger file)"
+    image_relative_paths_desc: "Keep image paths relative to document"
+    image_absolute_paths_desc: "Convert to absolute file paths"
+    theme_follow_editor: "Follow editor"
+    theme_light: "Light"
+    theme_dark: "Dark"
+    theme_auto: "Auto (system)"
     include_outline: "Include outline (table of contents)"
     include_comments: "Include HTML comments / source markers"
     link_base: "Base folder for relative links (leave empty to use document folder)"
@@ -160,10 +190,16 @@ settings:
     theme_dark: "Dark"
     theme_light: "Light"
     theme_system: "System"
+    theme_duskfox_blurred: "Duskfox Blurred"
     restore_session: "Restore previous session on startup"
   editor:
     language_servers: "Language servers"
     language_servers_hint: "Optional path to the server binary per detected server. Leave empty to use PATH."
+    language_server_default_path: "default from PATH"
+    strict_line_breaks: "Strict Line Breaks"
+    strict_line_breaks_tooltip: "Treat single newlines as hard line breaks in rendered view"
+    lsp_enabled: "LSP (Language Servers)"
+    lsp_enabled_tooltip: "Auto-detect and start language servers for code intelligence (requires servers on PATH)"
     title: "Editor"
     font_family: "Font"
     font_size: "Font Size"
@@ -754,6 +790,7 @@ a11y:
 
 # Recovery and session dialogs
 recovery:
+  file_path: "File: %{path}"
   auto_save:
     title: "Auto-Save Recovery"
     backup_found: "An auto-saved backup was found for this file."
@@ -855,6 +892,7 @@ csv:
 
 # Pipeline panel
 pipeline:
+  exit_code: "Exit: %{code}"
   title: "⚡ Live Pipeline"
   command_placeholder: "jq '.items[]' or yq '.data' ..."
   run: "▶ Run"
@@ -926,6 +964,17 @@ tooltip:
 
 # Ribbon toolbar additions
 ribbon:
+  new_tooltip: "New (%{shortcut}+N)"
+  open_file_tooltip: "Open File (%{shortcut}+O)"
+  open_folder_tooltip: "Open Folder (%{shortcut}+Shift+O)"
+  close_workspace: "Close Workspace"
+  search_in_files_tooltip: "Search in Files (%{shortcut}+Shift+F)"
+  quick_switcher_tooltip: "Quick File Switcher (%{shortcut}+P)"
+  save_tooltip: "Save (%{shortcut}+S)"
+  save_as_tooltip: "Save As (%{shortcut}+Shift+S)"
+  find_replace_tooltip: "Find/Replace (%{shortcut}+F)"
+  toggle_terminal_tooltip: "Toggle Terminal (%{shortcut}+`)"
+  pipeline_tooltip: "%{label} (%{shortcut}+Shift+L)"
   format_document: "Format Document (Pretty-print)"
   validate_syntax: "Validate Syntax"
   pipeline: "Live Pipeline..."
@@ -940,6 +989,7 @@ ribbon:
 
 # Welcome page (first launch)
 welcome:
+  custom_shortcut: "Custom: %{binding}"
   command_palette: "Command Palette"
   quick_access: "Quick access to all commands. Press the shortcut to open a searchable command list."
   shortcut: "Shortcut"
@@ -1085,6 +1135,16 @@ title_bar:
 
 # Error dialogs
 error:
+  read_failed: "Failed to read: %{error}"
+  decode_failed: "Failed to decode: %{error}"
+  read_file_failed: "Failed to read file: %{error}"
+  parse_pdf_failed: "Failed to parse PDF: %{error}"
+  load_image_failed: "Failed to load image: %{error}"
+  load_pdf_failed: "Failed to load PDF: %{error}"
+  render_page_failed: "Failed to render page: %{error}"
+  font_load_reverted: "Font failed to load: %{reason}. Reverted to Inter."
+  export_failed: "Export failed: %{error}"
+  open_failed: "Failed to open: %{error}"
   save_failed: "Failed to save file:\n%{error}"
   open_workspace_failed: "Failed to open workspace:\n%{error}"
   open_file_failed: "Failed to open file:\n%{error}"
@@ -1096,6 +1156,10 @@ error:
   explorer_failed: "Failed to open explorer:\n%{error}"
   write_failed: "Failed to write file:\n%{error}"
   encoding_failed: "Failed to change encoding: %{error}"
+
+viewer:
+  loading: "Loading %{name}"
+  pdf_status: "PDF  |  %{size}  |  %{zoom}%"
 
 # File dialog titles and filters
 file_dialog:
@@ -1114,6 +1178,7 @@ file_dialog:
     html: "HTML Files"
 
 command_palette:
+  input_hint: "Type a command..."
   no_matching_commands: "No matching commands"
   recent: "recent"
 
@@ -1134,6 +1199,11 @@ frontmatter:
   add_button: "Add frontmatter"
   add: "Add"
   new_key_hint: "new key…"
+  remove_field: "Remove field"
+  value_hint: "value"
+  number_hint: "number"
+  remove_tag: "Remove tag"
+  add_tag_hint: "add tag…"
 
 editor:
   pdf_no_pages: "PDF has no pages"

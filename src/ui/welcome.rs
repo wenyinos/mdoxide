@@ -67,6 +67,7 @@ impl WelcomePanel {
                         Theme::Dark => true,
                         Theme::Light => false,
                         Theme::System => system_dark,
+                        Theme::DuskfoxBlurred => true,
                     };
 
                     let text_color = if is_dark {
@@ -104,7 +105,12 @@ impl WelcomePanel {
                                 .color(text_color),
                         );
                         ui.add_space(8.0);
-                        for theme in [Theme::Light, Theme::Dark, Theme::System] {
+                        for theme in [
+                            Theme::Light,
+                            Theme::Dark,
+                            Theme::System,
+                            Theme::DuskfoxBlurred,
+                        ] {
                             let label = match theme {
                                 Theme::Light => {
                                     format!("  {}  ", t!("settings.general.theme_light").to_string())
@@ -114,6 +120,12 @@ impl WelcomePanel {
                                 }
                                 Theme::System => {
                                     format!("  {}  ", t!("settings.general.theme_system").to_string())
+                                }
+                                Theme::DuskfoxBlurred => {
+                                    format!(
+                                        "  {}  ",
+                                        t!("settings.general.theme_duskfox_blurred").to_string()
+                                    )
                                 }
                             };
                             if ui
@@ -434,7 +446,9 @@ impl WelcomePanel {
                         if is_custom {
                             ui.add_space(8.0);
                             ui.label(
-                                RichText::new(format!("Custom: {}", binding_str))
+                                RichText::new(
+                                    t!("welcome.custom_shortcut", binding = binding_str).to_string(),
+                                )
                                     .color(weak_color)
                                     .small(),
                             );

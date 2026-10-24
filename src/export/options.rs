@@ -93,6 +93,20 @@ impl ImageHandling {
         }
     }
 
+    /// Localized display label for UI.
+    pub fn label_localized(&self) -> String {
+        match self {
+            ImageHandling::EmbedBase64 => rust_i18n::t!("dialog.html_export.image_embed_base64"),
+            ImageHandling::RelativePaths => {
+                rust_i18n::t!("dialog.html_export.image_relative_paths")
+            }
+            ImageHandling::AbsolutePaths => {
+                rust_i18n::t!("dialog.html_export.image_absolute_paths")
+            }
+        }
+        .to_string()
+    }
+
     /// Get a description for this option.
     pub fn description(&self) -> &'static str {
         match self {

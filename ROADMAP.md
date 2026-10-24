@@ -35,6 +35,7 @@
   - ✅ 打包配置：DEB / RPM / NSIS 与 release workflow 就绪
   - ✅ v0.1.0 已发布（Linux RPM/DEB）
   - ✅ v0.1.2：汉化补全、启动跟随系统语言、默认字号与字体可读性、Windows NSIS 修复；产物由 release workflow 直接发布
+  - ✅ v0.2.0：Duskfox Blurred 主题与透明背景、全新图标、GitPages 主页、竖版海报、发布页模板与 checksums
 
 ## 明确不做
 

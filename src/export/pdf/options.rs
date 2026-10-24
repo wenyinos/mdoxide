@@ -48,6 +48,20 @@ impl PdfPageSize {
         }
     }
 
+    /// Localized label for UI.
+    pub fn label_localized(self) -> String {
+        match self {
+            PdfPageSize::A4 => "A4".to_string(),
+            PdfPageSize::UsLetter => {
+                rust_i18n::t!("dialog.pdf_export.page_size_us_letter").to_string()
+            }
+            PdfPageSize::UsLegal => {
+                rust_i18n::t!("dialog.pdf_export.page_size_us_legal").to_string()
+            }
+            PdfPageSize::A5 => "A5".to_string(),
+        }
+    }
+
     /// All variants in display order.
     pub fn all() -> &'static [PdfPageSize] {
         &[
@@ -143,6 +157,16 @@ impl PdfMarginPreset {
             PdfMarginPreset::Wide => "Wide (25 mm)",
             PdfMarginPreset::Custom => "Custom…",
         }
+    }
+
+    pub fn label_localized(self) -> String {
+        match self {
+            PdfMarginPreset::Narrow => rust_i18n::t!("dialog.pdf_export.margin_narrow"),
+            PdfMarginPreset::Comfortable => rust_i18n::t!("dialog.pdf_export.margin_comfortable"),
+            PdfMarginPreset::Wide => rust_i18n::t!("dialog.pdf_export.margin_wide"),
+            PdfMarginPreset::Custom => rust_i18n::t!("dialog.pdf_export.margin_custom"),
+        }
+        .to_string()
     }
 
     pub fn margins(self, custom: PdfMargins) -> PdfMargins {

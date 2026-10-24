@@ -1,6 +1,6 @@
 [package]
 name = "mdoxide"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.92"
 description = "A native WYSIWYG Markdown editor built with Rust and egui (MarkText-compatible reimplementation)"

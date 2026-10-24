@@ -146,8 +146,11 @@ impl MDOxideApp {
             Err(e) => {
                 warn!("Failed to generate HTML: {}", e);
                 let time = self.get_app_time();
-                self.state
-                    .show_toast(format!("Export failed: {}", e), time, 3.0);
+                self.state.show_toast(
+                    t!("error.export_failed", error = e.to_string()).to_string(),
+                    time,
+                    3.0,
+                );
             }
         }
     }
