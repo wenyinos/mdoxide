@@ -10,7 +10,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.3.2 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
+**v0.5.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
 
 ## What works today
 
@@ -25,6 +25,8 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 - RaTeX math rendering in the editor and in HTML/PDF exports
 - HTML and PDF export with embedded CJK fonts, tables, code blocks, links, and formula images
 - File tree, workspace mode, find & replace (regex)
+- Revision-driven editor/cache invalidation; one external-change entry point; live workspace indexing is cancellable
+- Code execution capped at 2 MB with process-tree termination; HTML active content is opt-in; terminal layout auto-load is off by default
 - 10 UI languages (996 aligned translation keys)
 
 ## Known limitations

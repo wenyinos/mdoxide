@@ -10,7 +10,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-**v0.3.2 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
+**v0.5.0 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
 
 ## 已具备的能力
 
@@ -25,6 +25,8 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 - RaTeX 数学公式：编辑器内渲染，并嵌入 HTML/PDF 导出
 - HTML 与 PDF 导出：内嵌中文字体，支持表格、代码块、链接与公式图片
 - 文件树、工作区模式、正则查找替换
+- 修订号驱动编辑器与缓存失效；外部修改只有一个入口；工作区索引可取消
+- 代码执行 2 MB 输出上限并终止整个进程树；HTML 活动内容默认关闭；终端布局默认不自动加载
 - 10 种界面语言（996 个中英对齐翻译键）
 
 ## 已知限制

@@ -8114,7 +8114,6 @@ mod tests {
     #[test]
     fn test_restore_failure_keeps_existing_tabs() {
         let mut state = AppState::with_settings(Settings::default());
-        state.new_tab();
         let existing_id = state.active_tab().unwrap().id;
 
         let mut session = crate::config::SessionState::default();
@@ -8127,6 +8126,8 @@ mod tests {
             session: Some(session),
             is_crash_recovery: false,
             recovered_content: std::collections::HashMap::new(),
+            conflicted_tabs: Vec::new(),
+            missing_file_tabs: Vec::new(),
         };
 
         assert!(!state.restore_from_session_result(&result));
