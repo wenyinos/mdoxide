@@ -1075,26 +1075,15 @@ fn table_cell_raw_cursor_at_click(
     if raw_text.is_empty() {
         return 0;
     }
-    let job = if display_bold {
-        build_cell_layout_job_with_base_bold(
-            raw_text,
-            font_size,
-            editor_font,
-            text_color,
-            code_bg,
-            inner_w,
-        )
-    } else {
-        build_inline_markdown_layout_job(
-            raw_text,
-            font_size,
-            editor_font,
-            text_color,
-            text_color,
-            code_bg,
-            inner_w,
-        )
-    };
+    let job = table_cell_layout_job(
+        raw_text,
+        font_size,
+        editor_font,
+        text_color,
+        code_bg,
+        inner_w,
+        display_bold,
+    );
     let galley = ui.fonts_mut(|f| f.layout_job(job));
     let local_pos = egui::Vec2::new(
         click_pos.x - cell_rect.min.x,
@@ -1237,6 +1226,46 @@ fn build_cell_layout_job_with_base_bold(
             },
         );
     }
+    job
+}
+
+/// Build the exact job used to paint a table cell.
+///
+/// Width/height measurement, painting, and click-to-caret mapping all go
+/// through this function so wrapping and row heights stay consistent.
+fn table_cell_layout_job(
+    text: &str,
+    font_size: f32,
+    editor_font: &EditorFont,
+    text_color: Color32,
+    code_bg: Color32,
+    wrap_width: f32,
+    bold: bool,
+) -> egui::text::LayoutJob {
+    let mut job = if bold {
+        build_cell_layout_job_with_base_bold(
+            text,
+            font_size,
+            editor_font,
+            text_color,
+            code_bg,
+            wrap_width,
+        )
+    } else {
+        build_inline_markdown_layout_job(
+            text,
+            font_size,
+            editor_font,
+            text_color,
+            text_color,
+            code_bg,
+            wrap_width,
+        )
+    };
+    // Prices, URLs and other unbroken tokens would otherwise overflow the cell
+    // and get clipped by the table frame.
+    job.wrap.break_anywhere = true;
+    job.wrap.max_width = wrap_width;
     job
 }
 
@@ -2290,8 +2319,8 @@ impl<'a> EditableTable<'a> {
         let num_cols = self.data.num_columns.max(1);
         let min_col_width = 40.0_f32;
         let _char_width = self.font_size * 0.6;
-        let cell_h_pad = 8.0_f32;
-        let cell_v_pad = 6.0_f32;
+        let cell_h_pad = 10.0_f32;
+        let cell_v_pad = 8.0_f32;
         let line_height = self.font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR;
 
         // Use the explicit max_width if provided, otherwise fall back to available
@@ -2301,6 +2330,13 @@ impl<'a> EditableTable<'a> {
             .unwrap_or_else(|| ui.available_width())
             .min(ui.available_width());
         let table_width = (hard_width - frame_h_margin).max(min_col_width);
+
+        // Measurement and painting must use the same font/styling job; otherwise
+        // bold headers and inline code measure narrower than they paint.
+        let cell_editor_font = self
+            .editor_font
+            .clone()
+            .unwrap_or(EditorFont::Inter);
 
         // Column widths: short columns keep their natural width,
         // remaining space is distributed among long columns.
@@ -2312,15 +2348,19 @@ impl<'a> EditableTable<'a> {
                         .data
                         .rows
                         .iter()
-                        .filter_map(|r| r.get(ci))
-                        .map(|c| {
-                            let galley = ui.fonts_mut(|f| {
-                                f.layout_no_wrap(
-                                    c.text.clone(),
-                                    FontId::proportional(self.font_size),
-                                    egui::Color32::PLACEHOLDER,
-                                )
-                            });
+                        .enumerate()
+                        .filter_map(|(ri, r)| r.get(ci).map(|c| (ri, c)))
+                        .map(|(ri, c)| {
+                            let job = table_cell_layout_job(
+                                &c.text,
+                                self.font_size,
+                                &cell_editor_font,
+                                egui::Color32::PLACEHOLDER,
+                                colors.code_bg,
+                                f32::INFINITY,
+                                ri == 0,
+                            );
+                            let galley = ui.fonts_mut(|f| f.layout_job(job));
                             galley.size().x
                         })
                         .fold(0.0_f32, f32::max);
@@ -2372,7 +2412,7 @@ impl<'a> EditableTable<'a> {
         };
 
         // Apply user-resized column widths if available, scaled to current table_width
-        let col_widths = if let Some(ref custom) = edit_state.custom_col_widths {
+        let mut col_widths = if let Some(ref custom) = edit_state.custom_col_widths {
             if custom.len() == num_cols {
                 let sum: f32 = custom.iter().sum();
                 if sum > 0.0 {
@@ -2387,7 +2427,18 @@ impl<'a> EditableTable<'a> {
             col_widths
         };
 
-        // Pre-measure row heights at the exact column widths
+        // Per-column minimums can push the sum past the frame width, which clips
+        // the last column. Scale the whole row back so it always fits.
+        let col_sum: f32 = col_widths.iter().sum();
+        if col_sum > table_width + 0.5 {
+            let scale = table_width / col_sum;
+            for width in &mut col_widths {
+                *width *= scale;
+            }
+        }
+
+        // Pre-measure row heights at the exact column widths using the same
+        // styled galleys that are painted below (including 1.6x line height).
         let row_heights: Vec<f32> = (0..self.data.rows.len())
             .map(|ri| {
                 let mut max_h = line_height;
@@ -2396,19 +2447,21 @@ impl<'a> EditableTable<'a> {
                         if let Some(cell) = row.get(ci) {
                             let cw = col_widths.get(ci).copied().unwrap_or(100.0);
                             let wrap_w = (cw - cell_h_pad * 2.0).max(20.0);
-                            let galley = ui.fonts_mut(|f| {
-                                f.layout(
-                                    cell.text.clone(),
-                                    FontId::proportional(self.font_size),
-                                    egui::Color32::PLACEHOLDER,
-                                    wrap_w,
-                                )
-                            });
+                            let job = table_cell_layout_job(
+                                &cell.text,
+                                self.font_size,
+                                &cell_editor_font,
+                                egui::Color32::PLACEHOLDER,
+                                colors.code_bg,
+                                wrap_w,
+                                ri == 0,
+                            );
+                            let galley = ui.fonts_mut(|f| f.layout_job(job));
                             max_h = max_h.max(galley.size().y);
                         }
                     }
                 }
-                max_h + cell_v_pad * 2.0
+                max_h + cell_v_pad * 2.0 + 2.0
             })
             .collect();
 
@@ -2609,32 +2662,16 @@ impl<'a> EditableTable<'a> {
                                                     }
                                                 } else {
                                                     // DISPLAY MODE: show rich text with inline formatting
-                                                    let ef = self
-                                                        .editor_font
-                                                        .as_ref()
-                                                        .cloned()
-                                                        .unwrap_or(EditorFont::Inter);
                                                     let display_bold = is_header;
-                                                    let job = if display_bold {
-                                                        build_cell_layout_job_with_base_bold(
-                                                            &cell.text,
-                                                            self.font_size,
-                                                            &ef,
-                                                            text_color,
-                                                            colors.code_bg,
-                                                            inner_w,
-                                                        )
-                                                    } else {
-                                                        build_inline_markdown_layout_job(
-                                                            &cell.text,
-                                                            self.font_size,
-                                                            &ef,
-                                                            text_color,
-                                                            text_color,
-                                                            colors.code_bg,
-                                                            inner_w,
-                                                        )
-                                                    };
+                                                    let job = table_cell_layout_job(
+                                                        &cell.text,
+                                                        self.font_size,
+                                                        &cell_editor_font,
+                                                        text_color,
+                                                        colors.code_bg,
+                                                        inner_w,
+                                                        display_bold,
+                                                    );
                                                     let galley =
                                                         ui.fonts_mut(|f| f.layout_job(job));
                                                     // Full inner rect: empty cells need a non-zero hit
@@ -2685,7 +2722,7 @@ impl<'a> EditableTable<'a> {
                                                                     response.rect,
                                                                     &cell.text,
                                                                     self.font_size,
-                                                                    &ef,
+                                                                    &cell_editor_font,
                                                                     text_color,
                                                                     colors.code_bg,
                                                                     inner_w,

@@ -23,10 +23,19 @@ menu:
     export_clipboard: "Copy as HTML"
     export_pdf: "Export to PDF..."
     print_preview: "Print preview..."
+    exit: "Exit"
   edit:
     label: "Edit"
   format:
     label: "Format"
+  view:
+    label: "View"
+    raw: "Source Code"
+    split: "Split View"
+    rendered: "Rendered"
+    line_numbers: "Line Numbers"
+  help:
+    label: "Help"
   tools:
     label: "Tools"
 

@@ -1,30 +1,58 @@
 //! Title bar rendering for the MDOxide application.
 //!
-//! This module renders the custom title bar with window controls,
-//! app icon, file title, auto-save indicator, view mode segment,
-//! and minimize/maximize/close buttons.
+//! MarkText-style frameless title bar: application menu on the left, centred
+//! document path/filename, document statistics and window controls on the right.
 
 use super::MDOxideApp;
 use crate::config::ViewMode;
+use crate::markdown::formatting::MarkdownFormatCommand;
 use crate::state::FileType;
-use crate::ui::phosphor_icons::{phosphor_font, ARROWS_IN, GEAR, NOTE_PENCIL};
-use crate::ui::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
+use crate::ui::phosphor_icons::{phosphor_font, LIST};
+use crate::ui::RibbonAction;
 use eframe::egui;
-use log::debug;
 use rust_i18n::t;
+use std::path::PathBuf;
 
-/// Hit area for minimize / maximize / close (≈20% smaller than the original 36×22).
-const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 18.0);
-/// Scale factor for chrome icon geometry (matches button shrink).
+/// MarkText's title bar is 32px tall.
+const TITLE_BAR_HEIGHT: f32 = 32.0;
+
+/// Left cluster holding the application-menu button.
+const MENU_BUTTON_AREA_WIDTH: f32 = 44.0;
+/// Right cluster holding word count and minimize/maximize/close.
+const WINDOW_BUTTON_AREA_WIDTH: f32 = 190.0;
+
+/// Hit area for minimize / maximize / close.
+const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 20.0);
+/// Scale factor for chrome icon geometry.
 const WINDOW_CHROME_ICON_SCALE: f32 = 0.8;
+
+/// Actions emitted by the title bar so they can run outside the panel closure.
+enum TitleBarAction {
+    Ribbon(RibbonAction),
+    Format(MarkdownFormatCommand),
+    SetView(ViewMode),
+    ToggleLineNumbers,
+    ToggleOutline,
+    ToggleTerminal,
+    ToggleProductivity,
+    TogglePipeline,
+    CycleTheme,
+    ToggleZen,
+    ToggleFullscreen,
+    OpenSettings,
+    About,
+    Exit,
+    OpenRecent(PathBuf),
+}
 
 impl MDOxideApp {
     /// Render the custom title bar panel.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn render_title_bar(
         &mut self,
         ui: &mut egui::Ui,
         is_maximized: bool,
-        is_dark: bool,
+        _is_dark: bool,
         _zen_mode: bool,
         title_bar_color: egui::Color32,
         button_hover_color: egui::Color32,
@@ -32,6 +60,64 @@ impl MDOxideApp {
         text_color: egui::Color32,
     ) {
         let ctx = ui.ctx().clone();
+        let accent = self.state.settings.mdoxide_accent_rgb();
+        let muted_color = egui::Color32::from_rgba_unmultiplied(
+            text_color.r(),
+            text_color.g(),
+            text_color.b(),
+            150,
+        );
+
+        // Snapshot state needed by the menus before the UI closure borrows self.
+        // CJK text has no spaces, so whitespace word counts are meaningless;
+        // show characters for those documents instead (MarkText does the same).
+        let doc_metric: Option<(usize, String)> =
+            self.state.active_tab_mut().map(|tab| {
+                let stats = tab.text_stats();
+                if tab.needs_cjk_cached() {
+                    (
+                        stats.characters_no_spaces,
+                        t!("stats.characters").to_string(),
+                    )
+                } else {
+                    (stats.words, t!("stats.words").to_string())
+                }
+            });
+        let is_workspace_mode = self.state.is_workspace_mode();
+        let is_markdown = self
+            .state
+            .active_tab()
+            .map(|tab| tab.file_type() == FileType::Markdown)
+            .unwrap_or(false);
+        let file_type = self
+            .state
+            .active_tab()
+            .map(|tab| tab.file_type())
+            .unwrap_or(FileType::Unknown);
+        let supports_split = file_type.supports_split();
+        let recent_files: Vec<PathBuf> = self
+            .state
+            .settings
+            .recent_files
+            .iter()
+            .take(10)
+            .cloned()
+            .collect();
+        let (title_text, path_text, modified) = match self.state.active_tab() {
+            Some(tab) => (
+                tab.title(),
+                tab.path
+                    .as_ref()
+                    .and_then(|p| p.parent())
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().into_owned()),
+                tab.is_modified(),
+            ),
+            None => (t!("app.name").to_string(), None, false),
+        };
+
+        let mut action: Option<TitleBarAction> = None;
+
         egui::Panel::top("title_bar")
             .frame(
                 egui::Frame::new()
@@ -41,166 +127,471 @@ impl MDOxideApp {
             )
             .show_separator_line(false)
             .show_inside(ui, |ui| {
-                // Remove spacing between elements
-                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                ui.set_height(TITLE_BAR_HEIGHT);
 
-                // Add top padding for title bar
-                ui.add_space(5.0);
+                let bar_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    egui::vec2(ui.available_width(), TITLE_BAR_HEIGHT),
+                );
+                // Reserve the strip first so the panel auto-sizes to 32px and the
+                // menu/window buttons added afterwards stay on top for hover.
+                ui.allocate_rect(bar_rect, egui::Sense::hover());
+                let left_rect = egui::Rect::from_min_size(
+                    bar_rect.min,
+                    egui::vec2(MENU_BUTTON_AREA_WIDTH, TITLE_BAR_HEIGHT),
+                );
+                let right_rect = egui::Rect::from_min_max(
+                    egui::pos2(bar_rect.right() - WINDOW_BUTTON_AREA_WIDTH, bar_rect.top()),
+                    bar_rect.max,
+                );
 
-                // Get state needed for title bar controls
-                let has_editor = self.state.active_tab().is_some();
-                let is_special_tab = self
-                    .state
-                    .active_tab()
-                    .map(|t| t.is_special())
-                    .unwrap_or(false);
-                let auto_save_enabled = self
-                    .state
-                    .active_tab()
-                    .map(|t| t.auto_save_enabled)
-                    .unwrap_or(false);
-                let current_view_mode = self
-                    .state
-                    .active_tab()
-                    .map(|t| t.view_mode)
-                    .unwrap_or(ViewMode::Raw);
-                let current_file_type = self
-                    .state
-                    .active_tab()
-                    .map(|t| t.file_type())
-                    .unwrap_or(FileType::Unknown);
-                let zen_mode_active = self.state.is_zen_mode();
-
-                // Track title bar actions
-                let mut title_bar_toggle_auto_save = false;
-                let mut title_bar_toggle_zen = false;
-                let mut title_bar_open_settings = false;
-                let mut title_bar_view_action: Option<ViewSegmentAction> = None;
-
-                // Title bar row - set consistent height and center alignment
-                let title_bar_height = 28.0;
-                ui.set_height(title_bar_height);
-
-                ui.horizontal_centered(|ui| {
-                    ui.add_space(8.0);
-
-                    // App icon/logo - display texture if available, fallback to emoji
-                    if let Some(texture) = &self.app_logo_texture {
-                        let logo_size = 18.0; // Match title bar height nicely
-                        ui.add(
-                            egui::Image::new(texture)
-                                .fit_to_exact_size(egui::vec2(logo_size, logo_size)),
-                        );
-                    } else {
-                        ui.label(egui::RichText::new(NOTE_PENCIL).font(phosphor_font(14.0)));
-                    }
-
-                    ui.add_space(4.0); // Reduced spacing between icon and title
-
-                    // Window title (dynamically generated) - use consistent sizing
-                    // Offset text slightly upward to better align with icon center
-                    let title = self.window_title();
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(title).size(12.0).color(text_color))
-                            .selectable(false),
-                    );
-
-                    // Auto-save indicator (after filename) - only show for document tabs
-                    if has_editor && !is_special_tab {
+                // ── Application menu (MarkText's frameless hamburger) ──────────
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(left_rect)
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    |ui| {
                         ui.add_space(8.0);
-                        if TitleBarButton::show_auto_save(ui, auto_save_enabled, is_dark).clicked()
-                        {
-                            title_bar_toggle_auto_save = true;
-                        }
-                    }
+                        ui.menu_button(
+                            egui::RichText::new(LIST)
+                                .font(phosphor_font(17.0))
+                                .color(text_color),
+                            |ui| {
+                                ui.set_min_width(180.0);
 
-                    // Fill remaining space with draggable area, but EXCLUDE the button area
-                    // on the right side to prevent drag response from consuming clicks
-                    // intended for window control buttons. This fixes Linux hit-testing issues.
-                    //
-                    // Button area width calculation (right-to-left):
-                    // - 12.0 spacing + Close(36) + Max(36) + Min(36) + Fullscreen(36) + 8.0 spacing = 164px
-                    // - Settings(28) + 4.0 + Zen(28) + 4.0 = 64px
-                    // - ViewModeSegment (3 x 26px) = 78px (or 2 x 26px = 52px for 2-mode)
-                    // Total ~306px + extra margin for safety = 400px
-                    const WINDOW_BUTTON_AREA_WIDTH: f32 = 400.0;
+                                // File
+                                ui.menu_button(t!("menu.file.label"), |ui| {
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.new"),
+                                        || TitleBarAction::Ribbon(RibbonAction::New),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.open"),
+                                        || TitleBarAction::Ribbon(RibbonAction::Open),
+                                        &mut action,
+                                    );
+                                    if is_workspace_mode {
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.close_workspace"),
+                                            || TitleBarAction::Ribbon(RibbonAction::CloseWorkspace),
+                                            &mut action,
+                                        );
+                                    } else {
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.open_workspace"),
+                                            || TitleBarAction::Ribbon(RibbonAction::OpenWorkspace),
+                                            &mut action,
+                                        );
+                                    }
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.save"),
+                                        || TitleBarAction::Ribbon(RibbonAction::Save),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.save_as"),
+                                        || TitleBarAction::Ribbon(RibbonAction::SaveAs),
+                                        &mut action,
+                                    );
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.export_html"),
+                                        || TitleBarAction::Ribbon(RibbonAction::ExportHtml),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.export_clipboard"),
+                                        || TitleBarAction::Ribbon(RibbonAction::CopyAsHtml),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.export_pdf"),
+                                        || TitleBarAction::Ribbon(RibbonAction::ExportPdf),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.print_preview"),
+                                        || TitleBarAction::Ribbon(RibbonAction::PrintPreview),
+                                        &mut action,
+                                    );
+                                    if !recent_files.is_empty() {
+                                        ui.separator();
+                                        ui.menu_button(t!("menu.file.recent"), |ui| {
+                                            for path in &recent_files {
+                                                let label = path
+                                                    .file_name()
+                                                    .map(|n| n.to_string_lossy().into_owned())
+                                                    .unwrap_or_else(|| path.display().to_string());
+                                                if ui.button(label).clicked() {
+                                                    action = Some(TitleBarAction::OpenRecent(
+                                                        path.clone(),
+                                                    ));
+                                                    ui.close();
+                                                }
+                                            }
+                                        });
+                                    }
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.open_settings"),
+                                        || TitleBarAction::OpenSettings,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.file.exit"),
+                                        || TitleBarAction::Exit,
+                                        &mut action,
+                                    );
+                                });
 
-                    let available = ui.available_rect_before_wrap();
-                    let drag_width = (available.width() - WINDOW_BUTTON_AREA_WIDTH).max(0.0);
-                    let drag_rect = egui::Rect::from_min_size(
-                        available.min,
-                        egui::vec2(drag_width, available.height()),
-                    );
+                                // Edit
+                                ui.menu_button(t!("menu.edit.label"), |ui| {
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.undo"),
+                                        || TitleBarAction::Ribbon(RibbonAction::Undo),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.redo"),
+                                        || TitleBarAction::Ribbon(RibbonAction::Redo),
+                                        &mut action,
+                                    );
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.find_replace"),
+                                        || TitleBarAction::Ribbon(RibbonAction::FindReplace),
+                                        &mut action,
+                                    );
+                                });
 
-                    // IMPORTANT: We use Sense::hover() and handle drag detection manually via
-                    // raw input state. This is necessary because:
-                    //
-                    // 1. When StartDrag is sent, the window manager takes over the drag operation
-                    // 2. egui doesn't receive the mouse release event (WM handles it)
-                    // 3. egui's widget interaction state gets confused, thinking the widget
-                    //    is still being interacted with
-                    // 4. On the next click, drag_started() doesn't fire because egui thinks
-                    //    we're continuing an existing interaction
-                    //
-                    // By using raw input state (primary_pressed), we bypass egui's widget-level
-                    // tracking entirely and get reliable drag detection every time.
-                    let drag_response = ui.allocate_rect(drag_rect, egui::Sense::hover());
+                                // Format
+                                if is_markdown {
+                                    ui.menu_button(t!("menu.format.label"), |ui| {
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.bold"),
+                                            || TitleBarAction::Format(MarkdownFormatCommand::Bold),
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.italic"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::Italic,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.inline_code"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::InlineCode,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.link"),
+                                            || TitleBarAction::Format(MarkdownFormatCommand::Link),
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.image"),
+                                            || TitleBarAction::Format(MarkdownFormatCommand::Image),
+                                            &mut action,
+                                        );
+                                        ui.separator();
+                                        for (level, label) in [
+                                            (1, t!("shortcuts.commands.heading_1")),
+                                            (2, t!("shortcuts.commands.heading_2")),
+                                            (3, t!("shortcuts.commands.heading_3")),
+                                        ] {
+                                            menu_action(
+                                                ui,
+                                                label,
+                                                || {
+                                                    TitleBarAction::Format(
+                                                        MarkdownFormatCommand::Heading(level),
+                                                    )
+                                                },
+                                                &mut action,
+                                            );
+                                        }
+                                        ui.separator();
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.bullet_list"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::BulletList,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.numbered_list"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::NumberedList,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.blockquote"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::Blockquote,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.code_block"),
+                                            || {
+                                                TitleBarAction::Format(
+                                                    MarkdownFormatCommand::CodeBlock,
+                                                )
+                                            },
+                                            &mut action,
+                                        );
+                                    });
+                                }
 
-                    // Get raw pointer state - this is always accurate regardless of widget state
-                    let (primary_pressed, double_clicked, pointer_pos) = ctx.input(|i| {
-                        (
-                            i.pointer.primary_pressed(),
-                            i.pointer
-                                .button_double_clicked(egui::PointerButton::Primary),
-                            i.pointer.interact_pos(),
-                        )
-                    });
+                                // View
+                                ui.menu_button(t!("menu.view.label"), |ui| {
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.raw"),
+                                        || TitleBarAction::SetView(ViewMode::Raw),
+                                        &mut action,
+                                    );
+                                    if supports_split {
+                                        menu_action(
+                                            ui,
+                                            t!("menu.view.split"),
+                                            || TitleBarAction::SetView(ViewMode::Split),
+                                            &mut action,
+                                        );
+                                    }
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.rendered"),
+                                        || TitleBarAction::SetView(ViewMode::Rendered),
+                                        &mut action,
+                                    );
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.line_numbers"),
+                                        || TitleBarAction::ToggleLineNumbers,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.toggle_outline"),
+                                        || TitleBarAction::ToggleOutline,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.toggle_terminal"),
+                                        || TitleBarAction::ToggleTerminal,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.toggle_productivity_hub"),
+                                        || TitleBarAction::ToggleProductivity,
+                                        &mut action,
+                                    );
+                                    if matches!(file_type, FileType::Json | FileType::Yaml) {
+                                        menu_action(
+                                            ui,
+                                            t!("shortcuts.commands.toggle_pipeline"),
+                                            || TitleBarAction::TogglePipeline,
+                                            &mut action,
+                                        );
+                                    }
+                                    ui.separator();
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.cycle_theme"),
+                                        || TitleBarAction::CycleTheme,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.toggle_zen_mode"),
+                                        || TitleBarAction::ToggleZen,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.toggle_fullscreen"),
+                                        || TitleBarAction::ToggleFullscreen,
+                                        &mut action,
+                                    );
+                                });
 
-                    // Check if pointer is in the drag area
-                    let pointer_in_drag_area = pointer_pos
-                        .map(|pos| drag_rect.contains(pos))
-                        .unwrap_or(false);
+                                // Tools (document-level actions from the old ribbon)
+                                if is_markdown || file_type.is_structured() {
+                                    ui.menu_button(t!("menu.tools.label"), |ui| {
+                                        if is_markdown {
+                                            menu_action(
+                                                ui,
+                                                t!("shortcuts.commands.insert_toc"),
+                                                || {
+                                                    TitleBarAction::Ribbon(
+                                                        RibbonAction::InsertToc,
+                                                    )
+                                                },
+                                                &mut action,
+                                            );
+                                        }
+                                        if file_type.is_structured() {
+                                            menu_action(
+                                                ui,
+                                                t!("ribbon.format_document"),
+                                                || {
+                                                    TitleBarAction::Ribbon(
+                                                        RibbonAction::FormatDocument,
+                                                    )
+                                                },
+                                                &mut action,
+                                            );
+                                            menu_action(
+                                                ui,
+                                                t!("ribbon.validate_syntax"),
+                                                || {
+                                                    TitleBarAction::Ribbon(
+                                                        RibbonAction::ValidateSyntax,
+                                                    )
+                                                },
+                                                &mut action,
+                                            );
+                                        }
+                                    });
+                                }
 
-                    // Handle double-click to maximize/restore
-                    if double_clicked && pointer_in_drag_area {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                    }
-
-                    // Handle drag to move window (but not if we're in a resize zone)
-                    //
-                    // We use primary_pressed() which is only true on the FRAME the button
-                    // is pressed down. This ensures StartDrag is sent exactly once per click,
-                    // preventing the "mouse stuck" bug on Linux.
-                    let is_in_resize = self.window_resize_state.current_direction().is_some()
-                        || self.window_resize_state.is_resizing();
-
-                    if primary_pressed && pointer_in_drag_area && !is_in_resize {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                    }
-
-                    // Still use the response for hover effects if needed
-                    let _ = drag_response;
-
-                    // Window control buttons (right-to-left)
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // ── Close button (×) ──────────────────────────────────────────────
-                        let close_btn = ui.add(
-                            egui::Button::new(egui::RichText::new(" ").size(14.0))
-                                .frame(false)
-                                .min_size(WINDOW_CHROME_BTN_SIZE),
+                                // Help
+                                ui.menu_button(t!("menu.help.label"), |ui| {
+                                    menu_action(
+                                        ui,
+                                        t!("shortcuts.commands.open_about"),
+                                        || TitleBarAction::About,
+                                        &mut action,
+                                    );
+                                });
+                            },
                         );
-                        // Rounded hover background; white icon on hover, normal otherwise
+                    },
+                );
+
+                // ── Centred document title ─────────────────────────────────────
+                let title_rect = egui::Rect::from_min_max(
+                    egui::pos2(left_rect.right() + 6.0, bar_rect.top()),
+                    egui::pos2(right_rect.left() - 6.0, bar_rect.bottom()),
+                );
+                if title_rect.width() > 20.0 {
+                    let mut job = egui::text::LayoutJob::default();
+                    job.wrap.max_width = title_rect.width();
+                    job.wrap.max_rows = 1;
+                    job.wrap.break_anywhere = true;
+                    job.wrap.overflow_character = Some('…');
+
+                    let title_format = |color: egui::Color32, size: f32| egui::text::TextFormat {
+                        font_id: egui::FontId::proportional(size),
+                        color,
+                        ..Default::default()
+                    };
+                    if modified {
+                        job.append("● ", 0.0, title_format(accent, 10.0));
+                    }
+                    if let Some(path_text) = &path_text {
+                        job.append(
+                            &format!("{path_text}   "),
+                            0.0,
+                            title_format(muted_color, 12.5),
+                        );
+                    }
+                    job.append(&title_text, 0.0, title_format(text_color, 13.0));
+
+                    let galley = ui.fonts_mut(|f| f.layout_job(job));
+                    let pos = egui::pos2(
+                        title_rect.center().x - galley.size().x / 2.0,
+                        title_rect.center().y - galley.size().y / 2.0,
+                    );
+                    ui.painter().galley(pos, galley, text_color);
+                }
+
+                // ── Window drag / double-click region ─────────────────────────
+                let drag_rect = egui::Rect::from_min_max(
+                    egui::pos2(left_rect.right(), bar_rect.top()),
+                    egui::pos2(right_rect.left(), bar_rect.bottom()),
+                );
+                let (primary_pressed, double_clicked, pointer_pos) = ctx.input(|i| {
+                    (
+                        i.pointer.primary_pressed(),
+                        i.pointer
+                            .button_double_clicked(egui::PointerButton::Primary),
+                        i.pointer.interact_pos(),
+                    )
+                });
+                let pointer_in_drag_area = pointer_pos
+                    .map(|pos| drag_rect.contains(pos))
+                    .unwrap_or(false);
+                let is_in_resize = self.window_resize_state.current_direction().is_some()
+                    || self.window_resize_state.is_resizing();
+
+                if double_clicked && pointer_in_drag_area {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+                }
+                if primary_pressed && pointer_in_drag_area && !is_in_resize {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+
+                // ── Right cluster: word count + window controls ───────────────
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(right_rect)
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                    |ui| {
+                        ui.add_space(6.0);
+
+                        // Close
+                        let close_btn = chrome_button(ui, close_hover_color);
                         let close_icon_color = if close_btn.hovered() {
-                            ui.painter().rect_filled(
-                                close_btn.rect,
-                                egui::CornerRadius::same(4),
-                                close_hover_color,
-                            );
                             egui::Color32::WHITE
                         } else {
                             text_color
                         };
-                        // Draw × as two crisp diagonal line segments
                         {
                             let c = close_btn.rect.center();
                             let d = 5.5_f32 * WINDOW_CHROME_ICON_SCALE;
@@ -219,27 +610,13 @@ impl MDOxideApp {
                         }
                         close_btn.on_hover_text(t!("a11y.close_button").to_string());
 
-                        // ── Maximize / Restore button ──────────────────────────────────────
-                        let max_btn = ui.add(
-                            egui::Button::new(egui::RichText::new(" ").size(14.0))
-                                .frame(false)
-                                .min_size(WINDOW_CHROME_BTN_SIZE),
-                        );
-                        if max_btn.hovered() {
-                            ui.painter().rect_filled(
-                                max_btn.rect,
-                                egui::CornerRadius::same(4),
-                                button_hover_color,
-                            );
-                        }
-                        // Draw maximize/restore icon (always visible, even on hover)
+                        // Maximize / restore
+                        let max_btn = chrome_button(ui, button_hover_color);
                         let max_center = max_btn.rect.center();
                         let stroke = egui::Stroke::new(1.5, text_color);
                         if is_maximized {
-                            // Restore icon: two overlapping rectangles
                             let size = 4.5 * WINDOW_CHROME_ICON_SCALE;
                             let offset = 2.0 * WINDOW_CHROME_ICON_SCALE;
-                            // Back rectangle (offset up-right) - show top and right edges only
                             let back_min = egui::pos2(
                                 max_center.x - size + offset,
                                 max_center.y - size - offset,
@@ -259,7 +636,6 @@ impl MDOxideApp {
                                 [back_max, egui::pos2(back_min.x + size, back_max.y)],
                                 stroke,
                             );
-                            // Front rectangle (main)
                             let front_rect = egui::Rect::from_center_size(
                                 egui::pos2(
                                     max_center.x - offset / 2.0,
@@ -274,7 +650,6 @@ impl MDOxideApp {
                                 egui::StrokeKind::Inside,
                             );
                         } else {
-                            // Maximize icon: rectangle with thicker top edge (suggests a window title bar)
                             let size = 5.5 * WINDOW_CHROME_ICON_SCALE;
                             let rect = egui::Rect::from_center_size(
                                 max_center,
@@ -314,22 +689,15 @@ impl MDOxideApp {
                         if max_btn.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                         }
-                        let max_tooltip = if is_maximized { "Restore" } else { "Maximize" };
+                        let max_tooltip = if is_maximized {
+                            t!("title_bar.restore").to_string()
+                        } else {
+                            t!("title_bar.maximize").to_string()
+                        };
                         max_btn.on_hover_text(max_tooltip);
 
-                        // ── Minimize button (–) ────────────────────────────────────────────
-                        let min_btn = ui.add(
-                            egui::Button::new(egui::RichText::new(" ").size(14.0))
-                                .frame(false)
-                                .min_size(WINDOW_CHROME_BTN_SIZE),
-                        );
-                        if min_btn.hovered() {
-                            ui.painter().rect_filled(
-                                min_btn.rect,
-                                egui::CornerRadius::same(4),
-                                button_hover_color,
-                            );
-                        }
+                        // Minimize
+                        let min_btn = chrome_button(ui, button_hover_color);
                         let center = min_btn.rect.center();
                         let min_half = 6.0 * WINDOW_CHROME_ICON_SCALE;
                         ui.painter().line_segment(
@@ -344,243 +712,108 @@ impl MDOxideApp {
                         }
                         min_btn.on_hover_text(t!("a11y.minimize_button").to_string());
 
-                        // Fullscreen button - draw expand arrows icon
-                        let is_fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-                        let fullscreen_btn = ui.add(
-                            egui::Button::new(egui::RichText::new(" ").size(14.0))
-                                .frame(false)
-                                .min_size(egui::vec2(36.0, 22.0)),
-                        );
-                        if fullscreen_btn.hovered() || is_fullscreen {
-                            ui.painter().rect_filled(
-                                fullscreen_btn.rect,
-                                egui::CornerRadius::same(4),
-                                button_hover_color,
+                        // Document statistic (MarkText shows this here)
+                        if let Some((count, label)) = &doc_metric {
+                            ui.add_space(8.0);
+                            ui.label(
+                                egui::RichText::new(format!("{count} {label}"))
+                                    .size(11.5)
+                                    .color(muted_color),
                             );
                         }
-                        // Draw fullscreen icon using corner-bracket shapes.
-                        //   Enter fullscreen: ⌜⌝⌞⌟  – L-brackets at outer corners, arms pointing in.
-                        //   Exit  fullscreen: inverse – brackets facing inward, arms pointing out.
-                        let cx = fullscreen_btn.rect.center().x;
-                        let cy = fullscreen_btn.rect.center().y;
-                        let d = 4.5_f32; // corner distance from center
-                        let a = 2.5_f32; // arm length
-                        let stroke = egui::Stroke::new(1.5, text_color);
-                        if is_fullscreen {
-                            // Compress icon: inward-facing brackets (vertex near center, arms outward)
-                            // TL
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx - d + a, cy - d + a),
-                                    egui::pos2(cx - d, cy - d + a),
-                                ],
-                                stroke,
-                            ); // ← left
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx - d + a, cy - d + a),
-                                    egui::pos2(cx - d + a, cy - d),
-                                ],
-                                stroke,
-                            ); // ↑ up
-                               // TR
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx + d - a, cy - d + a),
-                                    egui::pos2(cx + d, cy - d + a),
-                                ],
-                                stroke,
-                            ); // → right
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx + d - a, cy - d + a),
-                                    egui::pos2(cx + d - a, cy - d),
-                                ],
-                                stroke,
-                            ); // ↑ up
-                               // BL
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx - d + a, cy + d - a),
-                                    egui::pos2(cx - d, cy + d - a),
-                                ],
-                                stroke,
-                            ); // ← left
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx - d + a, cy + d - a),
-                                    egui::pos2(cx - d + a, cy + d),
-                                ],
-                                stroke,
-                            ); // ↓ down
-                               // BR
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx + d - a, cy + d - a),
-                                    egui::pos2(cx + d, cy + d - a),
-                                ],
-                                stroke,
-                            ); // → right
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(cx + d - a, cy + d - a),
-                                    egui::pos2(cx + d - a, cy + d),
-                                ],
-                                stroke,
-                            ); // ↓ down
-                        } else {
-                            // Expand icon: outer-facing brackets (vertex at corner, arms pointing in)
-                            // TL
-                            ui.painter().line_segment(
-                                [egui::pos2(cx - d, cy - d), egui::pos2(cx - d + a, cy - d)],
-                                stroke,
-                            ); // → right
-                            ui.painter().line_segment(
-                                [egui::pos2(cx - d, cy - d), egui::pos2(cx - d, cy - d + a)],
-                                stroke,
-                            ); // ↓ down
-                               // TR
-                            ui.painter().line_segment(
-                                [egui::pos2(cx + d, cy - d), egui::pos2(cx + d - a, cy - d)],
-                                stroke,
-                            ); // ← left
-                            ui.painter().line_segment(
-                                [egui::pos2(cx + d, cy - d), egui::pos2(cx + d, cy - d + a)],
-                                stroke,
-                            ); // ↓ down
-                               // BL
-                            ui.painter().line_segment(
-                                [egui::pos2(cx - d, cy + d), egui::pos2(cx - d + a, cy + d)],
-                                stroke,
-                            ); // → right
-                            ui.painter().line_segment(
-                                [egui::pos2(cx - d, cy + d), egui::pos2(cx - d, cy + d - a)],
-                                stroke,
-                            ); // ↑ up
-                               // BR
-                            ui.painter().line_segment(
-                                [egui::pos2(cx + d, cy + d), egui::pos2(cx + d - a, cy + d)],
-                                stroke,
-                            ); // ← left
-                            ui.painter().line_segment(
-                                [egui::pos2(cx + d, cy + d), egui::pos2(cx + d, cy + d - a)],
-                                stroke,
-                            ); // ↑ up
-                        }
-                        if fullscreen_btn.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(
-                                !is_fullscreen,
-                            ));
-                        }
-                        let fs_tooltip = if is_fullscreen {
-                            t!("tooltip.fullscreen_exit")
-                        } else {
-                            t!("tooltip.fullscreen_enter")
-                        };
-                        fullscreen_btn.on_hover_text(fs_tooltip.to_string());
-
-                        ui.add_space(8.0);
-
-                        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-                        // Title Bar Controls (before window buttons, right-to-left)
-                        // Settings ΓåÆ Zen Mode ΓåÆ View Mode Segment
-                        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-
-                        // Settings button
-                        if TitleBarButton::show(
-                            ui,
-                            GEAR,
-                            &t!("tooltip.settings").to_string(),
-                            false,
-                            is_dark,
-                        )
-                        .clicked()
-                        {
-                            title_bar_open_settings = true;
-                        }
-
-                        ui.add_space(4.0);
-
-                        // Zen Mode toggle (ARROWS_IN — matches command palette)
-                        let zen_tooltip = if zen_mode_active {
-                            t!("zen.exit")
-                        } else {
-                            t!("zen.enter")
-                        };
-                        if TitleBarButton::show(
-                            ui,
-                            ARROWS_IN,
-                            &format!("{} (F11)", zen_tooltip),
-                            zen_mode_active,
-                            is_dark,
-                        )
-                        .clicked()
-                        {
-                            title_bar_toggle_zen = true;
-                        }
-
-                        ui.add_space(4.0);
-
-                        // View Mode segmented control (all document tabs)
-                        if has_editor && !is_special_tab {
-                            let segment = ViewModeSegment::new();
-                            let mdoxide_accent = self.state.settings.mdoxide_accent_rgb();
-
-                            if current_file_type.supports_split() {
-                                // Markdown/tabular: 3-mode (Raw | Split | Rendered)
-                                if let Some(action) = segment.show(
-                                    ui,
-                                    current_view_mode,
-                                    current_file_type,
-                                    is_dark,
-                                    mdoxide_accent,
-                                ) {
-                                    title_bar_view_action = Some(action);
-                                }
-                            } else {
-                                // All other types: 2-mode (Raw | Rendered)
-                                if let Some(action) = segment.show_two_mode(
-                                    ui,
-                                    current_view_mode,
-                                    is_dark,
-                                    mdoxide_accent,
-                                ) {
-                                    title_bar_view_action = Some(action);
-                                }
-                            }
-                        }
-                    });
-                });
-
-                ui.add_space(2.0);
-
-                // Handle title bar actions (deferred to avoid borrow conflicts)
-                if title_bar_toggle_auto_save {
-                    if let Some(tab) = self.state.active_tab_mut() {
-                        tab.toggle_auto_save();
-                        debug!("Title bar: Toggle auto-save -> {}", tab.auto_save_enabled);
-                    }
-                }
-                if title_bar_toggle_zen {
-                    self.state.toggle_zen_mode();
-                    debug!("Title bar: Toggle Zen Mode");
-                }
-                if title_bar_open_settings {
-                    self.state.open_settings_tab();
-                    debug!("Title bar: Open Settings tab");
-                }
-                if let Some(view_action) = title_bar_view_action {
-                    if let Some(tab) = self.state.active_tab_mut() {
-                        let new_mode = match view_action {
-                            ViewSegmentAction::SetRaw => ViewMode::Raw,
-                            ViewSegmentAction::SetSplit => ViewMode::Split,
-                            ViewSegmentAction::SetRendered => ViewMode::Rendered,
-                        };
-                        tab.view_mode = new_mode;
-                        self.state.mark_settings_dirty();
-                        debug!("Title bar: Set view mode to {:?}", new_mode);
-                    }
-                }
+                    },
+                );
             });
+
+        // Actions run after the panel closure to avoid borrow conflicts.
+        if let Some(action) = action {
+            self.handle_title_bar_action(action, &ctx);
+        }
     }
+
+    fn handle_title_bar_action(&mut self, action: TitleBarAction, ctx: &egui::Context) {
+        match action {
+            TitleBarAction::Ribbon(ribbon_action) => {
+                self.handle_ribbon_action(ribbon_action, ctx);
+            }
+            TitleBarAction::Format(command) => {
+                self.handle_format_command(ctx, command);
+            }
+            TitleBarAction::SetView(mode) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.view_mode = mode;
+                    self.state.mark_settings_dirty();
+                }
+            }
+            TitleBarAction::ToggleLineNumbers => {
+                self.state.settings.show_line_numbers = !self.state.settings.show_line_numbers;
+                self.state.mark_settings_dirty();
+            }
+            TitleBarAction::ToggleOutline => self.handle_toggle_outline(),
+            TitleBarAction::ToggleTerminal => self.handle_toggle_terminal(),
+            TitleBarAction::ToggleProductivity => {
+                if self.state.settings.productivity_panel_docked {
+                    if self.state.settings.outline_enabled
+                        && self.outline_panel.active_tab()
+                            == crate::ui::OutlinePanelTab::Productivity
+                    {
+                        self.state.settings.outline_enabled = false;
+                    } else {
+                        self.state.settings.outline_enabled = true;
+                        self.outline_panel
+                            .set_active_tab(crate::ui::OutlinePanelTab::Productivity);
+                    }
+                } else {
+                    self.state.settings.productivity_panel_visible =
+                        !self.state.settings.productivity_panel_visible;
+                }
+                self.state.mark_settings_dirty();
+            }
+            TitleBarAction::TogglePipeline => self.handle_toggle_pipeline(),
+            TitleBarAction::CycleTheme => self.handle_cycle_theme(ctx),
+            TitleBarAction::ToggleZen => self.handle_toggle_zen_mode(),
+            TitleBarAction::ToggleFullscreen => self.handle_toggle_fullscreen(ctx),
+            TitleBarAction::OpenSettings => self.state.open_settings_tab(),
+            TitleBarAction::About => self.state.toggle_about(),
+            TitleBarAction::Exit => {
+                if self.state.request_exit() {
+                    self.should_exit = true;
+                }
+            }
+            TitleBarAction::OpenRecent(path) => {
+                let time = self.get_app_time();
+                if let Err(error) = self.open_file_smart(path, true, Some(time)) {
+                    self.state
+                        .show_error(format!("Failed to open file:\n{error}"));
+                }
+            }
+        }
+    }
+}
+
+/// Render one menu row; clicking it records `action` and closes the menu.
+fn menu_action(
+    ui: &mut egui::Ui,
+    label: impl Into<String>,
+    action: impl FnOnce() -> TitleBarAction,
+    out: &mut Option<TitleBarAction>,
+) {
+    if ui.button(label.into()).clicked() {
+        *out = Some(action());
+        ui.close();
+    }
+}
+
+/// Transparent window-control button with hover fill.
+fn chrome_button(ui: &mut egui::Ui, hover_color: egui::Color32) -> egui::Response {
+    let response = ui.add(
+        egui::Button::new(egui::RichText::new(" ").size(14.0))
+            .frame(false)
+            .min_size(WINDOW_CHROME_BTN_SIZE),
+    );
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(response.rect, egui::CornerRadius::same(4), hover_color);
+    }
+    response
 }

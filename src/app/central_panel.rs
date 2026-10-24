@@ -274,29 +274,37 @@ impl MDOxideApp {
                 // Collect tab info first to avoid borrow issues
                 let tab_count = self.state.tab_count();
                 let active_index = self.state.active_tab_index();
-                let tab_titles: Vec<(usize, String, bool)> = (0..tab_count)
+                let tab_titles: Vec<(usize, String, bool, bool)> = (0..tab_count)
                     .filter_map(|i| {
-                        self.state.tab(i).map(|tab| (i, tab.title(), i == active_index))
+                        self.state.tab(i).map(|tab| {
+                            (
+                                i,
+                                tab.title(),
+                                i == active_index,
+                                tab.is_modified(),
+                            )
+                        })
                     })
                     .collect();
 
-                // Custom wrapping tab bar
+                // Custom wrapping tab bar (MarkText: 28px strip, flat tabs,
+                // active tab marked by a 2px accent underline)
                 let available_width = ui.available_width();
-                let tab_height = 24.0;
-                let tab_spacing = 4.0;
-                let close_btn_width = 18.0;
-                let tab_padding = 16.0; // horizontal padding inside tab
+                let tab_height = 28.0;
+                let tab_spacing = 0.0;
+                let close_btn_width = 20.0;
+                let tab_padding = 18.0; // horizontal padding inside tab
                 let min_text_width = 60.0;
 
                 // Pre-calculate tab widths using actual text measurement
                 // This ensures consistent sizing between layout and render passes
                 let tab_widths: Vec<f32> = tab_titles
                     .iter()
-                    .map(|(_, title, _)| {
+                    .map(|(_, title, _, _)| {
                         let text_galley = ui.fonts_mut(|f| {
                             f.layout_no_wrap(
                                 title.clone(),
-                                egui::FontId::default(),
+                                egui::FontId::proportional(12.0),
                                 egui::Color32::WHITE // color doesn't affect measurement
                             )
                         });
@@ -363,19 +371,24 @@ impl MDOxideApp {
 
                 // Render tabs
                 let is_dark = ui.visuals().dark_mode;
-                let selected_bg = ui.visuals().selection.bg_fill;
-                let hover_bg = if is_dark {
-                    egui::Color32::from_rgb(60, 60, 70)
-                } else {
-                    egui::Color32::from_rgb(220, 220, 230)
-                };
+                let selected_bg = ui.visuals().faint_bg_color;
+                let hover_bg = ui.visuals().widgets.hovered.weak_bg_fill;
+                let accent = self.state.settings.mdoxide_accent_rgb();
                 let text_color = ui.visuals().text_color();
+                let muted_text = egui::Color32::from_rgba_unmultiplied(
+                    text_color.r(),
+                    text_color.g(),
+                    text_color.b(),
+                    150,
+                );
 
-                for (idx, (((tab_idx, title, selected), (x_pos, row)), tab_width)) in tab_titles
-                    .iter()
-                    .zip(tab_positions.iter())
-                    .zip(tab_widths.iter())
-                    .enumerate() {
+                for (idx, (((tab_idx, title, selected, modified), (x_pos, row)), tab_width)) in
+                    tab_titles
+                        .iter()
+                        .zip(tab_positions.iter())
+                        .zip(tab_widths.iter())
+                        .enumerate()
+                {
                     // Use pre-calculated tab width for consistency
                     let tab_width = *tab_width;
 
@@ -434,7 +447,25 @@ impl MDOxideApp {
                         }
                     }
 
-                    // Draw tab background
+                    // Close button and unsaved dot share the same slot:
+                    // the dot is shown at rest, the close cross on hover.
+                    let close_rect = egui::Rect::from_min_size(
+                        egui::pos2(
+                            tab_rect.right() - close_btn_width - 4.0,
+                            tab_rect.top() + 4.0,
+                        ),
+                        egui::vec2(close_btn_width, tab_height - 8.0),
+                    );
+                    let close_response = ui.interact(
+                        close_rect,
+                        egui::Id::new("tab_close").with(idx),
+                        egui::Sense::click(),
+                    );
+                    let tab_hovered = tab_response.hovered() || close_response.hovered();
+                    let show_dot = *modified && !tab_hovered;
+                    let show_close = !show_dot && tab_hovered;
+
+                    // Draw tab background (flat, MarkText-style)
                     if is_drop_target {
                         // Show drop indicator
                         let indicator_color = if is_dark {
@@ -442,50 +473,67 @@ impl MDOxideApp {
                         } else {
                             egui::Color32::from_rgb(100, 150, 230)
                         };
-                        ui.painter().rect_filled(tab_rect, 4.0, indicator_color);
+                        ui.painter().rect_filled(tab_rect, 0.0, indicator_color);
                     } else if *selected {
-                        ui.painter().rect_filled(tab_rect, 4.0, selected_bg);
+                        ui.painter().rect_filled(tab_rect, 0.0, selected_bg);
+                        // Active-tab underline
+                        let underline = egui::Rect::from_min_max(
+                            egui::pos2(tab_rect.left(), tab_rect.bottom() - 2.0),
+                            tab_rect.right_bottom(),
+                        );
+                        ui.painter().rect_filled(underline, 0.0, accent);
                     } else if tab_response.hovered() {
-                        ui.painter().rect_filled(tab_rect, 4.0, hover_bg);
+                        ui.painter().rect_filled(tab_rect, 0.0, hover_bg);
                     }
 
-                    // Draw tab title - use available width minus close button and padding
+                    // Draw tab title (elided to the available width)
                     let title_available_width = tab_width - close_btn_width - tab_padding;
                     let title_rect = egui::Rect::from_min_size(
-                        tab_rect.min + egui::vec2(8.0, 4.0),
-                        egui::vec2(title_available_width, tab_height - 8.0)
+                        tab_rect.min + egui::vec2(10.0, 0.0),
+                        egui::vec2(title_available_width, tab_height),
                     );
-                    ui.painter().text(
-                        title_rect.left_center(),
-                        egui::Align2::LEFT_CENTER,
-                        title,
-                        egui::FontId::default(),
-                        text_color
+                    let title_color = if *selected { text_color } else { muted_text };
+                    let mut title_job = egui::text::LayoutJob::single_section(
+                        title.clone(),
+                        egui::text::TextFormat {
+                            font_id: egui::FontId::proportional(12.0),
+                            color: title_color,
+                            ..Default::default()
+                        },
+                    );
+                    title_job.wrap.max_width = title_available_width;
+                    title_job.wrap.max_rows = 1;
+                    title_job.wrap.break_anywhere = true;
+                    title_job.wrap.overflow_character = Some('…');
+                    let title_galley = ui.fonts_mut(|f| f.layout_job(title_job));
+                    ui.painter().galley(
+                        egui::pos2(
+                            title_rect.left(),
+                            title_rect.center().y - title_galley.size().y / 2.0,
+                        ),
+                        title_galley,
+                        title_color,
                     );
 
-                    // Draw close button
-                    let close_rect = egui::Rect::from_min_size(
-                        egui::pos2(tab_rect.right() - close_btn_width - 4.0, tab_rect.top() + 4.0),
-                        egui::vec2(close_btn_width, tab_height - 8.0)
-                    );
-                    let close_response = ui.interact(
-                        close_rect,
-                        egui::Id::new("tab_close").with(idx),
-                        egui::Sense::click()
-                    );
-
-                    let close_color = if close_response.hovered() {
-                        egui::Color32::from_rgb(220, 80, 80)
-                    } else {
-                        text_color
-                    };
-                    ui.painter().text(
-                        close_rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        X,
-                        phosphor_font(12.0),
-                        close_color
-                    );
+                    if show_dot {
+                        ui.painter().circle_filled(
+                            egui::pos2(close_rect.center().x, close_rect.center().y),
+                            3.0,
+                            accent,
+                        );
+                    } else if show_close {
+                        ui.painter().text(
+                            close_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            X,
+                            phosphor_font(12.0),
+                            if close_response.hovered() {
+                                egui::Color32::from_rgb(220, 80, 80)
+                            } else {
+                                muted_text
+                            },
+                        );
+                    }
 
                     // Handle interactions
                     if tab_response.clicked() && !close_response.hovered() {

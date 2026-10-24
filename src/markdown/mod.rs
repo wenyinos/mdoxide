@@ -47,8 +47,8 @@ pub(crate) fn markdown_accent_temp_id() -> eframe::egui::Id {
 /// Line-height multiplier for rendered-mode text and the raw markdown editor.
 ///
 /// egui's font-derived line height is roughly 1.2×, which reads as cramped for
-/// CJK prose; 1.5× keeps paragraphs and lists comfortable.
-pub(crate) const RENDER_LINE_HEIGHT_FACTOR: f32 = 1.5;
+/// CJK prose; 1.6× matches MarkText's editor line height.
+pub(crate) const RENDER_LINE_HEIGHT_FACTOR: f32 = 1.6;
 
 mod ansi_render;
 mod ast_ops;

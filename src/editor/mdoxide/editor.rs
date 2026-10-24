@@ -47,7 +47,7 @@ const DEFAULT_FONT_SIZE: f32 = 15.0;
 
 /// Fixed line height for Phase 1 rendering.
 /// This provides consistent vertical spacing regardless of font metrics.
-const FIXED_LINE_HEIGHT: f32 = 22.0;
+const FIXED_LINE_HEIGHT: f32 = 24.0;
 
 /// A search match with pre-computed metadata for efficient rendering.
 ///
@@ -4085,8 +4085,8 @@ mod tests {
 
     #[test]
     fn test_fixed_line_height() {
-        // Verify the fixed line height constant is 20.0
-        assert!((FIXED_LINE_HEIGHT - 22.0).abs() < 0.01);
+        // 15px text at MarkText's 1.6 line-height
+        assert!((FIXED_LINE_HEIGHT - 24.0).abs() < 0.01);
     }
 
     #[test]
@@ -4176,14 +4176,20 @@ mod tests {
         // Line 0 should be at y=0
         assert!((editor.view.line_to_pixel(0) - 0.0).abs() < 0.01);
 
-        // Line 1 should be at y=20 (1 * FIXED_LINE_HEIGHT)
-        assert!((editor.view.line_to_pixel(1) - 20.0).abs() < 0.01);
+        // Line 1 should be at y=FIXED_LINE_HEIGHT
+        assert!(
+            (editor.view.line_to_pixel(1) - FIXED_LINE_HEIGHT).abs() < 0.01
+        );
 
-        // Line 2 should be at y=40 (2 * FIXED_LINE_HEIGHT)
-        assert!((editor.view.line_to_pixel(2) - 40.0).abs() < 0.01);
+        // Line 2 should be at y=2 * FIXED_LINE_HEIGHT
+        assert!(
+            (editor.view.line_to_pixel(2) - 2.0 * FIXED_LINE_HEIGHT).abs() < 0.01
+        );
 
-        // Line 4 should be at y=80 (4 * FIXED_LINE_HEIGHT)
-        assert!((editor.view.line_to_pixel(4) - 80.0).abs() < 0.01);
+        // Line 4 should be at y=4 * FIXED_LINE_HEIGHT
+        assert!(
+            (editor.view.line_to_pixel(4) - 4.0 * FIXED_LINE_HEIGHT).abs() < 0.01
+        );
     }
 
     #[test]
@@ -4196,14 +4202,17 @@ mod tests {
         // Pixel 0 should be line 0
         assert_eq!(editor.view.pixel_to_line(0.0), 0);
 
-        // Pixel 19 should still be line 0 (within first line)
-        assert_eq!(editor.view.pixel_to_line(19.0), 0);
+        // Just above the second line still belongs to line 0
+        assert_eq!(editor.view.pixel_to_line(FIXED_LINE_HEIGHT - 1.0), 0);
 
-        // Pixel 20 should be line 1
-        assert_eq!(editor.view.pixel_to_line(20.0), 1);
+        // Exactly at the second line boundary
+        assert_eq!(editor.view.pixel_to_line(FIXED_LINE_HEIGHT), 1);
 
-        // Pixel 40 should be line 2
-        assert_eq!(editor.view.pixel_to_line(40.0), 2);
+        // Two lines down
+        assert_eq!(
+            editor.view.pixel_to_line(2.0 * FIXED_LINE_HEIGHT),
+            2
+        );
     }
 
     #[test]
@@ -4256,16 +4265,16 @@ mod tests {
         editor.view.set_line_height(FIXED_LINE_HEIGHT);
         editor.view.scroll_to_line(0);
 
-        // Scroll down by one line (20 pixels)
-        editor.view.scroll_by(20.0, 101);
+        // Scroll down by one line
+        editor.view.scroll_by(FIXED_LINE_HEIGHT, 101);
         assert_eq!(editor.view.first_visible_line(), 1);
 
-        // Scroll down by 3 more lines (60 pixels)
-        editor.view.scroll_by(60.0, 101);
+        // Scroll down by 3 more lines
+        editor.view.scroll_by(3.0 * FIXED_LINE_HEIGHT, 101);
         assert_eq!(editor.view.first_visible_line(), 4);
 
-        // Scroll up by 2 lines (-40 pixels)
-        editor.view.scroll_by(-40.0, 101);
+        // Scroll up by 2 lines
+        editor.view.scroll_by(-2.0 * FIXED_LINE_HEIGHT, 101);
         assert_eq!(editor.view.first_visible_line(), 2);
     }
 }

@@ -406,10 +406,10 @@ mod tests {
     fn test_theme_manager_cycle() {
         let mut manager = ThemeManager::new(Theme::Light);
 
-        // Cycle should only toggle between Light and Dark (skip System)
+        // Cycle walks Light -> Dark -> Duskfox Blurred -> Light (skip System)
         assert_eq!(manager.cycle(), Theme::Dark);
+        assert_eq!(manager.cycle(), Theme::DuskfoxBlurred);
         assert_eq!(manager.cycle(), Theme::Light);
-        assert_eq!(manager.cycle(), Theme::Dark);
 
         // If on System, cycle should go to Light
         manager.set_theme(Theme::System);

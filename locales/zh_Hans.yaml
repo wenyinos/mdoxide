@@ -19,10 +19,19 @@ menu:
     export_clipboard: 复制为 HTML
     export_pdf: 导出为 PDF...
     print_preview: 打印预览...
+    exit: 退出
   edit:
     label: 编辑
   format:
     label: 格式
+  view:
+    label: 视图
+    raw: 源码
+    split: 分屏
+    rendered: 渲染
+    line_numbers: 行号
+  help:
+    label: 帮助
   tools:
     label: 工具
 view_mode:

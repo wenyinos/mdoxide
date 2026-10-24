@@ -161,9 +161,8 @@ const PARAGRAPH_TRAILING_SPACE_Y: f32 = 16.0;
 const MAX_NEW_MEASUREMENTS_PER_FRAME: usize = 20;
 
 /// Baseline pixels-per-line used for heuristic height estimates when a block
-/// has never been rendered.  Roughly matches a 14 px body font with default
-/// line spacing.
-const ESTIMATED_LINE_HEIGHT_PX: f32 = 20.0;
+/// has never been rendered. Matches the 15 px body font at 1.6 line spacing.
+const ESTIMATED_LINE_HEIGHT_PX: f32 = 24.0;
 
 /// Cached block positions for the rendered view, stored in egui temp memory.
 /// Invalidated when content or available width changes.

@@ -24,7 +24,6 @@ mod keyboard;
 mod line_ops;
 mod navigation;
 mod platform;
-mod status_bar;
 mod title_bar;
 mod types;
 
@@ -42,11 +41,11 @@ use types::*;
 #[allow(unused_imports)]
 use crate::preview::SyncScrollState;
 use crate::state::{AppState, FileType, Selection};
-use crate::theme::{ThemeColors, ThemeManager};
+use crate::theme::ThemeManager;
 use crate::ui::{
-    consume_clicks_in_resize_zones, handle_window_resize, load_app_logo_texture, AboutPanel,
+    consume_clicks_in_resize_zones, handle_window_resize, AboutPanel,
     BacklinksPanel, CommandPalette, FileOperationDialog, FileTreeContextAction, FileTreePanel,
-    FrontmatterPanel, OutlinePanel, ProductivityPanel, QuickSwitcher, Ribbon, RibbonAction,
+    FrontmatterPanel, OutlinePanel, ProductivityPanel, QuickSwitcher, RibbonAction,
     SearchPanel, SettingsPanel, TerminalPanel, TerminalPanelState, WelcomePanel, WindowResizeState,
 };
 
@@ -65,8 +64,6 @@ pub struct MDOxideApp {
     state: AppState,
     /// Theme manager for handling theme switching
     theme_manager: ThemeManager,
-    /// Ribbon UI component
-    ribbon: Ribbon,
     /// Settings panel component
     settings_panel: SettingsPanel,
     /// About/Help panel component
@@ -174,8 +171,6 @@ pub struct MDOxideApp {
     last_interaction_time: std::time::Instant,
     /// Last window title (to avoid sending viewport commands every frame)
     last_window_title: String,
-    /// App logo texture for title bar display (with transparent background)
-    app_logo_texture: Option<egui::TextureHandle>,
     /// Whether we've logged the one-shot window diagnostic on startup.
     window_diagnostic_logged: bool,
     /// Whether the platform-specific Alt+Space suppression has been applied.
@@ -397,12 +392,6 @@ impl MDOxideApp {
         let mut snippet_manager = SnippetManager::new();
         snippet_manager.set_enabled(state.settings.snippets_enabled);
 
-        // Load app logo texture for title bar display
-        let app_logo_texture = load_app_logo_texture(&cc.egui_ctx);
-        if app_logo_texture.is_some() {
-            info!("Loaded app logo texture for title bar");
-        }
-
         crate::log_memory("Before creating panels");
 
         // Create terminal panel components
@@ -422,7 +411,6 @@ impl MDOxideApp {
         let mut app = Self {
             state,
             theme_manager,
-            ribbon: Ribbon::new(),
             settings_panel: SettingsPanel::new(),
             about_panel: AboutPanel::new(),
             welcome_panel: WelcomePanel::new(),
@@ -476,7 +464,6 @@ impl MDOxideApp {
             last_fps_log: std::time::Instant::now(),
             last_interaction_time: std::time::Instant::now(),
             last_window_title: String::new(),
-            app_logo_texture,
             window_diagnostic_logged: false,
             platform_init_done: false,
             pending_cjk_check: false,
@@ -1489,19 +1476,15 @@ impl MDOxideApp {
     }
 
     /// Render the main UI content.
-    /// Returns a deferred format action if one was requested from the ribbon.
+    /// Returns a deferred format action requested by the central editor.
     fn render_ui(&mut self, ui: &mut egui::Ui) -> Option<DeferredFormatAction> {
         let ctx = ui.ctx().clone();
         let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
         let is_dark = ctx.global_style().visuals.dark_mode;
         let zen_mode = self.state.is_zen_mode();
 
-        // Title bar colors
-        let title_bar_color = if is_dark {
-            egui::Color32::from_rgb(32, 32, 32)
-        } else {
-            egui::Color32::from_rgb(240, 240, 240)
-        };
+        // Title bar colors: MarkText paints the chrome with the editor background.
+        let title_bar_color = ctx.global_style().visuals.panel_fill;
         let button_hover_color = if is_dark {
             egui::Color32::from_rgb(60, 60, 60)
         } else {
@@ -1526,192 +1509,7 @@ impl MDOxideApp {
             text_color,
         );
 
-        // View menu removed - Productivity Hub is now accessible via ribbon icon and outline panel tab
-
-        // Ribbon panel (below view menu) - hidden in Zen Mode
-        let ribbon_action = if !zen_mode {
-            // Get state needed for ribbon
-            let theme = self.state.settings.theme;
-            let view_mode = self
-                .state
-                .active_tab()
-                .map(|t| t.view_mode)
-                .unwrap_or(ViewMode::Raw);
-            let show_line_numbers = self.state.settings.show_line_numbers;
-            let can_save = self
-                .state
-                .active_tab()
-                .map(|t| t.path.is_some() && t.is_modified())
-                .unwrap_or(false);
-
-            let theme_colors = ThemeColors::from_theme(
-                theme,
-                &ctx.global_style().visuals,
-                self.state.settings.mdoxide_accent_rgb(),
-            );
-
-            let ribbon_bg = if is_dark {
-                egui::Color32::from_rgb(40, 40, 40)
-            } else {
-                egui::Color32::from_rgb(248, 248, 248)
-            };
-
-            let mut action = None;
-            egui::Panel::top("ribbon")
-                .frame(
-                    egui::Frame::new()
-                        .fill(ribbon_bg)
-                        .stroke(egui::Stroke::NONE)
-                        .inner_margin(egui::Margin::symmetric(4, 4)),
-                )
-                .show_separator_line(false)
-                .show_inside(ui, |ui| {
-                    // Get formatting state for active editor
-                    let formatting_state = self.state.active_tab().map(|tab| {
-                        get_formatting_state_for(
-                            &tab.content,
-                            tab.cursor_position.0,
-                            tab.cursor_position.1,
-                        )
-                    });
-
-                    // Get file type for adaptive toolbar
-                    let file_type = self
-                        .state
-                        .active_tab()
-                        .map(|t| t.file_type())
-                        .unwrap_or_default();
-
-                    // Get auto-save state for current tab
-                    let auto_save_enabled = self
-                        .state
-                        .active_tab()
-                        .map(|t| t.auto_save_enabled)
-                        .unwrap_or(false);
-
-                    action = self.ribbon.show(
-                        ui,
-                        &theme_colors,
-                        view_mode,
-                        show_line_numbers,
-                        can_save,
-                        self.state.active_tab().is_some(),
-                        formatting_state.as_ref(),
-                        self.state.settings.outline_enabled,
-                        self.state.settings.sync_scroll_enabled,
-                        self.state.is_workspace_mode(),
-                        file_type,
-                        self.state.is_zen_mode(),
-                        auto_save_enabled,
-                        self.state.settings.pipeline_enabled,
-                    );
-                });
-            action
-        } else {
-            None
-        };
-
-        // Handle ribbon actions - defer format actions until after editor renders
-        // IMPORTANT: Capture selection NOW, before the editor might lose focus
-        let mut deferred_format_action = if let Some(action) = ribbon_action {
-            match action {
-                RibbonAction::Format(cmd) => {
-                    // Capture the current selection state from MDOxideEditor
-                    use crate::editor::get_mdoxide_editor_mut;
-                    let tab_id = self.state.active_tab().map(|t| t.id);
-                    let selection = tab_id.and_then(|id| {
-                        get_mdoxide_editor_mut(&ctx, id, |editor| {
-                            let sel = editor.selection();
-                            let (start, end) = sel.ordered();
-
-                            // Convert character positions to byte positions for the formatting function
-                            let content = editor.buffer().to_string();
-                            let line_count = editor.buffer().line_count();
-
-                            // Clamp lines to valid range to prevent panics
-                            let start_line = start.line.min(line_count.saturating_sub(1));
-                            let end_line = end.line.min(line_count.saturating_sub(1));
-
-                            // Use try_line_to_char for safety
-                            let start_line_char = editor
-                                .buffer()
-                                .try_line_to_char(start_line)
-                                .unwrap_or(0);
-                            let end_line_char = editor
-                                .buffer()
-                                .try_line_to_char(end_line)
-                                .unwrap_or(0);
-
-                            let start_char = start_line_char + start.column;
-                            let end_char = end_line_char + end.column;
-
-                            // Convert char indices to byte indices
-                            let start_byte = crate::string_utils::char_index_to_byte_index(
-                                &content,
-                                start_char
-                            );
-                            let end_byte = crate::string_utils::char_index_to_byte_index(
-                                &content,
-                                end_char
-                            );
-
-                            // Get preview of selected text for debugging
-                            let selected_preview: String = content
-                                .chars()
-                                .skip(start_char)
-                                .take(end_char.saturating_sub(start_char).min(30))
-                                .collect();
-
-                            debug!(
-                                "Capturing selection for format: cursor=({},{}) to ({},{}), chars={}..{}, bytes={}..{}, selected='{}'",
-                                start.line,
-                                start.column,
-                                end.line,
-                                end.column,
-                                start_char,
-                                end_char,
-                                start_byte,
-                                end_byte,
-                                selected_preview
-                            );
-                            (start_byte, end_byte)
-                        })
-                    });
-                    if selection.is_none() {
-                        debug!(
-                            "WARNING: No selection captured for format action {:?} - MDOxideEditor may not be initialized yet",
-                            cmd
-                        );
-                    } else {
-                        debug!(
-                            "Deferred format action: {:?}, selection={:?}",
-                            cmd, selection
-                        );
-                    }
-                    Some(DeferredFormatAction { cmd, selection })
-                }
-                other => {
-                    self.handle_ribbon_action(other, &ctx);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        // Status bar - hidden in Zen Mode
-        if !zen_mode {
-            let (rainbow_toggle, encoding_change) = self.render_status_bar(ui, is_dark);
-            if rainbow_toggle {
-                self.state.settings.csv_rainbow_columns = !self.state.settings.csv_rainbow_columns;
-                self.state.mark_settings_dirty();
-            }
-            if let Some(encoding) = encoding_change {
-                if let Some(tab) = self.state.active_tab_mut() {
-                    tab.current_encoding = encoding;
-                }
-            }
-        }
+        let mut deferred_format_action: Option<DeferredFormatAction> = None;
 
         // Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰
         // Outline Panel (if enabled) - hidden in Zen Mode
@@ -1731,15 +1529,6 @@ impl MDOxideApp {
 
         // Track backlink navigation request from outline panel
         let mut backlink_navigate_to: Option<std::path::PathBuf> = None;
-
-        // Side panel toggle strip (shown when outline panel is closed, hidden in Zen Mode)
-        let blocks_resize_clicks = self.window_resize_state.blocks_widget_clicks();
-        if !self.state.settings.outline_enabled && !zen_mode {
-            if crate::ui::side_panel_toggle_strip(ui, is_dark, blocks_resize_clicks) {
-                self.state.settings.outline_enabled = true;
-                self.state.mark_settings_dirty();
-            }
-        }
 
         if self.state.settings.outline_enabled && !zen_mode {
             // Update outline if content changed
@@ -2244,9 +2033,46 @@ impl MDOxideApp {
         }
 
         // Central panel for editor content
-
-        // Central panel for editor content
         let central_deferred = self.render_central_panel(ui, is_dark);
+
+        // Transient notifications (MarkText-style floating toast; the old
+        // bottom status bar is gone).
+        if let Some(toast) = &self.state.ui.toast_message {
+            let fill = if is_dark {
+                egui::Color32::from_rgb(45, 48, 56)
+            } else {
+                egui::Color32::from_rgb(250, 250, 252)
+            };
+            let border = if is_dark {
+                egui::Color32::from_rgb(70, 74, 84)
+            } else {
+                egui::Color32::from_rgb(210, 212, 218)
+            };
+            let foreground = if is_dark {
+                egui::Color32::from_rgb(225, 225, 230)
+            } else {
+                egui::Color32::from_rgb(40, 40, 45)
+            };
+            egui::Area::new(egui::Id::new("toast_overlay"))
+                .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -22.0))
+                .order(egui::Order::Foreground)
+                .interactable(false)
+                .show(&ctx, |ui| {
+                    ui.set_max_width(560.0);
+                    egui::Frame::new()
+                        .fill(fill)
+                        .stroke(egui::Stroke::new(1.0, border))
+                        .corner_radius(6)
+                        .inner_margin(egui::Margin::symmetric(14, 8))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(toast)
+                                    .size(12.0)
+                                    .color(foreground),
+                            );
+                        });
+                });
+        }
 
         // MarkText-style bubble format bar, shown while a raw-editor selection exists.
         if self.state.settings.bubble_toolbar {

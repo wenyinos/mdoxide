@@ -40,7 +40,7 @@ pub use outline_panel::{OutlinePanel, OutlinePanelTab};
 pub use pipeline::{PipelinePanel, TabPipelineState};
 pub use productivity_panel::ProductivityPanel;
 pub use quick_switcher::QuickSwitcher;
-pub use ribbon::{Ribbon, RibbonAction};
+pub use ribbon::RibbonAction;
 pub use search::{SearchNavigationTarget, SearchPanel};
 pub use settings::SettingsPanel;
 pub use terminal_panel::{FloatingWindow, TerminalPanel, TerminalPanelState};
