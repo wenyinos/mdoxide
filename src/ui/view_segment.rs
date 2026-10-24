@@ -8,6 +8,7 @@
 
 use crate::app::modifier_symbol;
 use crate::config::ViewMode;
+use rust_i18n::t;
 use crate::state::FileType;
 use crate::theme::accent;
 use crate::ui::icons::phosphor_font;

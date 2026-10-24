@@ -7,6 +7,7 @@
 use crate::state::BacklinkEntry;
 use crate::ui::phosphor_icons::{file_icon_for_path, phosphor_font};
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Vec2};
+use rust_i18n::t;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
