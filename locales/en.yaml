@@ -706,6 +706,7 @@ notification:
   large_file_loading: "Loading large file (%{size} MB) in background..."
   file_loaded: "File loaded successfully (%{size} MB)"
   file_load_failed: "Failed to load file: %{error}"
+  external_change_kept_local: "File changed on disk; kept your unsaved edits"
   undo: "Undo (%{remaining} remaining)"
   nothing_to_undo: "Nothing to undo"
   redo: "Redo (%{remaining} remaining)"

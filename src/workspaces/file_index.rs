@@ -6,7 +6,9 @@
 
 use super::file_tree;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 /// How often the background thread reports progress (entries scanned).
@@ -46,6 +48,8 @@ pub struct WorkspaceFileIndex {
     files: Vec<PathBuf>,
     is_complete: bool,
     rx: Receiver<FileIndexMsg>,
+    /// Cancels the previous worker when the workspace changes or is reset.
+    cancel: Arc<AtomicBool>,
 }
 
 impl Default for WorkspaceFileIndex {
@@ -65,6 +69,7 @@ impl WorkspaceFileIndex {
             files: Vec::new(),
             is_complete: false,
             rx,
+            cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -75,6 +80,8 @@ impl WorkspaceFileIndex {
 
     /// Reset when leaving workspace mode.
     pub fn reset(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        self.cancel = Arc::new(AtomicBool::new(false));
         self.root = None;
         self.generation = self.generation.wrapping_add(1);
         self.needs_rebuild = false;
@@ -100,12 +107,17 @@ impl WorkspaceFileIndex {
         self.files.clear();
         self.is_complete = false;
 
+        self.cancel.store(true, Ordering::Relaxed);
         let (tx, rx) = mpsc::channel();
         self.rx = rx;
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.cancel = Arc::clone(&cancel);
 
         let root_owned = root.to_path_buf();
         let patterns = hidden_patterns.to_vec();
-        std::thread::spawn(move || index_workspace_thread(root_owned, patterns, generation, tx));
+        std::thread::spawn(move || {
+            index_workspace_thread(root_owned, patterns, generation, tx, cancel)
+        });
     }
 
     /// Drain background messages. Returns true if state changed (repaint needed).
@@ -211,6 +223,7 @@ fn index_workspace_thread(
     hidden_patterns: Vec<String>,
     generation: u64,
     tx: Sender<FileIndexMsg>,
+    cancel: Arc<AtomicBool>,
 ) {
     let mut entries_scanned = 0usize;
     let mut batch: Vec<PathBuf> = Vec::with_capacity(FILE_BATCH_SIZE);
@@ -220,6 +233,9 @@ fn index_workspace_thread(
         .into_iter()
         .filter_entry(|entry| !should_skip_walk_entry(entry, &root, &hidden_patterns))
     {
+        if cancel.load(Ordering::Relaxed) {
+            return;
+        }
         entries_scanned += 1;
 
         let Ok(entry) = entry else {

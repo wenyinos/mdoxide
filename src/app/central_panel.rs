@@ -1958,9 +1958,13 @@ impl MDOxideApp {
                                             workspace_root: ws_root.clone(),
                                         };
                                         let source_epoch = tab.source_epoch();
+                                        let tab_id = tab.id;
+                                        let content_version = tab.content_version();
 
                                         let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                             .mode(EditorMode::Rendered)
+                                            .document_id(tab_id)
+                                            .content_version(content_version)
                                             .font_size(font_size)
                                             .font_family(font_family.clone())
                                             .word_wrap(word_wrap)
@@ -2327,9 +2331,13 @@ impl MDOxideApp {
                                         workspace_root: ws_root,
                                     };
                                     let source_epoch = tab.source_epoch();
+                                    let tab_id = tab.id;
+                                    let content_version = tab.content_version();
 
                                     let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
+                                        .document_id(tab_id)
+                                        .content_version(content_version)
                                         .font_size(font_size)
                                         .font_family(font_family.clone())
                                         .word_wrap(word_wrap)

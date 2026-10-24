@@ -723,6 +723,10 @@ pub struct MarkdownEditor<'a> {
     code_execution: Option<CodeExecutionUi>,
     /// External-invalidation epoch from tab state; scopes rendered widget ids (see PRD).
     source_epoch: u64,
+    /// Stable document id for revision-keyed AST caching (0 = uncached caller).
+    document_id: usize,
+    /// Document revision for revision-keyed AST caching.
+    content_version: u64,
 }
 
 /// Context for resolving wikilinks to actual files during rendering.
@@ -762,6 +766,8 @@ impl<'a> MarkdownEditor<'a> {
             current_search_match: 0,
             code_execution: None,
             source_epoch: 0,
+            document_id: 0,
+            content_version: 0,
         }
     }
 
@@ -939,6 +945,20 @@ impl<'a> MarkdownEditor<'a> {
         self
     }
 
+    /// Set the stable document id used for revision-keyed AST caching.
+    #[must_use]
+    pub fn document_id(mut self, id: usize) -> Self {
+        self.document_id = id;
+        self
+    }
+
+    /// Set the document revision used for revision-keyed AST caching.
+    #[must_use]
+    pub fn content_version(mut self, version: u64) -> Self {
+        self.content_version = version;
+        self
+    }
+
     /// Show the editor widget and return the output.
     pub fn show(self, ui: &mut Ui) -> MarkdownEditorOutput {
         let id = self.id.unwrap_or_else(|| ui.id().with("markdown_editor"));
@@ -1073,7 +1093,11 @@ impl<'a> MarkdownEditor<'a> {
         });
 
         // Parse the markdown content (cached by blake3 hash â€” skips re-parse when unchanged)
-        let doc = match cache::get_or_parse(self.content) {
+        let doc = match cache::get_or_parse_versioned(
+            self.document_id,
+            self.content_version,
+            self.content,
+        ) {
             Ok(doc) => doc,
             Err(e) => {
                 ui.colored_label(Color32::RED, format!("Parse error: {}", e));

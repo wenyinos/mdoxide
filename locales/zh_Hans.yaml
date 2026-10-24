@@ -662,6 +662,7 @@ notification:
   large_file_loading: 正在后台加载大文件（%{size} MB）...
   file_loaded: 文件加载成功（%{size} MB）
   file_load_failed: 文件加载失败：%{error}
+  external_change_kept_local: 文件已在磁盘上修改；已保留你的未保存编辑
   undo: 撤销（剩余 %{remaining} 步）
   nothing_to_undo: 没有可撤销的操作
   redo: 重做（剩余 %{remaining} 步）

@@ -32,13 +32,15 @@ impl ContentHash {
 struct CachedAst {
     doc: std::sync::Arc<MarkdownDocument>,
     last_access: std::time::Instant,
+    approx_bytes: usize,
 }
 
 impl CachedAst {
-    fn new(doc: std::sync::Arc<MarkdownDocument>) -> Self {
+    fn new(doc: std::sync::Arc<MarkdownDocument>, approx_bytes: usize) -> Self {
         Self {
             doc,
             last_access: std::time::Instant::now(),
+            approx_bytes,
         }
     }
 
@@ -52,15 +54,20 @@ impl CachedAst {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_ENTRIES: usize = 32;
+/// Soft memory budget for cached ASTs. A count-only limit let 32 large
+/// documents pin hundreds of MB; evict by estimated bytes as well.
+const MAX_TOTAL_BYTES: usize = 64 * 1024 * 1024;
 
 struct MarkdownAstCache {
     entries: HashMap<ContentHash, CachedAst>,
+    total_bytes: usize,
 }
 
 impl MarkdownAstCache {
     fn new() -> Self {
         Self {
             entries: HashMap::with_capacity(MAX_ENTRIES),
+            total_bytes: 0,
         }
     }
 
@@ -73,11 +80,23 @@ impl MarkdownAstCache {
         }
     }
 
-    fn insert(&mut self, hash: ContentHash, doc: std::sync::Arc<MarkdownDocument>) {
-        if self.entries.len() >= MAX_ENTRIES {
+    fn insert(
+        &mut self,
+        hash: ContentHash,
+        doc: std::sync::Arc<MarkdownDocument>,
+        source_len: usize,
+    ) {
+        let approx_bytes = source_len.saturating_mul(3).saturating_add(4096);
+        while !self.entries.is_empty()
+            && (self.entries.len() >= MAX_ENTRIES
+                || self.total_bytes.saturating_add(approx_bytes) > MAX_TOTAL_BYTES)
+        {
             self.evict_lru();
         }
-        self.entries.insert(hash, CachedAst::new(doc));
+        if let Some(old) = self.entries.insert(hash, CachedAst::new(doc, approx_bytes)) {
+            self.total_bytes = self.total_bytes.saturating_sub(old.approx_bytes);
+        }
+        self.total_bytes = self.total_bytes.saturating_add(approx_bytes);
     }
 
     fn evict_lru(&mut self) {
@@ -87,12 +106,15 @@ impl MarkdownAstCache {
             .min_by_key(|(_, v)| v.last_access)
             .map(|(k, _)| *k)
         {
-            self.entries.remove(&oldest);
+            if let Some(removed) = self.entries.remove(&oldest) {
+                self.total_bytes = self.total_bytes.saturating_sub(removed.approx_bytes);
+            }
         }
     }
 
     fn clear(&mut self) {
         self.entries.clear();
+        self.total_bytes = 0;
     }
 }
 
@@ -101,6 +123,18 @@ impl MarkdownAstCache {
 // ─────────────────────────────────────────────────────────────────────────────
 
 static AST_CACHE: Mutex<Option<MarkdownAstCache>> = Mutex::new(None);
+
+/// Per-document revision cache: rendered mode can reuse the AST without
+/// hashing the whole buffer on every frame.
+const MAX_VERSIONED_DOCS: usize = 16;
+
+struct VersionedEntry {
+    version: u64,
+    doc: std::sync::Arc<MarkdownDocument>,
+    last_access: std::time::Instant,
+}
+
+static VERSIONED_CACHE: Mutex<Option<HashMap<usize, VersionedEntry>>> = Mutex::new(None);
 
 fn with_cache<F, R>(f: F) -> R
 where
@@ -128,8 +162,70 @@ pub fn get_or_parse(content: &str) -> Result<std::sync::Arc<MarkdownDocument>> {
     }
 
     let doc = std::sync::Arc::new(super::parser::parse_markdown(content)?);
-    with_cache(|c| c.insert(hash, std::sync::Arc::clone(&doc)));
+    with_cache(|c| c.insert(hash, std::sync::Arc::clone(&doc), content.len()));
     Ok(doc)
+}
+
+/// Revision-aware AST lookup for open documents.
+///
+/// Rendered mode runs every frame; hashing the whole document merely to
+/// discover "unchanged" is wasteful. Callers pass `Tab::content_version`, so
+/// a hit costs one revision comparison and an `Arc` bump. Only a revision
+/// change falls through to the hash-keyed cache.
+pub fn get_or_parse_versioned(
+    doc_id: usize,
+    version: u64,
+    content: &str,
+) -> Result<std::sync::Arc<MarkdownDocument>> {
+    if doc_id == 0 {
+        return get_or_parse(content);
+    }
+
+    {
+        let mut guard = VERSIONED_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let map = guard.get_or_insert_with(HashMap::new);
+        if let Some(entry) = map.get_mut(&doc_id) {
+            if entry.version == version {
+                entry.last_access = std::time::Instant::now();
+                return Ok(std::sync::Arc::clone(&entry.doc));
+            }
+        }
+    }
+
+    let doc = get_or_parse(content)?;
+    let mut guard = VERSIONED_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(HashMap::new);
+    if map.len() >= MAX_VERSIONED_DOCS && !map.contains_key(&doc_id) {
+        if let Some(oldest) = map
+            .iter()
+            .min_by_key(|(_, e)| e.last_access)
+            .map(|(id, _)| *id)
+        {
+            map.remove(&oldest);
+        }
+    }
+    map.insert(
+        doc_id,
+        VersionedEntry {
+            version,
+            doc: std::sync::Arc::clone(&doc),
+            last_access: std::time::Instant::now(),
+        },
+    );
+    Ok(doc)
+}
+
+/// Drop the revision cache entry for a closed document.
+pub fn remove_document(doc_id: usize) {
+    if let Ok(mut guard) = VERSIONED_CACHE.lock() {
+        if let Some(map) = guard.as_mut() {
+            map.remove(&doc_id);
+        }
+    }
 }
 
 /// Clear the AST cache (e.g. when global settings change).
@@ -138,6 +234,11 @@ pub fn clear_ast_cache() {
     if let Ok(mut guard) = AST_CACHE.lock() {
         if let Some(cache) = guard.as_mut() {
             cache.clear();
+        }
+    }
+    if let Ok(mut guard) = VERSIONED_CACHE.lock() {
+        if let Some(map) = guard.as_mut() {
+            map.clear();
         }
     }
 }

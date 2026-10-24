@@ -925,11 +925,9 @@ impl MDOxideApp {
             cleanup_mdoxide_editor(ctx, tab_id);
         }
 
-        // Clear global caches that may hold large data from the closed tab.
-        // The AST cache stores full parsed document trees keyed by content hash;
-        // for large files this can retain tens of MB after the tab is gone.
-        crate::markdown::cache::clear_ast_cache();
-        crate::markdown::cache::clear_block_height_cache();
+        // Drop only this document's revision cache entry. Other open
+        // documents keep their parsed ASTs (the cache has its own byte budget).
+        crate::markdown::cache::remove_document(tab_id);
 
         // Clear find/replace matches — these can be very large for big files
         self.state.ui.find_state.clear();

@@ -10,7 +10,6 @@ use crate::theme::ThemeColors;
 use eframe::egui::{self, Ui};
 use log::debug;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 use super::mdoxide::MDOxideEditor;
@@ -27,10 +26,8 @@ use super::mdoxide::MDOxideEditor;
 struct MDOxideEditorStorage {
     /// Map from tab ID to MDOxideEditor instance
     editors: HashMap<usize, MDOxideEditor>,
-    /// Hash of content for each editor (to detect external changes)
-    content_hashes: HashMap<usize, u64>,
-    /// Length of content for each editor (quick change detection without hashing)
-    content_lengths: HashMap<usize, usize>,
+    /// Document revision each editor buffer was synced to.
+    content_versions: HashMap<usize, u64>,
 }
 
 /// Gets mutable access to a MDOxideEditor by tab ID.
@@ -104,20 +101,12 @@ pub fn cleanup_mdoxide_editor(ctx: &egui::Context, tab_id: usize) {
             );
             // editor is dropped here, freeing TextBuffer (Rope) and remaining fields
         }
-        storage.content_hashes.remove(&tab_id);
-        storage.content_lengths.remove(&tab_id);
+        storage.content_versions.remove(&tab_id);
     });
 }
 
 /// File size threshold above which some features are disabled (5MB)
 const LARGE_FILE_THRESHOLD: usize = 5 * 1024 * 1024;
-
-/// Compute a fast hash of a string for cache invalidation.
-fn compute_content_hash(s: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
-}
 
 /// Result of showing the editor widget.
 pub struct EditorOutput {
@@ -489,138 +478,68 @@ impl<'a> EditorWidget<'a> {
             );
         }
 
-        // Get or create MDOxideEditor from storage
-        // PERFORMANCE: Avoid hashing large content every frame!
-        // Use content length as a quick check, only hash if length matches
-        let (mut editor, needs_content_sync, content_hash) = ui.ctx().data_mut(|data| {
+        // Get or create MDOxideEditor from storage.
+        //
+        // Synchronization is revision-based: `Tab::content_version` changes on
+        // every raw/rendered/external edit, so no per-frame hashing or length
+        // heuristic is needed (the old large-file "assume unchanged" path could
+        // silently keep a stale buffer after an equal-length external edit).
+        let tab_version = self.tab.content_version();
+        let (mut editor, needs_content_sync) = ui.ctx().data_mut(|data| {
             let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
 
-            // Check if we have an existing editor for this tab
             let has_editor = storage.editors.contains_key(&tab_id);
-            let existing_hash = storage.content_hashes.get(&tab_id).copied();
-            let existing_len = storage.content_lengths.get(&tab_id).copied();
+            let stored_version = storage.content_versions.get(&tab_id).copied();
+            let needs_sync = has_editor && stored_version != Some(tab_version);
 
-            // Quick check: if lengths differ, content definitely changed
-            // Only compute expensive hash if length matches (rare for external changes)
-            let (needs_sync, hash, sync_reason) = if !has_editor {
-                // No editor yet - need to create one, compute hash for future comparisons
-                let hash = compute_content_hash(&self.tab.content);
-                (true, hash, "no_editor")
-            } else if existing_len != Some(content_len) {
-                // Length changed - content definitely changed, compute new hash
-                let hash = compute_content_hash(&self.tab.content);
+            if needs_sync {
                 debug!(
-                    "EditorWidget sync: length changed ({:?} -> {})",
-                    existing_len, content_len
-                );
-                (true, hash, "length_changed")
-            } else if let Some(existing) = existing_hash {
-                // Length matches - for large files, assume no change to avoid expensive hash
-                // For small files, compute hash to detect subtle changes
-                if is_large_file {
-                    // Large file with same length - assume unchanged (fast path)
-                    (false, existing, "large_file_skip")
-                } else {
-                    // Small file - compute hash to check
-                    let hash = compute_content_hash(&self.tab.content);
-                    if hash != existing {
-                        debug!(
-                            "EditorWidget sync: hash mismatch (existing={}, computed={}, len={})",
-                            existing, hash, content_len
-                        );
-                        (true, hash, "hash_mismatch")
-                    } else {
-                        (false, hash, "hash_match")
-                    }
-                }
-            } else {
-                // No existing hash - compute one
-                let hash = compute_content_hash(&self.tab.content);
-                (true, hash, "no_hash")
-            };
-
-            // Log sync decision (only when sync is needed, to avoid spam)
-            if needs_sync && has_editor {
-                debug!(
-                    "EditorWidget: needs_content_sync=true for tab {} (reason: {})",
-                    tab_id, sync_reason
+                    "EditorWidget: syncing tab {} by revision ({:?} -> {})",
+                    tab_id, stored_version, tab_version
                 );
             }
 
-            // Get or create editor
             let editor = storage.editors.entry(tab_id).or_insert_with(|| {
                 debug!("Creating new MDOxideEditor for tab {}", tab_id);
                 MDOxideEditor::from_string(&self.tab.content)
             });
+            storage.content_versions.insert(tab_id, tab_version);
 
-            // Clone the editor for use outside the closure
-            // (We'll put it back after modifications)
             let editor_clone = std::mem::replace(editor, MDOxideEditor::new());
-
-            (editor_clone, needs_sync, hash)
+            (editor_clone, needs_sync)
         });
 
-        // Sync content from Tab to MDOxideEditor if external changes detected
+        // Sync content from Tab to MDOxideEditor after an external change.
         if needs_content_sync {
-            // Hash can desync from the stored cache while the rope still matches `tab.content`
-            // (e.g. after session restore). Avoid `buffer().to_string()` on large files every frame.
-            let editor_hash = compute_content_hash(&editor.buffer().to_string());
-            let content_actually_differs = editor_hash != content_hash;
+            debug!(
+                "Syncing Tab content to MDOxideEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
+                tab_id, self.tab.content.len(), self.tab.scroll_offset,
+                self.tab.cursor_position.0, self.tab.cursor_position.1
+            );
+            editor.set_content(&self.tab.content);
 
-            if !content_actually_differs {
-                crate::diag::event(
-                    "editor_spurious_sync",
-                    format!(
-                        "tab {} hash cache stale but buffer matches tab (len={})",
-                        tab_id,
-                        self.tab.content.len()
-                    ),
-                );
-            } else if editor.buffer().to_string() == self.tab.content {
-                // Hash collision (extremely rare) — strings match, skip sync.
-                crate::diag::event(
-                    "editor_hash_collision",
-                    format!(
-                        "tab {} DefaultHasher collision at len {}",
-                        tab_id,
-                        self.tab.content.len()
-                    ),
-                );
-            } else {
-                // Content actually differs - perform sync
-                // Use set_content() to update buffer in-place, preserving view state,
-                // syntax highlighting, and other editor configuration. This avoids
-                // visual glitching that occurs when fully recreating the editor.
-                debug!(
-                    "Syncing Tab content to MDOxideEditor for tab {} (content_len={}, scroll_offset={:.1}, cursor=({},{}))",
-                    tab_id, self.tab.content.len(), self.tab.scroll_offset, 
-                    self.tab.cursor_position.0, self.tab.cursor_position.1
-                );
-                editor.set_content(&self.tab.content);
+            // Restore cursor position from Tab
+            let cursor_line = self.tab.cursor_position.0;
+            let cursor_col = self.tab.cursor_position.1;
+            editor.set_cursor(super::mdoxide::Cursor::new(cursor_line, cursor_col));
 
-                // Restore cursor position from Tab
-                let cursor_line = self.tab.cursor_position.0;
-                let cursor_col = self.tab.cursor_position.1;
-                editor.set_cursor(super::mdoxide::Cursor::new(cursor_line, cursor_col));
-
-                // Restore viewport/scroll position from Tab if the view was reset
-                // The set_content() method preserves ViewState, so only restore
-                // if the current viewport seems wrong (e.g., editor was just created)
-                let line_height = editor.view().line_height();
-                if line_height > 0.0 && self.tab.scroll_offset > 0.0 {
-                    let current_first_line = editor.view().first_visible_line();
-                    let expected_first_line = (self.tab.scroll_offset / line_height) as usize;
-                    // Only restore if significantly off (more than 5 lines)
-                    if current_first_line.abs_diff(expected_first_line) > 5 {
-                        let total_lines = editor.buffer().line_count();
-                        editor
-                            .view_mut()
-                            .scroll_to_absolute(self.tab.scroll_offset, total_lines);
-                        debug!(
-                            "Restored viewport to absolute offset {:.1}px (line_height={:.1})",
-                            self.tab.scroll_offset, line_height
-                        );
-                    }
+            // Restore viewport/scroll position from Tab if the view was reset
+            // The set_content() method preserves ViewState, so only restore
+            // if the current viewport seems wrong (e.g., editor was just created)
+            let line_height = editor.view().line_height();
+            if line_height > 0.0 && self.tab.scroll_offset > 0.0 {
+                let current_first_line = editor.view().first_visible_line();
+                let expected_first_line = (self.tab.scroll_offset / line_height) as usize;
+                // Only restore if significantly off (more than 5 lines)
+                if current_first_line.abs_diff(expected_first_line) > 5 {
+                    let total_lines = editor.buffer().line_count();
+                    editor
+                        .view_mut()
+                        .scroll_to_absolute(self.tab.scroll_offset, total_lines);
+                    debug!(
+                        "Restored viewport to absolute offset {:.1}px (line_height={:.1})",
+                        self.tab.scroll_offset, line_height
+                    );
                 }
             }
         }
@@ -894,17 +813,6 @@ impl<'a> EditorWidget<'a> {
             self.tab.fold_state = editor.fold_state().clone();
         }
 
-        // Update content hash to reflect the new content (always persist `content_hash`
-        // after a mismatch check — fixes spurious per-frame re-sync).
-        let new_content_hash = if changed {
-            compute_content_hash(&self.tab.content)
-        } else if needs_content_sync {
-            content_hash
-        } else {
-            content_hash
-        };
-        let new_content_len = self.tab.content.len();
-
         // Use absolute scroll position for output (accounts for wrapped line heights)
         let scroll_total_offset = absolute_scroll_y;
 
@@ -924,12 +832,12 @@ impl<'a> EditorWidget<'a> {
         // Capture Vim mode label before storing editor back
         let vim_mode_label = editor.vim_mode().map(|m| m.label());
 
-        // Store the editor back
+        // Store the editor back with the revision it now matches.
+        let synced_version = self.tab.content_version();
         ui.ctx().data_mut(|data| {
             let storage = data.get_temp_mut_or_default::<MDOxideEditorStorage>(egui::Id::NULL);
             storage.editors.insert(tab_id, editor);
-            storage.content_hashes.insert(tab_id, new_content_hash);
-            storage.content_lengths.insert(tab_id, new_content_len);
+            storage.content_versions.insert(tab_id, synced_version);
         });
 
         EditorOutput {

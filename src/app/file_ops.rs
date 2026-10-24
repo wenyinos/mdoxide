@@ -1186,10 +1186,6 @@ impl MDOxideApp {
                 // Read the updated content from disk
                 match std::fs::read(path) {
                     Ok(bytes) => {
-                        // Detect encoding and decode
-                        let new_content = String::from_utf8(bytes.clone())
-                            .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).to_string());
-
                         // Find the tab with this path and reload if not modified by user
                         for idx in 0..tab_count {
                             let should_reload = self
@@ -1205,12 +1201,9 @@ impl MDOxideApp {
 
                             if should_reload {
                                 if let Some(tab) = self.state.tab_mut(idx) {
-                                    tab.content = new_content.clone();
-                                    tab.notify_external_content_change();
-                                    // Clamp cursor to new content length
-                                    let max_chars = tab.content.chars().count();
-                                    let current_cursor = tab.cursors.primary().head.min(max_chars);
-                                    tab.pending_cursor_restore = Some(current_cursor);
+                                    // Single external-change entry point: updates
+                                    // encoding/BOM, disk anchor and revision.
+                                    tab.replace_from_disk(bytes.clone());
                                     reloaded_count += 1;
                                     debug!("Reloaded externally modified file: {}", path.display());
                                 }
@@ -1219,6 +1212,11 @@ impl MDOxideApp {
                                 warn!(
                                     "File modified externally but tab has unsaved changes: {}",
                                     path.display()
+                                );
+                                self.state.show_toast(
+                                    t!("notification.external_change_kept_local").to_string(),
+                                    time,
+                                    4.0,
                                 );
                                 break;
                             }

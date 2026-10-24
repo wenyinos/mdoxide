@@ -375,13 +375,39 @@ struct TempScript {
 }
 
 impl TempScript {
-    fn new(suffix: &str) -> std::io::Result<(Self, PathBuf)> {
+    /// Create a private (0600) script file without clobbering an existing path.
+    fn write(suffix: &str, code: &str) -> std::io::Result<(Self, PathBuf)> {
+        use std::io::Write;
+
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("mdoxide_code_{nanos}{suffix}"));
-        Ok((Self { path: path.clone() }, path))
+        for attempt in 0..16u32 {
+            let path = std::env::temp_dir().join(format!(
+                "mdoxide_code_{}_{nanos}_{attempt}{suffix}",
+                std::process::id()
+            ));
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(&path) {
+                Ok(mut file) => {
+                    file.write_all(code.as_bytes())?;
+                    return Ok((Self { path: path.clone() }, path));
+                }
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(std::io::Error::new(
+            ErrorKind::AlreadyExists,
+            "could not allocate a unique temp script",
+        ))
     }
 }
 
@@ -445,12 +471,16 @@ fn run_shell(
     let mut last_io_err: Option<String> = None;
     for exe in interpreters {
         let (_guard, path) =
-            TempScript::new(shell_suffix(exe)).map_err(|e| RunError::Spawn(e.to_string()))?;
-        std::fs::write(&path, code).map_err(|e| RunError::Spawn(e.to_string()))?;
+            TempScript::write(shell_suffix(exe), code).map_err(|e| RunError::Spawn(e.to_string()))?;
         let args = shell_args(exe, &path);
 
         let mut cmd = Command::new(exe);
         cmd.args(&args);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
         cmd.current_dir(cwd);
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
@@ -478,8 +508,8 @@ fn run_python(
     timeout: Duration,
     handle: Option<&RunHandle>,
 ) -> Result<i32, RunError> {
-    let (_guard, path) = TempScript::new(".py").map_err(|e| RunError::Spawn(e.to_string()))?;
-    std::fs::write(&path, code).map_err(|e| RunError::Spawn(e.to_string()))?;
+    let (_guard, path) =
+        TempScript::write(".py", code).map_err(|e| RunError::Spawn(e.to_string()))?;
 
     let candidates: &[&str] = if cfg!(windows) {
         &["python", "py", "python3"]
@@ -493,6 +523,11 @@ fn run_python(
             cmd.arg("-3");
         }
         cmd.arg(&path);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
         cmd.current_dir(cwd);
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
@@ -557,15 +592,13 @@ fn wait_child(
             .as_ref()
             .is_some_and(|c| c.load(Ordering::Relaxed))
         {
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_child_tree(&mut child);
             join_readers();
             return Err(RunError::Cancelled);
         }
 
         if start.elapsed() > timeout {
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_child_tree(&mut child);
             join_readers();
             return Err(RunError::TimedOut);
         }
@@ -592,15 +625,46 @@ fn drain_pipe<R: Read>(mut pipe: R, handle: Option<&RunHandle>, is_stderr: bool)
     }
 }
 
+/// Cap captured output so a chatty script cannot exhaust memory.
+const MAX_CAPTURE_BYTES: usize = 2 * 1024 * 1024;
+
 fn push_chunk(handle: Option<&RunHandle>, bytes: &[u8], is_stderr: bool) {
     let Some(h) = handle else { return };
     if let Ok(mut state) = h.lock() {
-        if is_stderr {
-            state.stderr.extend_from_slice(bytes);
+        let buffer = if is_stderr {
+            &mut state.stderr
         } else {
-            state.stdout.extend_from_slice(bytes);
+            &mut state.stdout
+        };
+        let remaining = MAX_CAPTURE_BYTES.saturating_sub(buffer.len());
+        if remaining > 0 {
+            buffer.extend_from_slice(&bytes[..bytes.len().min(remaining)]);
         }
     }
+}
+
+/// Kill the child and any descendants it spawned.
+///
+/// Unix children are started in their own process group (`process_group(0)`),
+/// so a negative pid reaches the whole tree. Windows uses `taskkill /T`.
+fn kill_child_tree(child: &mut std::process::Child) {
+    let pid = child.id();
+    #[cfg(unix)]
+    {
+        let group = format!("-{pid}");
+        let _ = Command::new("kill")
+            .args(["-KILL", group.as_str()])
+            .status();
+    }
+    #[cfg(windows)]
+    {
+        let pid_arg = pid.to_string();
+        let _ = Command::new("taskkill")
+            .args(["/PID", pid_arg.as_str(), "/T", "/F"])
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 #[cfg(test)]

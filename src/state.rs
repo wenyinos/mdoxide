@@ -1323,9 +1323,9 @@ pub struct Tab {
     /// Populated by `prepare_undo_snapshot_hashed()` only when the blake3
     /// hash changes; `record_edit_from_snapshot()` updates it in-place.
     pending_undo_snapshot: Option<String>,
-    /// Blake3 hash of content at the time of the last undo snapshot.
-    /// Used to skip cloning when content hasn't changed between frames.
-    undo_content_hash: [u8; 32],
+    /// `content_version` at which `pending_undo_snapshot` was last refreshed.
+    /// Avoids hashing/cloning the whole document every frame.
+    undo_snapshot_version: u64,
 
     // ── Per-frame cache fields (invalidated via content_version) ─────────
     cached_text_stats: TextStats,
@@ -1341,6 +1341,9 @@ pub struct Tab {
     cached_needs_complex_script_version: u64,
     /// content_version at last auto-save (avoids O(N) hash_content per frame)
     last_auto_save_content_version: Option<u64>,
+    /// `content_version` written to the crash-recovery file.
+    /// Unchanged tabs are skipped instead of rewriting their full body every 5s.
+    last_recovery_version: Option<u64>,
 }
 
 impl Tab {
@@ -1408,7 +1411,7 @@ impl Tab {
             current_encoding: "utf-8", // Default to UTF-8 for new documents
             had_bom: false,          // New documents don't have a BOM
             pending_undo_snapshot: None,
-            undo_content_hash: [0u8; 32],
+            undo_snapshot_version: 0,
             cached_text_stats: TextStats::default(),
             cached_text_stats_version: u64::MAX,
             cached_is_modified: false,
@@ -1420,6 +1423,7 @@ impl Tab {
             cached_needs_complex_script: false,
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
+            last_recovery_version: None,
         }
     }
 
@@ -1508,7 +1512,7 @@ impl Tab {
             current_encoding: "utf-8",
             had_bom: false,
             pending_undo_snapshot: None,
-            undo_content_hash: [0u8; 32],
+            undo_snapshot_version: 0,
             cached_text_stats: TextStats::default(),
             cached_text_stats_version: u64::MAX,
             cached_is_modified: false,
@@ -1520,6 +1524,7 @@ impl Tab {
             cached_needs_complex_script: false,
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
+            last_recovery_version: None,
         }
     }
 
@@ -1616,7 +1621,7 @@ impl Tab {
             current_encoding: actual_encoding,
             had_bom,
             pending_undo_snapshot: None,
-            undo_content_hash: [0u8; 32],
+            undo_snapshot_version: 0,
             cached_text_stats: TextStats::default(),
             cached_text_stats_version: u64::MAX,
             cached_is_modified: false,
@@ -1628,6 +1633,7 @@ impl Tab {
             cached_needs_complex_script: false,
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
+            last_recovery_version: None,
         }
     }
 
@@ -1743,7 +1749,7 @@ impl Tab {
             current_encoding: "utf-8",
             had_bom: false,
             pending_undo_snapshot: None,
-            undo_content_hash: [0u8; 32],
+            undo_snapshot_version: 0,
             cached_text_stats: TextStats::default(),
             cached_text_stats_version: u64::MAX,
             cached_is_modified: false,
@@ -1755,6 +1761,7 @@ impl Tab {
             cached_needs_complex_script: false,
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
+            last_recovery_version: None,
         }
     }
 
@@ -1875,7 +1882,7 @@ impl Tab {
             current_encoding: actual_encoding,
             had_bom,
             pending_undo_snapshot: None,
-            undo_content_hash: [0u8; 32],
+            undo_snapshot_version: 0,
             cached_text_stats: TextStats::default(),
             cached_text_stats_version: u64::MAX,
             cached_is_modified: false,
@@ -1887,6 +1894,7 @@ impl Tab {
             cached_needs_complex_script: false,
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
+            last_recovery_version: None,
         }
     }
 
@@ -2319,6 +2327,9 @@ impl Tab {
             let old_len = self.content.len();
             self.content = decoded.into_owned();
             self.original_content = self.content.clone();
+            self.content_version = self.content_version.wrapping_add(1);
+            self.bump_source_epoch();
+            self.undo_snapshot_version = u64::MAX;
 
             // If content length changed significantly, reset cursor
             if ((self.content.len() as isize) - (old_len as isize)).abs() > 100 {
@@ -2333,6 +2344,75 @@ impl Tab {
 
         log::info!("Changed encoding to: {}", new_encoding);
         Ok(())
+    }
+
+    /// Replace the whole document from bytes read from disk.
+    ///
+    /// This is the single entry point for external file changes. It updates
+    /// content, encoding/BOM, the clean-on-disk anchor and the revision in one
+    /// step so the raw editor, rendered view and caches all resynchronize.
+    pub fn replace_from_disk(&mut self, bytes: Vec<u8>) {
+        use chardetng::EncodingDetector;
+
+        let is_large_file = bytes.len() >= LARGE_FILE_THRESHOLD;
+        let (content, encoding_name, had_bom) = if let Some((bom_encoding, bom_len)) =
+            encoding_rs::Encoding::for_bom(&bytes)
+        {
+            let (decoded, _) = bom_encoding.decode_without_bom_handling(&bytes[bom_len..]);
+            (decoded.into_owned(), bom_encoding.name(), true)
+        } else {
+            let preferred = encoding_rs::Encoding::for_label(self.current_encoding.as_bytes());
+            if let Some(encoding) = preferred.filter(|e| *e != encoding_rs::UTF_8) {
+                let (decoded, _, had_errors) = encoding.decode(&bytes);
+                if !had_errors {
+                    (decoded.into_owned(), encoding.name(), false)
+                } else {
+                    let mut detector = EncodingDetector::new();
+                    detector.feed(&bytes, true);
+                    let detected = detector.guess(None, true);
+                    let (decoded, _, _) = detected.decode(&bytes);
+                    (decoded.into_owned(), detected.name(), false)
+                }
+            } else {
+                let mut detector = EncodingDetector::new();
+                detector.feed(&bytes, true);
+                let detected = detector.guess(None, true);
+                let (decoded, _, _) = detected.decode(&bytes);
+                (decoded.into_owned(), detected.name(), false)
+            }
+        };
+
+        self.content = content;
+        self.is_large_file = is_large_file;
+        if is_large_file {
+            self.original_content.clear();
+            self.original_content_hash = Some(Self::compute_content_hash(&self.content));
+            self.original_bytes.clear();
+        } else {
+            self.original_content = self.content.clone();
+            self.original_content_hash = None;
+            self.original_bytes = bytes;
+        }
+        self.detected_encoding = Some(encoding_name);
+        self.current_encoding = encoding_name;
+        self.had_bom = had_bom;
+
+        // Invalidate every revision-keyed cache and the Raw editor buffer.
+        self.content_version = self.content_version.wrapping_add(1);
+        self.bump_source_epoch();
+        self.pending_undo_snapshot = None;
+        self.undo_snapshot_version = u64::MAX;
+        self.edit_history = if is_large_file {
+            EditHistory::with_max_groups(LARGE_FILE_MAX_UNDO_GROUPS)
+        } else {
+            EditHistory::new()
+        };
+
+        let max_chars = self.content.chars().count();
+        let head = self.cursors.primary().head.min(max_chars);
+        self.cursors.set_single(Selection::cursor(head));
+        self.sync_cursor_from_primary();
+        self.pending_cursor_restore = Some(head);
     }
 
     /// Encode the current content to bytes using the selected encoding.
@@ -2470,7 +2550,8 @@ impl Tab {
             self.content = new_content;
             self.content_version = self.content_version.wrapping_add(1);
             self.bump_source_epoch();
-            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+            // The pending snapshot is stale; the next prepare refreshes it.
+            self.undo_snapshot_version = u64::MAX;
             self.mark_content_edited();
         }
     }
@@ -2487,13 +2568,13 @@ impl Tab {
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
             self.bump_source_epoch();
-            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             match self.pending_undo_snapshot.as_mut() {
                 Some(snap) => snap.clone_from(&self.content),
                 None => {
                     self.pending_undo_snapshot = Some(self.content.clone());
                 }
             }
+            self.undo_snapshot_version = self.content_version;
         }
         cursor
     }
@@ -2501,20 +2582,20 @@ impl Tab {
     /// Redo the last undone edit group.
     ///
     /// Reapplies operations to `self.content` and bumps `content_version`.
-    /// Updates the undo snapshot in-place and refreshes the blake3 hash.
+    /// Updates the undo snapshot in-place.
     /// Returns cursor char position, or `None` if the redo stack was empty.
     pub fn redo(&mut self) -> Option<usize> {
         let cursor = self.edit_history.redo_string(&mut self.content);
         if cursor.is_some() {
             self.content_version = self.content_version.wrapping_add(1);
             self.bump_source_epoch();
-            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
             match self.pending_undo_snapshot.as_mut() {
                 Some(snap) => snap.clone_from(&self.content),
                 None => {
                     self.pending_undo_snapshot = Some(self.content.clone());
                 }
             }
+            self.undo_snapshot_version = self.content_version;
         }
         cursor
     }
@@ -2586,25 +2667,23 @@ impl Tab {
         self.content_version = self.content_version.wrapping_add(1);
     }
 
-    /// Prepare an undo snapshot using blake3 hash-based change detection.
+    /// Prepare an undo snapshot when the document revision changed.
     ///
-    /// Computes a blake3 hash of content and only clones when the hash
-    /// differs from the stored hash (i.e., content actually changed).
-    /// Uses `clone_from` to reuse existing buffer capacity when possible.
+    /// `content_version` is the single source of truth for "did the text
+    /// change"; no per-frame hashing is needed. The clone only happens once
+    /// per revision, and `clone_from` reuses the previous buffer.
     /// Call before non-Raw view widgets that can modify `content`.
     pub fn prepare_undo_snapshot_hashed(&mut self) {
-        let hash = *blake3::hash(self.content.as_bytes()).as_bytes();
-        if hash != self.undo_content_hash {
+        if self.undo_snapshot_version != self.content_version
+            || self.pending_undo_snapshot.is_none()
+        {
             match self.pending_undo_snapshot.as_mut() {
                 Some(snap) => snap.clone_from(&self.content),
                 None => {
                     self.pending_undo_snapshot = Some(self.content.clone());
                 }
             }
-            self.undo_content_hash = hash;
-        } else if self.pending_undo_snapshot.is_none() {
-            self.pending_undo_snapshot = Some(self.content.clone());
-            self.undo_content_hash = hash;
+            self.undo_snapshot_version = self.content_version;
         }
     }
 
@@ -2634,10 +2713,10 @@ impl Tab {
             self.record_edit_from_snapshot();
         }
         self.content = final_content;
-        self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
         if let Some(snap) = self.pending_undo_snapshot.as_mut() {
             snap.clone_from(&self.content);
         }
+        self.undo_snapshot_version = self.content_version;
     }
 
     /// Like [`record_edit_from_snapshot`] but bumps [`source_epoch`] when content changes.
@@ -2651,13 +2730,13 @@ impl Tab {
                 let ops = compute_edit_ops(&old_content, &self.content);
                 self.edit_history.record_operations(ops);
                 old_content.clone_from(&self.content);
-                self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
                 self.content_version = self.content_version.wrapping_add(1);
                 if bump_epoch {
                     self.bump_source_epoch();
                 }
             }
             self.pending_undo_snapshot = Some(old_content);
+            self.undo_snapshot_version = self.content_version;
         }
     }
 
@@ -2667,7 +2746,8 @@ impl Tab {
         if old_content != self.content {
             let ops = compute_edit_ops(&old_content, &self.content);
             self.edit_history.record_operations(ops);
-            self.undo_content_hash = *blake3::hash(self.content.as_bytes()).as_bytes();
+            self.content_version = self.content_version.wrapping_add(1);
+            self.undo_snapshot_version = u64::MAX;
             self.pending_undo_snapshot = None;
             self.bump_source_epoch();
         }
@@ -3650,13 +3730,9 @@ impl AppState {
             recovery_conflicts: HashMap::new(),
         };
 
-        // Try to restore tabs from previous session
-        state.restore_session_tabs();
-
-        // If no tabs were restored, create an initial empty tab
-        if state.tabs.is_empty() {
-            state.new_tab();
-        }
+        // Tabs are restored explicitly by the app-level session coordinator
+        // (session.json), so no implicit settings-based restore happens here.
+        state.new_tab();
 
         state
     }
@@ -3669,7 +3745,7 @@ impl AppState {
     ///
     /// If `settings.restore_session` is false, this method returns early
     /// without restoring any tabs (caller will create an empty tab).
-    fn restore_session_tabs(&mut self) {
+    pub(crate) fn restore_tabs_from_settings(&mut self) {
         // Check if session restore is enabled
         if !self.settings.restore_session {
             debug!("Session restore disabled in settings, skipping tab restoration");
@@ -3682,6 +3758,11 @@ impl AppState {
         if tab_infos.is_empty() {
             debug!("No tabs to restore from previous session");
             return;
+        }
+
+        // Replace the placeholder empty tab created by the constructor.
+        if self.tabs.len() == 1 && self.tabs[0].is_empty_untitled() {
+            self.tabs.clear();
         }
 
         info!("Restoring {} tab(s) from previous session", tab_infos.len());
@@ -3744,6 +3825,8 @@ impl AppState {
                 self.tabs.len(),
                 self.active_tab_index
             );
+        } else {
+            self.new_tab();
         }
     }
 
@@ -3826,13 +3909,8 @@ impl AppState {
             recovery_conflicts: HashMap::new(),
         };
 
-        // Try to restore tabs from session data
-        state.restore_session_tabs();
-
-        // If no tabs were restored, create an empty tab
-        if state.tabs.is_empty() {
-            state.new_tab();
-        }
+        // Tabs are restored explicitly by the session coordinator.
+        state.new_tab();
 
         state
     }
@@ -4749,23 +4827,33 @@ impl AppState {
     /// restore can reject recovery files whose tab id was reused for a
     /// different document or whose disk file was changed externally
     /// (task 106 — hardened session recovery).
-    pub fn save_recovery_content(&self) {
+    pub fn save_recovery_content(&mut self) {
         use crate::config::save_recovery_content;
 
-        for tab in &self.tabs {
+        for tab in &mut self.tabs {
             if tab.is_special() {
                 continue;
             }
-            if tab.is_modified() {
-                let ok = save_recovery_content(
-                    tab.id,
-                    &tab.content,
-                    tab.path.as_deref(),
-                    tab.disk_content_hash(),
-                );
-                if !ok {
-                    warn!("Failed to save recovery content for tab {}", tab.id);
-                }
+            let modified = tab.is_modified_cached();
+            if !modified {
+                // Nothing to persist; remember the revision so a later edit
+                // (which bumps content_version) triggers a write.
+                tab.last_recovery_version = Some(tab.content_version);
+                continue;
+            }
+            if tab.last_recovery_version == Some(tab.content_version) {
+                continue;
+            }
+            let ok = save_recovery_content(
+                tab.id,
+                &tab.content,
+                tab.path.as_deref(),
+                tab.disk_content_hash(),
+            );
+            if ok {
+                tab.last_recovery_version = Some(tab.content_version);
+            } else {
+                warn!("Failed to save recovery content for tab {}", tab.id);
             }
         }
     }
@@ -4867,8 +4955,11 @@ impl AppState {
             return false;
         }
 
-        // Clear existing tabs
-        self.tabs.clear();
+        // Build the restored set separately: only replace the current tabs
+        // when at least one tab was restored. A failed session read must not
+        // leave the user with an empty window.
+        let old_tabs = std::mem::take(&mut self.tabs);
+        let old_active_index = self.active_tab_index;
 
         let mut restored_count = 0;
 
@@ -5050,7 +5141,7 @@ impl AppState {
                                 current_encoding: encoding,
                                 had_bom,
                                 pending_undo_snapshot: None,
-                                undo_content_hash: [0u8; 32],
+                                undo_snapshot_version: 0,
                                 cached_text_stats: TextStats::default(),
                                 cached_text_stats_version: u64::MAX,
                                 cached_is_modified: false,
@@ -5062,6 +5153,7 @@ impl AppState {
                                 cached_needs_complex_script: false,
                                 cached_needs_complex_script_version: u64::MAX,
                                 last_auto_save_content_version: None,
+                                last_recovery_version: None,
                             };
                             t
                         } else {
@@ -5206,6 +5298,13 @@ impl AppState {
             }
         } else {
             debug!("Session was in single-file mode, no workspace to restore");
+        }
+
+        if restored_count == 0 {
+            self.tabs = old_tabs;
+            self.active_tab_index = old_active_index.min(self.tabs.len().saturating_sub(1));
+            warn!("Session restore yielded no tabs; keeping the existing tab set");
+            return false;
         }
 
         info!(
@@ -7356,7 +7455,8 @@ mod tests {
     fn test_restore_session_tabs_empty_settings() {
         // When last_open_tabs is empty, should create one empty tab
         let settings = Settings::default();
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         assert_eq!(state.tab_count(), 1);
         assert!(state.active_tab().unwrap().path.is_none());
@@ -7375,7 +7475,8 @@ mod tests {
             split_ratio: 0.5,
         }];
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Should fall back to creating an empty tab since the file doesn't exist
         assert_eq!(state.tab_count(), 1);
@@ -7395,7 +7496,8 @@ mod tests {
             split_ratio: 0.5,
         }];
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Should fall back to creating an empty tab since unsaved tabs are skipped
         assert_eq!(state.tab_count(), 1);
@@ -7409,7 +7511,8 @@ mod tests {
         settings.last_open_tabs = vec![]; // No tabs to restore
         settings.active_tab_index = 100; // Invalid index
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Should create one empty tab and active_tab_index should be 0
         assert_eq!(state.tab_count(), 1);
@@ -7443,7 +7546,8 @@ mod tests {
         }];
         settings.active_tab_index = 0;
 
-        let state = AppState::with_settings(settings);
+        let mut state = AppState::with_settings(settings);
+        state.restore_tabs_from_settings();
 
         // Clean up temp file
         let _ = std::fs::remove_file(&temp_file);
