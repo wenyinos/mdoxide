@@ -13,8 +13,16 @@ env:
 
 jobs:
   linux-packages:
-    name: Linux packages
-    runs-on: ubuntu-22.04
+    name: Linux packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-22.04
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v5
@@ -41,20 +49,30 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mdoxide-linux
+          name: mdoxide-linux-${{ matrix.arch }}
           path: dist/*
 
   windows-installer:
-    name: Windows installer
+    name: Windows installer (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@1.92.0
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --locked
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Install NSIS
         shell: pwsh
@@ -71,11 +89,11 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $version = "${{ github.ref_name }}".TrimStart('v')
-          & "$env:NSIS_DIR\makensis.exe" /DVERSION=$version installer/windows/mdoxide.nsi
+          & "$env:NSIS_DIR\makensis.exe" /DVERSION=$version /DARCH=${{ matrix.arch }} "/DBIN_DIR=${{ matrix.target }}/release" installer/windows/mdoxide.nsi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mdoxide-windows
+          name: mdoxide-windows-${{ matrix.arch }}
           path: dist/*.exe
 
   publish:

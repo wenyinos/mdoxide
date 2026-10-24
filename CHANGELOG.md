@@ -2,6 +2,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.3.2] - 2026-10-24
+
+### 新增
+
+- Linux 与 Windows 发布产物增加 ARM64 架构：RPM aarch64、DEB arm64、Windows ARM64 安装包；每个平台同时提供 x86_64 / x64 版本
+- 标题栏恢复专注模式（Zen）切换按钮，与 F11 和菜单项共用状态
+
+### 修复
+
+- 标题栏视图切换与字数统计重叠：`ViewModeSegment` 不再为每个分段二次分配布局空间，避免 RTL 布局中光标反向推进
+- ARM64 Windows 安装包与 x64 安装包可并存（独立安装目录、开始菜单与卸载注册表项）
+
 ## [0.3.1] - 2026-10-24
 
 ### 变更
