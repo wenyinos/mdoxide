@@ -22,6 +22,7 @@ mod ribbon;
 mod search;
 mod settings;
 mod terminal_panel;
+#[allow(dead_code)]
 mod view_segment;
 mod welcome;
 mod window;
@@ -44,7 +45,6 @@ pub use ribbon::RibbonAction;
 pub use search::{SearchNavigationTarget, SearchPanel};
 pub use settings::SettingsPanel;
 pub use terminal_panel::{FloatingWindow, TerminalPanel, TerminalPanelState};
-pub use view_segment::{TitleBarButton, ViewModeSegment, ViewSegmentAction};
 pub use welcome::WelcomePanel;
 pub use window::{
     center_panel_in_viewport, constrain_rect_to_viewport, consume_clicks_in_resize_zones,

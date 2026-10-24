@@ -96,6 +96,10 @@ pub enum RibbonAction {
     // Productivity
     /// Toggle productivity hub visibility
     ToggleProductivity,
+
+    // Frontmatter
+    /// Toggle the frontmatter panel (kept for keyboard shortcut handling)
+    ToggleFrontmatter,
 }
 
 #[cfg(test)]
