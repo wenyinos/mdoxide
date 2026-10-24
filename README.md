@@ -10,20 +10,21 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.2.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts (RPM, DEB, Windows installer) are built by GitHub Actions.
+**v0.3.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts (RPM, DEB, Windows installer) are built by GitHub Actions.
 
 ## What works today
 
 - WYSIWYG markdown editing (per-block rendered/editing switch, commit-boundary undo)
 - Raw / Rendered / Split view modes
-- MarkText-style UI: frameless title bar, centred tab strip, three-tab sidebar, selection format toolbar, focus and typewriter modes
+- MarkText-style chrome: 32px frameless title bar with hamburger application menu, centred document path, 28px tab strip with accent underline, selection format toolbar, focus and typewriter modes
+- Typography tuned to MarkText: 15px body text at 1.6× line height; table cells wrap and grow to fit their content
 - Bundled Source Han Sans for reliable CJK rendering; fcitx5 IME verified on Wayland (preedit, candidate window, backspace, commit, Esc)
 - CommonMark + GFM via `comrak`; syntax highlighting via `syntect`
 - Native Mermaid rendering (11 diagram types) and Mermaid SVG in HTML export
 - RaTeX math rendering in the editor and in HTML/PDF exports
 - HTML and PDF export with embedded CJK fonts, tables, code blocks, links, and formula images
 - File tree, workspace mode, find & replace (regex)
-- 10 UI languages
+- 10 UI languages (996 aligned translation keys)
 
 ## Known limitations
 
@@ -36,7 +37,7 @@ Requirements: Rust 1.92 (pinned in `rust-toolchain.toml`), plus the usual Linux 
 
 ```bash
 cargo run --release        # run
-cargo test --release       # 1601 tests, 0 failures
+cargo test --release       # full test suite
 cargo build --release      # binary at target/release/mdoxide
 ```
 

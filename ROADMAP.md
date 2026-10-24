@@ -36,6 +36,7 @@
   - ✅ v0.1.0 已发布（Linux RPM/DEB）
   - ✅ v0.1.2：汉化补全、启动跟随系统语言、默认字号与字体可读性、Windows NSIS 修复；产物由 release workflow 直接发布
   - ✅ v0.2.0：Duskfox Blurred 主题与透明背景、全新图标、GitPages 主页、竖版海报、发布页模板与 checksums
+  - ✅ v0.3.0：MarkText 界面复刻（汉堡菜单标题栏、移除 ribbon/状态栏）、表格换行与行高修复、1.6 倍行距
 
 ## 明确不做
 

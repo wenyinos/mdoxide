@@ -10,20 +10,21 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-**v0.2.0 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物（RPM、DEB、Windows 安装包）由 GitHub Actions 构建。
+**v0.3.0 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物（RPM、DEB、Windows 安装包）由 GitHub Actions 构建。
 
 ## 已具备的能力
 
 - 所见即所得 Markdown 编辑：按块切换渲染/编辑态，提交边界撤销
 - 源码 / 渲染 / 分屏三种视图
-- MarkText 风格界面：无边框标题栏、居中标签页、三页签侧边栏、选区浮动格式条、专注与打字机模式
+- MarkText 风格界面：32px 无边框标题栏（汉堡应用菜单、居中路径与未保存点）、28px 标签栏与主题色下划线、选区浮动格式条、专注与打字机模式
+- 排版对齐 MarkText：正文 15px、1.6 倍行距；表格单元格自动换行并按内容增高
 - 内置思源黑体，中文渲染不依赖系统字体；fcitx5 IME 已在 Wayland 真机验证（预编辑、候选窗、组合中 Backspace、提交、Esc）
 - CommonMark + GFM（`comrak`），代码高亮（`syntect`）
 - 原生 Mermaid 渲染（11 种图表），HTML 导出内嵌 Mermaid SVG
 - RaTeX 数学公式：编辑器内渲染，并嵌入 HTML/PDF 导出
 - HTML 与 PDF 导出：内嵌中文字体，支持表格、代码块、链接与公式图片
 - 文件树、工作区模式、正则查找替换
-- 10 种界面语言
+- 10 种界面语言（996 个中英对齐翻译键）
 
 ## 已知限制
 
@@ -36,7 +37,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ```bash
 cargo run --release        # 运行
-cargo test --release       # 1601 个测试，0 失败
+cargo test --release       # 完整测试套件
 cargo build --release      # 产物：target/release/mdoxide
 ```
 
