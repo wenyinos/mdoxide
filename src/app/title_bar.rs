@@ -7,8 +7,8 @@ use super::MDOxideApp;
 use crate::config::ViewMode;
 use crate::markdown::formatting::MarkdownFormatCommand;
 use crate::state::FileType;
-use crate::ui::phosphor_icons::{phosphor_font, LIST};
-use crate::ui::RibbonAction;
+use crate::ui::phosphor_icons::{phosphor_font, GEAR, LIST};
+use crate::ui::{RibbonAction, TitleBarButton, ViewModeSegment, ViewSegmentAction};
 use eframe::egui;
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -18,8 +18,8 @@ const TITLE_BAR_HEIGHT: f32 = 32.0;
 
 /// Left cluster holding the application-menu button.
 const MENU_BUTTON_AREA_WIDTH: f32 = 44.0;
-/// Right cluster holding word count and minimize/maximize/close.
-const WINDOW_BUTTON_AREA_WIDTH: f32 = 190.0;
+/// Right cluster holding statistics, view switch, settings and window controls.
+const WINDOW_BUTTON_AREA_WIDTH: f32 = 300.0;
 
 /// Hit area for minimize / maximize / close.
 const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 20.0);
@@ -52,7 +52,7 @@ impl MDOxideApp {
         &mut self,
         ui: &mut egui::Ui,
         is_maximized: bool,
-        _is_dark: bool,
+        is_dark: bool,
         _zen_mode: bool,
         title_bar_color: egui::Color32,
         button_hover_color: egui::Color32,
@@ -95,6 +95,16 @@ impl MDOxideApp {
             .map(|tab| tab.file_type())
             .unwrap_or(FileType::Unknown);
         let supports_split = file_type.supports_split();
+        let current_view_mode = self
+            .state
+            .active_tab()
+            .map(|tab| tab.view_mode)
+            .unwrap_or(ViewMode::Raw);
+        let has_document_tab = self
+            .state
+            .active_tab()
+            .map(|tab| !tab.is_special())
+            .unwrap_or(false);
         let recent_files: Vec<PathBuf> = self
             .state
             .settings
@@ -711,6 +721,39 @@ impl MDOxideApp {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
                         min_btn.on_hover_text(t!("a11y.minimize_button").to_string());
+
+                        // Settings shortcut (restored from the Ferrite chrome)
+                        ui.add_space(4.0);
+                        if TitleBarButton::show(
+                            ui,
+                            GEAR,
+                            &t!("tooltip.settings").to_string(),
+                            false,
+                            is_dark,
+                        )
+                        .clicked()
+                        {
+                            action = Some(TitleBarAction::OpenSettings);
+                        }
+
+                        // View mode quick switch (restored from the Ferrite chrome)
+                        if has_document_tab {
+                            ui.add_space(4.0);
+                            let segment = ViewModeSegment::new();
+                            let segment_action = if supports_split {
+                                segment.show(ui, current_view_mode, file_type, is_dark, accent)
+                            } else {
+                                segment.show_two_mode(ui, current_view_mode, is_dark, accent)
+                            };
+                            if let Some(segment_action) = segment_action {
+                                let mode = match segment_action {
+                                    ViewSegmentAction::SetRaw => ViewMode::Raw,
+                                    ViewSegmentAction::SetSplit => ViewMode::Split,
+                                    ViewSegmentAction::SetRendered => ViewMode::Rendered,
+                                };
+                                action = Some(TitleBarAction::SetView(mode));
+                            }
+                        }
 
                         // Document statistic (MarkText shows this here)
                         if let Some((count, label)) = &doc_metric {

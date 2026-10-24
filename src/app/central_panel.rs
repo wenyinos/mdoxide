@@ -265,12 +265,12 @@ impl MDOxideApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO).fill(fill_color))
             .show_inside(ui, |ui| {
-            // Tab bar - uses custom wrapping layout for multi-line support
-            // Hidden in Zen Mode for distraction-free editing
+            // Tab bar - uses custom wrapping layout for multi-line support.
+            // Kept visible in Zen Mode so documents remain switchable.
             let mut tab_to_close: Option<usize> = None;
             let mut tab_swap: Option<(usize, usize)> = None;
 
-            if !zen_mode {
+            {
                 // Collect tab info first to avoid borrow issues
                 let tab_count = self.state.tab_count();
                 let active_index = self.state.active_tab_index();
@@ -616,7 +616,7 @@ impl MDOxideApp {
                     );
                 }
                 ui.add_space(3.0);
-            } // End of tab bar (hidden in Zen Mode)
+            } // End of tab bar (always visible, including Zen Mode)
 
             // Check if active tab is a special tab (settings, about, etc.)
             // If so, render the special tab content instead of the editor
