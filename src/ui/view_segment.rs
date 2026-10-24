@@ -204,8 +204,14 @@ impl ViewModeSegment {
 
             let is_selected = current_mode == *mode;
 
-            // Create clickable area
-            let segment_response = ui.allocate_rect(segment_rect, Sense::click());
+            // `interact` (not `allocate_rect`): the whole pill is already
+            // allocated above. Allocating each segment again advances the
+            // parent cursor, which overlaps following widgets in RTL layouts.
+            let segment_response = ui.interact(
+                segment_rect,
+                ui.id().with("view_mode_segment").with(icon),
+                Sense::click(),
+            );
 
             // Draw hover effect (only for non-selected, enabled segments)
             if !is_selected && segment_response.hovered() && *enabled {
@@ -365,7 +371,12 @@ impl ViewModeSegment {
 
             let is_selected = current_mode == *mode
                 || (current_mode == ViewMode::Split && *mode == ViewMode::Raw);
-            let segment_response = ui.allocate_rect(segment_rect, Sense::click());
+            // See `show`: interact without advancing the parent layout cursor.
+            let segment_response = ui.interact(
+                segment_rect,
+                ui.id().with("view_mode_segment_2").with(icon),
+                Sense::click(),
+            );
 
             if !is_selected && segment_response.hovered() {
                 let hover_rect = segment_rect.shrink(INNER_PADDING);

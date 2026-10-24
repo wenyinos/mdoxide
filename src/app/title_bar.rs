@@ -7,7 +7,7 @@ use super::MDOxideApp;
 use crate::config::ViewMode;
 use crate::markdown::formatting::MarkdownFormatCommand;
 use crate::state::FileType;
-use crate::ui::phosphor_icons::{phosphor_font, GEAR, LIST};
+use crate::ui::phosphor_icons::{phosphor_font, ARROWS_IN, GEAR, LIST};
 use crate::ui::{RibbonAction, TitleBarButton, ViewModeSegment, ViewSegmentAction};
 use eframe::egui;
 use rust_i18n::t;
@@ -18,8 +18,8 @@ const TITLE_BAR_HEIGHT: f32 = 32.0;
 
 /// Left cluster holding the application-menu button.
 const MENU_BUTTON_AREA_WIDTH: f32 = 44.0;
-/// Right cluster holding statistics, view switch, settings and window controls.
-const WINDOW_BUTTON_AREA_WIDTH: f32 = 300.0;
+/// Right cluster holding statistics, view switch, focus/settings and window controls.
+const WINDOW_BUTTON_AREA_WIDTH: f32 = 340.0;
 
 /// Hit area for minimize / maximize / close.
 const WINDOW_CHROME_BTN_SIZE: egui::Vec2 = egui::vec2(29.0, 20.0);
@@ -53,7 +53,7 @@ impl MDOxideApp {
         ui: &mut egui::Ui,
         is_maximized: bool,
         is_dark: bool,
-        _zen_mode: bool,
+        zen_mode: bool,
         title_bar_color: egui::Color32,
         button_hover_color: egui::Color32,
         close_hover_color: egui::Color32,
@@ -734,6 +734,25 @@ impl MDOxideApp {
                         .clicked()
                         {
                             action = Some(TitleBarAction::OpenSettings);
+                        }
+
+                        // Focus (Zen) mode toggle
+                        ui.add_space(4.0);
+                        let zen_tooltip = if zen_mode {
+                            t!("zen.exit")
+                        } else {
+                            t!("zen.enter")
+                        };
+                        if TitleBarButton::show(
+                            ui,
+                            ARROWS_IN,
+                            &zen_tooltip.to_string(),
+                            zen_mode,
+                            is_dark,
+                        )
+                        .clicked()
+                        {
+                            action = Some(TitleBarAction::ToggleZen);
                         }
 
                         // View mode quick switch (restored from the Ferrite chrome)
