@@ -19,13 +19,12 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
     groups:
-      # Keep routine minor/patch bumps in one reviewable PR; major bumps
-      # remain individual so breaking changes get their own validation.
-      cargo-minor-patch:
+      # Only patch bumps are grouped. Many dependencies are pre-1.0, where a
+      # "minor" bump can be breaking, so those get individual PRs.
+      cargo-patch:
         patterns:
           - "*"
         update-types:
-          - "minor"
           - "patch"
 
   - package-ecosystem: "github-actions"
@@ -43,9 +42,8 @@ updates:
       prefix: "chore(ci)"
       include: "scope"
     groups:
-      actions-minor-patch:
+      actions-patch:
         patterns:
           - "*"
         update-types:
-          - "minor"
           - "patch"
