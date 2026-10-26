@@ -101,7 +101,7 @@ encoding_rs = "0.8"
 chardetng = "0.1"
 
 # Terminal emulation
-portable-pty = "0.8"
+portable-pty = "0.9"
 vte = "0.13"
 ctrlc = "3.5.1"
 
