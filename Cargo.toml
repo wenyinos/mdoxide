@@ -98,7 +98,7 @@ ropey = "1.6"
 
 # Character encoding detection and conversion
 encoding_rs = "0.8"
-chardetng = "0.1"
+chardetng = "1.0"
 
 # Terminal emulation
 portable-pty = "0.8"
