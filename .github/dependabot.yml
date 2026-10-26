@@ -17,7 +17,6 @@ updates:
       - "rust"
     commit-message:
       prefix: "chore(deps)"
-      include: "scope"
     groups:
       # Only patch bumps are grouped. Many dependencies are pre-1.0, where a
       # "minor" bump can be breaking, so those get individual PRs.
@@ -40,7 +39,11 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "chore(ci)"
-      include: "scope"
+    ignore:
+      # This ref is the Rust toolchain version (1.92.0 pinned in
+      # rust-toolchain.toml), not an action release tag. Bumping it would
+      # silently move the MSRV.
+      - dependency-name: "dtolnay/rust-toolchain"
     groups:
       actions-patch:
         patterns:
