@@ -7515,7 +7515,7 @@ mod tests {
         let mut text = "aé中z".to_string();
         let caret = replace_char_range(&mut text, 1, 3, "XY");
         assert_eq!(text, "aXYz");
-        assert_eq!(caret, 2);
+        assert_eq!(caret, 3);
     }
 
     #[test]
