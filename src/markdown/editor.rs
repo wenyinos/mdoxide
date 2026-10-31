@@ -2856,7 +2856,6 @@ fn render_session_formatted_edit_text(
                 .state
                 .cursor
                 .set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
-            output.state.store(ui.ctx(), widget_id);
         }
     }
 
@@ -3147,7 +3146,6 @@ fn render_session_plain_text_block(
             output.state.cursor.set_char_range(Some(
                 egui::text::CCursorRange::one(ccursor),
             ));
-            output.state.store(ui.ctx(), widget_id);
         }
     }
 
@@ -3543,7 +3541,7 @@ fn render_paragraph_with_structural_keys(
             let sense_id = block_ref.widget_id(ui).with("display_sense");
             let sense_response =
                 ui.interact(display_response.rect, sense_id, egui::Sense::click());
-            add_display_block_context_menu(ui, &sense_response, raw_display, source.as_str());
+            add_display_block_context_menu(&sense_response, raw_display, source.as_str());
 
             if sense_response.clicked() {
                 let displayed_plaintext = node.text_content();
@@ -4214,7 +4212,6 @@ fn render_list_item_with_structural_keys(
                     let sense_response =
                         ui.interact(display_response.rect, sense_id, egui::Sense::click());
                     add_display_block_context_menu(
-                        ui,
                         &sense_response,
                         raw_display,
                         source.as_str(),
@@ -4404,7 +4401,7 @@ fn render_paragraph(
             let sense_id = block_ref.widget_id(ui).with("display_sense");
             let sense_response =
                 ui.interact(display_response.rect, sense_id, egui::Sense::click());
-            add_display_block_context_menu(ui, &sense_response, raw_display, source.as_str());
+            add_display_block_context_menu(&sense_response, raw_display, source.as_str());
 
             if sense_response.clicked() {
                 let displayed_plaintext = node.text_content();
@@ -4547,19 +4544,14 @@ fn show_formatted_block_galley_display(
     let size = galley.size();
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     ui.painter().galley(rect.min, galley, colors.text);
-    add_display_block_context_menu(ui, &response, raw_text, source);
+    add_display_block_context_menu(&response, raw_text, source);
     response
 }
 
 /// Context menu for a non-editing rendered block (painted galley).
 /// The caller's click-sense widget sits on top, so callers attach this to
 /// that response as well.
-fn add_display_block_context_menu(
-    ui: &mut Ui,
-    response: &Response,
-    raw_text: &str,
-    source: &str,
-) {
+fn add_display_block_context_menu(response: &Response, raw_text: &str, source: &str) {
     response.context_menu(|ui| {
         if ui.button(t!("context_menu.copy_block")).clicked() {
             ui.ctx().copy_text(raw_text.to_string());
@@ -5579,7 +5571,6 @@ fn render_list_item(
                     let sense_response =
                         ui.interact(display_response.rect, sense_id, egui::Sense::click());
                     add_display_block_context_menu(
-                        ui,
                         &sense_response,
                         raw_display,
                         source.as_str(),
