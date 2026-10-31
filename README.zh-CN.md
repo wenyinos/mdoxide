@@ -10,13 +10,14 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-**v0.5.0 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
+**v0.5.1 已发布。** 六个里程碑全部完成：基座 Fork 与代码审查、模块裁减、MarkText 外观重塑、交互对齐（含 fcitx5 IME 真机走查）、导出质量与打包。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
 
 ## 已具备的能力
 
 - 所见即所得 Markdown 编辑：按块切换渲染/编辑态，提交边界撤销
 - 源码 / 渲染 / 分屏三种视图
 - MarkText 风格界面：32px 无边框标题栏（汉堡应用菜单、视图切换、专注模式与设置快捷按钮、居中路径与未保存点）、28px 标签栏与主题色下划线、选区浮动格式条、打字机模式
+- 源码与预览模式文本右键菜单：复制 / 剪切 / 粘贴 / 全选；预览可“复制全部（纯文本）”或“复制为 Markdown”
 - 专注模式淡化非当前编辑块；禅模式隐藏侧栏与状态栏，但保留顶部标签页
 - 排版对齐 MarkText：正文 15px、1.6 倍行距；表格单元格自动换行并按内容增高
 - 内置思源黑体，中文渲染不依赖系统字体；fcitx5 IME 已在 Wayland 真机验证（预编辑、候选窗、组合中 Backspace、提交、Esc）
@@ -32,6 +33,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 ## 已知限制
 
 - PDF v1：Mermaid 输出为代码块、图片为占位符、未应用 bidi 重排
+- 预览选中以块为单位，暂不支持跨段拖选（可用“复制全部”复制整篇）
 - 不支持 macOS
 
 ## 构建

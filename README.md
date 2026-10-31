@@ -10,13 +10,14 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.5.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
+**v0.5.1 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
 
 ## What works today
 
 - WYSIWYG markdown editing (per-block rendered/editing switch, commit-boundary undo)
 - Raw / Rendered / Split view modes
 - MarkText-style chrome: 32px frameless title bar with hamburger application menu, quick view-mode switch, focus and settings shortcuts, centred document path, 28px tab strip with accent underline, selection format toolbar, typewriter mode
+- Text context menus in Raw and Rendered modes: copy / cut / paste / select all, plus "Copy All (Plain Text)" and "Copy as Markdown" in preview
 - Focus mode dims inactive blocks; Zen mode hides the sidebar and status bar but keeps the tab strip visible
 - Typography tuned to MarkText: 15px body text at 1.6× line height; table cells wrap and grow to fit their content
 - Bundled Source Han Sans for reliable CJK rendering; fcitx5 IME verified on Wayland (preedit, candidate window, backspace, commit, Esc)
@@ -32,6 +33,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 ## Known limitations
 
 - PDF v1: Mermaid blocks render as code blocks, images are placeholders, and bidi reordering is not applied
+- Preview text selection is per block; cross-block selection is not supported (use "Copy All" for the whole document)
 - macOS is not supported
 
 ## Build
