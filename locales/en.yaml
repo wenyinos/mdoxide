@@ -42,6 +42,15 @@ menu:
 # Toolbar buttons
 
 # View mode labels
+context_menu:
+  copy: "Copy"
+  cut: "Cut"
+  paste: "Paste"
+  select_all: "Select All"
+  copy_block: "Copy This Block"
+  copy_all_text: "Copy All (Plain Text)"
+  copy_as_markdown: "Copy as Markdown"
+
 view_mode:
   raw_desc: "Plain markdown text editing"
   rendered_desc: "WYSIWYG rendered editing"

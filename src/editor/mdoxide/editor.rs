@@ -41,6 +41,7 @@ use crate::fonts;
 use crate::markdown::syntax::{highlight_code, highlight_code_with_theme};
 use crate::state::FoldState;
 use crate::ui::{render_nav_buttons, NavAction};
+use rust_i18n::t;
 
 /// Default font size for the editor.
 const DEFAULT_FONT_SIZE: f32 = 15.0;
@@ -1002,6 +1003,11 @@ impl MDOxideEditor {
 
         self.content_dirty = true;
         true
+    }
+
+    /// Paste text at all cursors (used by the context menu).
+    pub fn paste_text(&mut self, text: &str) {
+        self.insert_text_at_all_cursors(text);
     }
 
     /// Inserts text at all cursor positions with proper offset adjustment.
@@ -2673,6 +2679,37 @@ impl MDOxideEditor {
             }
             NavAction::None => {}
         }
+
+        // Right-click menu: egui's TextEdit/custom editor has no built-in one.
+        response.context_menu(|ui| {
+            let has_selection = self.has_any_selection();
+            if ui
+                .add_enabled(has_selection, egui::Button::new(t!("context_menu.copy")))
+                .clicked()
+            {
+                ui.ctx().copy_text(self.selected_text());
+                ui.close();
+            }
+            if ui
+                .add_enabled(has_selection, egui::Button::new(t!("context_menu.cut")))
+                .clicked()
+            {
+                ui.ctx().copy_text(self.selected_text());
+                self.delete_selection();
+                ui.close();
+            }
+            if ui.button(t!("context_menu.paste")).clicked() {
+                if let Some(text) = crate::editor::read_clipboard_text() {
+                    self.paste_text(&text);
+                }
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(t!("context_menu.select_all")).clicked() {
+                self.select_all();
+                ui.close();
+            }
+        });
 
         response
     }

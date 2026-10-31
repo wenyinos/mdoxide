@@ -35,3 +35,14 @@ pub use widget::{EditorWidget, SearchHighlights};
 
 // Re-export MDOxideEditor access helpers
 pub use widget::{cleanup_mdoxide_editor, get_mdoxide_editor_mut};
+
+/// Read plain text from the OS clipboard for context-menu paste.
+///
+/// egui only delivers paste as an `Event::Paste`; menu actions happen outside
+/// the input pass, so we read the clipboard directly. Returns `None` when the
+/// clipboard is unavailable or does not contain text.
+pub(crate) fn read_clipboard_text() -> Option<String> {
+    arboard::Clipboard::new()
+        .ok()
+        .and_then(|mut clipboard| clipboard.get_text().ok())
+}

@@ -27,7 +27,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 - File tree, workspace mode, find & replace (regex)
 - Revision-driven editor/cache invalidation; one external-change entry point; live workspace indexing is cancellable
 - Code execution capped at 2 MB with process-tree termination; HTML active content is opt-in; terminal layout auto-load is off by default
-- 10 UI languages (996 aligned translation keys)
+- 10 UI languages (1006 aligned translation keys)
 
 ## Known limitations
 

@@ -58,7 +58,7 @@ use crate::markdown::rendered_session::{
 };
 use crate::markdown::rendered_commit_undo;
 use crate::markdown::parser::{
-    CalloutType, HeadingLevel, ListType, MarkdownNode, MarkdownNodeType,
+    CalloutType, HeadingLevel, ListType, MarkdownDocument, MarkdownNode, MarkdownNodeType,
 };
 use crate::markdown::widgets::{
     build_inline_markdown_layout_job, map_displayed_to_raw, CodeBlockData, EditableCodeBlock,
@@ -71,6 +71,7 @@ use eframe::egui::{
     TextureHandle, TextureOptions, Ui, Vec2,
 };
 use log::{debug, warn};
+use rust_i18n::t;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -1104,6 +1105,8 @@ impl<'a> MarkdownEditor<'a> {
                 return self.show_raw_editor(ui, id);
             }
         };
+
+        set_current_rendered_doc(&doc);
 
         // DEBUG: Document structure logging removed - was too verbose (every frame)
         // Enable manually if needed for debugging:
@@ -2626,6 +2629,158 @@ fn ensure_formatted_block_initialized(
 /// `PendingActivation` (focus + cursor), and handles Enter (commit + return to display),
 /// Escape (discard + return to display), and lost_focus (commit). Caller is responsible
 /// for parent layout (horizontal row, indent space).
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rendered-mode context menu / clipboard helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// AST for the rendered editor being shown this frame. Used by "Copy All"
+    /// so the plain-text projection is only built when the menu is used.
+    static CURRENT_RENDERED_DOC: std::cell::RefCell<Option<std::sync::Arc<MarkdownDocument>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn set_current_rendered_doc(doc: &std::sync::Arc<MarkdownDocument>) {
+    CURRENT_RENDERED_DOC.with(|cell| {
+        *cell.borrow_mut() = Some(std::sync::Arc::clone(doc));
+    });
+}
+
+fn with_current_rendered_doc<R>(f: impl FnOnce(&MarkdownDocument) -> R) -> Option<R> {
+    CURRENT_RENDERED_DOC.with(|cell| cell.borrow().as_ref().map(|doc| f(doc)))
+}
+
+/// Plain-text projection across top-level blocks (headings/lists lose markers).
+fn document_plain_text(doc: &MarkdownDocument) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for node in &doc.root.children {
+        let text = node.text_content();
+        let text = text.trim();
+        if !text.is_empty() {
+            parts.push(text.to_string());
+        }
+    }
+    parts.join("\n\n")
+}
+
+fn range_bounds(range: egui::text::CCursorRange) -> (usize, usize) {
+    let a = range.primary.index;
+    let b = range.secondary.index;
+    if a <= b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+fn selected_text_in_range(text: &str, range: egui::text::CCursorRange) -> String {
+    let (start, end) = range_bounds(range);
+    text.chars().skip(start).take(end.saturating_sub(start)).collect()
+}
+
+/// Replace a character range and return the new caret position.
+fn replace_char_range(text: &mut String, start: usize, end: usize, insert: &str) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let start = start.min(chars.len());
+    let end = end.min(chars.len()).max(start);
+    let mut out = String::with_capacity(text.len() + insert.len());
+    out.extend(chars[..start].iter());
+    out.push_str(insert);
+    out.extend(chars[end..].iter());
+    *text = out;
+    start + insert.chars().count()
+}
+
+fn add_document_copy_menu(ui: &mut Ui, source: &str) {
+    ui.separator();
+    if ui.button(t!("context_menu.copy_all_text")).clicked() {
+        if let Some(text) = with_current_rendered_doc(document_plain_text) {
+            ui.ctx().copy_text(text);
+        }
+        ui.close();
+    }
+    if ui.button(t!("context_menu.copy_as_markdown")).clicked() {
+        ui.ctx().copy_text(source.to_string());
+        ui.close();
+    }
+}
+
+/// Copy/cut/paste/select-all for one rendered TextEdit block.
+/// Returns true when the menu changed the block text.
+fn add_text_edit_context_menu(
+    ui: &mut Ui,
+    response: &Response,
+    text: &mut String,
+    cursor: &mut egui::text_selection::TextCursorState,
+    source: &str,
+) -> bool {
+    let mut text_changed = false;
+    response.context_menu(|ui| {
+        let range = cursor.char_range();
+        let selected = range.map(|r| selected_text_in_range(text.as_str(), r));
+        let has_selection = selected.as_ref().is_some_and(|s| !s.is_empty());
+
+        if ui
+            .add_enabled(has_selection, egui::Button::new(t!("context_menu.copy")))
+            .clicked()
+        {
+            if let Some(selected) = selected.as_ref() {
+                ui.ctx().copy_text(selected.clone());
+            }
+            ui.close();
+        }
+        if ui
+            .add_enabled(has_selection, egui::Button::new(t!("context_menu.cut")))
+            .clicked()
+        {
+            if let Some(selected) = selected.as_ref() {
+                ui.ctx().copy_text(selected.clone());
+                if let Some(range) = range {
+                    let (start, end) = range_bounds(range);
+                    let caret = replace_char_range(text, start, end, "");
+                    cursor.set_char_range(Some(egui::text::CCursorRange::one(
+                        egui::text::CCursor::new(caret),
+                    )));
+                    text_changed = true;
+                }
+            }
+            ui.close();
+        }
+        if ui.button(t!("context_menu.paste")).clicked() {
+            if let Some(paste) = crate::editor::read_clipboard_text() {
+                let (start, end) = range
+                    .map(range_bounds)
+                    .unwrap_or_else(|| {
+                        let pos = cursor
+                            .char_range()
+                            .map(|r| r.primary.index)
+                            .unwrap_or(0);
+                        (pos, pos)
+                    });
+                let caret = replace_char_range(text, start, end, &paste);
+                cursor.set_char_range(Some(egui::text::CCursorRange::one(
+                    egui::text::CCursor::new(caret),
+                )));
+                text_changed = true;
+            }
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(t!("context_menu.select_all")).clicked() {
+            let len = text.chars().count();
+            cursor.set_char_range(Some(egui::text::CCursorRange {
+                primary: egui::text::CCursor::new(len),
+                secondary: egui::text::CCursor::new(0),
+                h_pos: None,
+            }));
+            ui.close();
+        }
+        add_document_copy_menu(ui, source);
+    });
+    text_changed
+}
+
 fn render_session_formatted_edit_text(
     ui: &mut Ui,
     block_ref: BlockRef,
@@ -2762,6 +2917,29 @@ fn render_session_formatted_edit_text(
     note_session_active_clicked(ui, block_ref, session, &response);
 
     let _ = editor_font;
+
+    let menu_changed = {
+        let block_state = session
+            .blocks
+            .get_mut(&block_ref)
+            .expect("formatted block initialized above");
+        add_text_edit_context_menu(
+            ui,
+            &response,
+            &mut block_state.text,
+            &mut output.state.cursor,
+            source.as_str(),
+        )
+    };
+    output.state.store(ui.ctx(), widget_id);
+    if menu_changed {
+        let new_text = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.text.clone())
+            .unwrap_or_default();
+        session.on_text_changed(block_ref, new_text);
+    }
 
     let has_focus = response.has_focus();
     let selection = if has_focus {
@@ -2996,6 +3174,29 @@ fn render_session_plain_text_block(
     }
 
     note_session_active_clicked(ui, block_ref, session, response);
+
+    let menu_changed = {
+        let block_state = session
+            .blocks
+            .get_mut(&block_ref)
+            .expect("session block initialized above");
+        add_text_edit_context_menu(
+            ui,
+            response,
+            &mut block_state.text,
+            &mut output.state.cursor,
+            source.as_str(),
+        )
+    };
+    output.state.store(ui.ctx(), widget_id);
+    if menu_changed {
+        let new_text = session
+            .blocks
+            .get(&block_ref)
+            .map(|s| s.text.clone())
+            .unwrap_or_default();
+        session.on_text_changed(block_ref, new_text);
+    }
 
     let has_focus = response.has_focus();
     let selection = if has_focus {
@@ -3332,6 +3533,7 @@ fn render_paragraph_with_structural_keys(
                             editor_font,
                             colors,
                             wrap_w,
+                            source.as_str(),
                         ),
                         wrap_w,
                     )
@@ -3341,6 +3543,7 @@ fn render_paragraph_with_structural_keys(
             let sense_id = block_ref.widget_id(ui).with("display_sense");
             let sense_response =
                 ui.interact(display_response.rect, sense_id, egui::Sense::click());
+            add_display_block_context_menu(ui, &sense_response, raw_display, source.as_str());
 
             if sense_response.clicked() {
                 let displayed_plaintext = node.text_content();
@@ -4004,11 +4207,18 @@ fn render_list_item_with_structural_keys(
                         editor_font,
                         colors,
                         layout_wrap_w,
+                        source.as_str(),
                     );
 
                     let sense_id = block_ref.widget_id(ui).with("display_sense");
                     let sense_response =
                         ui.interact(display_response.rect, sense_id, egui::Sense::click());
+                    add_display_block_context_menu(
+                        ui,
+                        &sense_response,
+                        raw_display,
+                        source.as_str(),
+                    );
 
                     if sense_response.clicked() {
                         let displayed_plaintext = para.text_content();
@@ -4184,6 +4394,7 @@ fn render_paragraph(
                             editor_font,
                             colors,
                             wrap_w,
+                            source.as_str(),
                         ),
                         wrap_w,
                     )
@@ -4193,6 +4404,7 @@ fn render_paragraph(
             let sense_id = block_ref.widget_id(ui).with("display_sense");
             let sense_response =
                 ui.interact(display_response.rect, sense_id, egui::Sense::click());
+            add_display_block_context_menu(ui, &sense_response, raw_display, source.as_str());
 
             if sense_response.clicked() {
                 let displayed_plaintext = node.text_content();
@@ -4320,6 +4532,7 @@ fn show_formatted_block_galley_display(
     editor_font: &EditorFont,
     colors: &EditorColors,
     wrap_width: f32,
+    source: &str,
 ) -> Response {
     let job = build_inline_markdown_layout_job(
         raw_text,
@@ -4334,7 +4547,26 @@ fn show_formatted_block_galley_display(
     let size = galley.size();
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     ui.painter().galley(rect.min, galley, colors.text);
+    add_display_block_context_menu(ui, &response, raw_text, source);
     response
+}
+
+/// Context menu for a non-editing rendered block (painted galley).
+/// The caller's click-sense widget sits on top, so callers attach this to
+/// that response as well.
+fn add_display_block_context_menu(
+    ui: &mut Ui,
+    response: &Response,
+    raw_text: &str,
+    source: &str,
+) {
+    response.context_menu(|ui| {
+        if ui.button(t!("context_menu.copy_block")).clicked() {
+            ui.ctx().copy_text(raw_text.to_string());
+            ui.close();
+        }
+        add_document_copy_menu(ui, source);
+    });
 }
 
 /// Compute the character index in displayed text from a click position using egui's Galley.
@@ -5340,11 +5572,18 @@ fn render_list_item(
                         editor_font,
                         colors,
                         layout_wrap_w,
+                        source.as_str(),
                     );
 
                     let sense_id = block_ref.widget_id(ui).with("display_sense");
                     let sense_response =
                         ui.interact(display_response.rect, sense_id, egui::Sense::click());
+                    add_display_block_context_menu(
+                        ui,
+                        &sense_response,
+                        raw_display,
+                        source.as_str(),
+                    );
 
                     if sense_response.clicked() {
                         let displayed_plaintext = para.text_content();
@@ -7279,5 +7518,22 @@ mod tests {
                 i
             );
         }
+    }
+    #[test]
+    fn replace_char_range_uses_char_indices() {
+        let mut text = "aé中z".to_string();
+        let caret = replace_char_range(&mut text, 1, 3, "XY");
+        assert_eq!(text, "aXYz");
+        assert_eq!(caret, 2);
+    }
+
+    #[test]
+    fn document_plain_text_joins_top_level_blocks() {
+        let doc = crate::markdown::parser::parse_markdown("# Title\n\nBody **bold**\n")
+            .expect("parse");
+        let text = document_plain_text(&doc);
+        assert!(text.contains("Title"));
+        assert!(text.contains("Body bold"));
+        assert!(text.contains("\n\n"));
     }
 }
