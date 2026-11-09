@@ -1,5 +1,5 @@
 !ifndef VERSION
-!define VERSION "0.5.1"
+!define VERSION "0.6.0"
 !endif
 !ifndef ARCH
 !define ARCH "x64"

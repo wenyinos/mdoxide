@@ -2,6 +2,26 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.6.0] - 2026-11-09
+
+### 变更
+
+- Rust 工具链切换为 stable（`rust-toolchain.toml` 不再固定 1.92；CI/Release 使用 `dtolnay/rust-toolchain@stable`）
+- 会话、逐标签恢复与自动保存统一使用 `write_atomic`：临时文件 + fsync + rename + 目录 fsync + 唯一临时名
+- 配置保存保留真正的上一版：先写 `config.json.bak`，再原子替换 `config.json`
+- 崩溃恢复改为单写后台线程；UI 线程只提交快照，干净标签内容哈希按修订号缓存
+- 工作区索引增加 400 ms 静默期与 `worker_active` 限制，同一时刻最多一个扫描线程
+
+### 性能
+
+- Raw 编辑器改为操作级上报：`TextBuffer` 记录 insert/delete，`EditorWidget` 重放到 `Tab.content`；不再每键整篇 `to_string` + 全文 diff
+- Raw 不再每帧准备撤销快照
+
+### 说明
+
+- P1-01 第二步（`Document`/`EditorSession` 单一 Rope、移除 `Tab.content` 第二副本）留待后续版本
+- 预览跨段选择仍不支持；右键“复制全部 / 复制为 Markdown”可覆盖整篇复制
+
 ## [0.5.1] - 2026-10-31
 
 ### 新增
