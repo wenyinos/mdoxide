@@ -38,7 +38,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 构建
 
-环境要求：Rust 1.92（由 `rust-toolchain.toml` 锁定），以及 Linux 图形开发包（Fedora：`gtk3-devel`、`libxkbcommon-devel`、`wayland-devel`）。
+环境要求：stable Rust（由 `rust-toolchain.toml` 指定），以及 Linux 图形开发包（Fedora：`gtk3-devel`、`libxkbcommon-devel`、`wayland-devel`）。
 
 ```bash
 cargo run --release        # 运行

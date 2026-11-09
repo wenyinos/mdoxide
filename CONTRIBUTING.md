@@ -2,7 +2,7 @@
 
 ## 环境
 
-Rust 1.92（`rust-toolchain.toml` 锁定），Linux 需 GTK3 / xkbcommon / Wayland 开发包。详见 [`docs/building.md`](docs/building.md)。
+stable Rust（`rust-toolchain.toml` 指定），Linux 需 GTK3 / xkbcommon / Wayland 开发包。详见 [`docs/building.md`](docs/building.md)。
 
 ## 提交前检查
 

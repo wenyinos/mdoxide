@@ -4,7 +4,7 @@
 
 ## 环境要求
 
-- **Rust 1.92+**（版本由 `rust-toolchain.toml` 锁定）
+- **stable Rust**（版本由 `rust-toolchain.toml` 指定）
 - **Git**
 
 ```bash

@@ -38,7 +38,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Build
 
-Requirements: Rust 1.92 (pinned in `rust-toolchain.toml`), plus the usual Linux GUI dev packages (`gtk3-devel`, `libxkbcommon-devel`, `wayland-devel` on Fedora).
+Requirements: stable Rust (specified in `rust-toolchain.toml`), plus the usual Linux GUI dev packages (`gtk3-devel`, `libxkbcommon-devel`, `wayland-devel` on Fedora).
 
 ```bash
 cargo run --release        # run
