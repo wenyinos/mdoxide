@@ -253,9 +253,9 @@ fn load_config_internal() -> Result<Settings> {
 
 /// Save configuration to the default config file location.
 ///
-/// This function performs an atomic write by:
-/// 1. Writing to a temporary backup file
-/// 2. Replacing the original file with the backup
+/// This function performs a durable atomic write:
+/// 1. Copies the previous config to `config.json.bak` (when it exists)
+/// 2. Writes the new config with temp file + fsync + rename + directory fsync
 ///
 /// # Errors
 ///
@@ -282,16 +282,21 @@ pub fn save_config(settings: &Settings) -> Result<()> {
         source: Box::new(e),
     })?;
 
-    // Write to backup file first (atomic write pattern)
-    fs::write(&backup_path, &json).map_err(|e| Error::ConfigSave {
-        path: backup_path.clone(),
-        source: Box::new(e),
-    })?;
+    // Keep a real previous-version backup: copy the old config to .bak
+    // before atomically replacing config.json. A failed config write leaves
+    // the old config intact; a successful one leaves the previous version
+    // recoverable from .bak.
+    if let Ok(previous) = fs::read(&config_path) {
+        if let Err(e) = crate::files::atomic::write_atomic(&backup_path, &previous) {
+            warn!("Failed to write config backup: {}", e);
+        }
+    }
 
-    // Replace original with backup
-    fs::rename(&backup_path, &config_path).map_err(|e| Error::ConfigSave {
-        path: config_path.clone(),
-        source: Box::new(e),
+    crate::files::atomic::write_atomic(&config_path, json.as_bytes()).map_err(|e| {
+        Error::ConfigSave {
+            path: config_path.clone(),
+            source: Box::new(e),
+        }
     })?;
 
     info!(

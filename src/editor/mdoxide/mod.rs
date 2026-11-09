@@ -27,4 +27,4 @@ pub mod vim;
 // Re-export the main types for external use
 pub use cursor::Cursor;
 pub use editor::MDOxideEditor;
-pub use history::{compute_edit_ops, EditHistory};
+pub use history::{compute_edit_ops, EditHistory, EditOperation};

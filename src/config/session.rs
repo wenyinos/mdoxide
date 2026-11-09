@@ -547,19 +547,9 @@ fn save_session_to_file(state: &SessionState, is_recovery: bool) -> bool {
         }
     };
 
-    // Atomic write: write to temp file, then rename
-    let temp_path = path.with_extension("tmp");
-    debug!("Writing session to temp file: {}", temp_path.display());
-    if let Err(e) = fs::write(&temp_path, &json) {
-        error!("Failed to write session temp file: {}", e);
-        return false;
-    }
-
-    debug!("Renaming temp file to: {}", path.display());
-    if let Err(e) = fs::rename(&temp_path, &path) {
-        error!("Failed to rename session temp file: {}", e);
-        // Try to clean up temp file
-        let _ = fs::remove_file(&temp_path);
+    // Durable atomic write: temp file + fsync + rename + directory fsync.
+    if let Err(e) = crate::files::atomic::write_atomic(&path, json.as_bytes()) {
+        error!("Failed to write session state atomically: {}", e);
         return false;
     }
 
@@ -749,6 +739,15 @@ fn load_session_from_file(path: &PathBuf) -> Option<SessionState> {
     }
 }
 
+/// One tab body queued for background crash-recovery writing.
+#[derive(Debug, Clone)]
+pub struct RecoveryTabJob {
+    pub tab_id: usize,
+    pub content: String,
+    pub path: Option<PathBuf>,
+    pub disk_hash: Option<u64>,
+}
+
 /// Save recovery content for a tab, including identity metadata.
 ///
 /// `path` is the tab's current file path (or `None` for untitled tabs) and
@@ -789,16 +788,8 @@ pub fn save_recovery_content(
     };
 
     let file_path = dir.join(format!("{}.json", tab_id));
-    let temp_path = file_path.with_extension("tmp");
-
-    if let Err(e) = fs::write(&temp_path, &json) {
-        error!("Failed to write recovery content: {}", e);
-        return false;
-    }
-
-    if let Err(e) = fs::rename(&temp_path, &file_path) {
-        error!("Failed to rename recovery content file: {}", e);
-        let _ = fs::remove_file(&temp_path);
+    if let Err(e) = crate::files::atomic::write_atomic(&file_path, json.as_bytes()) {
+        error!("Failed to write recovery content atomically: {}", e);
         return false;
     }
 
@@ -1326,16 +1317,9 @@ pub fn save_auto_save_content(
     // Format: metadata JSON on first line, blank line, then content
     let full_content = format!("{}\n\n{}", metadata_json, content);
 
-    // Atomic write: write to temp file, then rename
-    let temp_path = save_path.with_extension("tmp");
-    if let Err(e) = fs::write(&temp_path, &full_content) {
-        error!("Failed to write auto-save temp file: {}", e);
-        return false;
-    }
-
-    if let Err(e) = fs::rename(&temp_path, &save_path) {
-        error!("Failed to rename auto-save temp file: {}", e);
-        let _ = fs::remove_file(&temp_path);
+    // Durable atomic write: temp file + fsync + rename + directory fsync.
+    if let Err(e) = crate::files::atomic::write_atomic(&save_path, full_content.as_bytes()) {
+        error!("Failed to write auto-save file atomically: {}", e);
         return false;
     }
 

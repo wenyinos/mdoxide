@@ -461,12 +461,9 @@ impl<'a> EditorWidget<'a> {
         let tab_id = self.tab.id;
         let _base_id = self.id.unwrap_or_else(|| ui.id().with("mdoxide_editor"));
 
-        // Capture an undo snapshot of the pre-edit content so edits made
-        // through MDOxideEditor are recorded in `tab.edit_history` (the stack
-        // that Ctrl+Z / Ctrl+Y consult via `handle_undo` / `handle_redo`).
-        // Without this the tab's edit history stays empty and users see
-        // "Nothing to undo" even after typing — a v0.2.8 regression.
-        self.tab.prepare_undo_snapshot_hashed();
+        // Raw edits are recorded as operations by the buffer and replayed
+        // into `tab.edit_history` after rendering; no pre-edit snapshot or
+        // full-document diff is needed here.
 
         // Check if this is a large file (disable some features for performance)
         let content_len = self.tab.content.len();
@@ -764,19 +761,19 @@ impl<'a> EditorWidget<'a> {
         // Now we use MDOxideEditor's dirty flag (set during input processing) to
         // detect changes without any string operations.
         let changed = editor.is_content_dirty();
-        if changed {
-            // Only allocate string when we know content changed
+        // Raw edits are reported as operations by the buffer, so we replay
+        // them into `Tab.content` instead of converting the whole rope to a
+        // String and diffing full documents on every keystroke.
+        let ops = editor.take_pending_ops();
+        if !ops.is_empty() {
+            for op in &ops {
+                op.apply_to_string(&mut self.tab.content);
+            }
+            self.tab.record_operations_external(ops);
+            self.tab.mark_content_edited();
+        } else if changed {
+            // Safety net for a mutation path that forgot to record an op.
             self.tab.content = editor.buffer().to_string();
-            // Diff against the pre-edit snapshot captured at the top of
-            // show(). This:
-            //   1. Pushes ops onto `tab.edit_history` so Ctrl+Z / Ctrl+Y
-            //      (which read this stack via handle_undo/handle_redo)
-            //      work for raw-mode edits.
-            //   2. Bumps `content_version`, invalidating the cached
-            //      `is_modified()` so the title bar dirty-mark, the
-            //      on-close save prompt and auto-save all notice the
-            //      edit.
-            // Hotfix for v0.2.8 undo-broken / data-loss regression.
             self.tab.record_external_edit_from_snapshot();
             self.tab.mark_content_edited();
         }

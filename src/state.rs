@@ -10,7 +10,7 @@
 #![allow(clippy::redundant_closure)]
 
 use crate::config::{load_config, save_config_silent, Settings, TabInfo, ViewMode};
-use crate::editor::{compute_edit_ops, EditHistory, TextStats};
+use crate::editor::{compute_edit_ops, EditHistory, EditOperation, TextStats};
 use crate::lsp::{DiagnosticMap, LspManager};
 use crate::ui::TabPipelineState;
 use crate::workspaces::{filter_events, AppMode, Workspace, WorkspaceEvent, WorkspaceWatcher};
@@ -1344,6 +1344,9 @@ pub struct Tab {
     /// `content_version` written to the crash-recovery file.
     /// Unchanged tabs are skipped instead of rewriting their full body every 5s.
     last_recovery_version: Option<u64>,
+    /// Cached full-content hash keyed by `content_version`.
+    /// Avoids rehashing clean tabs on every periodic session snapshot.
+    cached_content_hash: std::cell::Cell<Option<(u64, u64)>>,
 }
 
 impl Tab {
@@ -1424,6 +1427,7 @@ impl Tab {
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
             last_recovery_version: None,
+            cached_content_hash: std::cell::Cell::new(None),
         }
     }
 
@@ -1525,6 +1529,7 @@ impl Tab {
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
             last_recovery_version: None,
+            cached_content_hash: std::cell::Cell::new(None),
         }
     }
 
@@ -1634,6 +1639,7 @@ impl Tab {
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
             last_recovery_version: None,
+            cached_content_hash: std::cell::Cell::new(None),
         }
     }
 
@@ -1762,6 +1768,7 @@ impl Tab {
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
             last_recovery_version: None,
+            cached_content_hash: std::cell::Cell::new(None),
         }
     }
 
@@ -1895,6 +1902,7 @@ impl Tab {
             cached_needs_complex_script_version: u64::MAX,
             last_auto_save_content_version: None,
             last_recovery_version: None,
+            cached_content_hash: std::cell::Cell::new(None),
         }
     }
 
@@ -2539,7 +2547,15 @@ impl Tab {
 
     /// Get the content hash for change detection.
     pub fn content_hash(&self) -> u64 {
-        hash_content(&self.content)
+        let version = self.content_version;
+        if let Some((cached_version, hash)) = self.cached_content_hash.get() {
+            if cached_version == version {
+                return hash;
+            }
+        }
+        let hash = hash_content(&self.content);
+        self.cached_content_hash.set(Some((version, hash)));
+        hash
     }
 
     /// Set new content and record diff-based undo operation.
@@ -2738,6 +2754,22 @@ impl Tab {
             self.pending_undo_snapshot = Some(old_content);
             self.undo_snapshot_version = self.content_version;
         }
+    }
+
+    /// Record operations reported directly by the Raw editor.
+    ///
+    /// Avoids full-document `to_string()` + diff on every keystroke: positions
+    /// are valid against the current `content`, so replaying them produces the
+    /// editor buffer exactly.
+    pub fn record_operations_external(&mut self, ops: Vec<EditOperation>) {
+        if ops.is_empty() {
+            return;
+        }
+        self.edit_history.record_operations(ops);
+        self.content_version = self.content_version.wrapping_add(1);
+        self.bump_source_epoch();
+        self.pending_undo_snapshot = None;
+        self.undo_snapshot_version = u64::MAX;
     }
 
     /// Legacy shim: record edit from explicit old content.
@@ -4763,7 +4795,7 @@ impl AppState {
                 let file_mtime = tab.path.as_ref().and_then(|p| Self::get_file_mtime(p));
 
                 let original_content_hash = if !tab.is_modified() {
-                    Some(hash_content(&tab.content))
+                    Some(tab.content_hash())
                 } else {
                     None
                 };
@@ -4827,33 +4859,47 @@ impl AppState {
     /// restore can reject recovery files whose tab id was reused for a
     /// different document or whose disk file was changed externally
     /// (task 106 — hardened session recovery).
-    pub fn save_recovery_content(&mut self) {
-        use crate::config::save_recovery_content;
-
+    /// Collect modified tabs whose body changed since the last recovery write.
+    ///
+    /// The caller (UI thread) clones only changed bodies; JSON serialization
+    /// and disk I/O run on the recovery writer thread.
+    pub fn take_recovery_jobs(&mut self) -> Vec<crate::config::RecoveryTabJob> {
+        let mut jobs = Vec::new();
         for tab in &mut self.tabs {
             if tab.is_special() {
                 continue;
             }
             let modified = tab.is_modified_cached();
             if !modified {
-                // Nothing to persist; remember the revision so a later edit
-                // (which bumps content_version) triggers a write.
                 tab.last_recovery_version = Some(tab.content_version);
                 continue;
             }
             if tab.last_recovery_version == Some(tab.content_version) {
                 continue;
             }
-            let ok = save_recovery_content(
-                tab.id,
-                &tab.content,
-                tab.path.as_deref(),
-                tab.disk_content_hash(),
-            );
-            if ok {
-                tab.last_recovery_version = Some(tab.content_version);
-            } else {
-                warn!("Failed to save recovery content for tab {}", tab.id);
+            jobs.push(crate::config::RecoveryTabJob {
+                tab_id: tab.id,
+                content: tab.content.clone(),
+                path: tab.path.clone(),
+                disk_hash: tab.disk_content_hash(),
+            });
+            tab.last_recovery_version = Some(tab.content_version);
+        }
+        jobs
+    }
+
+    /// Synchronous recovery write used on shutdown (after the writer is flushed).
+    pub fn save_recovery_content(&mut self) {
+        use crate::config::save_recovery_content;
+
+        for job in self.take_recovery_jobs() {
+            if !save_recovery_content(
+                job.tab_id,
+                &job.content,
+                job.path.as_deref(),
+                job.disk_hash,
+            ) {
+                warn!("Failed to save recovery content for tab {}", job.tab_id);
             }
         }
     }
@@ -5154,6 +5200,7 @@ impl AppState {
                                 cached_needs_complex_script_version: u64::MAX,
                                 last_auto_save_content_version: None,
                                 last_recovery_version: None,
+                                cached_content_hash: std::cell::Cell::new(None),
                             };
                             t
                         } else {

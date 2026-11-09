@@ -24,6 +24,7 @@ mod keyboard;
 mod line_ops;
 mod navigation;
 mod platform;
+mod recovery_writer;
 mod title_bar;
 mod types;
 
@@ -149,6 +150,8 @@ pub struct MDOxideApp {
     window_resize_state: WindowResizeState,
     /// Session save throttle for crash recovery persistence
     session_save_throttle: crate::config::SessionSaveThrottle,
+    /// Background writer for crash-recovery snapshots.
+    recovery_writer: recovery_writer::RecoveryWriter,
     /// Git auto-refresh manager for automatic status updates
     /// Whether we're showing the crash recovery dialog
     show_recovery_dialog: bool,
@@ -458,6 +461,7 @@ impl MDOxideApp {
             lsp_idle_since: std::collections::HashMap::new(),
             window_resize_state: WindowResizeState::new(),
             session_save_throttle: SessionSaveThrottle::default(),
+            recovery_writer: recovery_writer::RecoveryWriter::new(),
             show_recovery_dialog,
             pending_recovery,
             pending_startup_paths: Vec::new(),
@@ -794,7 +798,6 @@ impl MDOxideApp {
     /// This checks if enough time has passed since the last session save
     /// and saves a crash recovery snapshot if needed.
     fn update_session_recovery(&mut self) {
-        use crate::config::save_crash_recovery_state;
 
         // Don't save crash recovery if we're exiting
         if self.should_exit {
@@ -812,11 +815,18 @@ impl MDOxideApp {
             session_state.clean_shutdown = false; // This is a crash recovery snapshot
             self.inject_csv_delimiters(&mut session_state);
 
-            if save_crash_recovery_state(&session_state) {
-                // Also save recovery content for tabs with unsaved changes
-                self.state.save_recovery_content();
+            // Only changed bodies are cloned here; serialization + I/O run on
+            // the recovery writer thread.
+            let tabs = self.state.take_recovery_jobs();
+            let job = recovery_writer::RecoveryJob {
+                session: session_state,
+                tabs,
+            };
+            if self.recovery_writer.submit(job) {
                 self.session_save_throttle.record_save();
-                debug!("Crash recovery snapshot saved");
+                debug!("Crash recovery snapshot queued");
+            } else {
+                warn!("Crash recovery writer is unavailable; snapshot not queued");
             }
         }
     }
@@ -2707,6 +2717,9 @@ impl eframe::App for MDOxideApp {
         };
 
         info!("Application exiting");
+
+        // Flush queued recovery snapshots before the synchronous shutdown write.
+        self.recovery_writer.shutdown();
 
         // Save productivity panel data
         self.productivity_panel.save_all();

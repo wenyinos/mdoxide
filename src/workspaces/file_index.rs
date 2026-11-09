@@ -50,6 +50,10 @@ pub struct WorkspaceFileIndex {
     rx: Receiver<FileIndexMsg>,
     /// Cancels the previous worker when the workspace changes or is reset.
     cancel: Arc<AtomicBool>,
+    /// True while a worker is walking the tree; prevents overlapping scans.
+    worker_active: Arc<AtomicBool>,
+    /// When the index was invalidated; rebuild waits for a quiet period.
+    last_invalidate: Option<std::time::Instant>,
 }
 
 impl Default for WorkspaceFileIndex {
@@ -70,12 +74,15 @@ impl WorkspaceFileIndex {
             is_complete: false,
             rx,
             cancel: Arc::new(AtomicBool::new(false)),
+            worker_active: Arc::new(AtomicBool::new(false)),
+            last_invalidate: None,
         }
     }
 
     /// Mark the index stale (e.g. after files are created or deleted).
     pub fn invalidate(&mut self) {
         self.needs_rebuild = true;
+        self.last_invalidate = Some(std::time::Instant::now());
     }
 
     /// Reset when leaving workspace mode.
@@ -85,6 +92,7 @@ impl WorkspaceFileIndex {
         self.root = None;
         self.generation = self.generation.wrapping_add(1);
         self.needs_rebuild = false;
+        self.last_invalidate = None;
         self.entries_scanned = 0;
         self.files.clear();
         self.is_complete = false;
@@ -99,8 +107,20 @@ impl WorkspaceFileIndex {
             return;
         }
 
+        // Coalesce bursts of file events and never run two scans at once.
+        if self.worker_active.load(Ordering::Relaxed) {
+            return;
+        }
+        if self
+            .last_invalidate
+            .is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(400))
+        {
+            return;
+        }
+
         self.root = Some(root.to_path_buf());
         self.needs_rebuild = false;
+        self.last_invalidate = None;
         self.generation = self.generation.wrapping_add(1);
         let generation = self.generation;
         self.entries_scanned = 0;
@@ -112,11 +132,14 @@ impl WorkspaceFileIndex {
         self.rx = rx;
         let cancel = Arc::new(AtomicBool::new(false));
         self.cancel = Arc::clone(&cancel);
+        let worker_active = Arc::new(AtomicBool::new(true));
+        self.worker_active = Arc::clone(&worker_active);
 
         let root_owned = root.to_path_buf();
         let patterns = hidden_patterns.to_vec();
         std::thread::spawn(move || {
-            index_workspace_thread(root_owned, patterns, generation, tx, cancel)
+            index_workspace_thread(root_owned, patterns, generation, tx, cancel);
+            worker_active.store(false, Ordering::Relaxed);
         });
     }
 

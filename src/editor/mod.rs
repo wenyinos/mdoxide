@@ -17,7 +17,7 @@ mod stats;
 mod widget;
 
 // Re-export MDOxide editor types
-pub use mdoxide::{compute_edit_ops, EditHistory};
+pub use mdoxide::{compute_edit_ops, EditHistory, EditOperation};
 
 // Re-export other editor types
 pub use find_replace::{FindReplacePanel, FindState};

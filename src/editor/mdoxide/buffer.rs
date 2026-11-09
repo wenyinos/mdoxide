@@ -7,6 +7,8 @@
 use ropey::Rope;
 use std::borrow::Cow;
 
+use super::history::EditOperation;
+
 /// A text buffer backed by a rope data structure for efficient large-file editing.
 ///
 /// `TextBuffer` wraps `ropey::Rope` to provide:
@@ -17,6 +19,9 @@ use std::borrow::Cow;
 #[derive(Debug, Clone)]
 pub struct TextBuffer {
     rope: Rope,
+    /// Operations produced by local edits since the last `take_ops()`.
+    /// Cleared after external `set_content` loads a new rope.
+    pending_ops: Vec<EditOperation>,
 }
 
 impl Default for TextBuffer {
@@ -37,7 +42,10 @@ impl TextBuffer {
     /// ```
     #[must_use]
     pub fn new() -> Self {
-        Self { rope: Rope::new() }
+        Self {
+            rope: Rope::new(),
+            pending_ops: Vec::new(),
+        }
     }
 
     /// Creates a `TextBuffer` from a string slice.
@@ -54,6 +62,7 @@ impl TextBuffer {
     pub fn from_string(content: &str) -> Self {
         Self {
             rope: Rope::from_str(content),
+            pending_ops: Vec::new(),
         }
     }
 
@@ -78,6 +87,12 @@ impl TextBuffer {
     /// ```
     pub fn insert(&mut self, pos: usize, text: &str) {
         self.rope.insert(pos, text);
+        if !text.is_empty() {
+            self.pending_ops.push(EditOperation::Insert {
+                pos,
+                text: text.to_string(),
+            });
+        }
     }
 
     /// Removes a range of text starting at the specified position.
@@ -101,8 +116,23 @@ impl TextBuffer {
     /// ```
     pub fn remove(&mut self, pos: usize, len: usize) {
         if len > 0 {
+            let removed = self.rope.slice(pos..pos + len).to_string();
             self.rope.remove(pos..pos + len);
+            self.pending_ops.push(EditOperation::Delete {
+                pos,
+                text: removed,
+            });
         }
+    }
+
+    /// Drain operations recorded by local inserts/removes.
+    pub fn take_ops(&mut self) -> Vec<EditOperation> {
+        std::mem::take(&mut self.pending_ops)
+    }
+
+    /// Discard recorded operations (used after loading external content).
+    pub fn clear_ops(&mut self) {
+        self.pending_ops.clear();
     }
 
     /// Returns a slice of text as a String.
@@ -868,5 +898,19 @@ mod tests {
         let (text, start_char) = buffer.slice_lines_to_string(0, 10);
         assert_eq!(text, "");
         assert_eq!(start_char, 0);
+    }
+    #[test]
+    fn edits_record_replayable_operations() {
+        let mut buffer = TextBuffer::from_string("abc");
+        buffer.insert(1, "XY");
+        buffer.remove(0, 1);
+        let ops = buffer.take_ops();
+        assert_eq!(ops.len(), 2);
+        let mut text = "abc".to_string();
+        for op in &ops {
+            op.apply_to_string(&mut text);
+        }
+        assert_eq!(text, buffer.to_string());
+        assert!(buffer.take_ops().is_empty());
     }
 }

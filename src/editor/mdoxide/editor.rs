@@ -1005,6 +1005,11 @@ impl MDOxideEditor {
         true
     }
 
+    /// Drain operations recorded by local buffer edits (insert/remove).
+    pub fn take_pending_ops(&mut self) -> Vec<super::history::EditOperation> {
+        self.buffer.take_ops()
+    }
+
     /// Paste text at all cursors (used by the context menu).
     pub fn paste_text(&mut self, text: &str) {
         self.insert_text_at_all_cursors(text);
