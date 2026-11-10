@@ -2021,7 +2021,7 @@ impl MDOxideApp {
                                             .wikilink_context(wl_ctx)
                                             .code_execution(code_exec)
                                             .source_epoch(source_epoch)
-                                            .id(rendered_editor_id(tab.id))
+                                            .id(rendered_editor_id(tab_id))
                                             .pending_scroll_offset(pending_preview_scroll);
                                         if let Some(ref sh) = search_highlights {
                                             md_editor = md_editor.search_highlights(
@@ -2394,7 +2394,7 @@ impl MDOxideApp {
                                         .wikilink_context(wl_ctx)
                                         .code_execution(code_exec)
                                         .source_epoch(source_epoch)
-                                        .id(rendered_editor_id(tab.id))
+                                        .id(rendered_editor_id(tab_id))
                                         .scroll_to_line(scroll_to_line)
                                         .pending_scroll_offset(pending_offset);
                                     if let Some(ref sh) = search_highlights {
