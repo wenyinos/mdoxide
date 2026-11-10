@@ -10,7 +10,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.6.0 released.** All six milestones are complete: baseline fork and audit, module reduction, MarkText visual identity, interaction parity (including a real fcitx5 IME walkthrough), export quality, and packaging. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
+**v0.6.5 released.** All six milestones are complete. This is an internal architecture release: the document body, path, encoding and undo history now live in a single `Document` owner, and `state.rs` was split into document, editor-session, UI and workspace modules. No user-visible behavior changed. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
 
 ## What works today
 
@@ -27,6 +27,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 - HTML and PDF export with embedded CJK fonts, tables, code blocks, links, and formula images
 - File tree, workspace mode, find & replace (regex)
 - Revision-driven editor/cache invalidation; one external-change entry point
+- Single `Document` owner for body, path, encoding and undo history (`Tab` delegates to it)
 - Raw edits are recorded as operations (no per-keystroke full-document conversion or diff)
 - Durable atomic writes for config, session and recovery files; previous config kept as backup
 - Crash-recovery snapshots are serialized on a background writer; workspace indexing is debounced and single-worker

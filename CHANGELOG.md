@@ -2,6 +2,20 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.6.5] - 2026-11-10
+
+### 变更
+
+- 正文所有权收敛（P1-01 第二步）：新增 `Document`，统一持有正文、原正文、路径、编码/BOM/原字节、撤销历史、修订号与修订缓存；`Tab` 移除 `content`/`path`/`content_version` 等字段，通过 `Deref`/`DerefMut` 转发到 `document`
+- 标签构造与会话恢复路径统一构造 `Document`，补齐 `had_bom`/`original_bytes` 初始化
+- `state.rs` 按领域拆分（P1-04 第一次拆分）：`state/document.rs`、`state/editor_session.rs`、`state/ui_state.rs`、`state/workspace.rs`；`state.rs` 从 8246 行降至 4841 行
+- 清理 `Tab` 结构体尾部的悬空文档注释（该注释会触发 `E0585` 并把结构体恢复为错误类型）
+
+### 说明
+
+- 本版为内部架构版本，无用户可见功能变更
+- `Document.content` 仍为 `String`，Raw 编辑器 `TextBuffer` 的 Rope 尚未合并；跨模块正文写入尚未收敛到统一文档 API
+
 ## [0.6.0] - 2026-11-09
 
 ### 变更

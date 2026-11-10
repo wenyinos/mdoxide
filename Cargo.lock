@@ -3019,7 +3019,7 @@ dependencies = [
 
 [[package]]
 name = "mdoxide"
-version = "0.6.0"
+version = "0.6.5"
 dependencies = [
  "arboard",
  "blake3",

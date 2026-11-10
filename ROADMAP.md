@@ -42,6 +42,7 @@
   - ✅ v0.5.0：修订号驱动的编辑器/缓存同步、单一外部变更入口、启动恢复收敛、索引/代码执行/导出安全边界
   - ✅ v0.5.1：Raw/预览文本右键菜单，预览“复制全部/复制为 Markdown”
   - ✅ v0.6.0：stable 工具链、耐久原子写、恢复后台写、索引 debounce、Raw 操作级撤销
+  - ✅ v0.6.5：正文所有权收敛到 `Document`、`state.rs` 按领域拆分（document/editor_session/ui_state/workspace）
 
 ## 明确不做
 
