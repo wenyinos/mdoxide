@@ -10,7 +10,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.6.5 released.** All six milestones are complete. This is an internal architecture release: the document body, path, encoding and undo history now live in a single `Document` owner, and `state.rs` was split into document, editor-session, UI and workspace modules. No user-visible behavior changed. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
+**v0.8.0 released.** All six milestones are complete. This release ports the usable parts of upstream Ferrite v0.3.1: HTML `<details>` and aligned blocks, Mermaid popup/gitGraph/autonumber, rendered block navigation, custom editor/rendered/terminal fonts with Nerd Font fallback, settings search, file-tree polish, native title bar and Linux primary-selection paste. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
 
 ## What works today
 
@@ -28,6 +28,10 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 - File tree, workspace mode, find & replace (regex)
 - Revision-driven editor/cache invalidation; one external-change entry point
 - Single `Document` owner for body, path, encoding and undo history (`Tab` delegates to it)
+- Rich Markdown blocks: `<details>/<summary>`, aligned `<div>`, `kbd`/`sup`/`sub`, click-to-open Mermaid popup, full gitGraph attributes
+- Rendered-view keyboard navigation, preview lock and frontmatter property cards
+- Independent editor/rendered/terminal fonts, including custom system fonts and Nerd Font glyph fallback
+- Per-row settings search, runtime stats (fonts/Mermaid cache/terminal), native title bar option and Linux primary-selection paste
 - Raw edits are recorded as operations (no per-keystroke full-document conversion or diff)
 - Durable atomic writes for config, session and recovery files; previous config kept as backup
 - Crash-recovery snapshots are serialized on a background writer; workspace indexing is debounced and single-worker

@@ -10,7 +10,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-**v0.6.5 已发布。** 六个里程碑全部完成。本版为内部架构版本：正文、路径、编码与撤销历史统一归 `Document` 所有，`state.rs` 拆分为文档、编辑会话、UI 与工作区模块；无用户可见行为变更。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
+**v0.8.0 已发布。** 六个里程碑全部完成。本版同步上游 Ferrite v0.3.1 的可用能力：`<details>` 与对齐块、Mermaid 弹窗/gitGraph/autonumber、渲染视图块导航、编辑器/渲染/终端独立字体与 Nerd Font 回退、设置搜索、文件树润色、原生标题栏与 Linux 主选区粘贴。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
 
 ## 已具备的能力
 
@@ -28,6 +28,10 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 - 文件树、工作区模式、正则查找替换
 - 修订号驱动编辑器与缓存失效；外部修改只有一个入口
 - 正文、路径、编码与撤销历史统一由 `Document` 持有（`Tab` 委托访问）
+- 富 Markdown 块：`<details>/<summary>`、对齐 `<div>`、`kbd/sup/sub`、Mermaid 点击弹窗与完整 gitGraph 属性
+- 渲染视图方向键块导航、预览锁定与 Frontmatter 属性卡片
+- 编辑器/渲染/终端独立字体，支持自定义系统字体与 Nerd Font 字形回退
+- 设置逐行搜索、运行时统计（字体/Mermaid 缓存/终端）、原生标题栏与 Linux 主选区粘贴
 - Raw 编辑按操作上报，不再每键整篇转换与 diff
 - 配置、会话与恢复文件使用耐久原子写；配置保留上一版备份
 - 崩溃恢复由后台单写线程序列化；工作区索引带 400ms 合并且单 worker

@@ -43,6 +43,7 @@
   - ✅ v0.5.1：Raw/预览文本右键菜单，预览“复制全部/复制为 Markdown”
   - ✅ v0.6.0：stable 工具链、耐久原子写、恢复后台写、索引 debounce、Raw 操作级撤销
   - ✅ v0.6.5：正文所有权收敛到 `Document`、`state.rs` 按领域拆分（document/editor_session/ui_state/workspace）
+  - ✅ v0.8.0：同步上游 Ferrite v0.3.1 可移植项（HTML 子集、Mermaid 第二波/gitGraph、块导航、字体/终端、设置搜索、文件树、原生标题栏、Linux 主选区）
 
 ## 明确不做
 

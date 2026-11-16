@@ -2,6 +2,41 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.8.0] - 2026-11-17
+
+### 新增
+
+- Markdown 渲染：支持 `<details>/<summary>` 折叠块、`<div align>` 对齐容器，以及 `<kbd>/<sup>/<sub>/<img>` 内联标签与 `<br>` 换行
+- Mermaid：图表点击后打开缩放/平移弹窗；支持 `sequenceDiagram autonumber`、`%% @pos` 手动布局、`fa:` 前缀剔除、`linkStyle` 多索引与 fit-to-pane
+- Mermaid gitGraph：commit `tag`/`type`、branch `order`、`cherry-pick`、LR/TB 布局与 tag 徽章
+- 编辑器：Tab/Shift+Tab 行缩进、Alt+Z 自动换行、Ctrl+Shift+R 从磁盘重载、连续输入合并撤销
+- 渲染视图：方向键块导航（标题/段落）、Enter 进入编辑、预览锁定、Frontmatter 属性卡片、渲染/分屏查找滚动
+- 字体：渲染视图与编辑器可各选独立字体（含自定义系统字体）；终端字体选择与 Nerd Font/Powerline 字形回退
+- 设置：设置搜索按逐行过滤并直接显示匹配控件；Stats 页新增运行时模块（字体、Mermaid 缓存、终端会话）
+- 文件：本地链接/图片相对路径解析；二进制/不支持文件交给系统默认应用并提示；剪贴板图片粘贴到 `assets/`
+- Linux：中键主选区粘贴（150ms 防抖，单次撤销步骤）；可选原生系统标题栏（需重启）
+- 标签栏右键菜单；文件树活动行高亮、目录图标着色与缩进引导线
+
+### 修复
+
+- 脏标签切换编码先确认，避免未保存修改丢失
+- 有损编码保存拒绝写盘并提示改用 UTF-8，不再写入 `&#NNNN;`
+- UTF-16 BOM 在二进制判定前识别；二进制检测不再误判 UTF-16 文件
+- CRLF/混合行尾保持：Enter/Backspace/Delete、行操作、TOC 与渲染提交按文档主导行尾写入
+- Mermaid 半输入括号不再因反向切片崩溃；引用块/嵌套列表编辑保留容器前缀
+- 退出/关闭窗口保存全部修改标签；Don't Save 清理恢复与自动保存文件
+- 配置损坏时保留 `config.json.corrupt-*`，避免被下一次保存覆盖
+- Unicode 大小写不敏感搜索（`İstanbul` 可匹配 `istanbul`，`ß` 不匹配 `ss`）
+
+### 构建
+
+- `rfd` 升级到 0.17，修复最新 stable 下 `ashpd 0.8` 编译失败
+
+### 说明
+
+- `Document.content` 仍为 `String`，Raw 编辑器 `TextBuffer` 的 Rope 尚未合并为唯一正文
+- 预览仍按块选择；跨段拖选通过“复制全部”覆盖
+
 ## [0.6.5] - 2026-11-10
 
 ### 变更
