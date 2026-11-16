@@ -78,6 +78,8 @@ pub struct FileTreePanel {
     width: f32,
     /// Whether we're currently resizing
     is_resizing: bool,
+    /// File path of the active document tab (for row emphasis).
+    active_path: Option<PathBuf>,
 }
 
 impl Default for FileTreePanel {
@@ -92,6 +94,7 @@ impl FileTreePanel {
         Self {
             width: DEFAULT_PANEL_WIDTH,
             is_resizing: false,
+            active_path: None,
         }
     }
 
@@ -168,6 +171,11 @@ impl FileTreePanel {
     ///
     /// Used by the unified sidebar (MarkText-style tabs), where the container
     /// panel is shared with the outline and search tabs.
+    /// Set the file path emphasised as the active document.
+    pub fn set_active_path(&mut self, path: Option<PathBuf>) {
+        self.active_path = path;
+    }
+
     pub fn show_content(
         &mut self,
         ui: &mut egui::Ui,
@@ -214,7 +222,14 @@ impl FileTreePanel {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.add_space(4.0);
-                self.render_tree_node(ui, file_tree, 0, is_dark, &mut output);
+                self.render_tree_node(
+                    ui,
+                    file_tree,
+                    0,
+                    is_dark,
+                    self.active_path.as_deref(),
+                    &mut output,
+                );
                 ui.add_space(4.0);
             });
 
@@ -228,6 +243,7 @@ impl FileTreePanel {
         node: &FileTreeNode,
         depth: usize,
         is_dark: bool,
+        active_path: Option<&std::path::Path>,
         output: &mut FileTreeOutput,
     ) {
         let indent = depth as f32 * INDENT_PER_LEVEL;
@@ -245,11 +261,12 @@ impl FileTreePanel {
             Color32::from_rgb(220, 225, 235)
         };
 
-        let _selected_bg = if is_dark {
+        let active_bg = if is_dark {
             Color32::from_rgb(45, 55, 75)
         } else {
             Color32::from_rgb(200, 210, 230)
         };
+        let is_active = is_active_path(active_path, &node.path);
 
         // Determine if this is a directory (loaded or not)
         let is_dir = matches!(
@@ -268,10 +285,36 @@ impl FileTreePanel {
         let (row_rect, row_response) =
             ui.allocate_exact_size(Vec2::new(row_width, row_height), Sense::click());
 
-        // Paint hover background FIRST (before text)
-        if row_response.hovered() {
+        // Active document row first, then hover feedback.
+        if is_active {
+            ui.painter().rect_filled(row_rect, 2.0, active_bg);
+        } else if row_response.hovered() {
             ui.painter().rect_filled(row_rect, 2.0, hover_bg);
+        }
+        if row_response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        // Indent guides make deep folders easier to scan.
+        for level in 1..=depth {
+            let guide_x = row_rect.left() + level as f32 * INDENT_PER_LEVEL - 6.0;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(guide_x, row_rect.top() + 3.0),
+                    egui::pos2(guide_x, row_rect.bottom() - 3.0),
+                ],
+                egui::Stroke::new(1.0, text_color.gamma_multiply(0.12)),
+            );
+        }
+        if is_active {
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(row_rect.left() + indent, row_rect.top() + 2.0),
+                    egui::vec2(2.0, row_rect.height() - 4.0),
+                ),
+                1.0,
+                ui.visuals().hyperlink_color,
+            );
         }
 
         // Now render the row content on top of the background
@@ -301,7 +344,11 @@ impl FileTreePanel {
             egui::Align2::LEFT_TOP,
             icon,
             phosphor_font(14.0),
-            text_color,
+            if is_dir {
+                ui.visuals().hyperlink_color
+            } else {
+                text_color
+            },
         );
         content_pos.x += 18.0; // Space for icon
 
@@ -349,7 +396,14 @@ impl FileTreePanel {
         if let FileTreeNodeKind::Directory { children } = &node.kind {
             if node.is_expanded {
                 for child in children {
-                    self.render_tree_node(ui, child, depth + 1, is_dark, output);
+                    self.render_tree_node(
+                        ui,
+                        child,
+                        depth + 1,
+                        is_dark,
+                        active_path,
+                        output,
+                    );
                 }
             }
         }
@@ -429,6 +483,10 @@ impl FileTreePanel {
     }
 }
 
+fn is_active_path(active: Option<&std::path::Path>, path: &std::path::Path) -> bool {
+    active == Some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -462,5 +520,27 @@ mod tests {
         assert!(!output.close_requested);
         assert!(output.new_width.is_none());
         assert!(output.context_action.is_none());
+    }
+
+    #[test]
+    fn test_active_path_detection() {
+        let path = PathBuf::from("/workspace/note.md");
+        assert!(is_active_path(Some(path.as_path()), &path));
+        assert!(!is_active_path(
+            Some(std::path::Path::new("/workspace/other.md")),
+            &path
+        ));
+        assert!(!is_active_path(None, &path));
+    }
+
+    #[test]
+    fn test_file_tree_panel_tracks_active_path() {
+        let mut panel = FileTreePanel::new();
+        assert!(panel.active_path.is_none());
+        panel.set_active_path(Some(PathBuf::from("/workspace/note.md")));
+        assert_eq!(
+            panel.active_path.as_deref(),
+            Some(std::path::Path::new("/workspace/note.md"))
+        );
     }
 }

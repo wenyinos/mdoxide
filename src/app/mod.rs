@@ -1610,6 +1610,9 @@ impl MDOxideApp {
                     .unwrap_or("Workspace");
                 (&ws.file_tree, name)
             });
+            let active_tree_path = self.state.active_tab().and_then(|tab| tab.path.clone());
+            self.file_tree_panel.set_active_path(active_tree_path);
+
             let outline_output = self.outline_panel.show(
                 ui,
                 &self.cached_outline,
