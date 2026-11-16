@@ -833,7 +833,10 @@ fn convert_details_blocks(node: &mut MarkdownNode) {
         // Summary-only HTML blocks are metadata, not body content.
         body.retain(|child| {
             !matches!(&child.node_type, MarkdownNodeType::HtmlBlock(html)
-                if html.to_ascii_lowercase().contains("<summary"))
+                if {
+                    let lower = html.to_ascii_lowercase();
+                    lower.contains("<summary") && !lower.trim_start().starts_with("<details")
+                })
         });
 
         item.node_type = MarkdownNodeType::Details { summary, open: is_open };
