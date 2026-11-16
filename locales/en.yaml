@@ -965,6 +965,11 @@ mermaid:
   badge: "mermaid"
   empty: "(empty diagram)"
   rendering_error: "Rendering error: %{error}"
+  popup_title: "Mermaid Diagram"
+  popup_hint: "Click to open a larger view"
+  zoom_in: "Zoom in"
+  zoom_out: "Zoom out"
+  zoom_reset: "Reset"
   warning_line: "Line %{line}:"
 
 # Table of Contents

@@ -72,6 +72,7 @@ pub use templates::{mermaid_kind_menu_label, snippet_fenced_block, MermaidTempla
 pub use validation::{compute_mermaid_diagnostics, validate_mermaid_source, MermaidError};
 
 use egui::{Color32, FontId, Ui};
+use rust_i18n::t;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Mutex;
 
@@ -171,7 +172,148 @@ pub enum RenderResult {
 /// Render a mermaid diagram to the UI.
 ///
 /// Returns a RenderResult indicating success or failure.
+/// Render a mermaid diagram and allow opening it in a zoom/pan popup.
 pub fn render_mermaid_diagram(
+    ui: &mut Ui,
+    source: &str,
+    dark_mode: bool,
+    font_size: f32,
+) -> RenderResult {
+    let source = source.trim();
+    if source.is_empty() {
+        return render_mermaid_diagram_inner(ui, source, dark_mode, font_size);
+    }
+
+    let top = ui.cursor().top();
+    let rect = ui.available_rect_before_wrap();
+    let result = render_mermaid_diagram_inner(ui, source, dark_mode, font_size);
+    let bottom = ui.cursor().top().max(ui.min_rect().bottom());
+    if matches!(result, RenderResult::Success) && bottom > top {
+        let click_rect = egui::Rect::from_min_max(
+            egui::pos2(rect.left(), top),
+            egui::pos2(rect.right(), bottom),
+        );
+        let id = ui.id().with(("mermaid_popup", mermaid_source_hash(source)));
+        let response = ui.interact(click_rect, id, egui::Sense::click());
+        if response.clicked() {
+            ui.memory_mut(|memory| {
+                memory
+                    .data
+                    .insert_temp(egui::Id::new("mermaid_popup_source"), source.to_string());
+                memory
+                    .data
+                    .insert_temp(egui::Id::new("mermaid_popup_open"), true);
+            });
+            ui.ctx().request_repaint();
+        }
+        response.on_hover_text(t!("mermaid.popup_hint").to_string());
+    }
+
+    render_mermaid_popup(ui.ctx(), source, dark_mode, font_size);
+    result
+}
+
+fn mermaid_source_hash(source: &str) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn clamp_mermaid_zoom(zoom: f32) -> f32 {
+    zoom.clamp(0.5, 3.0)
+}
+
+fn zoom_mermaid_by(zoom: f32, delta: f32) -> f32 {
+    clamp_mermaid_zoom(zoom + delta)
+}
+
+fn render_mermaid_popup(
+    ctx: &egui::Context,
+    source: &str,
+    dark_mode: bool,
+    font_size: f32,
+) {
+    let Some(active_source) = ctx.memory(|memory| {
+        memory
+            .data
+            .get_temp::<String>(egui::Id::new("mermaid_popup_source"))
+    }) else {
+        return;
+    };
+    if active_source != source {
+        return;
+    }
+
+    let mut open = ctx
+        .memory(|memory| {
+            memory
+                .data
+                .get_temp::<bool>(egui::Id::new("mermaid_popup_open"))
+        })
+        .unwrap_or(true);
+    let zoom_id = egui::Id::new(("mermaid_popup_zoom", mermaid_source_hash(source)));
+    let mut zoom = ctx
+        .memory(|memory| memory.data.get_temp::<f32>(zoom_id))
+        .unwrap_or(1.0);
+
+    egui::Window::new(t!("mermaid.popup_title").to_string())
+        .open(&mut open)
+        .default_size([900.0, 650.0])
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("−").on_hover_text(t!("mermaid.zoom_out")).clicked() {
+                    zoom = zoom_mermaid_by(zoom, -0.1);
+                }
+                ui.label(format!("{:.0}%", zoom * 100.0));
+                if ui.button("+").on_hover_text(t!("mermaid.zoom_in")).clicked() {
+                    zoom = zoom_mermaid_by(zoom, 0.1);
+                }
+                if ui
+                    .button(t!("mermaid.zoom_reset").to_string())
+                    .clicked()
+                {
+                    zoom = 1.0;
+                }
+            });
+            ui.separator();
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .drag_to_scroll(true)
+                .show(ui, |ui| {
+                    ui.set_min_width(820.0);
+                    let _ = render_mermaid_diagram_inner(
+                        ui,
+                        source,
+                        dark_mode,
+                        font_size * zoom,
+                    );
+                });
+        });
+
+    if open {
+        ctx.memory_mut(|memory| {
+            memory.data.insert_temp(zoom_id, zoom);
+            memory
+                .data
+                .insert_temp(egui::Id::new("mermaid_popup_open"), true);
+        });
+    } else {
+        ctx.memory_mut(|memory| {
+            memory
+                .data
+                .remove::<String>(egui::Id::new("mermaid_popup_source"));
+            memory
+                .data
+                .insert_temp(egui::Id::new("mermaid_popup_open"), false);
+            memory.data.remove::<f32>(zoom_id);
+        });
+    }
+}
+
+fn render_mermaid_diagram_inner(
     ui: &mut Ui,
     source: &str,
     dark_mode: bool,
@@ -484,6 +626,15 @@ mod tests {
         assert_eq!(dbl.0, "H");
         assert_eq!(dbl.1, "Ring");
         assert_eq!(dbl.2, NodeShape::DoubleCircle);
+    }
+
+    #[test]
+    fn test_mermaid_popup_zoom_clamps_and_steps() {
+        assert_eq!(clamp_mermaid_zoom(0.1), 0.5);
+        assert_eq!(clamp_mermaid_zoom(5.0), 3.0);
+        assert!((zoom_mermaid_by(1.0, 0.1) - 1.1).abs() < f32::EPSILON);
+        assert_eq!(zoom_mermaid_by(0.5, -0.1), 0.5);
+        assert_eq!(zoom_mermaid_by(3.0, 0.1), 3.0);
     }
 
     #[test]

@@ -912,6 +912,11 @@ mermaid:
   badge: mermaid
   empty: (空图表)
   rendering_error: 渲染错误：%{error}
+  popup_title: Mermaid 图表
+  popup_hint: 点击打开大图查看
+  zoom_in: 放大
+  zoom_out: 缩小
+  zoom_reset: 重置
   warning_line: 第 %{line} 行：
 workspace:
   close_folder: 关闭文件夹
