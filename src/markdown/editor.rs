@@ -5356,9 +5356,45 @@ fn extract_paragraph_content(source: &str, start_line: usize, end_line: usize) -
     let lines: Vec<&str> = source.lines().collect();
     if start_line > 0 && start_line <= lines.len() {
         let end = end_line.min(lines.len());
+        let first_prefix = extract_line_prefix(lines[start_line - 1]).0;
+        let marker = first_prefix.trim_start();
+        let is_list = marker.starts_with("- ")
+            || marker.starts_with("* ")
+            || marker.starts_with("+ ")
+            || marker
+                .find(|ch: char| !ch.is_ascii_digit())
+                .map(|index| {
+                    index > 0
+                        && (marker.as_bytes().get(index) == Some(&b'.')
+                            || marker.as_bytes().get(index) == Some(&b')'))
+                })
+                .unwrap_or(false);
+        let continuation_strip = if is_list && !first_prefix.contains('>') {
+            first_prefix.chars().take_while(|ch| ch.is_whitespace()).count() + 2
+        } else {
+            0
+        };
         lines[(start_line - 1)..end]
             .iter()
-            .map(|line| extract_line_prefix(line).1.to_string())
+            .enumerate()
+            .map(|(index, line)| {
+                if index == 0 {
+                    extract_line_prefix(line).1.to_string()
+                } else {
+                    // Strip the list continuation indent so the edit session
+                    // shows text, while update_source_range restores it.
+                    let strip = if continuation_strip > 0 {
+                        format!("{:width$}", "", width = continuation_strip)
+                    } else {
+                        String::new()
+                    };
+                    if !strip.is_empty() {
+                        line.strip_prefix(&strip).unwrap_or(line).to_string()
+                    } else {
+                        line.to_string()
+                    }
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     } else {
