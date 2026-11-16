@@ -234,6 +234,8 @@ settings:
     lsp_enabled_tooltip: "Auto-detect and start language servers for code intelligence (requires servers on PATH)"
     title: "Editor"
     font_family: "Font"
+    rendered_font: "Rendered view font"
+    rendered_font_same: "Same as editor"
     font_size: "Font Size"
     font_inter_desc: "Modern, clean proportional font"
     font_jetbrains_desc: "Monospace font for code"
@@ -1249,3 +1251,7 @@ frontmatter:
 editor:
   pdf_no_pages: "PDF has no pages"
   file_load_failed: "Failed to load file"
+
+image_paste:
+  save_document_first: "Save the document before pasting an image."
+  saved: "Image saved to assets/%{name}"

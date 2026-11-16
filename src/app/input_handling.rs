@@ -25,6 +25,16 @@ impl MDOxideApp {
             return;
         }
 
+        // Ctrl/Cmd+V with an image-only clipboard: save into ./assets and insert markdown.
+        let image_paste_pressed = ctx.input(|i| {
+            i.modifiers.command && !i.modifiers.shift && i.key_pressed(egui::Key::V)
+        });
+        if image_paste_pressed && self.try_paste_clipboard_image() {
+            ctx.input_mut(|i| {
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::V);
+            });
+        }
+
         let consumed_action: Option<bool> = ctx.input_mut(|i| {
             // Cmd+Shift+Z (macOS) / Ctrl+Shift+Z (Win/Linux): Redo (check first since it's more specific)
             if i.consume_key(
@@ -89,6 +99,109 @@ impl MDOxideApp {
                 self.handle_redo();
             }
         }
+    }
+
+    /// Paste a clipboard image into `assets/` and insert markdown at the cursor.
+    ///
+    /// Returns true when an image was handled. Plain-text paste is left untouched.
+    fn try_paste_clipboard_image(&mut self) -> bool {
+        if self.terminal_panel_state.terminal_has_focus {
+            return false;
+        }
+        let Ok(mut clipboard) = arboard::Clipboard::new() else {
+            return false;
+        };
+        if clipboard
+            .get_text()
+            .map(|text| !text.trim().is_empty())
+            .unwrap_or(false)
+        {
+            return false;
+        }
+        let Ok(image) = clipboard.get_image() else {
+            return false;
+        };
+
+        let Some(tab) = self.state.active_tab() else {
+            return false;
+        };
+        let tab_id = tab.id;
+        let Some(dir) = tab.path.as_ref().and_then(|path| path.parent()).map(|path| path.to_path_buf()) else {
+            let time = self.get_app_time();
+            self.state.show_toast(
+                t!("image_paste.save_document_first").to_string(),
+                time,
+                3.0,
+            );
+            return true;
+        };
+
+        let assets = dir.join("assets");
+        if let Err(error) = std::fs::create_dir_all(&assets) {
+            self.state
+                .show_error(format!("Failed to create assets directory: {error}"));
+            return true;
+        }
+
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        let mut index = 0usize;
+        let filename = loop {
+            let candidate = if index == 0 {
+                format!("pasted-{stamp}.png")
+            } else {
+                format!("pasted-{stamp}-{index}.png")
+            };
+            if !assets.join(&candidate).exists() {
+                break candidate;
+            }
+            index += 1;
+        };
+        let dest = assets.join(&filename);
+
+        let width = image.width as u32;
+        let height = image.height as u32;
+        let Some(buffer) = image::RgbaImage::from_raw(width, height, image.bytes.into_owned())
+        else {
+            self.state
+                .show_error("Clipboard image had invalid dimensions".to_string());
+            return true;
+        };
+        if let Err(error) = buffer.save(&dest) {
+            self.state
+                .show_error(format!("Failed to save pasted image: {error}"));
+            return true;
+        }
+
+        let markdown = format!("![](assets/{filename})");
+        let Some(tab) = self.state.tab_by_id_mut(tab_id) else {
+            return true;
+        };
+        let cursor = tab.cursors.primary().head;
+        let char_count = tab.content.chars().count();
+        let cursor = cursor.min(char_count);
+        let byte = tab
+            .content
+            .char_indices()
+            .nth(cursor)
+            .map(|(byte, _)| byte)
+            .unwrap_or(tab.content.len());
+        let mut new_content = String::with_capacity(tab.content.len() + markdown.len());
+        new_content.push_str(&tab.content[..byte]);
+        new_content.push_str(&markdown);
+        new_content.push_str(&tab.content[byte..]);
+        tab.set_content(new_content);
+        tab.set_cursor(cursor + markdown.chars().count());
+
+        let time = self.get_app_time();
+        self.state.show_toast(
+            t!("image_paste.saved", name = filename).to_string(),
+            time,
+            2.5,
+        );
+        true
     }
 
     /// Filter out Event::Cut when nothing is selected to prevent egui bug.

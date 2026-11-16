@@ -1171,6 +1171,41 @@ impl SettingsPanel {
         ui.separator();
         ui.add_space(8.0);
 
+        // Rendered view font (separate from the raw editor)
+        ui.label(RichText::new(t!("settings.editor.rendered_font")).strong());
+        let mut same_as_editor = settings.rendered_font_family.is_none();
+        if ui
+            .checkbox(
+                &mut same_as_editor,
+                t!("settings.editor.rendered_font_same"),
+            )
+            .changed()
+        {
+            settings.rendered_font_family = if same_as_editor {
+                None
+            } else {
+                Some(settings.font_family.clone())
+            };
+        }
+        if let Some(font) = settings.rendered_font_family.as_mut() {
+            egui::ComboBox::from_id_salt("rendered_font_family")
+                .selected_text(font.display_name())
+                .show_ui(ui, |ui| {
+                    for option in EditorFont::builtin_fonts() {
+                        if ui
+                            .selectable_label(*font == *option, option.display_name())
+                            .clicked()
+                        {
+                            *font = option.clone();
+                        }
+                    }
+                });
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
         // Font size slider
         ui.horizontal(|ui| {
             ui.label(RichText::new(t!("settings.editor.font_size")).strong());

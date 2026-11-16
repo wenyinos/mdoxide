@@ -2088,6 +2088,8 @@ pub struct Settings {
 
     /// Font family for the editor
     pub font_family: EditorFont,
+    /// Optional separate font for the rendered view; None = same as editor.
+    pub rendered_font_family: Option<EditorFont>,
 
     /// CJK font preference for regional glyph variants.
     /// Controls which CJK font takes priority in the fallback chain.
@@ -2569,6 +2571,7 @@ impl Default for Settings {
             show_line_numbers: true,
             font_size: 15.0,
             font_family: EditorFont::default(),
+            rendered_font_family: None,
             cjk_font_preference: CjkFontPreference::default(),
             complex_script_font_preferences: std::collections::BTreeMap::new(),
 

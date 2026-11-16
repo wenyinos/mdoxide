@@ -231,6 +231,8 @@ settings:
     lsp_enabled_tooltip: 自动检测并启动语言服务器以提供代码智能（需要服务器位于 PATH）
     title: 编辑器
     font_family: 字体
+    rendered_font: 渲染视图字体
+    rendered_font_same: 与编辑器相同
     font_size: 字体尺寸
     font_inter_desc: 现代、简洁的比例字体
     font_jetbrains_desc: 代码等宽字体
@@ -1181,3 +1183,7 @@ frontmatter:
 editor:
   pdf_no_pages: PDF 没有页面
   file_load_failed: 文件加载失败
+
+image_paste:
+  save_document_first: 请先保存文档，再粘贴图片。
+  saved: 图片已保存到 assets/%{name}

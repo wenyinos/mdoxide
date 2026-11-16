@@ -168,11 +168,28 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
     let mut participant_map: HashMap<String, usize> = HashMap::new();
     let mut block_stack: Vec<SeqBlockBuilder> = Vec::new();
     let lines: Vec<&str> = source.lines().skip(1).collect();
+    let mut autonumber: Option<(u32, u32)> = None;
+    let mut next_number = 1u32;
 
     for (line_num, line) in lines.iter().enumerate() {
         let line = line.trim();
 
         if line.is_empty() || line.starts_with("%%") {
+            continue;
+        }
+
+        // autonumber [start [step]] / autonumber off
+        let directive = line.split_whitespace().next().unwrap_or("");
+        if directive == "autonumber" {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.get(1) == Some(&"off") {
+                autonumber = None;
+            } else {
+                let start = parts.get(1).and_then(|value| value.parse().ok()).unwrap_or(1);
+                let step = parts.get(2).and_then(|value| value.parse().ok()).unwrap_or(1);
+                autonumber = Some((start, step.max(1)));
+                next_number = start;
+            }
             continue;
         }
 
@@ -352,7 +369,15 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
         }
 
         // Parse message
-        if let Some(msg) = parse_sequence_message(line) {
+        if let Some(mut msg) = parse_sequence_message(line) {
+            if let Some((_, step)) = autonumber {
+                msg.label = if msg.label.is_empty() {
+                    format!("{}", next_number)
+                } else {
+                    format!("{}. {}", next_number, msg.label)
+                };
+                next_number = next_number.saturating_add(step);
+            }
             for id in [&msg.from, &msg.to] {
                 if !participant_map.contains_key(id) {
                     participant_map.insert(id.clone(), diagram.participants.len());
@@ -1255,4 +1280,24 @@ fn draw_block(
     }
 
     *current_y += layout.block_padding * 2.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_autonumber_start_step_and_off() {
+        let source = "sequenceDiagram\nautonumber 10 5\nA->>B: Hello\nB-->>A: Reply\nautonumber off\nA->>B: Plain";
+        let diagram = parse_sequence_diagram(source).unwrap();
+        let labels: Vec<&str> = diagram
+            .statements
+            .iter()
+            .filter_map(|statement| match statement {
+                SeqStatement::Message(message) => Some(message.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, vec!["10. Hello", "15. Reply", "Plain"]);
+    }
 }

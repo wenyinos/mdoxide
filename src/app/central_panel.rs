@@ -726,6 +726,12 @@ impl MDOxideApp {
                 // Editor widget - extract settings values to avoid borrow conflicts
                 let font_size = self.state.settings.font_size;
                 let font_family = self.state.settings.font_family.clone();
+                let rendered_font_family = self
+                    .state
+                    .settings
+                    .rendered_font_family
+                    .clone()
+                    .unwrap_or_else(|| font_family.clone());
                 let word_wrap = self.state.settings.word_wrap;
                 let theme = self.state.settings.theme;
                 let show_line_numbers = self.state.settings.show_line_numbers;
@@ -2084,7 +2090,7 @@ impl MDOxideApp {
                                             .document_id(tab_id)
                                             .content_version(content_version)
                                             .font_size(font_size)
-                                            .font_family(font_family.clone())
+                                            .font_family(rendered_font_family.clone())
                                             .word_wrap(word_wrap)
                                             .theme(theme)
                                             .accent_rgb(accent_rgb)
@@ -2465,7 +2471,7 @@ impl MDOxideApp {
                                         .document_id(tab_id)
                                         .content_version(content_version)
                                         .font_size(font_size)
-                                        .font_family(font_family.clone())
+                                        .font_family(rendered_font_family.clone())
                                         .word_wrap(word_wrap)
                                         .theme(theme)
                                         .accent_rgb(accent_rgb)
