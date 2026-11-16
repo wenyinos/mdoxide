@@ -37,6 +37,14 @@ pub struct UiState {
     pub confirm_dialog_message: String,
     /// Pending action after confirmation
     pub pending_action: Option<PendingAction>,
+    /// Whether the "reload from disk" confirmation is open
+    pub show_reload_confirm: bool,
+    /// Tab id awaiting reload confirmation
+    pub reload_confirm_tab: Option<usize>,
+    /// Whether the lossy-encoding save dialog is open
+    pub show_lossy_encoding_dialog: bool,
+    /// Tab, encoding and optional Save-As target that triggered the refusal
+    pub lossy_encoding_tab: Option<(usize, &'static str, Option<PathBuf>)>,
     /// Status bar message (deprecated, use toast_message instead)
     pub status_message: Option<String>,
     /// Whether the find/replace panel is open
@@ -109,4 +117,9 @@ pub enum PendingAction {
     OpenFile(PathBuf),
     /// Create a new document
     NewDocument,
+    /// Switch the active tab's text encoding (confirmed when the tab is dirty)
+    ChangeEncoding {
+        tab_id: usize,
+        encoding: &'static str,
+    },
 }

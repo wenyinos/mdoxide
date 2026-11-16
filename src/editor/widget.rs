@@ -220,6 +220,10 @@ pub struct EditorWidget<'a> {
     vim_mode: bool,
     /// LSP diagnostics for this file (set each frame from AppState).
     diagnostics: Vec<crate::lsp::state::DiagnosticEntry>,
+    /// Indent width for Tab/Shift+Tab.
+    tab_size: usize,
+    /// Whether Tab inserts spaces instead of a hard tab.
+    use_spaces_for_tab: bool,
 }
 
 impl<'a> EditorWidget<'a> {
@@ -251,6 +255,8 @@ impl<'a> EditorWidget<'a> {
             auto_close_brackets: false,
             diagnostics: Vec::new(),
             vim_mode: false,
+            tab_size: 4,
+            use_spaces_for_tab: true,
         }
     }
 
@@ -437,6 +443,14 @@ impl<'a> EditorWidget<'a> {
         self
     }
 
+    /// Configure Tab/Shift+Tab indentation.
+    #[must_use]
+    pub fn indent_options(mut self, tab_size: usize, use_spaces: bool) -> Self {
+        self.tab_size = tab_size;
+        self.use_spaces_for_tab = use_spaces;
+        self
+    }
+
     /// Set whether Vim modal editing is enabled.
     #[must_use]
     pub fn vim_mode(mut self, enabled: bool) -> Self {
@@ -546,6 +560,7 @@ impl<'a> EditorWidget<'a> {
         editor.set_font_family(self.font_family.clone());
         editor.set_wrap_enabled(self.word_wrap);
         editor.set_auto_close_brackets(self.auto_close_brackets);
+        editor.set_indent_options(self.tab_size, self.use_spaces_for_tab);
         editor.set_vim_mode(self.vim_mode);
 
         // Apply max line width setting (convert character count to pixels)

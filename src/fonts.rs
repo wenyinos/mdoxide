@@ -1805,6 +1805,26 @@ pub fn create_font_definitions_with_cjk_spec(
         Arc::new(FontData::from_static(JETBRAINS_BOLD_ITALIC)),
     );
 
+    // Emoji fallback: system emoji fonts cover glyphs Inter/JetBrains lack.
+    if let Some(data) = load_system_font(&[
+        "Noto Color Emoji",
+        "Segoe UI Emoji",
+        "Apple Color Emoji",
+        "Noto Emoji",
+    ]) {
+        fonts
+            .font_data
+            .insert("emoji-fallback".to_owned(), Arc::new(data));
+        for family in [FontFamily::Proportional, FontFamily::Monospace] {
+            fonts
+                .families
+                .entry(family)
+                .or_default()
+                .push("emoji-fallback".to_owned());
+        }
+        info!("Loaded system emoji fallback font");
+    }
+
     // Load custom font if specified
     let custom_loaded = if let Some(font_name) = custom_font {
         match load_system_font_by_name(font_name) {

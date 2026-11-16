@@ -39,7 +39,7 @@ use super::view::ViewState;
 use crate::config::EditorFont;
 use crate::fonts;
 use crate::markdown::syntax::{highlight_code, highlight_code_with_theme};
-use crate::state::FoldState;
+use crate::state::{FoldState, LineEnding};
 use crate::ui::{render_nav_buttons, NavAction};
 use rust_i18n::t;
 
@@ -81,6 +81,12 @@ pub struct SearchMatch {
 pub struct MDOxideEditor {
     /// The text content.
     pub(crate) buffer: TextBuffer,
+    /// Dominant line ending used when inserting newlines.
+    pub(crate) line_ending: LineEnding,
+    /// Indent width in spaces (or tab stop when `use_spaces_for_tab` is false).
+    pub(crate) tab_size: usize,
+    /// Whether Tab inserts spaces instead of a hard tab.
+    pub(crate) use_spaces_for_tab: bool,
     /// Viewport state for virtual scrolling.
     pub(crate) view: ViewState,
     /// Galley cache for efficient rendering.
@@ -230,6 +236,9 @@ impl MDOxideEditor {
     pub fn new() -> Self {
         Self {
             buffer: TextBuffer::new(),
+            line_ending: LineEnding::Lf,
+            tab_size: 4,
+            use_spaces_for_tab: true,
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -301,6 +310,9 @@ impl MDOxideEditor {
     pub fn from_string(content: &str) -> Self {
         Self {
             buffer: TextBuffer::from_string(content),
+            line_ending: LineEnding::detect(content),
+            tab_size: 4,
+            use_spaces_for_tab: true,
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -371,6 +383,7 @@ impl MDOxideEditor {
     ///
     /// The cursor is clamped to valid bounds after content replacement.
     pub fn set_content(&mut self, content: &str) {
+        self.line_ending = LineEnding::detect(content);
         self.buffer = TextBuffer::from_string(content);
         self.line_cache.invalidate();
         self.content_dirty = true;
@@ -1067,6 +1080,125 @@ impl MDOxideEditor {
             .ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
     }
 
+    /// Indent (Tab) or outdent (Shift+Tab) the selected lines / current lines.
+    ///
+    /// - Any non-empty selection indents whole lines without replacing text.
+    /// - Shift+Tab removes one leading hard tab, else up to `tab_size` spaces.
+    /// - A collapsed caret with Tab inserts the configured indent unit at the caret.
+    fn handle_tab_key(&mut self, outdent: bool) {
+        if !outdent && !self.selections.iter().any(|sel| sel.is_range()) {
+            let unit = if self.use_spaces_for_tab {
+                " ".repeat(self.tab_size.max(1))
+            } else {
+                "\t".to_string()
+            };
+            self.insert_text_at_all_cursors(&unit);
+            return;
+        }
+
+        // Collect every line touched by a selection or caret.
+        let mut lines: Vec<usize> = Vec::new();
+        for sel in &self.selections {
+            let (start, end) = sel.ordered();
+            let start_line = start.line;
+            let end_line = if sel.is_range() && end.column == 0 && end.line > start.line {
+                end.line - 1
+            } else {
+                end.line
+            };
+            for line in start_line..=end_line {
+                if !lines.contains(&line) {
+                    lines.push(line);
+                }
+            }
+        }
+        lines.sort_unstable();
+
+        let line_starts: Vec<(usize, usize)> = lines
+            .iter()
+            .filter_map(|&line| self.buffer.try_line_to_char(line).map(|start| (line, start)))
+            .collect();
+
+        // Measure removals before mutating.
+        let mut removed: Vec<(usize, usize)> = Vec::new();
+        if outdent {
+            let tab_size = self.tab_size.max(1);
+            for &(line, start) in &line_starts {
+                let end = (start + tab_size + 1).min(self.buffer.len());
+                let text = self.buffer.slice(start, end);
+                let count = if text.starts_with('\t') {
+                    1
+                } else {
+                    text.chars().take_while(|ch| *ch == ' ').take(tab_size).count()
+                };
+                if count > 0 {
+                    removed.push((line, count));
+                }
+            }
+        }
+
+        // Mutate bottom-up so earlier line offsets stay valid.
+        for &(line, start) in line_starts.iter().rev() {
+            if outdent {
+                let count = removed
+                    .iter()
+                    .find(|(removed_line, _)| *removed_line == line)
+                    .map(|(_, count)| *count)
+                    .unwrap_or(0);
+                if count > 0 {
+                    self.buffer.remove(start, count);
+                }
+            } else {
+                let unit = if self.use_spaces_for_tab {
+                    " ".repeat(self.tab_size.max(1))
+                } else {
+                    "\t".to_string()
+                };
+                self.buffer.insert(start, &unit);
+            }
+        }
+
+        let indent_len = if self.use_spaces_for_tab {
+            self.tab_size.max(1)
+        } else {
+            1
+        };
+        let adjust = |cursor: Cursor| -> Cursor {
+            let column = if outdent {
+                let count = removed
+                    .iter()
+                    .find(|(line, _)| *line == cursor.line)
+                    .map(|(_, count)| *count)
+                    .unwrap_or(0);
+                cursor.column.saturating_sub(count)
+            } else {
+                cursor.column
+                    + if line_starts.iter().any(|(line, _)| *line == cursor.line) {
+                        indent_len
+                    } else {
+                        0
+                    }
+            };
+            Cursor {
+                line: cursor.line,
+                column,
+            }
+        };
+
+        self.selections = self
+            .selections
+            .iter()
+            .map(|sel| Selection {
+                anchor: adjust(sel.anchor),
+                head: adjust(sel.head),
+            })
+            .collect();
+        self.merge_overlapping_selections();
+        self.content_dirty = true;
+        self.view
+            .ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
+    }
+
     /// Performs backspace at all cursor positions with proper offset adjustment.
     ///
     /// Deletes the full grapheme cluster before each cursor, correctly handling
@@ -1102,7 +1234,12 @@ impl MDOxideEditor {
                     1
                 }
             } else {
-                1 // newline join — single char
+                // Join a full CRLF pair, not just the LF half.
+                if *char_pos >= 2 && self.buffer.slice(*char_pos - 2, *char_pos) == "\r\n" {
+                    2
+                } else {
+                    1
+                }
             };
             let start = char_pos.saturating_sub(grapheme_chars);
             delete_ranges.push((start, grapheme_chars));
@@ -1183,8 +1320,12 @@ impl MDOxideEditor {
                 } else {
                     1
                 }
+            } else if *char_pos + 2 <= self.buffer.len()
+                && self.buffer.slice(*char_pos, *char_pos + 2) == "\r\n"
+            {
+                2
             } else {
-                1 // newline join
+                1
             };
             delete_ranges.push((*char_pos, del_len));
         }
@@ -2497,13 +2638,13 @@ impl MDOxideEditor {
                     if is_text_modifying && !modifiers.ctrl && !modifiers.command {
                         match key {
                             egui::Key::Tab => {
-                                // Insert tab character (TODO: respect use_spaces and tab_size settings)
-                                // This also prevents Tab from cycling focus to other UI elements
-                                self.insert_text_at_all_cursors("\t");
+                                // Tab also prevents focus from cycling to other widgets.
+                                self.handle_tab_key(modifiers.shift);
                                 continue;
                             }
                             egui::Key::Enter => {
-                                self.insert_text_at_all_cursors("\n");
+                                let eol = self.line_ending.as_str();
+                                self.insert_text_at_all_cursors(eol);
                                 continue;
                             }
                             egui::Key::Backspace => {
@@ -3243,6 +3384,12 @@ impl MDOxideEditor {
     /// (to avoid interfering with contractions like "don't").
     pub fn set_auto_close_brackets(&mut self, enabled: bool) {
         self.auto_close_brackets = enabled;
+    }
+
+    /// Configure Tab/Shift+Tab indentation.
+    pub fn set_indent_options(&mut self, tab_size: usize, use_spaces: bool) {
+        self.tab_size = tab_size.max(1);
+        self.use_spaces_for_tab = use_spaces;
     }
 
     /// Enables or disables Vim modal editing mode.
@@ -4318,5 +4465,56 @@ mod tests {
         // Scroll up by 2 lines
         editor.view.scroll_by(-2.0 * FIXED_LINE_HEIGHT, 101);
         assert_eq!(editor.view.first_visible_line(), 2);
+    }
+
+    #[test]
+    fn test_tab_indents_selected_lines_without_replacing_text() {
+        let mut editor = MDOxideEditor::from_string("a\nb");
+        editor.set_indent_options(4, true);
+        editor.selections = vec![Selection::new(
+            Cursor {
+                line: 0,
+                column: 0,
+            },
+            Cursor {
+                line: 1,
+                column: 1,
+            },
+        )];
+
+        editor.handle_tab_key(false);
+        assert_eq!(editor.buffer.slice(0, editor.buffer.len()), "    a\n    b");
+    }
+
+    #[test]
+    fn test_shift_tab_outdents_lines() {
+        let mut editor = MDOxideEditor::from_string("    a\n\tb");
+        editor.set_indent_options(4, true);
+        editor.selections = vec![Selection::new(
+            Cursor {
+                line: 0,
+                column: 0,
+            },
+            Cursor {
+                line: 1,
+                column: 2,
+            },
+        )];
+
+        editor.handle_tab_key(true);
+        assert_eq!(editor.buffer.slice(0, editor.buffer.len()), "a\nb");
+    }
+
+    #[test]
+    fn test_tab_with_collapsed_caret_inserts_indent_unit() {
+        let mut editor = MDOxideEditor::from_string("ab");
+        editor.set_indent_options(2, true);
+        editor.selections = vec![Selection::collapsed(Cursor {
+            line: 0,
+            column: 1,
+        })];
+
+        editor.handle_tab_key(false);
+        assert_eq!(editor.buffer.slice(0, editor.buffer.len()), "a  b");
     }
 }

@@ -89,7 +89,11 @@ impl MDOxideApp {
         let (current_line_num, cursor_col) = tab.cursor_position;
 
         // Split into lines for manipulation
-        let lines: Vec<&str> = tab.content.split('\n').collect();
+        let eol = tab.line_ending.as_str();
+        let lines: Vec<&str> = tab.content
+            .split('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .collect();
 
         // Bounds check
         if current_line_num >= lines.len() {
@@ -114,24 +118,22 @@ impl MDOxideApp {
             }
         }
 
-        let new_content = new_lines.join("\n");
+        let new_content = new_lines.join(eol);
 
         // Calculate new cursor position on the duplicated line (one line down, same column)
         let new_line_num = current_line_num + 1;
-        let mut new_line_start = 0usize;
-        for (i, line) in new_lines.iter().enumerate() {
-            if i == new_line_num {
-                break;
-            }
-            new_line_start += line.len() + 1; // +1 for newline
-        }
+        let new_line_start: usize = new_lines[..new_line_num]
+            .iter()
+            .map(|line| line.chars().count())
+            .sum::<usize>()
+            + new_line_num * eol.chars().count();
 
-        // Clamp column to new line length
-        let new_line_len = new_lines.get(new_line_num).map(|l| l.len()).unwrap_or(0);
-        let new_cursor_byte = new_line_start + cursor_col.min(new_line_len);
-        let new_cursor_char = new_content[..new_cursor_byte.min(new_content.len())]
-            .chars()
-            .count();
+        // Clamp column to new line length (character offsets throughout)
+        let new_line_len = new_lines
+            .get(new_line_num)
+            .map(|line| line.chars().count())
+            .unwrap_or(0);
+        let new_cursor_char = new_line_start + cursor_col.min(new_line_len);
 
         // Apply changes
         tab.content = new_content;
@@ -178,7 +180,11 @@ impl MDOxideApp {
         }
 
         // Split into lines for manipulation
-        let lines: Vec<&str> = tab.content.split('\n').collect();
+        let eol = tab.line_ending.as_str();
+        let lines: Vec<&str> = tab.content
+            .split('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .collect();
         let mut new_lines = lines.clone();
 
         // Perform the swap
@@ -191,7 +197,7 @@ impl MDOxideApp {
         }
 
         // Build new content
-        let new_content = new_lines.join("\n");
+        let new_content = new_lines.join(eol);
 
         // Calculate new cursor position
         // The cursor should be on the same line content, which has moved
@@ -201,25 +207,23 @@ impl MDOxideApp {
             current_line_num + 1
         };
 
-        // Find byte offset of the new line position
-        let mut new_line_start = 0usize;
-        for (i, line) in new_lines.iter().enumerate() {
-            if i == new_line_num {
-                break;
-            }
-            new_line_start += line.len() + 1; // +1 for newline
-        }
+        // Character offset of the new line position
+        let new_line_start: usize = new_lines[..new_line_num]
+            .iter()
+            .map(|line| line.chars().count())
+            .sum::<usize>()
+            + new_line_num * eol.chars().count();
 
-        // Calculate new cursor byte position (line start + column, clamped to line length)
-        let new_line_len = new_lines.get(new_line_num).map(|l| l.len()).unwrap_or(0);
-        let new_cursor_byte = new_line_start + cursor_col.min(new_line_len);
-
-        // Convert byte position to character position
-        let new_cursor_char = new_content[..new_cursor_byte].chars().count();
+        // Keep the cursor column (character units) clamped to the line length
+        let new_line_len = new_lines
+            .get(new_line_num)
+            .map(|line| line.chars().count())
+            .unwrap_or(0);
+        let new_cursor_char = new_line_start + cursor_col.min(new_line_len);
 
         debug!(
-            "Move line: new_line_num={}, new_line_start={}, new_cursor_byte={}, new_cursor_char={}",
-            new_line_num, new_line_start, new_cursor_byte, new_cursor_char
+            "Move line: new_line_num={}, new_line_start={}, new_cursor_char={}",
+            new_line_num, new_line_start, new_cursor_char
         );
 
         // Apply changes
@@ -280,7 +284,11 @@ impl MDOxideApp {
         }
 
         // Split into lines for manipulation
-        let lines: Vec<&str> = tab.content.split('\n').collect();
+        let eol = tab.line_ending.as_str();
+        let lines: Vec<&str> = tab.content
+            .split('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .collect();
         let mut new_lines: Vec<&str> = Vec::with_capacity(lines.len().saturating_sub(1));
 
         // Remove the current line
@@ -295,7 +303,7 @@ impl MDOxideApp {
             // If we deleted the last line, result is empty
             String::new()
         } else {
-            new_lines.join("\n")
+            new_lines.join(eol)
         };
 
         // Calculate new cursor position
@@ -306,27 +314,19 @@ impl MDOxideApp {
             current_line_num
         };
 
-        // Find byte offset of the new line position
-        let mut new_line_start = 0usize;
-        for (i, line) in new_lines.iter().enumerate() {
-            if i == new_line_num {
-                break;
-            }
-            new_line_start += line.len() + 1; // +1 for newline
-        }
+        // Character offset of the new line position
+        let new_line_start: usize = new_lines[..new_line_num]
+            .iter()
+            .map(|line| line.chars().count())
+            .sum::<usize>()
+            + new_line_num * eol.chars().count();
 
-        // Calculate new cursor byte position (line start + column, clamped to line length)
-        let new_line_len = new_lines.get(new_line_num).map(|l| l.len()).unwrap_or(0);
-        let new_cursor_byte = new_line_start + cursor_col.min(new_line_len);
-
-        // Convert byte position to character position
-        let new_cursor_char = if new_content.is_empty() {
-            0
-        } else {
-            new_content[..new_cursor_byte.min(new_content.len())]
-                .chars()
-                .count()
-        };
+        // Keep the cursor column (character units) clamped to the line length
+        let new_line_len = new_lines
+            .get(new_line_num)
+            .map(|line| line.chars().count())
+            .unwrap_or(0);
+        let new_cursor_char = new_line_start + cursor_col.min(new_line_len);
 
         debug!(
             "Delete line: line={}, total_lines={}, new_line_num={}, new_cursor_char={}",

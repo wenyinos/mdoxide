@@ -13,6 +13,7 @@ menu:
     open: 打开...
     save: 保存
     save_as: 另存为...
+    encoding: 编码
     recent: 最近的文件
     export: 导出
     export_html: 导出为 HTML...
@@ -29,7 +30,8 @@ menu:
     raw: 源码
     split: 分屏
     rendered: 渲染
-    line_numbers: 行号
+    preview_lock: 锁定预览
+  line_numbers: 行号
   help:
     label: 帮助
   tools:
@@ -111,6 +113,16 @@ dialog:
     title: 未保存的更改
     save: 保存
     dont_save: 不保存
+    encoding_change:
+      message: 从 %{current} 切换到 %{encoding} 会重新读取磁盘内容，未保存的修改将丢失。是否先保存？
+    reload_from_disk:
+      title: 从磁盘重新加载？
+      message: 丢弃当前标签页的未保存修改，并用磁盘上的文件替换？
+      confirm: 重新加载
+    lossy_encoding:
+      title: 当前编码无法保存
+      message: "%{encoding} 无法表示本文档中的部分字符。是否改用 UTF-8 保存？当前尚未写入磁盘。"
+      save_utf8: 另存为 UTF-8
   code_execution_consent:
     title: 允许运行本文档中的代码？
     body_intro: 运行围栏代码块会在你的计算机上以当前用户权限启动真实子进程。MDOxide 不会沙箱化运行器，也不会过滤网络访问。
@@ -727,6 +739,10 @@ notification:
   deleted: 已删除：%{name}
   opened_background: 已在后台打开：%{name}
   settings_reset: 恢复默认设置
+  preview_locked_on: 预览已锁定
+  preview_locked_off: 预览已解锁
+  word_wrap_on: 自动换行：开
+  word_wrap_off: 自动换行：关
   encoding_changed: 编码已更改为 %{encoding}
   reloaded_single: 已重新加载：%{name}
   reloaded_multiple: 已从磁盘重新加载 %{count} 个文件
@@ -882,7 +898,10 @@ pipeline:
 
     • grep ''pattern''   - 搜索模式'
   no_output_success: (命令无输出)
+markdown:
+  properties: 属性
 tab:
+  copy_path: 复制路径
   reveal_in_explorer: 在资源管理器中显示
 mermaid:
   badge: mermaid

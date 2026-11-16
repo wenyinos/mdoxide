@@ -205,18 +205,23 @@ fn load_config_internal() -> Result<Settings> {
         return Ok(Settings::default());
     }
 
-    // Parse and sanitize
-    let mut settings = Settings::from_json_sanitized(&contents).map_err(|e| {
-        warn!(
-            "Config file at {} contains invalid JSON: {}",
-            config_path.display(),
-            e
-        );
-        Error::ConfigParse {
-            message: format!("Failed to parse config file: {}", e),
-            source: Some(Box::new(e)),
+    // Parse and sanitize. Invalid JSON is preserved for the user instead of
+    // being overwritten by the next settings save.
+    let mut settings = match Settings::from_json_sanitized(&contents) {
+        Ok(settings) => settings,
+        Err(e) => {
+            warn!(
+                "Config file at {} contains invalid JSON: {}",
+                config_path.display(),
+                e
+            );
+            preserve_corrupt_config(&config_path);
+            return Err(Error::ConfigParse {
+                message: format!("Failed to parse config file: {}", e),
+                source: Some(Box::new(e)),
+            });
         }
-    })?;
+    };
 
     // Follow the system locale until the user explicitly picks a language.
     if !settings.language_explicit {
@@ -327,6 +332,43 @@ pub fn save_config_silent(settings: &Settings) -> bool {
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Rename an unreadable config so it is not overwritten, keeping the three newest copies.
+fn preserve_corrupt_config(path: &std::path::Path) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    let Some(dir) = path.parent() else {
+        return;
+    };
+    let dest = dir.join(format!("config.json.corrupt-{}", stamp));
+    if let Err(error) = fs::rename(path, &dest) {
+        warn!("Failed to preserve corrupt config: {}", error);
+        return;
+    }
+    info!("Preserved corrupt config as {}", dest.display());
+
+    // Keep only the three newest corrupt backups.
+    if let Ok(entries) = fs::read_dir(dir) {
+        let mut backups: Vec<_> = entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with("config.json.corrupt-"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        backups.sort();
+        while backups.len() > 3 {
+            let oldest = backups.remove(0);
+            let _ = fs::remove_file(oldest);
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -91,13 +91,18 @@ pub fn parse_class_diagram(source: &str) -> Result<ClassDiagram, String> {
                 // class Interface <<interface>>
                 let start = rest.find("<<").unwrap();
                 let end = rest.find(">>").unwrap();
-                let name = rest[..start]
-                    .trim()
-                    .trim_end_matches('{')
-                    .trim()
-                    .to_string();
-                let stereo = rest[start + 2..end].trim().to_string();
-                (name, Some(stereo))
+                if end < start + 2 {
+                    // Half-typed/stray delimiter: fall back to the plain-name path.
+                    (rest.trim_end_matches('{').trim().to_string(), None)
+                } else {
+                    let name = rest[..start]
+                        .trim()
+                        .trim_end_matches('{')
+                        .trim()
+                        .to_string();
+                    let stereo = rest[start + 2..end].trim().to_string();
+                    (name, Some(stereo))
+                }
             } else {
                 (rest.trim_end_matches('{').trim().to_string(), None)
             };

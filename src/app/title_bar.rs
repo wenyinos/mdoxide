@@ -43,6 +43,9 @@ enum TitleBarAction {
     About,
     Exit,
     OpenRecent(PathBuf),
+    ReloadFromDisk,
+    TogglePreviewLock,
+    ChangeEncoding(&'static str),
 }
 
 impl MDOxideApp {
@@ -210,6 +213,45 @@ impl MDOxideApp {
                                         ui,
                                         t!("menu.file.save_as"),
                                         || TitleBarAction::Ribbon(RibbonAction::SaveAs),
+                                        &mut action,
+                                    );
+                                    if let Some(tab) = self.state.active_tab() {
+                                        let current_encoding = tab.current_encoding;
+                                        let current_label = tab.encoding_display_name();
+                                        ui.menu_button(
+                                            format!(
+                                                "{}: {}",
+                                                t!("menu.file.encoding"),
+                                                current_label
+                                            ),
+                                            |ui| {
+                                                for &encoding in
+                                                    crate::state::Tab::COMMON_ENCODINGS
+                                                {
+                                                    let selected = current_encoding
+                                                        .eq_ignore_ascii_case(encoding);
+                                                    if ui
+                                                        .selectable_label(
+                                                            selected,
+                                                            encoding.to_uppercase(),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        action = Some(
+                                                            TitleBarAction::ChangeEncoding(
+                                                                encoding,
+                                                            ),
+                                                        );
+                                                        ui.close();
+                                                    }
+                                                }
+                                            },
+                                        );
+                                    }
+                                    menu_action(
+                                        ui,
+                                        t!("recovery.conflict.reload_disk"),
+                                        || TitleBarAction::ReloadFromDisk,
                                         &mut action,
                                     );
                                     ui.separator();
@@ -421,6 +463,12 @@ impl MDOxideApp {
                                         ui,
                                         t!("menu.view.line_numbers"),
                                         || TitleBarAction::ToggleLineNumbers,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.preview_lock"),
+                                        || TitleBarAction::TogglePreviewLock,
                                         &mut action,
                                     );
                                     menu_action(
@@ -847,6 +895,45 @@ impl MDOxideApp {
                 if let Err(error) = self.open_file_smart(path, true, Some(time)) {
                     self.state
                         .show_error(format!("Failed to open file:\n{error}"));
+                }
+            }
+            TitleBarAction::ReloadFromDisk => {
+                self.handle_reload_from_disk_request();
+            }
+            TitleBarAction::TogglePreviewLock => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.preview_locked = !tab.preview_locked;
+                    let locked = tab.preview_locked;
+                    let time = self.get_app_time();
+                    let key = if locked {
+                        "notification.preview_locked_on"
+                    } else {
+                        "notification.preview_locked_off"
+                    };
+                    self.state.show_toast(t!(key).to_string(), time, 2.0);
+                }
+            }
+            TitleBarAction::ChangeEncoding(encoding) => {
+                if let Some(tab_id) = self.state.active_tab().map(|tab| tab.id) {
+                    let is_modified = self
+                        .state
+                        .active_tab()
+                        .map(|tab| tab.is_modified())
+                        .unwrap_or(false);
+                    if is_modified {
+                        self.state.request_encoding_change(tab_id, encoding);
+                    } else if self.state.apply_encoding_change(tab_id, encoding).is_ok() {
+                        let time = self.get_app_time();
+                        self.state.show_toast(
+                            t!(
+                                "notification.encoding_changed",
+                                encoding = encoding.to_uppercase()
+                            )
+                            .to_string(),
+                            time,
+                            2.0,
+                        );
+                    }
                 }
             }
         }

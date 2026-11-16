@@ -575,6 +575,54 @@ impl MDOxideApp {
                     } else if tab_response.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                     }
+
+                    tab_response.context_menu(|ui| {
+                        if ui
+                            .button(t!("shortcuts.commands.new_tab").to_string())
+                            .clicked()
+                        {
+                            self.state.new_tab();
+                            ui.close();
+                        }
+                        if ui
+                            .button(t!("shortcuts.commands.close_tab").to_string())
+                            .clicked()
+                        {
+                            tab_to_close = Some(*tab_idx);
+                            ui.close();
+                        }
+                        ui.separator();
+                        let path = self
+                            .state
+                            .tab(*tab_idx)
+                            .and_then(|tab| tab.path.clone());
+                        if ui
+                            .add_enabled(
+                                path.is_some(),
+                                egui::Button::new(t!("tab.copy_path").to_string()),
+                            )
+                            .clicked()
+                        {
+                            if let Some(path) = &path {
+                                ui.copy_text(path.display().to_string());
+                            }
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                path.is_some(),
+                                egui::Button::new(t!("tab.reveal_in_explorer").to_string()),
+                            )
+                            .clicked()
+                        {
+                            if let Some(folder) = path.as_ref().and_then(|path| path.parent()) {
+                                if let Err(error) = open::that(folder) {
+                                    log::warn!("Failed to reveal tab in file manager: {}", error);
+                                }
+                            }
+                            ui.close();
+                        }
+                    });
                 }
 
                 // Draw + button in the centred last row
@@ -682,6 +730,8 @@ impl MDOxideApp {
                 let theme = self.state.settings.theme;
                 let show_line_numbers = self.state.settings.show_line_numbers;
                 let auto_close_brackets = self.state.settings.auto_close_brackets;
+                let tab_size = self.state.settings.tab_size as usize;
+                let use_spaces_for_tab = self.state.settings.use_spaces;
                 let vim_mode = self.state.settings.vim_mode;
 
                 // Get theme colors for line number styling
@@ -692,6 +742,7 @@ impl MDOxideApp {
                 );
 
                 // Prepare search highlights if find panel is open
+                let mut find_scroll_line: Option<usize> = None;
                 let search_highlights = if
                     self.state.ui.show_find_replace &&
                     !self.state.ui.find_state.matches.is_empty()
@@ -701,15 +752,30 @@ impl MDOxideApp {
                         current_match: self.state.ui.find_state.current_match,
                         scroll_to_match: self.state.ui.scroll_to_match,
                     };
-                    // Clear scroll flag after using it
-                    self.state.ui.scroll_to_match = false;
+                    if self.state.ui.scroll_to_match {
+                        if let Some(tab) = self.state.active_tab() {
+                            if let Some((start, _)) = self
+                                .state
+                                .ui
+                                .find_state
+                                .matches
+                                .get(self.state.ui.find_state.current_match)
+                            {
+                                let start = (*start).min(tab.content.len());
+                                find_scroll_line =
+                                    Some(tab.content[..start].matches('\n').count() + 1);
+                            }
+                        }
+                        // Clear scroll flag after using it
+                        self.state.ui.scroll_to_match = false;
+                    }
                     Some(highlights)
                 } else {
                     None
                 };
 
                 // Extract pending scroll request before mutable borrow
-                let scroll_to_line = self.pending_scroll_to_line.take();
+                let scroll_to_line = self.pending_scroll_to_line.take().or(find_scroll_line);
 
                 // Get tab metadata before mutable borrow
                 let tab_info = self.state
@@ -1028,6 +1094,7 @@ impl MDOxideApp {
                                     .default_syntax_language(default_syntax_language.clone())
                                     .syntax_theme(syntax_theme.clone())
                                     .auto_close_brackets(auto_close_brackets)
+                                    .indent_options(tab_size, use_spaces_for_tab)
                                     .vim_mode(vim_mode)
                                     .diagnostics(tab_diagnostics.clone());
 
@@ -1636,6 +1703,7 @@ impl MDOxideApp {
                                         .default_syntax_language(default_syntax_language.clone())
                                         .syntax_theme(syntax_theme.clone())
                                         .auto_close_brackets(auto_close_brackets)
+                                        .indent_options(tab_size, use_spaces_for_tab)
                                         .vim_mode(vim_mode)
                                         .diagnostics(tab_diagnostics.clone())
                                         .pending_sync_scroll_offset(pending_editor_scroll);
@@ -2002,9 +2070,11 @@ impl MDOxideApp {
                                         let source_epoch = tab.source_epoch();
                                         let tab_id = tab.id;
                                         let content_version = tab.content_version();
+                                        let preview_locked = tab.preview_locked;
 
                                         let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                             .mode(EditorMode::Rendered)
+                                            .preview_locked(preview_locked)
                                             .document_id(tab_id)
                                             .content_version(content_version)
                                             .font_size(font_size)
@@ -2375,9 +2445,11 @@ impl MDOxideApp {
                                     let source_epoch = tab.source_epoch();
                                     let tab_id = tab.id;
                                     let content_version = tab.content_version();
+                                    let preview_locked = tab.preview_locked;
 
                                     let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
+                                        .preview_locked(preview_locked)
                                         .document_id(tab_id)
                                         .content_version(content_version)
                                         .font_size(font_size)

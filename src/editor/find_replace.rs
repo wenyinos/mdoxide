@@ -122,58 +122,18 @@ impl FindState {
         }
     }
 
-    /// Find literal matches with case-insensitive comparison using regex.
+    /// Find literal matches with Unicode-aware case-insensitive comparison.
     ///
-    /// Uses the regex engine with (?i) flag for efficient case-insensitive search.
-    /// This avoids allocating a lowercase copy of the entire text (saves ~4-8MB for large files).
+    /// Folds each character individually (`İ` → `i`, `ß` stays `ß`), so
+    /// `istanbul` matches `İstanbul` without letting `ß` match `ss`.
     fn find_literal_matches_case_insensitive_regex(&mut self, text: &str) {
-        // Escape special regex characters in the search term
-        let escaped = regex::escape(&self.search_term);
-
-        // Build pattern with case-insensitive flag and optional word boundaries
-        let pattern = if self.whole_word {
-            format!(r"(?i)\b{}\b", escaped)
-        } else {
-            format!(r"(?i){}", escaped)
-        };
-
-        match Regex::new(&pattern) {
-            Ok(re) => {
-                for m in re.find_iter(text) {
-                    self.matches.push((m.start(), m.end()));
-                }
-            }
-            Err(e) => {
-                debug!(
-                    "Failed to build case-insensitive regex pattern '{}': {}",
-                    pattern, e
-                );
-                // Fallback to simple approach if regex fails
-                self.find_literal_matches_case_insensitive_fallback(text);
-            }
-        }
-    }
-
-    /// Fallback case-insensitive search for when regex fails.
-    /// This allocates a lowercase copy but handles edge cases correctly.
-    fn find_literal_matches_case_insensitive_fallback(&mut self, text: &str) {
-        let search_text = text.to_lowercase();
-        let search_term = self.search_term.to_lowercase();
-        let term_len = self.search_term.len();
-
-        let mut start = 0;
-        while let Some(pos) = search_text[start..].find(&search_term) {
-            let match_start = start + pos;
-            let match_end = match_start + term_len;
-
-            // Check whole word boundary if enabled
+        for (match_start, match_end) in
+            crate::string_utils::find_case_insensitive(text, &self.search_term)
+        {
             if self.whole_word && !self.is_word_boundary(text, match_start, match_end) {
-                start = match_start + 1;
                 continue;
             }
-
             self.matches.push((match_start, match_end));
-            start = match_end;
         }
     }
 
@@ -796,6 +756,19 @@ mod tests {
         state.case_sensitive = false;
         let count = state.find_matches("Hello, HELLO, hello!");
         assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_find_matches_unicode_case_folding() {
+        let mut state = FindState::new();
+        state.search_term = "istanbul".to_string();
+        state.case_sensitive = false;
+        assert_eq!(state.find_matches("İstanbul and istanbul"), 2);
+
+        let mut state = FindState::new();
+        state.search_term = "strasse".to_string();
+        state.case_sensitive = false;
+        assert_eq!(state.find_matches("straße"), 0);
     }
 
     #[test]

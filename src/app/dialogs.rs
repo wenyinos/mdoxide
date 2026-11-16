@@ -43,6 +43,10 @@ impl MDOxideApp {
                             Some(PendingAction::CloseTab(_))
                         );
                         let is_exit = self.state.ui.pending_action == Some(PendingAction::Exit);
+                        let encoding_to_apply = match &self.state.ui.pending_action {
+                            Some(PendingAction::ChangeEncoding { encoding, .. }) => Some(*encoding),
+                            _ => None,
+                        };
 
                         // Collect tab IDs for cleanup before the action mutates state
                         let tab_ids_to_cleanup: Vec<usize> = match self.state.ui.pending_action {
@@ -92,11 +96,75 @@ impl MDOxideApp {
                                     }
                                 }
                             } else if is_exit {
-                                // Save all modified tabs before exit
-                                self.handle_save_file();
+                                // Save every modified tab, then exit when clean.
+                                self.state.save_all_modified_path_tabs();
                                 if !self.state.has_unsaved_changes() {
                                     self.state.handle_confirmed_action();
                                     self.should_exit = true;
+                                } else if let Some(index) =
+                                    self.state.first_modified_untitled_tab()
+                                {
+                                    self.state.set_active_tab(index);
+                                    self.handle_save_as_file();
+                                }
+                            } else if matches!(
+                                self.state.ui.pending_action,
+                                Some(PendingAction::CloseAllTabs)
+                            ) {
+                                self.state.save_all_modified_path_tabs();
+                                if !self.state.has_unsaved_changes() {
+                                    self.state.handle_confirmed_action();
+                                    for id in &tab_ids_to_cleanup {
+                                        self.cleanup_tab_state(*id, Some(ui.ctx()));
+                                    }
+                                } else if let Some(index) =
+                                    self.state.first_modified_untitled_tab()
+                                {
+                                    self.state.set_active_tab(index);
+                                    self.handle_save_as_file();
+                                }
+                            } else if let Some(PendingAction::ChangeEncoding { tab_id, .. }) =
+                                self.state.ui.pending_action.clone()
+                            {
+                                // Save the target tab first, then apply the encoding.
+                                if let Some(index) =
+                                    self.state.tabs().iter().position(|t| t.id == tab_id)
+                                {
+                                    self.state.set_active_tab(index);
+                                    self.handle_save_file();
+                                    let saved = self
+                                        .state
+                                        .tab_by_id(tab_id)
+                                        .map(|t| !t.is_modified())
+                                        .unwrap_or(false);
+                                    if saved {
+                                        self.state.handle_confirmed_action();
+                                        if let Some(encoding) = encoding_to_apply {
+                                            let time = self.get_app_time();
+                                            self.state.show_toast(
+                                                t!(
+                                                    "notification.encoding_changed",
+                                                    encoding = encoding.to_uppercase()
+                                                )
+                                                .to_string(),
+                                                time,
+                                                2.0,
+                                            );
+                                        }
+                                    }
+                                } else {
+                                    self.state.cancel_pending_action();
+                                }
+                            } else {
+                                // Open/New: save the active tab, then proceed when clean.
+                                self.handle_save_file();
+                                if !self
+                                    .state
+                                    .active_tab()
+                                    .map(|tab| tab.is_modified())
+                                    .unwrap_or(true)
+                                {
+                                    self.state.handle_confirmed_action();
                                 }
                             }
                         }
@@ -107,6 +175,18 @@ impl MDOxideApp {
                             .clicked()
                         {
                             self.state.handle_confirmed_action();
+                            if let Some(encoding) = encoding_to_apply {
+                                let time = self.get_app_time();
+                                self.state.show_toast(
+                                    t!(
+                                        "notification.encoding_changed",
+                                        encoding = encoding.to_uppercase()
+                                    )
+                                    .to_string(),
+                                    time,
+                                    2.0,
+                                );
+                            }
                             for id in &tab_ids_to_cleanup {
                                 self.cleanup_tab_state(*id, Some(ui.ctx()));
                             }
@@ -120,6 +200,73 @@ impl MDOxideApp {
                         // "Cancel" button - abort the action
                         if ui.button(t!("dialog.confirm.cancel").to_string()).clicked() {
                             self.state.cancel_pending_action();
+                        }
+                    });
+                });
+        }
+
+        // Reload-from-disk confirmation
+        if self.state.ui.show_reload_confirm {
+            egui::Window::new(t!("dialog.reload_from_disk.title").to_string())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    ui.label(t!("dialog.reload_from_disk.message").to_string());
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(t!("dialog.reload_from_disk.confirm").to_string())
+                            .clicked()
+                        {
+                            let tab_id = self.state.ui.reload_confirm_tab.take();
+                            self.state.ui.show_reload_confirm = false;
+                            if let Some(tab_id) = tab_id {
+                                self.reload_tab_from_disk(tab_id);
+                            }
+                        }
+                        if ui.button(t!("dialog.confirm.cancel").to_string()).clicked() {
+                            self.state.ui.show_reload_confirm = false;
+                            self.state.ui.reload_confirm_tab = None;
+                        }
+                    });
+                });
+        }
+
+        // Lossy encoding save refusal
+        if self.state.ui.show_lossy_encoding_dialog {
+            let encoding = self
+                .state
+                .ui
+                .lossy_encoding_tab
+                .as_ref()
+                .map(|(_, encoding, _)| *encoding)
+                .unwrap_or("UTF-8");
+            egui::Window::new(t!("dialog.lossy_encoding.title").to_string())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    ui.label(
+                        t!(
+                            "dialog.lossy_encoding.message",
+                            encoding = encoding.to_uppercase()
+                        )
+                        .to_string(),
+                    );
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(t!("dialog.lossy_encoding.save_utf8").to_string())
+                            .clicked()
+                        {
+                            self.retry_lossy_save_as_utf8();
+                        }
+                        if ui.button(t!("dialog.confirm.cancel").to_string()).clicked() {
+                            self.state.ui.show_lossy_encoding_dialog = false;
+                            self.state.ui.lossy_encoding_tab = None;
                         }
                     });
                 });

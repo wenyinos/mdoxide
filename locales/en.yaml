@@ -17,6 +17,7 @@ menu:
     open: "Open..."
     save: "Save"
     save_as: "Save As..."
+    encoding: "Encoding"
     recent: "Recent Files"
     export: "Export"
     export_html: "Export to HTML..."
@@ -33,7 +34,8 @@ menu:
     raw: "Source Code"
     split: "Split View"
     rendered: "Rendered"
-    line_numbers: "Line Numbers"
+    preview_lock: "Lock Preview"
+  line_numbers: "Line Numbers"
   help:
     label: "Help"
   tools:
@@ -111,6 +113,16 @@ dialog:
     title: "Unsaved Changes"
     save: "Save"
     dont_save: "Don't Save"
+    encoding_change:
+      message: "Switching from %{current} to %{encoding} reloads the file from disk. Unsaved changes will be lost. Save before switching?"
+    reload_from_disk:
+      title: "Reload from disk?"
+      message: "Discard unsaved changes in this tab and replace it with the file on disk?"
+      confirm: "Reload"
+    lossy_encoding:
+      title: "Cannot save with this encoding"
+      message: "%{encoding} cannot represent every character in this document. Save it as UTF-8 instead? Nothing has been written yet."
+      save_utf8: "Save as UTF-8"
   code_execution_consent:
     title: "Allow running code from this document?"
     body_intro: "Running a fenced snippet starts a real subprocess on your computer using your user privileges. MDOxide does not sandbox runners or filter network access."
@@ -771,6 +783,10 @@ notification:
   deleted: "Deleted: %{name}"
   opened_background: "Opened in background: %{name}"
   settings_reset: "Settings reset to defaults"
+  preview_locked_on: "Preview locked"
+  preview_locked_off: "Preview unlocked"
+  word_wrap_on: "Word wrap: on"
+  word_wrap_off: "Word wrap: off"
   encoding_changed: "Encoding changed to %{encoding}"
   reloaded_single: "Reloaded: %{name}"
   reloaded_multiple: "%{count} files reloaded from disk"
@@ -931,8 +947,12 @@ pipeline:
 
 # Encoding
 
+markdown:
+  properties: "Properties"
+
 # Tab context menu
 tab:
+  copy_path: "Copy Path"
   reveal_in_explorer: "Reveal in Explorer"
 
 # Mermaid diagrams

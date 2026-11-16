@@ -198,12 +198,52 @@ impl Default for TabKind {
 /// `Tab` dereferences to this type, so existing `tab.content` /
 /// `tab.path` / `tab.content_version` access continues to work while the
 /// body has a single owner.
+/// Dominant line ending of a document.
+///
+/// Editing operations (Enter, Backspace, Delete, line ops) use this so a CRLF
+/// file does not turn into mixed line endings after the first keystroke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineEnding {
+    #[default]
+    Lf,
+    CrLf,
+    Cr,
+}
+
+impl LineEnding {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lf => "\n",
+            Self::CrLf => "\r\n",
+            Self::Cr => "\r",
+        }
+    }
+
+    /// Detect the dominant line ending in `text` (defaults to LF).
+    pub fn detect(text: &str) -> Self {
+        let crlf = text.matches("\r\n").count();
+        let lf = text.matches('\n').count().saturating_sub(crlf);
+        let cr = text.matches('\r').count().saturating_sub(crlf);
+        if crlf >= lf && crlf >= cr && crlf > 0 {
+            Self::CrLf
+        } else if cr > lf {
+            Self::Cr
+        } else {
+            Self::Lf
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Document {
     /// File path (None for untitled documents).
     pub(crate) path: Option<PathBuf>,
     /// Current text.
     pub(crate) content: String,
+    /// Dominant line ending used for newlines inserted by edits.
+    pub(crate) line_ending: LineEnding,
+    /// When true, rendered preview blocks cannot be edited.
+    pub(crate) preview_locked: bool,
     /// Original content for change detection (small files).
     pub(crate) original_content: String,
     /// Hash of original content (large files).
@@ -357,6 +397,8 @@ impl Tab {
         document: Document {
             path: None,
             content: String::new(),
+            line_ending: LineEnding::Lf,
+            preview_locked: false,
             original_content: String::new(),
             original_content_hash: None,
             is_large_file: false,
@@ -482,6 +524,8 @@ impl Tab {
             last_auto_save_content_version: None,
             last_recovery_version: None,
             cached_content_hash: std::cell::Cell::new(None),
+            line_ending: LineEnding::detect(&content),
+            preview_locked: false,
             content,
             original_content,
             original_content_hash,
@@ -594,6 +638,8 @@ impl Tab {
             cached_content_hash: std::cell::Cell::new(None),
             had_bom,
             original_bytes,
+            line_ending: LineEnding::detect(&content),
+            preview_locked: false,
             content,
             original_content,
             original_content_hash,
@@ -725,6 +771,8 @@ impl Tab {
             last_auto_save_content_version: None,
             last_recovery_version: None,
             cached_content_hash: std::cell::Cell::new(None),
+            line_ending: LineEnding::detect(&content),
+            preview_locked: false,
             content,
             original_content,
             original_content_hash,
@@ -861,6 +909,8 @@ impl Tab {
             cached_content_hash: std::cell::Cell::new(None),
             had_bom,
             original_bytes,
+            line_ending: LineEnding::detect(&content),
+            preview_locked: false,
             content,
             original_content,
             original_content_hash,
@@ -1325,6 +1375,7 @@ impl Tab {
             // Update content (preserve cursor position as best we can)
             let old_len = self.content.len();
             self.content = decoded.into_owned();
+            self.line_ending = LineEnding::detect(&self.content);
             self.original_content = self.content.clone();
             self.content_version = self.content_version.wrapping_add(1);
             self.bump_source_epoch();
@@ -1343,6 +1394,14 @@ impl Tab {
 
         log::info!("Changed encoding to: {}", new_encoding);
         Ok(())
+    }
+
+    /// Change only the encoding used for the next save, without re-decoding
+    /// the current buffer. Used by the "Save as UTF-8" recovery path when the
+    /// previous encoding could not represent every character.
+    pub fn set_save_encoding(&mut self, encoding: &'static str) {
+        self.current_encoding = encoding;
+        self.detected_encoding = Some(encoding);
     }
 
     /// Replace the whole document from bytes read from disk.
@@ -1382,6 +1441,7 @@ impl Tab {
         };
 
         self.content = content;
+        self.line_ending = LineEnding::detect(&self.content);
         self.is_large_file = is_large_file;
         if is_large_file {
             self.original_content.clear();
@@ -1416,15 +1476,16 @@ impl Tab {
 
     /// Encode the current content to bytes using the selected encoding.
     ///
-    /// Returns the encoded bytes. If the encoding doesn't support certain characters,
-    /// they may be replaced with fallback characters.
+    /// Returns the encoded bytes. Returns `Err(current_encoding)` when the
+    /// selected legacy encoding cannot represent every character; callers must
+    /// refuse to save instead of silently writing HTML numeric references.
     ///
     /// If the original file had a BOM (Byte Order Mark), it will be prepended to the output.
     /// This is important for UTF-16 files which require a BOM for proper detection.
     ///
     /// Note: encoding_rs does NOT support encoding TO UTF-16, only decoding FROM it.
     /// We handle UTF-16 encoding manually using Rust's built-in encode_utf16().
-    pub fn encode_content(&self) -> Vec<u8> {
+    pub fn encode_content(&self) -> Result<Vec<u8>, &'static str> {
         let encoding_lower = self.current_encoding.to_lowercase();
 
         // Handle UTF-16 specially - encoding_rs doesn't support encoding TO UTF-16
@@ -1438,7 +1499,7 @@ impl Tab {
             for code_unit in self.content.encode_utf16() {
                 result.extend_from_slice(&code_unit.to_le_bytes());
             }
-            return result;
+            return Ok(result);
         }
 
         if encoding_lower == "utf-16be" || encoding_lower == "utf-16-be" {
@@ -1451,14 +1512,19 @@ impl Tab {
             for code_unit in self.content.encode_utf16() {
                 result.extend_from_slice(&code_unit.to_be_bytes());
             }
-            return result;
+            return Ok(result);
         }
 
         // For all other encodings, use encoding_rs
         let encoding = encoding_rs::Encoding::for_label(self.current_encoding.as_bytes())
             .unwrap_or(encoding_rs::UTF_8);
 
-        let (encoded, _actual_encoding, _had_errors) = encoding.encode(&self.content);
+        let (encoded, _actual_encoding, had_errors) = encoding.encode(&self.content);
+        if had_errors {
+            // encoding_rs substitutes HTML numeric references for unmappable
+            // characters. Refuse the save rather than corrupting the document.
+            return Err(self.current_encoding);
+        }
         let mut result = encoded.into_owned();
 
         // Prepend BOM if the original file had one (for UTF-8 with BOM)
@@ -1467,11 +1533,11 @@ impl Tab {
             if !bom.is_empty() {
                 let mut with_bom = bom.to_vec();
                 with_bom.append(&mut result);
-                return with_bom;
+                return Ok(with_bom);
             }
         }
 
-        result
+        Ok(result)
     }
 
     /// Get the BOM bytes for a given encoding label.
@@ -1555,6 +1621,7 @@ impl Tab {
             let ops = compute_edit_ops(&self.content, &new_content);
             self.edit_history.record_operations(ops);
             self.content = new_content;
+            self.line_ending = LineEnding::detect(&self.content);
             self.content_version = self.content_version.wrapping_add(1);
             self.bump_source_epoch();
             // The pending snapshot is stale; the next prepare refreshes it.

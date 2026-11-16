@@ -465,6 +465,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_node_from_text_mangled_delimiters_does_not_panic() {
+        // Half-typed brackets used to slice with start > end and abort the app.
+        for text in [
+            "A] [B]",
+            "A} {B",
+            "A))((B",
+            "A]] [[B",
+            "A}} {{B",
+            "A) (B",
+            "A] [B",
+            "[",
+            "]",
+            "{",
+            "}",
+            "A((B",
+            "A[[B",
+            "A{{B",
+        ] {
+            let _ = parse_node_from_text(text);
+        }
+    }
+
+    #[test]
+    fn test_parse_flowchart_mangled_input_does_not_panic() {
+        let source = "flowchart TD\nA}x{ --> B\nsubgraph a] [b\nend";
+        let _ = parse_flowchart(source);
+    }
+
+    #[test]
     fn test_parse_edge_with_label() {
         let result = parse_edge_line_full("A -->|Yes| B");
         assert!(result.is_some());

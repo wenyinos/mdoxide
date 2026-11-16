@@ -25,6 +25,7 @@
 
 #[cfg(test)]
 use super::buffer::TextBuffer;
+use std::time::Instant;
 
 /// Represents a single edit operation that can be undone or redone.
 ///
@@ -227,6 +228,10 @@ pub struct EditHistory {
     redo_stack: Vec<OperationGroup>,
     /// Maximum number of undo groups to keep. Operations are tiny so this can be large.
     max_groups: usize,
+    /// Timestamp of the last merged single-character insert.
+    last_typing_at: Option<Instant>,
+    /// Character position immediately after that insert.
+    last_typing_end: Option<usize>,
 }
 
 /// Default maximum undo groups (operation-based entries are small).
@@ -254,6 +259,8 @@ impl EditHistory {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             max_groups: DEFAULT_MAX_GROUPS,
+            last_typing_at: None,
+            last_typing_end: None,
         }
     }
 
@@ -264,6 +271,8 @@ impl EditHistory {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             max_groups,
+            last_typing_at: None,
+            last_typing_end: None,
         }
     }
 
@@ -296,11 +305,51 @@ impl EditHistory {
     /// Used by the diff-based recording path: one edit frame produces 0–2 operations
     /// (delete and/or insert) that must undo together. Each call is a separate undo step;
     /// rapid typing creates one step per dirty frame, not one step per typing session.
-    pub fn record_operations(&mut self, ops: Vec<EditOperation>) {
+    pub fn record_operations(&mut self, mut ops: Vec<EditOperation>) {
         if ops.is_empty() {
             return;
         }
+
+        // Merge consecutive single-character inserts typed within 700 ms.
+        let single_char_insert = match ops.as_slice() {
+            [EditOperation::Insert { pos, text }]
+                if text.chars().count() == 1
+                    && !text.contains('\n')
+                    && !text.contains('\r') =>
+            {
+                Some((*pos, text.clone()))
+            }
+            _ => None,
+        };
+        if let Some((pos, text)) = single_char_insert.clone() {
+            let within_window = self
+                .last_typing_at
+                .map(|at| at.elapsed() < std::time::Duration::from_millis(700))
+                .unwrap_or(false);
+            if within_window && self.last_typing_end == Some(pos) {
+                if let Some(group) = self.undo_stack.last_mut() {
+                    if let Some(EditOperation::Insert {
+                        pos: last_pos,
+                        text: last_text,
+                    }) = group.operations.last()
+                    {
+                        if *last_pos + last_text.chars().count() == pos {
+                            group.operations.push(ops.remove(0));
+                            self.last_typing_at = Some(Instant::now());
+                            self.last_typing_end = Some(pos + text.chars().count());
+                            self.redo_stack.clear();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         self.undo_stack.push(OperationGroup::from_operations(ops));
+        self.last_typing_at = single_char_insert.as_ref().map(|_| Instant::now());
+        self.last_typing_end = single_char_insert
+            .as_ref()
+            .map(|(pos, text)| *pos + text.chars().count());
 
         while self.undo_stack.len() > self.max_groups {
             self.undo_stack.remove(0);
@@ -491,7 +540,10 @@ impl EditHistory {
     /// No-op retained for API compatibility.
     ///
     /// Each [`record_operations`] call already creates its own undo group.
-    pub fn break_group(&mut self) {}
+    pub fn break_group(&mut self) {
+        self.last_typing_at = None;
+        self.last_typing_end = None;
+    }
 }
 
 #[cfg(test)]
@@ -1130,5 +1182,46 @@ mod tests {
 
         // Buffer should be back to original size
         assert_eq!(buffer.len(), original_len);
+    }
+
+    #[test]
+    fn test_typing_run_coalesces_into_one_group() {
+        let mut history = EditHistory::new();
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 0,
+            text: "a".to_string(),
+        }]);
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 1,
+            text: "b".to_string(),
+        }]);
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 2,
+            text: "c".to_string(),
+        }]);
+
+        assert_eq!(history.undo_count(), 1);
+        let mut text = "abc".to_string();
+        history.undo_string(&mut text);
+        assert_eq!(text, "");
+    }
+
+    #[test]
+    fn test_newline_and_paste_break_typing_run() {
+        let mut history = EditHistory::new();
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 0,
+            text: "a".to_string(),
+        }]);
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 1,
+            text: "\n".to_string(),
+        }]);
+        history.record_operations(vec![EditOperation::Insert {
+            pos: 2,
+            text: "paste".to_string(),
+        }]);
+
+        assert_eq!(history.undo_count(), 3);
     }
 }

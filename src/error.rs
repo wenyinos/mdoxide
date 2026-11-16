@@ -56,6 +56,9 @@ pub enum Error {
     // ─────────────────────────────────────────────────────────────────────────
     /// Generic application error with a message
     Application(String),
+
+    /// The selected legacy encoding cannot represent every character in the document.
+    LossyEncoding { encoding: &'static str },
 }
 
 // Implement From traits for convenient error conversion
@@ -112,6 +115,11 @@ impl fmt::Display for Error {
 
             // Application Errors
             Error::Application(msg) => write!(f, "{}", msg),
+            Error::LossyEncoding { encoding } => write!(
+                f,
+                "Cannot save as {}: some characters cannot be represented in this encoding",
+                encoding
+            ),
         }
     }
 }
@@ -129,7 +137,7 @@ impl std::error::Error for Error {
             Error::ConfigParse { source, .. } => source
                 .as_ref()
                 .map(|s| s.as_ref() as &(dyn std::error::Error + 'static)),
-            Error::ConfigDirNotFound | Error::Application(_) => None,
+            Error::ConfigDirNotFound | Error::Application(_) | Error::LossyEncoding { .. } => None,
         }
     }
 }

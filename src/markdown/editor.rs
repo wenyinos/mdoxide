@@ -718,6 +718,8 @@ pub struct MarkdownEditor<'a> {
     strict_line_breaks: bool,
     /// Search match byte ranges for overlay highlighting in rendered view
     search_highlights: Option<Vec<(usize, usize)>>,
+    /// Whether rendered preview editing is locked.
+    preview_locked: bool,
     /// Index of the currently focused search match
     current_search_match: usize,
     /// Gating and cwd for running fenced code from the preview (optional).
@@ -764,6 +766,7 @@ impl<'a> MarkdownEditor<'a> {
             wikilink_context: None,
             strict_line_breaks: false,
             search_highlights: None,
+            preview_locked: false,
             current_search_match: 0,
             code_execution: None,
             source_epoch: 0,
@@ -790,6 +793,13 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn word_wrap(mut self, wrap: bool) -> Self {
         self.word_wrap = wrap;
+        self
+    }
+
+    /// Lock rendered preview editing (raw/split-left stays editable).
+    #[must_use]
+    pub fn preview_locked(mut self, locked: bool) -> Self {
+        self.preview_locked = locked;
         self
     }
 
@@ -1278,6 +1288,10 @@ impl<'a> MarkdownEditor<'a> {
         };
         let source_epoch = self.source_epoch;
         let mut rendered_session = rendered_session::load_for_epoch(ui, id, source_epoch);
+        rendered_session.locked = self.preview_locked;
+        if rendered_session.locked {
+            rendered_session.active = None;
+        }
 
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
@@ -4959,7 +4973,8 @@ fn insert_output_block_after(source: &mut String, end_line: usize, body: &str) {
     let tail = lines.split_off(insert_idx);
     lines.extend(block);
     lines.extend(tail);
-    *source = lines.join("\n");
+    let eol = crate::state::LineEnding::detect(source).as_str();
+    *source = lines.join(eol);
 }
 
 /// Render a mermaid diagram block with specialized visualization.
@@ -5331,7 +5346,7 @@ fn extract_paragraph_content(source: &str, start_line: usize, end_line: usize) -
         let end = end_line.min(lines.len());
         lines[(start_line - 1)..end]
             .iter()
-            .map(|s| s.to_string())
+            .map(|line| extract_line_prefix(line).1.to_string())
             .collect::<Vec<_>>()
             .join("\n")
     } else {
@@ -5897,13 +5912,18 @@ fn update_table_in_source(
             new_lines.push(lines[i].to_string());
         }
 
-        *source = new_lines.join("\n");
+        let eol = crate::state::LineEnding::detect(source).as_str();
+        *source = new_lines.join(eol);
     }
 }
 
 /// Render front matter (YAML/TOML header).
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
     const BASE_INDENT: f32 = 4.0;
+
+    let raw = content.trim();
+    let raw = raw.strip_prefix("---").unwrap_or(raw);
+    let raw = raw.strip_suffix("---").unwrap_or(raw).trim();
 
     let available_width = ui.available_width();
     ui.horizontal(|ui| {
@@ -5916,22 +5936,93 @@ fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, conte
             .corner_radius(4)
             .show(ui, |ui| {
                 ui.label(
-                    RichText::new("Front Matter")
+                    RichText::new(t!("markdown.properties").to_string())
                         .color(colors.quote_text)
-                        .font(FontId::monospace(font_size * 0.8))
-                        .italics(),
+                        .font(FontId::proportional(font_size * 0.8))
+                        .strong(),
                 );
-                ui.add(
-                    TextEdit::multiline(&mut content.to_string())
-                        .code_editor()
-                        .font(FontId::monospace(font_size * 0.9))
-                        .text_color(colors.code_text)
-                        .frame(egui::Frame::NONE)
-                        .desired_width(ui.available_width())
-                        .interactive(false),
-                );
+                ui.add_space(4.0);
+
+                let parsed = serde_yaml::from_str::<serde_yaml::Value>(raw);
+                match parsed {
+                    Ok(serde_yaml::Value::Mapping(mapping)) if !mapping.is_empty() => {
+                        for (key, value) in mapping {
+                            ui.horizontal_wrapped(|ui| {
+                                let key_text = match key {
+                                    serde_yaml::Value::String(key) => key,
+                                    other => yaml_scalar_text(&other),
+                                };
+                                ui.label(
+                                    RichText::new(format!("{}:", key_text))
+                                        .color(colors.quote_text)
+                                        .font(FontId::proportional(font_size * 0.85)),
+                                );
+                                match value {
+                                    serde_yaml::Value::Bool(flag) => {
+                                        ui.label(
+                                            RichText::new(if flag { "true" } else { "false" })
+                                                .color(colors.link)
+                                                .font(FontId::proportional(font_size * 0.85)),
+                                        );
+                                    }
+                                    serde_yaml::Value::Sequence(items) => {
+                                        for item in items {
+                                            ui.label(
+                                                RichText::new(yaml_scalar_text(&item))
+                                                    .color(colors.code_text)
+                                                    .font(FontId::proportional(font_size * 0.85))
+                                                    .background_color(
+                                                        colors.text.gamma_multiply(0.08),
+                                                    ),
+                                            );
+                                        }
+                                    }
+                                    serde_yaml::Value::Null => {
+                                        ui.label(
+                                            RichText::new("—")
+                                                .color(colors.quote_text)
+                                                .font(FontId::proportional(font_size * 0.85)),
+                                        );
+                                    }
+                                    other => {
+                                        ui.label(
+                                            RichText::new(yaml_scalar_text(&other))
+                                                .color(colors.code_text)
+                                                .font(FontId::proportional(font_size * 0.85)),
+                                        );
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    _ => {
+                        // Not a mapping (or empty): keep the raw, read-only view.
+                        ui.add(
+                            TextEdit::multiline(&mut raw.to_string())
+                                .code_editor()
+                                .font(FontId::monospace(font_size * 0.9))
+                                .text_color(colors.code_text)
+                                .frame(egui::Frame::NONE)
+                                .desired_width(ui.available_width())
+                                .interactive(false),
+                        );
+                    }
+                }
             });
     });
+}
+
+/// Render a YAML scalar compactly for the frontmatter properties card.
+fn yaml_scalar_text(value: &serde_yaml::Value) -> String {
+    match value {
+        serde_yaml::Value::String(text) => text.clone(),
+        serde_yaml::Value::Number(number) => number.to_string(),
+        serde_yaml::Value::Bool(flag) => flag.to_string(),
+        serde_yaml::Value::Null => "—".to_string(),
+        other => serde_yaml::to_string(other)
+            .map(|text| text.trim().replace('\n', " "))
+            .unwrap_or_default(),
+    }
 }
 
 /// Render a link as an editable widget with hover menu.
@@ -6450,8 +6541,15 @@ fn update_source_line(source: &mut String, line: usize, new_content: &str) {
     let line_count = lines.len();
     if line > 0 && line <= line_count {
         let mut new_lines = lines;
-        new_lines[line - 1] = new_content.to_string();
-        *source = new_lines.join("\n");
+        let (prefix, _) = extract_line_prefix(&new_lines[line - 1]);
+        let replacement = if !prefix.is_empty() && !new_content.starts_with(prefix) {
+            format!("{}{}", prefix, new_content)
+        } else {
+            new_content.to_string()
+        };
+        new_lines[line - 1] = replacement;
+        let eol = crate::state::LineEnding::detect(source).as_str();
+        *source = new_lines.join(eol);
     }
 }
 
@@ -6470,6 +6568,24 @@ fn extract_line_prefix(line: &str) -> (&str, &str) {
 
     let trimmed = line.trim_start();
     let indent_len = line.len() - trimmed.len();
+
+    // Blockquote prefixes (including nested `> > ` and callout bodies).
+    if trimmed.starts_with('>') {
+        let mut prefix_len = indent_len;
+        let mut rest = &line[indent_len..];
+        loop {
+            if let Some(next) = rest.strip_prefix("> ") {
+                prefix_len += 2;
+                rest = next;
+            } else if let Some(next) = rest.strip_prefix('>') {
+                prefix_len += 1;
+                rest = next;
+            } else {
+                break;
+            }
+        }
+        return (&line[..prefix_len], rest);
+    }
 
     // Check for list markers
     if let Some(rest) = trimmed.strip_prefix("- [x] ") {
@@ -6542,6 +6658,9 @@ fn update_source_range(source: &mut String, start_line: usize, end_line: usize, 
             if idx == 0 && !prefix.is_empty() {
                 // First line: preserve the original prefix
                 new_lines.push(format!("{}{}", prefix, content_line));
+            } else if idx > 0 && prefix.contains('>') {
+                // Every line of a blockquote paragraph needs the quote prefix.
+                new_lines.push(format!("{}{}", prefix, content_line));
             } else if idx > 0 && !prefix.is_empty() {
                 // Continuation lines: preserve indentation but no marker
                 let indent = prefix
@@ -6565,7 +6684,8 @@ fn update_source_range(source: &mut String, start_line: usize, end_line: usize, 
             new_lines.push(lines[i].to_string());
         }
 
-        *source = new_lines.join("\n");
+        let eol = crate::state::LineEnding::detect(source).as_str();
+        *source = new_lines.join(eol);
     }
 }
 
@@ -6598,7 +6718,8 @@ fn update_code_block(
             new_lines.push(lines[i].to_string());
         }
 
-        *source = new_lines.join("\n");
+        let eol = crate::state::LineEnding::detect(source).as_str();
+        *source = new_lines.join(eol);
     }
 }
 
@@ -6700,7 +6821,8 @@ fn update_link_in_source(
             }
         }
 
-        *source = new_lines.join("\n");
+        let eol = crate::state::LineEnding::detect(source).as_str();
+        *source = new_lines.join(eol);
     }
 }
 
@@ -7035,6 +7157,27 @@ mod tests {
         let mut source = "Line 1\nLine 2\nLine 3\nLine 4".to_string();
         update_source_range(&mut source, 2, 3, "New Content");
         assert_eq!(source, "Line 1\nNew Content\nLine 4");
+    }
+
+    #[test]
+    fn test_update_source_range_preserves_blockquote_prefix() {
+        let mut source = "> quoted text\n> continues\n\nAfter".to_string();
+        update_source_range(&mut source, 1, 2, "new quoted\nnew continues");
+        assert_eq!(source, "> new quoted\n> new continues\n\nAfter");
+    }
+
+    #[test]
+    fn test_update_source_line_preserves_blockquote_prefix() {
+        let mut source = "> # Heading\nBody".to_string();
+        update_source_line(&mut source, 1, "# New Heading");
+        assert_eq!(source, "> # New Heading\nBody");
+    }
+
+    #[test]
+    fn test_update_source_range_preserves_nested_quote_prefix() {
+        let mut source = "> > nested quote\n> > second".to_string();
+        update_source_range(&mut source, 1, 2, "changed\nstill quoted");
+        assert_eq!(source, "> > changed\n> > still quoted");
     }
 
     #[test]

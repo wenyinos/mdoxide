@@ -245,6 +245,10 @@ fn parse_subgraph_header(line: &str, counter: &mut usize) -> (String, Option<Str
     // Check if rest contains brackets (explicit title)
     if let Some(bracket_start) = rest.find('[') {
         if let Some(bracket_end) = rest.rfind(']') {
+            if bracket_end <= bracket_start {
+                *counter += 1;
+                return (format!("subgraph_{}", counter), Some(rest.to_string()));
+            }
             let id = rest[..bracket_start].trim().to_string();
             let title = rest[bracket_start + 1..bracket_end].trim().to_string();
             let id = if id.is_empty() {
@@ -764,6 +768,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
                 id
             };
             if let Some(end) = text.find("])") {
+                if end < start + 2 {
+                    return None;
+                }
                 let label = text[start + 2..end].trim();
                 return Some((extract_id(id, text), clean_label(label), NodeShape::Stadium));
             }
@@ -791,6 +798,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find("((") {
             let id = text[..start].trim();
             if let Some(end) = text.find("))") {
+                if end < start + 2 {
+                    return None;
+                }
                 let label = text[start + 2..end].trim();
                 return Some((extract_id(id, text), clean_label(label), NodeShape::Circle));
             }
@@ -802,6 +812,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find("[(") {
             let id = text[..start].trim();
             if let Some(end) = text.find(")]") {
+                if end < start + 2 {
+                    return None;
+                }
                 let label = text[start + 2..end].trim();
                 return Some((
                     extract_id(id, text),
@@ -817,6 +830,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find("[[") {
             let id = text[..start].trim();
             if let Some(end) = text.find("]]") {
+                if end < start + 2 {
+                    return None;
+                }
                 let label = text[start + 2..end].trim();
                 return Some((
                     extract_id(id, text),
@@ -832,6 +848,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find("{{") {
             let id = text[..start].trim();
             if let Some(end) = text.find("}}") {
+                if end < start + 2 {
+                    return None;
+                }
                 let label = text[start + 2..end].trim();
                 return Some((extract_id(id, text), clean_label(label), NodeShape::Hexagon));
             }
@@ -843,6 +862,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find('{') {
             let id = text[..start].trim();
             if let Some(end) = text.rfind('}') {
+                if end < start + 1 {
+                    return None;
+                }
                 let label = text[start + 1..end].trim();
                 return Some((extract_id(id, text), clean_label(label), NodeShape::Diamond));
             }
@@ -895,6 +917,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find('(') {
             let id = text[..start].trim();
             if let Some(end) = text.rfind(')') {
+                if end < start + 1 {
+                    return None;
+                }
                 let label = text[start + 1..end].trim();
                 return Some((
                     extract_id(id, text),
@@ -917,6 +942,9 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         if let Some(start) = text.find('[') {
             let id = text[..start].trim();
             if let Some(end) = text.rfind(']') {
+                if end < start + 1 {
+                    return None;
+                }
                 let label = text[start + 1..end].trim();
                 return Some((
                     extract_id(id, text),

@@ -8,6 +8,7 @@ use super::MDOxideApp;
 use crate::state::Selection;
 use eframe::egui;
 use log::{debug, warn};
+use rust_i18n::t;
 
 impl MDOxideApp {
     /// Consume undo/redo keyboard events BEFORE rendering.
@@ -54,6 +55,31 @@ impl MDOxideApp {
             }
             None
         });
+
+        // Ctrl/Cmd+Shift+R: reload the active tab from disk.
+        let reload = ctx.input_mut(|i| {
+            i.consume_key(
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                egui::Key::R,
+            )
+        });
+        if reload {
+            self.handle_reload_from_disk_request();
+        }
+
+        // Alt+Z toggles word wrap (consumed before any TextEdit sees it).
+        let toggle_wrap = ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::Z));
+        if toggle_wrap {
+            self.state.settings.word_wrap = !self.state.settings.word_wrap;
+            self.state.mark_settings_dirty();
+            let time = self.get_app_time();
+            let key = if self.state.settings.word_wrap {
+                "notification.word_wrap_on"
+            } else {
+                "notification.word_wrap_off"
+            };
+            self.state.show_toast(t!(key).to_string(), time, 2.0);
+        }
 
         // If undo/redo was consumed, handle it
         if let Some(is_undo) = consumed_action {

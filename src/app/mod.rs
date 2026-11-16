@@ -904,6 +904,8 @@ impl MDOxideApp {
         // restore (see `AppState::resolve_tab_content`). Always do this from
         // every close path so it runs whether the tab was discarded or saved.
         crate::config::delete_recovery_content(tab_id);
+        let tab_path = self.state.tab_by_id(tab_id).and_then(|tab| tab.path.clone());
+        crate::config::delete_auto_save(tab_id, tab_path.as_ref());
 
         // Cancel any in-progress background file loading for this tab.
         // Dropping the JoinHandle detaches the thread; it will notice the
@@ -2586,7 +2588,8 @@ impl eframe::App for MDOxideApp {
         self.handle_lsp_events(ctx);
 
         // Handle automatic Git status refresh (focus, periodic, debounced)
-        // Periodic session save for crash recovery
+        // Debounced settings persistence and periodic crash recovery.
+        self.state.tick_settings_autosave();
         self.update_session_recovery();
 
         // Sync productivity panel with current workspace

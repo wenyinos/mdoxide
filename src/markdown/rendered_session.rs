@@ -102,6 +102,8 @@ pub enum CommitPolicy {
 pub struct RenderedEditSession {
     pub active: Option<BlockRef>,
     pub blocks: HashMap<BlockRef, BlockEditState>,
+    /// Preview lock: block editing is gated while true.
+    pub locked: bool,
 }
 
 impl RenderedEditSession {
@@ -120,6 +122,9 @@ impl RenderedEditSession {
     ) where
         F: FnMut(BlockRef, &BlockEditState),
     {
+        if self.locked {
+            return;
+        }
         if self.active == Some(block) {
             log::trace!("RenderedEditSession: re-activate same block {:?}", block);
             let state = self
@@ -275,6 +280,9 @@ impl RenderedEditSession {
     ) where
         F: FnMut(BlockRef, &BlockEditState),
     {
+        if self.locked {
+            return;
+        }
         if self.active == Some(block) {
             log::trace!("RenderedEditSession: re-activate same block {:?}", block);
             let state = self

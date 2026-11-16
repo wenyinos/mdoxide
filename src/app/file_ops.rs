@@ -343,6 +343,12 @@ impl MDOxideApp {
                         self.backlinks_need_refresh = true;
                     }
                 }
+                Err(crate::error::Error::LossyEncoding { encoding }) => {
+                    if let Some(id) = tab_id {
+                        self.state.ui.lossy_encoding_tab = Some((id, encoding, None));
+                        self.state.ui.show_lossy_encoding_dialog = true;
+                    }
+                }
                 Err(e) => {
                     warn!("Failed to save file: {}", e);
                     self.state
@@ -438,11 +444,114 @@ impl MDOxideApp {
                 }
                 self.backlinks_need_refresh = true;
             }
+            Err(crate::error::Error::LossyEncoding { encoding }) => {
+                if let Some(id) = tab_id {
+                    self.state.ui.lossy_encoding_tab = Some((id, encoding, Some(path.clone())));
+                    self.state.ui.show_lossy_encoding_dialog = true;
+                }
+            }
             Err(e) => {
                 warn!("Failed to save file: {}", e);
                 self.state
                     .show_error(t!("error.save_failed", error = e.to_string()).to_string());
             }
+        }
+    }
+
+    /// Ask to reload the active tab from disk (with a dirty-buffer confirmation).
+    pub(crate) fn handle_reload_from_disk_request(&mut self) {
+        let Some(tab) = self.state.active_tab() else {
+            return;
+        };
+        let tab_id = tab.id;
+        if tab.path.is_none() {
+            let time = self.get_app_time();
+            self.state.show_toast(
+                t!("recovery.untitled").to_string(),
+                time,
+                2.0,
+            );
+            return;
+        }
+        if tab.is_modified() {
+            self.state.ui.reload_confirm_tab = Some(tab_id);
+            self.state.ui.show_reload_confirm = true;
+            return;
+        }
+        self.reload_tab_from_disk(tab_id);
+    }
+
+    /// Replace a tab's buffer with the current file on disk.
+    pub(crate) fn reload_tab_from_disk(&mut self, tab_id: usize) {
+        let Some(index) = self.state.tabs().iter().position(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(path) = self.state.tab(index).and_then(|tab| tab.path.clone()) else {
+            return;
+        };
+
+        match std::fs::read(&path) {
+            Ok(bytes) => {
+                if is_binary_content(&bytes) {
+                    self.state.show_error(
+                        "Binary file detected. Reload was cancelled.".to_string(),
+                    );
+                    return;
+                }
+                self.state.set_active_tab(index);
+                if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
+                    tab.replace_from_disk(bytes);
+                }
+                let time = self.get_app_time();
+                let name = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("file");
+                self.state.show_toast(
+                    t!("notification.reloaded_single", name = name).to_string(),
+                    time,
+                    2.0,
+                );
+            }
+            Err(error) => {
+                self.state
+                    .show_error(t!("error.open_failed", error = error.to_string()).to_string());
+            }
+        }
+    }
+
+    /// Retry a refused lossy save by keeping the buffer and writing it as UTF-8.
+    pub(crate) fn retry_lossy_save_as_utf8(&mut self) {
+        let Some((tab_id, _encoding, target_path)) = self.state.ui.lossy_encoding_tab.take()
+        else {
+            return;
+        };
+        self.state.ui.show_lossy_encoding_dialog = false;
+
+        let Some(index) = self.state.tabs().iter().position(|tab| tab.id == tab_id) else {
+            return;
+        };
+        self.state.set_active_tab(index);
+        if let Some(tab) = self.state.tab_by_id_mut(tab_id) {
+            tab.set_save_encoding("UTF-8");
+        }
+
+        match target_path {
+            Some(path) => match self.state.save_active_tab_as(path.clone()) {
+                Ok(()) => {
+                    let time = self.get_app_time();
+                    self.state.show_toast(
+                        t!("notification.saved", path = path.display().to_string()).to_string(),
+                        time,
+                        3.0,
+                    );
+                }
+                Err(error) => {
+                    self.state
+                        .show_error(t!("error.save_failed", error = error.to_string()).to_string());
+                }
+            },
+            None => self.handle_save_file(),
         }
     }
 

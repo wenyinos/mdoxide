@@ -469,3 +469,48 @@ mod tests {
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unicode Case-Insensitive Literal Search
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Fold one character for literal, case-insensitive matching.
+///
+/// Uses the first lowercase mapping only: `İ` folds to `i`, while `ß` stays
+/// `ß` (so it does not match `ss`).
+pub fn case_fold_char(ch: char) -> char {
+    ch.to_lowercase().next().unwrap_or(ch)
+}
+
+/// Find all non-overlapping case-insensitive literal matches.
+///
+/// Returns byte ranges into `haystack`. Whole-word filtering is left to callers.
+pub fn find_case_insensitive(haystack: &str, needle: &str) -> Vec<(usize, usize)> {
+    let needle: Vec<char> = needle.chars().map(case_fold_char).collect();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let haystack: Vec<(char, usize, usize)> = haystack
+        .char_indices()
+        .map(|(start, ch)| (case_fold_char(ch), start, start + ch.len_utf8()))
+        .collect();
+
+    let mut matches = Vec::new();
+    let mut index = 0;
+    while index + needle.len() <= haystack.len() {
+        let matched = needle
+            .iter()
+            .enumerate()
+            .all(|(offset, ch)| haystack[index + offset].0 == *ch);
+        if matched {
+            matches.push((
+                haystack[index].1,
+                haystack[index + needle.len() - 1].2,
+            ));
+            index += needle.len();
+        } else {
+            index += 1;
+        }
+    }
+    matches
+}

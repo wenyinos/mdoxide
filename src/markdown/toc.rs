@@ -192,11 +192,12 @@ pub fn generate_toc_content(text: &str, options: &TocOptions) -> String {
     // Find the base (minimum) level for calculating indentation
     let base_level = headings.iter().map(|h| h.level).min().unwrap_or(1);
 
+    let eol = crate::state::LineEnding::detect(text).as_str();
     headings
         .iter()
         .map(|h| h.to_toc_line(base_level, options))
         .collect::<Vec<_>>()
-        .join("\n")
+        .join(eol)
 }
 
 /// Generate a complete TOC block with markers.
@@ -209,11 +210,12 @@ pub fn generate_toc_content(text: &str, options: &TocOptions) -> String {
 /// The complete TOC block including <!-- TOC --> markers
 pub fn generate_toc_block(text: &str, options: &TocOptions) -> String {
     let content = generate_toc_content(text, options);
+    let eol = crate::state::LineEnding::detect(text).as_str();
 
     if content.is_empty() {
-        format!("{}\n{}", TOC_START, TOC_END)
+        format!("{}{}{}", TOC_START, eol, TOC_END)
     } else {
-        format!("{}\n{}\n{}", TOC_START, content, TOC_END)
+        format!("{}{}{}{}{}", TOC_START, eol, content, eol, TOC_END)
     }
 }
 
@@ -272,8 +274,18 @@ pub fn insert_or_update_toc(text: &str, cursor: usize, options: &TocOptions) -> 
     let needs_newline_before = cursor > 0 && !text[..cursor].ends_with('\n');
     let needs_newline_after = cursor < text.len() && !text[cursor..].starts_with('\n');
 
-    let prefix = if needs_newline_before { "\n\n" } else { "" };
-    let suffix = if needs_newline_after { "\n\n" } else { "" };
+    let eol = crate::state::LineEnding::detect(text).as_str();
+    let double_eol = format!("{}{}", eol, eol);
+    let prefix = if needs_newline_before {
+        double_eol.as_str()
+    } else {
+        ""
+    };
+    let suffix = if needs_newline_after {
+        double_eol.as_str()
+    } else {
+        ""
+    };
 
     let new_text = format!(
         "{}{}{}{}{}",
@@ -311,7 +323,8 @@ pub fn remove_toc(text: &str) -> String {
 
         // Ensure proper spacing between sections
         if !before_trimmed.is_empty() && !after_trimmed.is_empty() {
-            format!("{}\n\n{}", before_trimmed, after_trimmed)
+            let eol = crate::state::LineEnding::detect(text).as_str();
+            format!("{}{}{}{}", before_trimmed, eol, eol, after_trimmed)
         } else {
             format!("{}{}", before_trimmed, after_trimmed)
         }

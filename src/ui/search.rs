@@ -207,7 +207,7 @@ impl SearchPanel {
         let query = if self.case_sensitive {
             self.query.clone()
         } else {
-            self.query.to_lowercase()
+            self.query.clone()
         };
 
         // Compile regex if needed
@@ -299,19 +299,18 @@ impl SearchPanel {
                 let matches_found: Vec<(usize, usize)> = if let Some(ref re) = regex {
                     re.find_iter(line).map(|m| (m.start(), m.end())).collect()
                 } else {
-                    let search_line = if self.case_sensitive {
-                        line.to_string()
+                    if self.case_sensitive {
+                        let mut positions = Vec::new();
+                        let mut start = 0;
+                        while let Some(pos) = line[start..].find(&query) {
+                            let abs_pos = start + pos;
+                            positions.push((abs_pos, abs_pos + query.len()));
+                            start = abs_pos + 1;
+                        }
+                        positions
                     } else {
-                        line.to_lowercase()
-                    };
-                    let mut positions = Vec::new();
-                    let mut start = 0;
-                    while let Some(pos) = search_line[start..].find(&query) {
-                        let abs_pos = start + pos;
-                        positions.push((abs_pos, abs_pos + query.len()));
-                        start = abs_pos + 1;
+                        crate::string_utils::find_case_insensitive(line, &query)
                     }
-                    positions
                 };
 
                 for (match_start, match_end) in matches_found {

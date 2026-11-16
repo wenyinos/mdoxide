@@ -155,14 +155,32 @@ impl FileType {
 /// Detect if file content appears to be binary (non-text) data.
 ///
 /// This function uses heuristics to detect binary content:
-/// 1. Presence of null bytes (strong indicator of binary data)
-/// 2. High ratio of non-printable/control characters
+/// 1. A BOM identifies text (UTF-8/UTF-16) before null-byte checks
+/// 2. Presence of null bytes (strong indicator of binary data)
+/// 3. High ratio of non-printable/control characters
 ///
 /// Returns `true` if the content appears to be binary data.
 pub fn is_binary_content(bytes: &[u8]) -> bool {
     // Empty files are not binary
     if bytes.is_empty() {
         return false;
+    }
+
+    // A BOM identifies the file as text before the null-byte heuristic runs.
+    // UTF-16 text is full of 0x00 bytes in its ASCII range, so checking for
+    // nulls first would misclassify every UTF-16 file as binary.
+    if let Some((encoding, bom_len)) = encoding_rs::Encoding::for_bom(bytes) {
+        let sample_end = bytes.len().min(bom_len.saturating_add(8192));
+        let (decoded, _, _) = encoding.decode(&bytes[bom_len..sample_end]);
+        let total = decoded.chars().count();
+        if total == 0 {
+            return false;
+        }
+        let non_printable = decoded
+            .chars()
+            .filter(|ch| ch.is_control() && !matches!(ch, '\n' | '\r' | '\t'))
+            .count();
+        return non_printable * 10 > total;
     }
 
     // Check for null bytes - strong indicator of binary data
@@ -355,6 +373,8 @@ pub struct AppState {
     pub ui: UiState,
     /// Whether settings have been modified and need saving
     settings_dirty: bool,
+    /// When settings were last marked dirty (for 500 ms debounced persistence).
+    settings_dirty_since: Option<std::time::Instant>,
     /// Current application mode (single file or workspace)
     pub app_mode: AppMode,
     /// Active workspace (only populated when app_mode is Workspace)
@@ -404,6 +424,7 @@ impl AppState {
             settings,
             ui: UiState::default(),
             settings_dirty: false,
+            settings_dirty_since: None,
             app_mode: AppMode::default(),
             workspace: None,
             workspace_watcher: None,
@@ -583,6 +604,7 @@ impl AppState {
             settings,
             ui: UiState::default(),
             settings_dirty: false,
+            settings_dirty_since: None,
             app_mode: AppMode::default(),
             workspace: None,
             workspace_watcher: None,
@@ -1163,7 +1185,9 @@ impl AppState {
         })?;
 
         // Encode content using the tab's current encoding
-        let encoded_bytes = tab.encode_content();
+        let encoded_bytes = tab
+            .encode_content()
+            .map_err(|encoding| crate::error::Error::LossyEncoding { encoding })?;
         let encoding = tab.current_encoding;
 
         crate::files::atomic::write_atomic(&path, &encoded_bytes).map_err(|e| {
@@ -1185,6 +1209,42 @@ impl AppState {
         Ok(())
     }
 
+    /// Save every modified tab that already has a path. Returns false if any
+    /// save failed. Untitled tabs are left for the caller to route through Save As.
+    pub fn save_all_modified_path_tabs(&mut self) -> bool {
+        let indices: Vec<usize> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| !tab.is_special() && tab.is_modified() && tab.path.is_some())
+            .map(|(index, _)| index)
+            .collect();
+
+        let original_active = self.active_tab_index;
+        let mut all_saved = true;
+        for index in indices {
+            if index >= self.tabs.len() {
+                continue;
+            }
+            self.set_active_tab(index);
+            if let Err(error) = self.save_active_tab() {
+                warn!("Failed to save tab {}: {}", index, error);
+                all_saved = false;
+            }
+        }
+        if original_active < self.tabs.len() {
+            self.set_active_tab(original_active);
+        }
+        all_saved
+    }
+
+    /// Index of the first modified tab without a path (needs Save As).
+    pub fn first_modified_untitled_tab(&self) -> Option<usize> {
+        self.tabs
+            .iter()
+            .position(|tab| !tab.is_special() && tab.is_modified() && tab.path.is_none())
+    }
+
     /// Save the active tab to a new path.
     ///
     /// Uses the tab's current encoding for output. For "Save As" operations,
@@ -1195,7 +1255,9 @@ impl AppState {
             .ok_or_else(|| crate::error::Error::Application("No active tab".to_string()))?;
 
         // Encode content using the tab's current encoding
-        let encoded_bytes = tab.encode_content();
+        let encoded_bytes = tab
+            .encode_content()
+            .map_err(|encoding| crate::error::Error::LossyEncoding { encoding })?;
         let encoding = tab.current_encoding;
 
         crate::files::atomic::write_atomic(&path, &encoded_bytes).map_err(|e| {
@@ -1390,6 +1452,21 @@ impl AppState {
     /// Mark settings as dirty (needing to be saved).
     pub fn mark_settings_dirty(&mut self) {
         self.settings_dirty = true;
+        self.settings_dirty_since = Some(std::time::Instant::now());
+    }
+
+    /// Persist settings once the 500 ms debounce window has elapsed.
+    pub fn tick_settings_autosave(&mut self) {
+        if !self.settings_dirty {
+            return;
+        }
+        let due = self
+            .settings_dirty_since
+            .map(|since| since.elapsed() >= std::time::Duration::from_millis(500))
+            .unwrap_or(true);
+        if due {
+            self.save_settings_if_dirty();
+        }
     }
 
     /// Save settings to config file if modified.
@@ -1410,6 +1487,7 @@ impl AppState {
 
             if save_config_silent(&self.settings) {
                 self.settings_dirty = false;
+                self.settings_dirty_since = None;
                 info!("Settings saved");
                 return true;
             }
@@ -1544,6 +1622,16 @@ impl AppState {
     /// Synchronous recovery write used on shutdown (after the writer is flushed).
     pub fn save_recovery_content(&mut self) {
         use crate::config::save_recovery_content;
+
+        // Clean tabs must not leave recovery/autosave files behind: a later
+        // launch would otherwise offer to restore edits that no longer exist.
+        for tab in &self.tabs {
+            if tab.is_special() || tab.is_modified() {
+                continue;
+            }
+            crate::config::delete_recovery_content(tab.id);
+            crate::config::delete_auto_save(tab.id, tab.path.as_ref());
+        }
 
         for job in self.take_recovery_jobs() {
             if !save_recovery_content(
@@ -1801,6 +1889,8 @@ impl AppState {
                             let t = Tab {
                                 document: Document {
                                     path: Some(path.clone()),
+                                    line_ending: LineEnding::detect(&content),
+                                    preview_locked: false,
                                     content,
                                     original_content: original_content_str,
                                     original_content_hash,
@@ -2340,10 +2430,46 @@ impl AppState {
                 PendingAction::NewDocument => {
                     self.new_tab();
                 }
+                PendingAction::ChangeEncoding { tab_id, encoding } => {
+                    if let Err(error) = self.apply_encoding_change(tab_id, encoding) {
+                        warn!("Failed to change encoding: {}", error);
+                    }
+                }
             }
         }
         self.ui.show_confirm_dialog = false;
         self.ui.confirm_dialog_message.clear();
+    }
+
+    /// Ask for confirmation before switching encoding on a dirty tab.
+    pub fn request_encoding_change(&mut self, tab_id: usize, encoding: &'static str) {
+        let current = self
+            .tab_by_id(tab_id)
+            .map(|tab| tab.encoding_display_name())
+            .unwrap_or_else(|| "UTF-8".to_string());
+        self.ui.confirm_dialog_message = t!(
+            "dialog.encoding_change.message",
+            current = current,
+            encoding = encoding.to_uppercase()
+        )
+        .to_string();
+        self.ui.pending_action = Some(PendingAction::ChangeEncoding { tab_id, encoding });
+        self.ui.show_confirm_dialog = true;
+    }
+
+    /// Apply an encoding change by tab id. Fails if the tab was closed.
+    pub fn apply_encoding_change(
+        &mut self,
+        tab_id: usize,
+        encoding: &'static str,
+    ) -> Result<(), String> {
+        let index = self
+            .tabs
+            .iter()
+            .position(|tab| tab.id == tab_id)
+            .ok_or_else(|| "Tab is no longer open".to_string())?;
+        self.set_active_tab(index);
+        self.tabs[index].set_encoding(encoding)
     }
 
     /// Cancel the pending action.
@@ -2646,6 +2772,38 @@ mod tests {
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0B, 0x0C, 0x0E, 0x0F,
         ];
         assert!(is_binary_content(&binary_with_control));
+    }
+
+    #[test]
+    fn test_binary_detection_utf16_bom_is_text() {
+        let text = "UTF-16 text\n第二行 with émoji 🎉";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        assert!(!is_binary_content(&bytes));
+
+        // BE BOM too
+        let mut be = vec![0xFE, 0xFF];
+        for unit in text.encode_utf16() {
+            be.extend_from_slice(&unit.to_be_bytes());
+        }
+        assert!(!is_binary_content(&be));
+    }
+
+    #[test]
+    fn test_binary_detection_utf8_bom_is_text() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("# 标题\n\n正文".as_bytes());
+        assert!(!is_binary_content(&bytes));
+    }
+
+    #[test]
+    fn test_binary_detection_bom_does_not_hide_binary_payload() {
+        // Valid UTF-8 BOM followed by binary control bytes is still binary.
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend(std::iter::repeat(0x01).take(100));
+        assert!(is_binary_content(&bytes));
     }
 
     #[test]
@@ -3572,6 +3730,31 @@ mod tests {
         assert!(tab.can_undo());
         tab.undo();
         assert_eq!(tab.content, "# Hi");
+    }
+
+    #[test]
+    fn test_tab_split_view_raw_and_rendered_undo_interleaved() {
+        use crate::markdown::rendered_commit_undo::PendingRenderedCommitUndo;
+
+        let mut tab = Tab::new(0);
+        tab.content = "base".to_string();
+
+        // A raw-pane edit recorded as its own undo group.
+        let ops = compute_edit_ops("base", "raw edit");
+        tab.edit_history.record_operations(ops);
+        tab.content = "raw edit".to_string();
+
+        // A rendered block commit on top of that raw edit.
+        tab.apply_rendered_commit_undo_entries([PendingRenderedCommitUndo {
+            pre_commit_snapshot: "raw edit".to_string(),
+            post_commit_snapshot: "raw edit + rendered".to_string(),
+            break_group_before: true,
+        }]);
+
+        tab.undo();
+        assert_eq!(tab.content, "raw edit");
+        tab.undo();
+        assert_eq!(tab.content, "base");
     }
 
     #[test]
@@ -4812,6 +4995,41 @@ mod tests {
         tab.replace_from_disk(b.clone().into_bytes());
         assert_eq!(tab.content, b);
         assert!(!tab.is_modified());
+    }
+
+    #[test]
+    fn test_line_ending_detection_and_document_storage() {
+        assert_eq!(LineEnding::detect("a\nb\n"), LineEnding::Lf);
+        assert_eq!(LineEnding::detect("a\r\nb\r\n"), LineEnding::CrLf);
+        assert_eq!(LineEnding::detect("a\rb\r"), LineEnding::Cr);
+
+        let tab = Tab::with_file(
+            0,
+            PathBuf::from("/tmp/crlf.md"),
+            "line one\r\nline two\r\n".to_string(),
+        );
+        assert_eq!(tab.line_ending, LineEnding::CrLf);
+        assert_eq!(tab.line_ending.as_str(), "\r\n");
+    }
+
+    #[test]
+    fn test_lossy_encoding_save_is_refused() {
+        let mut tab = Tab::new(0);
+        tab.content = "emoji 🎉 and ü".to_string();
+        tab.set_save_encoding("windows-1252");
+        assert!(tab.encode_content().is_err());
+
+        tab.set_save_encoding("UTF-8");
+        assert!(tab.encode_content().is_ok());
+    }
+
+    #[test]
+    fn test_apply_encoding_change_by_tab_id() {
+        let mut state = AppState::with_settings(Settings::default());
+        let tab_id = state.active_tab().unwrap().id;
+        assert!(state.apply_encoding_change(tab_id, "UTF-8").is_ok());
+        assert_eq!(state.active_tab().unwrap().current_encoding, "UTF-8");
+        assert!(state.apply_encoding_change(usize::MAX, "UTF-8").is_err());
     }
 
     #[test]
