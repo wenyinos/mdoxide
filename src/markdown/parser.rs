@@ -188,6 +188,14 @@ impl CalloutType {
     }
 }
 
+/// Horizontal alignment for a `<div align="…">` container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DivAlign {
+    Left,
+    Center,
+    Right,
+}
+
 /// Represents the type of a markdown node.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MarkdownNodeType {
@@ -215,6 +223,15 @@ pub enum MarkdownNodeType {
     },
     /// HTML block
     HtmlBlock(String),
+    /// `<details>`/`<summary>` collapsible block.
+    Details {
+        /// Plain-text summary label.
+        summary: String,
+        /// Whether the block starts expanded (`<details open>`).
+        open: bool,
+    },
+    /// `<div align="left|center|right">` container.
+    AlignedDiv { align: DivAlign },
     /// Paragraph
     Paragraph,
     /// Heading (H1-H6)
@@ -349,6 +366,7 @@ impl MarkdownNode {
                 output.push_str(display.as_deref().unwrap_or(target));
             }
             MarkdownNodeType::VideoEmbed(info) => output.push_str(&info.source_text),
+            MarkdownNodeType::Details { summary, .. } => output.push_str(summary),
             MarkdownNodeType::Math { literal, .. } => output.push_str(literal),
             _ => {}
         }
@@ -406,6 +424,11 @@ pub fn parse_markdown_with_options(
     // Convert comrak AST to our own structure
     let mut front_matter = None;
     let mut converted_root = convert_node(root, &mut front_matter)?;
+
+    // Group raw `<details>` / `</details>` HTML blocks into one collapsible node.
+    convert_details_blocks(&mut converted_root);
+    // Group `<div align>` containers so their contents can be aligned natively.
+    convert_aligned_div_blocks(&mut converted_root);
 
     // Detect GitHub-style callouts (> [!TYPE]) within blockquotes and convert
     // them to dedicated Callout nodes for styled rendering.
@@ -594,6 +617,265 @@ fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
 /// 1. A single blockquote whose first paragraph starts with `[!TYPE]` → convert to Callout
 /// 2. A single blockquote with multiple paragraphs, some starting with `[!TYPE]` → split & convert
 /// 3. Consecutive separate blockquotes (handled naturally since this runs before merge)
+/// Group `<div align="…">` HTML blocks into one aligned container.
+fn convert_aligned_div_blocks(node: &mut MarkdownNode) {
+    for child in &mut node.children {
+        convert_aligned_div_blocks(child);
+    }
+
+    let original = std::mem::take(&mut node.children);
+    let mut converted: Vec<MarkdownNode> = Vec::with_capacity(original.len());
+    let mut iter = original.into_iter().peekable();
+
+    while let Some(mut item) = iter.next() {
+        let html = match &item.node_type {
+            MarkdownNodeType::HtmlBlock(html) => html.clone(),
+            _ => {
+                converted.push(item);
+                continue;
+            }
+        };
+        let lower = html.to_ascii_lowercase();
+        if !lower.trim_start().starts_with("<div") {
+            converted.push(item);
+            continue;
+        }
+        let Some(align) = parse_div_align(&lower) else {
+            converted.push(item);
+            continue;
+        };
+
+        // Single-block form with inline body.
+        if let Some(close) = lower.find("</div>") {
+            let body_start = html.find('>').map(|index| index + 1).unwrap_or(0);
+            let body = strip_html_tags(html[body_start..close].trim());
+            if !body.is_empty() {
+                item.children.push(MarkdownNode {
+                    node_type: MarkdownNodeType::Paragraph,
+                    children: vec![MarkdownNode {
+                        node_type: MarkdownNodeType::Text(body),
+                        children: Vec::new(),
+                        start_line: item.start_line,
+                        end_line: item.end_line,
+                    }],
+                    start_line: item.start_line,
+                    end_line: item.end_line,
+                });
+            }
+            item.node_type = MarkdownNodeType::AlignedDiv { align };
+            converted.push(item);
+            continue;
+        }
+
+        let mut body: Vec<MarkdownNode> = Vec::new();
+        let mut closing: Option<MarkdownNode> = None;
+        let mut depth = 1usize;
+        while let Some(next) = iter.next() {
+            let html = match &next.node_type {
+                MarkdownNodeType::HtmlBlock(html) => Some(html.to_ascii_lowercase()),
+                _ => None,
+            };
+            if let Some(html) = &html {
+                if html.trim_start().starts_with("<div") {
+                    depth += 1;
+                }
+                if html.contains("</div>") {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        closing = Some(next);
+                        break;
+                    }
+                }
+            }
+            body.push(next);
+        }
+
+        let Some(closing) = closing else {
+            item.children.clear();
+            converted.push(item);
+            converted.extend(body);
+            continue;
+        };
+
+        item.node_type = MarkdownNodeType::AlignedDiv { align };
+        item.children = body;
+        item.end_line = closing.end_line;
+        convert_details_blocks(&mut item);
+        convert_aligned_div_blocks(&mut item);
+        converted.push(item);
+    }
+
+    node.children = converted;
+}
+
+fn parse_div_align(lower_html: &str) -> Option<DivAlign> {
+    let start = lower_html.find("<div")?;
+    let end = lower_html[start..].find('>')? + start;
+    let attrs = &lower_html[start..end];
+    let align_pos = attrs.find("align")?;
+    let value = attrs[align_pos + "align".len()..]
+        .trim_start_matches(|ch: char| ch == '=' || ch == ' ' || ch == '"' || ch == '\'');
+    if value.starts_with("center") {
+        Some(DivAlign::Center)
+    } else if value.starts_with("right") {
+        Some(DivAlign::Right)
+    } else if value.starts_with("left") {
+        Some(DivAlign::Left)
+    } else {
+        None
+    }
+}
+
+/// Group `<details>` / `<summary>` HTML blocks into a single collapsible node.
+fn convert_details_blocks(node: &mut MarkdownNode) {
+    for child in &mut node.children {
+        convert_details_blocks(child);
+    }
+
+    let original = std::mem::take(&mut node.children);
+    let mut converted: Vec<MarkdownNode> = Vec::with_capacity(original.len());
+    let mut iter = original.into_iter().peekable();
+
+    while let Some(mut item) = iter.next() {
+        let is_details_open = matches!(&item.node_type, MarkdownNodeType::HtmlBlock(html)
+            if html.trim_start().to_ascii_lowercase().starts_with("<details"));
+        if !is_details_open {
+            converted.push(item);
+            continue;
+        }
+
+        let open_html = match &item.node_type {
+            MarkdownNodeType::HtmlBlock(html) => html.clone(),
+            _ => {
+                converted.push(item);
+                continue;
+            }
+        };
+        let summary = extract_html_tag_text(&open_html, "summary");
+        let is_open = {
+            let lower = open_html.to_ascii_lowercase();
+            lower
+                .find("<details")
+                .and_then(|start| lower[start..].find('>').map(|end| (start, end)))
+                .map(|(start, end)| lower[start..start + end].contains("open"))
+                .unwrap_or(false)
+        };
+
+        // Single-block form: <details><summary>..</summary>body</details>
+        if let Some(close) = open_html.to_ascii_lowercase().find("</details>") {
+            let summary = summary.unwrap_or_else(|| "Details".to_string());
+            let body_start = open_html
+                .to_ascii_lowercase()
+                .find("</summary>")
+                .map(|index| index + "</summary>".len())
+                .unwrap_or(0);
+            let body = strip_html_tags(open_html[body_start..close].trim());
+            if !body.is_empty() {
+                let child = MarkdownNode {
+                    node_type: MarkdownNodeType::Paragraph,
+                    children: vec![MarkdownNode {
+                        node_type: MarkdownNodeType::Text(body),
+                        children: Vec::new(),
+                        start_line: item.start_line,
+                        end_line: item.end_line,
+                    }],
+                    start_line: item.start_line,
+                    end_line: item.end_line,
+                };
+                item.children.push(child);
+            }
+            item.node_type = MarkdownNodeType::Details { summary, open: is_open };
+            converted.push(item);
+            continue;
+        }
+
+        // Multi-block form: gather siblings until the closing </details> block.
+        let mut body: Vec<MarkdownNode> = Vec::new();
+        let mut closing: Option<MarkdownNode> = None;
+        let mut depth = 1usize;
+        while let Some(next) = iter.next() {
+            let html = match &next.node_type {
+                MarkdownNodeType::HtmlBlock(html) => Some(html.to_ascii_lowercase()),
+                _ => None,
+            };
+            if let Some(html) = &html {
+                if html.trim_start().starts_with("<details") {
+                    depth += 1;
+                }
+                if html.contains("</details>") {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        closing = Some(next);
+                        break;
+                    }
+                }
+            }
+            body.push(next);
+        }
+
+        let Some(closing) = closing else {
+            // Unclosed: leave the original opener and body untouched.
+            item.children.clear();
+            converted.push(item);
+            converted.extend(body);
+            continue;
+        };
+
+        let summary = summary
+            .or_else(|| {
+                body.iter().find_map(|child| match &child.node_type {
+                    MarkdownNodeType::HtmlBlock(html) => extract_html_tag_text(html, "summary"),
+                    _ => None,
+                })
+            })
+            .unwrap_or_else(|| "Details".to_string());
+
+        // Summary-only HTML blocks are metadata, not body content.
+        body.retain(|child| {
+            !matches!(&child.node_type, MarkdownNodeType::HtmlBlock(html)
+                if html.to_ascii_lowercase().contains("<summary"))
+        });
+
+        item.node_type = MarkdownNodeType::Details { summary, open: is_open };
+        item.children = body;
+        item.end_line = closing.end_line;
+        // Nested containers in the body still need conversion.
+        convert_details_blocks(&mut item);
+        convert_aligned_div_blocks(&mut item);
+        converted.push(item);
+    }
+
+    node.children = converted;
+}
+
+/// Extract the text of the first `<tag>…</tag>` pair, stripping nested tags.
+fn extract_html_tag_text(html: &str, tag: &str) -> Option<String> {
+    let lower = html.to_ascii_lowercase();
+    let open = format!("<{}", tag);
+    let close = format!("</{}>", tag);
+    let start = lower.find(&open)?;
+    let content_start = lower[start..].find('>')? + start + 1;
+    let content_end = lower[content_start..].find(&close)? + content_start;
+    let text = strip_html_tags(&html[content_start..content_end]);
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_string())
+}
+
+/// Remove HTML tags from a short inline string.
+fn strip_html_tags(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut in_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => output.push(ch),
+            _ => {}
+        }
+    }
+    output
+}
+
 fn convert_callout_blockquotes(node: &mut MarkdownNode) {
     // Recursively process all children depth-first
     for child in &mut node.children {
@@ -2200,6 +2482,106 @@ mod tests {
             hr.is_some(),
             "--- between blank lines should produce ThematicBreak"
         );
+    }
+
+    #[test]
+    fn test_details_summary_block_is_grouped() {
+        let markdown = "<details>\n<summary>More</summary>\n\nBody **bold**\n\n</details>\n\nAfter";
+        let doc = parse_markdown(markdown).unwrap();
+        let details = doc
+            .root
+            .children
+            .iter()
+            .find_map(|child| match &child.node_type {
+                MarkdownNodeType::Details { summary, open } => Some((summary, *open, child)),
+                _ => None,
+            })
+            .expect("details node");
+        assert_eq!(details.0, "More");
+        assert!(!details.1);
+        assert!(
+            details.2.children.iter().any(|child| matches!(
+                child.node_type,
+                MarkdownNodeType::Paragraph
+            )),
+            "details body should be parsed as markdown"
+        );
+    }
+
+    #[test]
+    fn test_aligned_div_block_is_grouped() {
+        let markdown = "<div align=\"center\">\n\nCentered **text**\n\n</div>\n\nAfter";
+        let doc = parse_markdown(markdown).unwrap();
+        let div = doc
+            .root
+            .children
+            .iter()
+            .find_map(|child| match &child.node_type {
+                MarkdownNodeType::AlignedDiv { align } => Some((*align, child)),
+                _ => None,
+            })
+            .expect("aligned div node");
+        assert_eq!(div.0, DivAlign::Center);
+        assert!(
+            div.1.children.iter().any(|child| matches!(
+                child.node_type,
+                MarkdownNodeType::Paragraph
+            )),
+            "div body should be parsed as markdown"
+        );
+    }
+
+    #[test]
+    fn test_aligned_div_single_block() {
+        let doc = parse_markdown("<div align='right'>Right text</div>").unwrap();
+        let div = doc
+            .root
+            .children
+            .iter()
+            .find_map(|child| match &child.node_type {
+                MarkdownNodeType::AlignedDiv { align } => Some((*align, child)),
+                _ => None,
+            })
+            .expect("aligned div node");
+        assert_eq!(div.0, DivAlign::Right);
+        assert_eq!(div.1.text_content(), "Right text");
+    }
+
+    #[test]
+    fn test_nested_details_blocks() {
+        let markdown = "<details>\n<summary>Outer</summary>\n\n<details>\n<summary>Inner</summary>\n\nInner body\n\n</details>\n\n</details>";
+        let doc = parse_markdown(markdown).unwrap();
+        let outer = doc
+            .root
+            .children
+            .iter()
+            .find_map(|child| match &child.node_type {
+                MarkdownNodeType::Details { summary, .. } if summary == "Outer" => Some(child),
+                _ => None,
+            })
+            .expect("outer details");
+        assert!(outer.children.iter().any(|child| matches!(
+            &child.node_type,
+            MarkdownNodeType::Details { summary, .. } if summary == "Inner"
+        )));
+    }
+
+    #[test]
+    fn test_details_single_block_open_attribute_and_inline_summary() {
+        let markdown = "<details open><summary><strong>Title</strong></summary>Body text</details>";
+        let doc = parse_markdown(markdown).unwrap();
+        let details = doc
+            .root
+            .children
+            .iter()
+            .find_map(|child| match &child.node_type {
+                MarkdownNodeType::Details { summary, open } => Some((summary, *open, child)),
+                _ => None,
+            })
+            .expect("details node");
+        assert_eq!(details.0, "Title");
+        assert!(details.1);
+        assert_eq!(details.2.text_content(), "TitleBody text");
     }
 
     #[test]

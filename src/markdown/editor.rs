@@ -2115,6 +2115,39 @@ fn render_node_with_structural_keys(
                 editor_font,
             );
         }
+        MarkdownNodeType::AlignedDiv { align } => {
+            render_aligned_div_block(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+                *align,
+            );
+        }
+        MarkdownNodeType::Details { summary, open } => {
+            render_details_block(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+                summary,
+                *open,
+            );
+        }
         MarkdownNodeType::FrontMatter(content) => {
             render_front_matter(ui, colors, font_size, content);
         }
@@ -2330,6 +2363,39 @@ fn render_node(
                 colors,
                 font_size,
                 editor_font,
+            );
+        }
+        MarkdownNodeType::AlignedDiv { align } => {
+            render_aligned_div_block(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+                *align,
+            );
+        }
+        MarkdownNodeType::Details { summary, open } => {
+            render_details_block(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+                summary,
+                *open,
             );
         }
         MarkdownNodeType::FrontMatter(content) => {
@@ -5966,6 +6032,90 @@ fn update_table_in_source(
 }
 
 /// Render front matter (YAML/TOML header).
+#[allow(clippy::too_many_arguments)]
+fn render_aligned_div_block(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
+    align: crate::markdown::parser::DivAlign,
+) {
+    use crate::markdown::parser::DivAlign;
+    let egui_align = match align {
+        DivAlign::Left => egui::Align::Min,
+        DivAlign::Center => egui::Align::Center,
+        DivAlign::Right => egui::Align::Max,
+    };
+    ui.with_layout(egui::Layout::top_down(egui_align), |ui| {
+        ui.set_width(ui.available_width());
+        for child in &node.children {
+            render_node(
+                ui,
+                child,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level + 1,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_details_block(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
+    summary: &str,
+    open: bool,
+) {
+    let id = egui::Id::new(("details_block", node.start_line));
+    egui::CollapsingHeader::new(
+        RichText::new(summary)
+            .color(colors.text)
+            .font(FontId::proportional(font_size)),
+    )
+    .id_salt(id)
+    .default_open(open)
+    .show(ui, |ui| {
+        for child in &node.children {
+            render_node(
+                ui,
+                child,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level + 1,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+    });
+}
+
 fn render_front_matter(ui: &mut Ui, colors: &EditorColors, font_size: f32, content: &str) {
     const BASE_INDENT: f32 = 4.0;
 
