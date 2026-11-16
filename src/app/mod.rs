@@ -615,12 +615,13 @@ impl MDOxideApp {
                 info!("Opening file from CLI: {}", file_path.display());
                 let time = self.get_app_time();
                 match self.open_file_smart(file_path.clone(), true, Some(time)) {
-                    Ok(tab_idx) => {
+                    Ok(Some(tab_idx)) => {
                         if first_opened_tab_idx.is_none() {
                             first_opened_tab_idx = Some(tab_idx);
                         }
                         self.pending_cjk_check = true;
                     }
+                    Ok(None) => {}
                     Err(e) => {
                         warn!("Failed to open file '{}': {}", file_path.display(), e);
                     }

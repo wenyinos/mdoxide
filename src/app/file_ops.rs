@@ -69,7 +69,7 @@ impl MDOxideApp {
             info!("Opening file: {}", path.display());
             let time = self.get_app_time();
             match self.open_file_smart(path.clone(), true, Some(time)) {
-                Ok(tab_index) => {
+                Ok(Some(tab_index)) => {
                     success_count += 1;
                     self.pending_cjk_check = true;
                     // Check for auto-save recovery (skip for loading tabs)
@@ -82,6 +82,9 @@ impl MDOxideApp {
                     {
                         self.check_auto_save_recovery(tab_index);
                     }
+                }
+                Ok(None) => {
+                    success_count += 1;
                 }
                 Err(e) => {
                     warn!("Failed to open file {}: {}", path.display(), e);
@@ -120,13 +123,22 @@ impl MDOxideApp {
         path: PathBuf,
         focus: bool,
         app_time: Option<f64>,
-    ) -> Result<usize, std::io::Error> {
+    ) -> Result<Option<usize>, std::io::Error> {
         // Delegate to synchronous path for already-open, image, and PDF files
         if self.state.find_tab_by_path(&path).is_some()
             || FileType::from_path(&path).is_image()
             || FileType::from_path(&path).is_pdf()
         {
-            return self.state.open_file_with_focus(path, focus, app_time);
+            return self
+                .state
+                .open_file_with_focus(path, focus, app_time)
+                .map(Some);
+        }
+
+        // Binary/unsupported files go to the OS default application instead of
+        // creating an error tab. Text files continue through the editor.
+        if self.try_open_external_binary(&path) {
+            return Ok(None);
         }
 
         let metadata = std::fs::metadata(&path)?;
@@ -148,10 +160,50 @@ impl MDOxideApp {
                     3.0,
                 );
             }
-            Ok(tab_index)
+            Ok(Some(tab_index))
         } else {
-            self.state.open_file_with_focus(path, focus, app_time)
+            self.state
+                .open_file_with_focus(path, focus, app_time)
+                .map(Some)
         }
+    }
+
+    /// Open a binary file with the OS default app and show a toast.
+    fn try_open_external_binary(&mut self, path: &std::path::Path) -> bool {
+        use std::io::Read;
+
+        let Ok(mut file) = std::fs::File::open(path) else {
+            return false;
+        };
+        let mut sample = [0u8; 8192];
+        let Ok(read) = file.read(&mut sample) else {
+            return false;
+        };
+        if read == 0 || !should_open_external(&sample[..read]) {
+            return false;
+        }
+
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("file")
+            .to_string();
+        match open::that(path) {
+            Ok(()) => {
+                let time = self.get_app_time();
+                self.state.show_toast(
+                    t!("notification.opened_in_default_app", name = name).to_string(),
+                    time,
+                    3.0,
+                );
+            }
+            Err(error) => {
+                self.state.show_error(
+                    t!("error.open_external_failed", error = error.to_string()).to_string(),
+                );
+            }
+        }
+        true
     }
 
     /// Spawn a background thread that reads a file in chunks, sending progress updates.
@@ -1593,7 +1645,7 @@ impl MDOxideApp {
                 }
             } else if path.is_file() {
                 match self.open_file_smart(path.clone(), true, Some(time)) {
-                    Ok(tab_index) => {
+                    Ok(Some(tab_index)) => {
                         self.pending_cjk_check = true;
                         if !self
                             .state
@@ -1606,6 +1658,9 @@ impl MDOxideApp {
                         }
                         opened += 1;
                         debug!("Opened file from secondary instance: {}", path.display());
+                    }
+                    Ok(None) => {
+                        opened += 1;
                     }
                     Err(e) => {
                         warn!("Failed to open file from secondary instance: {}", e);
@@ -2220,5 +2275,22 @@ fn collect_matching_files(dir: &Path, filename_lower: &str, results: &mut Vec<Pa
                 }
             }
         }
+    }
+}
+
+/// Binary samples should be handed to the OS default application.
+fn should_open_external(sample: &[u8]) -> bool {
+    is_binary_content(sample)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_external_open_binary_policy() {
+        assert!(should_open_external(b"\x00\x01\x02"));
+        assert!(!should_open_external(b"# Markdown\n\nText"));
+        assert!(!should_open_external("中文文本".as_bytes()));
     }
 }

@@ -770,6 +770,7 @@ notification:
   image_added: 图片已添加到资源文件夹
   images_added: '%{count} 张图片已添加到资源文件夹'
   opened_external_single: 已根据外部请求打开文件
+  opened_in_default_app: 已用系统默认应用打开 %{name}
   opened_external_multiple: 已根据外部请求打开 %{count} 个文件
   wikilink_not_found: '[[%{target}]] — 文件未找到'
   wikilink_open_failed: 无法打开 [[%{target}]]：%{error}
@@ -1135,6 +1136,7 @@ error:
   open_workspace_failed: '打开工作区失败：
 
     %{error}'
+  open_external_failed: '用系统默认应用打开失败：%{error}'
   open_file_failed: '打开文件失败：
 
     %{error}'

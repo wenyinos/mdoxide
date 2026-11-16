@@ -2588,6 +2588,15 @@ mod tests {
     }
 
     #[test]
+    fn test_html_entities_are_decoded_in_text() {
+        let doc = parse_markdown("A &amp; B &rarr; C &#169;").unwrap();
+        let text = doc.root.text_content();
+        assert!(text.contains('&'), "text={text}");
+        assert!(text.contains('→'), "text={text}");
+        assert!(text.contains('©'), "text={text}");
+    }
+
+    #[test]
     fn test_yaml_frontmatter_preserved() {
         let markdown = "---\ntitle: Test\ndate: 2026-01-01\n---\n\n# Hello";
         let doc = parse_markdown(markdown).unwrap();
