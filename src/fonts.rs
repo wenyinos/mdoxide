@@ -1023,6 +1023,8 @@ const FONT_CUSTOM: &str = "Custom";
 const FONT_CUSTOM_RENDERED: &str = "CustomRendered";
 /// Key for the custom terminal font.
 const FONT_TERMINAL_CUSTOM: &str = "TerminalCustom";
+/// Key for the Nerd Font glyph fallback used by the terminal.
+const FONT_NERD_FALLBACK: &str = "NerdFontFallback";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HarfRust shaping: TTF bytes aligned with egui font families
@@ -1865,6 +1867,53 @@ fn register_rendered_custom_family(
     }
 }
 
+/// System font families commonly used as Nerd Font / Powerline fallbacks.
+pub fn nerd_font_candidates() -> &'static [&'static str] {
+    &[
+        "Symbols Nerd Font Mono",
+        "Symbols Nerd Font",
+        "JetBrainsMono Nerd Font",
+        "JetBrainsMonoNL Nerd Font",
+        "Nerd Font",
+    ]
+}
+
+/// Whether a character belongs to a Unicode private-use area used by
+/// Powerline / Nerd Font glyph sets.
+pub fn is_nerd_font_glyph(ch: char) -> bool {
+    matches!(ch as u32, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
+}
+
+/// Add the first installed Nerd Font as the terminal glyph fallback.
+fn register_nerd_font_fallback(fonts: &mut FontDefinitions) {
+    if fonts.font_data.contains_key(FONT_NERD_FALLBACK) {
+        return;
+    }
+    let Some(data) = load_system_font(nerd_font_candidates()) else {
+        return;
+    };
+    fonts
+        .font_data
+        .insert(FONT_NERD_FALLBACK.to_owned(), Arc::new(data));
+
+    let monospace = FontFamily::Monospace;
+    fonts
+        .families
+        .entry(monospace)
+        .or_default()
+        .push(FONT_NERD_FALLBACK.to_owned());
+
+    let terminal_family = FontFamily::Name(FONT_TERMINAL_CUSTOM.into());
+    if fonts.families.contains_key(&terminal_family) {
+        fonts
+            .families
+            .entry(terminal_family)
+            .or_default()
+            .push(FONT_NERD_FALLBACK.to_owned());
+    }
+    info!("Registered Nerd Font glyph fallback for terminal");
+}
+
 /// Load the terminal custom font into its own key (falling back to JetBrains).
 fn load_terminal_custom_font(fonts: &mut FontDefinitions, font_name: &str) -> bool {
     match load_system_font_by_name(font_name) {
@@ -2182,6 +2231,7 @@ pub fn create_font_definitions_with_cjk_spec(
 
     register_rendered_custom_family(&mut fonts, rendered_custom_loaded, true, &cjk_state, cjk_preference);
     register_terminal_custom_family(&mut fonts, terminal_font_loaded, true, &cjk_state, cjk_preference);
+    register_nerd_font_fallback(&mut fonts);
 
     info!(
         "Loaded fonts: CJK(KR={}, JP={}, SC={}, TC={}), ComplexScript={}",
@@ -2469,6 +2519,7 @@ pub fn create_font_definitions_with_settings(
 
     register_rendered_custom_family(&mut fonts, rendered_custom_loaded, load_cjk, &cjk_state, cjk_preference);
     register_terminal_custom_family(&mut fonts, terminal_font_loaded, load_cjk, &cjk_state, cjk_preference);
+    register_nerd_font_fallback(&mut fonts);
 
     info!(
         "Loaded fonts: Inter, JetBrains Mono, CJK={} (preference: {:?}), custom: {}",
@@ -3174,6 +3225,16 @@ mod tests {
             get_styled_font_family(true, true, &EditorFont::JetBrainsMono),
             FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into())
         );
+    }
+
+    #[test]
+    fn test_nerd_font_private_use_ranges() {
+        assert!(is_nerd_font_glyph('\u{E0B0}')); // Powerline separator
+        assert!(is_nerd_font_glyph('\u{F8FF}')); // BMP private use end
+        assert!(is_nerd_font_glyph('\u{F0001}')); // Supplementary PUA-A
+        assert!(!is_nerd_font_glyph('A'));
+        assert!(!is_nerd_font_glyph('中'));
+        assert!(!nerd_font_candidates().is_empty());
     }
 
     #[test]
