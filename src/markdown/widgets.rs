@@ -6612,7 +6612,7 @@ mod tests {
     fn test_map_displayed_to_raw_skips_inline_html_tags() {
         let raw = "<kbd>Ctrl</kbd>+C";
         assert_eq!(map_displayed_to_raw(0, raw), 5);
-        assert_eq!(map_displayed_to_raw(4, raw), raw.chars().count());
+        assert_eq!(map_displayed_to_raw(4, raw), 15);
         // <br> occupies one displayed character.
         assert_eq!(map_displayed_to_raw(1, "a<br>b"), 1);
         assert_eq!(map_displayed_to_raw(2, "a<br>b"), 5);
