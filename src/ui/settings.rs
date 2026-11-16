@@ -163,6 +163,43 @@ impl SettingsSection {
     }
 }
 
+const SETTINGS_SECTIONS: [SettingsSection; 6] = [
+    SettingsSection::Appearance,
+    SettingsSection::Editor,
+    SettingsSection::Files,
+    SettingsSection::Keyboard,
+    SettingsSection::Terminal,
+    SettingsSection::About,
+];
+
+struct SettingSearchEntry {
+    label_key: &'static str,
+    keywords: &'static str,
+    section: SettingsSection,
+}
+
+const SETTING_SEARCH_INDEX: &[SettingSearchEntry] = &[
+    SettingSearchEntry { label_key: "settings.appearance.theme", keywords: "theme dark light 主题 外观", section: SettingsSection::Appearance },
+    SettingSearchEntry { label_key: "settings.appearance.accent_color", keywords: "accent color 主题色", section: SettingsSection::Appearance },
+    SettingSearchEntry { label_key: "settings.appearance.language", keywords: "language locale 语言", section: SettingsSection::Appearance },
+    SettingSearchEntry { label_key: "settings.appearance.syntax_theme", keywords: "syntax highlight 语法高亮", section: SettingsSection::Appearance },
+    SettingSearchEntry { label_key: "settings.editor.font_family", keywords: "font family 字体", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.rendered_font", keywords: "font rendered preview 字体 渲染", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.font_size", keywords: "font size zoom 字号 缩放", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.word_wrap", keywords: "word wrap 自动换行", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.tab_size", keywords: "tab indent 缩进 制表符", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.use_spaces", keywords: "spaces indent 空格", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.show_line_numbers", keywords: "line numbers 行号", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.show_minimap", keywords: "minimap 小地图", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.enable_auto_save", keywords: "auto save 自动保存", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.editor.bubble_toolbar", keywords: "toolbar selection 工具栏", section: SettingsSection::Editor },
+    SettingSearchEntry { label_key: "settings.files.recent_files", keywords: "recent files 最近文件", section: SettingsSection::Files },
+    SettingSearchEntry { label_key: "settings.terminal.font_size", keywords: "terminal font 终端 字体", section: SettingsSection::Terminal },
+    SettingSearchEntry { label_key: "settings.terminal.theme", keywords: "terminal theme 终端主题", section: SettingsSection::Terminal },
+    SettingSearchEntry { label_key: "settings.keyboard.title", keywords: "shortcut keybinding 快捷键", section: SettingsSection::Keyboard },
+    SettingSearchEntry { label_key: "settings.about.title", keywords: "about version update 版本 更新", section: SettingsSection::About },
+];
+
 /// Result of showing the settings panel.
 #[derive(Debug, Clone, Default)]
 pub struct SettingsPanelOutput {
@@ -190,6 +227,8 @@ pub struct SettingsPanel {
     active_section: SettingsSection,
     /// State for capturing a new key binding (None if not capturing)
     key_capture: Option<KeyCaptureState>,
+    /// Search text for the whole settings panel
+    search: String,
     /// Filter text for keyboard shortcuts search
     keyboard_filter: String,
     /// Conflict warning message (if any)
@@ -214,6 +253,7 @@ impl SettingsPanel {
         Self {
             active_section: SettingsSection::default(),
             key_capture: None,
+            search: String::new(),
             keyboard_filter: String::new(),
             conflict_warning: None,
             cached_monitor_info: None,
@@ -252,28 +292,81 @@ impl SettingsPanel {
                 });
                 ui.add_space(12.0);
 
-                for section in [
-                    SettingsSection::Appearance,
-                    SettingsSection::Editor,
-                    SettingsSection::Files,
-                    SettingsSection::Keyboard,
-                    SettingsSection::Terminal,
-                    SettingsSection::About,
-                ] {
-                    let selected = self.active_section == section;
-                    let text = format!("{} {}", section.icon(), section.label());
+                let search_id = ui.make_persistent_id("settings_search");
+                if ui.input(|input| {
+                    input.modifiers.command && input.key_pressed(egui::Key::F)
+                }) {
+                    ui.memory_mut(|memory| memory.request_focus(search_id));
+                }
+                let search_response = ui.add(
+                    egui::TextEdit::singleline(&mut self.search)
+                        .id(search_id)
+                        .hint_text(t!("settings.search_hint"))
+                        .desired_width(sidebar_width - 16.0),
+                );
+                if search_response.has_focus()
+                    && ui.input(|input| input.key_pressed(egui::Key::Escape))
+                {
+                    self.search.clear();
+                }
+                ui.add_space(6.0);
 
-                    let btn = ui.add_sized(
-                        [sidebar_width - 16.0, 32.0],
-                        egui::Button::selectable(selected, RichText::new(text).size(14.0)),
-                    );
+                if self.search.trim().is_empty() {
+                    for section in SETTINGS_SECTIONS {
+                        let selected = self.active_section == section;
+                        let text = format!("{} {}", section.icon(), section.label());
 
-                    if btn.clicked() {
-                        self.active_section = section;
-                        if section != SettingsSection::Keyboard {
-                            self.key_capture = None;
-                            self.conflict_warning = None;
+                        let btn = ui.add_sized(
+                            [sidebar_width - 16.0, 32.0],
+                            egui::Button::selectable(selected, RichText::new(text).size(14.0)),
+                        );
+
+                        if btn.clicked() {
+                            self.active_section = section;
+                            if section != SettingsSection::Keyboard {
+                                self.key_capture = None;
+                                self.conflict_warning = None;
+                            }
                         }
+                    }
+                } else {
+                    let query = self.search.trim().to_lowercase();
+                    let mut matches = 0usize;
+                    egui::ScrollArea::vertical()
+                        .max_height(available.y - 180.0)
+                        .show(ui, |ui| {
+                            for entry in SETTING_SEARCH_INDEX {
+                                let label = t!(entry.label_key).to_lowercase();
+                                let section_label = entry.section.label().to_lowercase();
+                                if !label.contains(&query)
+                                    && !entry.keywords.contains(&query)
+                                    && !section_label.contains(&query)
+                                {
+                                    continue;
+                                }
+                                matches += 1;
+                                if ui
+                                    .add_sized(
+                                        [sidebar_width - 16.0, 28.0],
+                                        egui::Button::new(
+                                            RichText::new(t!(entry.label_key).to_string())
+                                                .size(12.0),
+                                        ),
+                                    )
+                                    .on_hover_text(entry.section.label())
+                                    .clicked()
+                                {
+                                    self.active_section = entry.section;
+                                    self.search.clear();
+                                }
+                            }
+                        });
+                    if matches == 0 {
+                        ui.label(
+                            RichText::new(t!("settings.search_no_results").to_string())
+                                .size(11.0)
+                                .italics(),
+                        );
                     }
                 }
 

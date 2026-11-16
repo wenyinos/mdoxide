@@ -57,6 +57,21 @@ pub fn layout_flowchart(
     let sugiyama = SugiyamaLayout::new(graph, flowchart.direction, config.clone(), available_width);
     let mut layout = sugiyama.compute();
 
+    // Apply `%% @pos` manual overrides (coordinates are node centers).
+    if !flowchart.position_hints.is_empty() {
+        for (id, (x, y)) in &flowchart.position_hints {
+            if let Some(node) = layout.nodes.get_mut(id) {
+                node.pos = egui::pos2(x - node.size.x / 2.0, y - node.size.y / 2.0);
+            }
+        }
+        let mut max = egui::vec2(0.0, 0.0);
+        for node in layout.nodes.values() {
+            max.x = max.x.max(node.pos.x + node.size.x);
+            max.y = max.y.max(node.pos.y + node.size.y);
+        }
+        layout.total_size = max + egui::vec2(config.margin, config.margin);
+    }
+
     // Compute subgraph bounding boxes
     compute_subgraph_layouts(&mut layout, flowchart, &config, font_size, text_measurer);
 

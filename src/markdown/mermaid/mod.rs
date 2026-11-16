@@ -261,15 +261,37 @@ pub fn render_mermaid_diagram(
                         FlowchartColors::light()
                     };
                     let text_measurer = EguiTextMeasurer::new(ui);
-                    let layout =
-                        layout_flowchart(&flowchart, available_width, font_size, &text_measurer);
+                    let mut render_font = font_size;
+                    let mut layout = layout_flowchart(
+                        &flowchart,
+                        available_width,
+                        render_font,
+                        &text_measurer,
+                    );
+
+                    // Fit-to-pane: shrink the diagram's font/layout until it fits
+                    // the preview width (bounded so labels stay legible).
+                    let mut attempts = 0;
+                    while layout.total_size.x > available_width
+                        && render_font > 8.0
+                        && attempts < 12
+                    {
+                        render_font = (render_font - 1.0).max(8.0);
+                        layout = layout_flowchart(
+                            &flowchart,
+                            available_width,
+                            render_font,
+                            &text_measurer,
+                        );
+                        attempts += 1;
+                    }
 
                     // Cache the result for future frames
                     with_cache(|cache| {
                         cache.insert_flowchart(cache_key, flowchart.clone(), layout.clone());
                     });
 
-                    render_flowchart(ui, &flowchart, &layout, &colors, font_size);
+                    render_flowchart(ui, &flowchart, &layout, &colors, render_font);
                     RenderResult::Success
                 }));
 
@@ -462,6 +484,30 @@ mod tests {
         assert_eq!(dbl.0, "H");
         assert_eq!(dbl.1, "Ring");
         assert_eq!(dbl.2, NodeShape::DoubleCircle);
+    }
+
+    #[test]
+    fn test_flowchart_fa_prefix_is_stripped_from_labels() {
+        let flowchart =
+            parse_flowchart("flowchart TD\nA[fa:fa-user User] -->|fa:fa-arrow Go| B").unwrap();
+        let a = flowchart.nodes.iter().find(|node| node.id == "A").unwrap();
+        assert_eq!(a.label, "User");
+        assert_eq!(flowchart.edges[0].label.as_deref(), Some("Go"));
+    }
+
+    #[test]
+    fn test_flowchart_link_style_index_list() {
+        let flowchart =
+            parse_flowchart("flowchart TD\nA-->B\nB-->C\nlinkStyle 0,1 stroke:#f00").unwrap();
+        assert!(flowchart.link_styles.contains_key(&0));
+        assert!(flowchart.link_styles.contains_key(&1));
+    }
+
+    #[test]
+    fn test_flowchart_position_hint_parsed() {
+        let flowchart =
+            parse_flowchart("flowchart TD\n%% @pos A 120 80\nA --> B").unwrap();
+        assert_eq!(flowchart.position_hints.get("A"), Some(&(120.0, 80.0)));
     }
 
     #[test]

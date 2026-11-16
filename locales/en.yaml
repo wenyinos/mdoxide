@@ -208,6 +208,8 @@ dialog:
     open_after_export: "Open the file after export"
     export: "Export…"
 settings:
+  search_hint: "Search settings…"
+  search_no_results: "No matching settings"
   title: "Settings"
   reset_all: "Reset All"
   reset_tooltip: "Reset all settings to defaults"

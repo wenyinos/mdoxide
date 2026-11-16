@@ -180,6 +180,8 @@ pub struct Flowchart {
     pub link_styles: HashMap<usize, LinkStyle>,
     /// Default style applied to all edges without explicit style
     pub default_link_style: Option<LinkStyle>,
+    /// Manual node positions from `%% @pos <id> <x> <y>` hints (center coordinates).
+    pub position_hints: HashMap<String, (f32, f32)>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

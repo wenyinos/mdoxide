@@ -205,6 +205,8 @@ dialog:
     open_after_export: 导出后打开文件
     export: 导出…
 settings:
+  search_hint: 搜索设置…
+  search_no_results: 没有匹配的设置
   title: 设置
   reset_all: 重置全部
   reset_tooltip: 重置所有设置项为默认值

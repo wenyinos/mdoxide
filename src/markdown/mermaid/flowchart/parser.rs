@@ -52,6 +52,19 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
         let line = lines[line_idx].trim();
         line_idx += 1;
 
+        // Manual layout hint: %% @pos <node_id> <x> <y>
+        if let Some(hint) = line.strip_prefix("%% @pos ") {
+            let parts: Vec<&str> = hint.split_whitespace().collect();
+            if parts.len() >= 3 {
+                if let (Ok(x), Ok(y)) = (parts[1].parse::<f32>(), parts[2].parse::<f32>()) {
+                    flowchart
+                        .position_hints
+                        .insert(parts[0].to_string(), (x, y));
+                }
+            }
+            continue;
+        }
+
         // Skip empty lines and comments
         if line.is_empty() || line.starts_with("%%") {
             continue;
@@ -498,8 +511,12 @@ fn parse_link_style(line: &str, flowchart: &mut Flowchart) {
 
     if index_part.eq_ignore_ascii_case("default") {
         flowchart.default_link_style = Some(style);
-    } else if let Ok(index) = index_part.parse::<usize>() {
-        flowchart.link_styles.insert(index, style);
+    } else {
+        for part in index_part.split(',') {
+            if let Ok(index) = part.trim().parse::<usize>() {
+                flowchart.link_styles.insert(index, style.clone());
+            }
+        }
     }
 }
 
@@ -1001,6 +1018,18 @@ fn extract_id(id: &str, full_text: &str) -> String {
 
 /// Clean up label text by converting HTML line breaks to newlines.
 fn clean_label(label: &str) -> String {
+    // Mermaid accepts FontAwesome prefixes in labels; we do not render the
+    // glyph, so drop the `fa:fa-*` token while keeping the rest of the label.
+    let label = label
+        .split_whitespace()
+        .filter(|token| {
+            !token.starts_with("fa:")
+                && !token.starts_with("fab:")
+                && !token.starts_with("fas:")
+                && !token.starts_with("far:")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
     label
         .replace("<br/>", "\n")
         .replace("<br>", "\n")
