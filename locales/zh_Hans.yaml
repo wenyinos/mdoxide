@@ -516,6 +516,13 @@ stats:
   mermaid_diagrams: Mermaid 图表
   tables: 表格
   blockquotes: 引用块
+  runtime:
+    title: 运行时模块
+    cjk_fonts: 已加载 CJK 字体
+    complex_scripts: 已加载复杂文字
+    mermaid_cache: Mermaid 缓存
+    entries: "%{count} 项"
+    terminal_sessions: 终端会话
 quick_switcher:
   placeholder: 搜索文件...
   no_results: 没有匹配的文件

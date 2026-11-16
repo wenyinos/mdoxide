@@ -527,6 +527,13 @@ stats:
   mermaid_diagrams: "Mermaid diagrams"
   tables: "Tables"
   blockquotes: "Blockquotes"
+  runtime:
+    title: "Runtime modules"
+    cjk_fonts: "Loaded CJK fonts"
+    complex_scripts: "Loaded complex scripts"
+    mermaid_cache: "Mermaid cache"
+    entries: "%{count} entries"
+    terminal_sessions: "Terminal sessions"
 
 # File tree / Sidebar
 

@@ -1618,6 +1618,8 @@ impl MDOxideApp {
             });
             let active_tree_path = self.state.active_tab().and_then(|tab| tab.path.clone());
             self.file_tree_panel.set_active_path(active_tree_path);
+            self.outline_panel
+                .set_runtime_terminal_sessions(self.terminal_panel_state.manager.terminal_count());
 
             let outline_output = self.outline_panel.show(
                 ui,

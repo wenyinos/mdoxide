@@ -115,6 +115,8 @@ pub struct OutlinePanel {
     current_section: Option<usize>,
     /// Currently active tab
     active_tab: OutlinePanelTab,
+    /// Number of live terminal sessions (read-only stat).
+    runtime_terminal_sessions: usize,
 }
 
 impl Default for OutlinePanel {
@@ -131,6 +133,7 @@ impl OutlinePanel {
             side: OutlinePanelSide::Right,
             current_section: None,
             active_tab: OutlinePanelTab::Outline,
+            runtime_terminal_sessions: 0,
         }
     }
 
@@ -185,6 +188,11 @@ impl OutlinePanel {
     #[allow(dead_code)] // Public API for programmatic tab switching
     pub fn set_active_tab(&mut self, tab: OutlinePanelTab) {
         self.active_tab = tab;
+    }
+
+    /// Update the terminal-session count shown in the Stats tab.
+    pub fn set_runtime_terminal_sessions(&mut self, count: usize) {
+        self.runtime_terminal_sessions = count;
     }
 
     /// Render the outline panel.
@@ -1220,6 +1228,58 @@ impl OutlinePanel {
         }
 
         ui.add_space(8.0);
+        self.render_runtime_stats(ui, text_color, muted_color);
+    }
+
+    fn render_runtime_stats(&self, ui: &mut Ui, text_color: Color32, muted_color: Color32) {
+        ui.separator();
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!("stats.runtime.title").to_string())
+                .size(11.0)
+                .strong()
+                .color(text_color),
+        );
+        ui.add_space(4.0);
+
+        let fonts = crate::fonts::runtime_font_stats();
+        runtime_stat_label(
+            ui,
+            &t!("stats.runtime.cjk_fonts"),
+            &format_runtime_list(&fonts.cjk),
+            muted_color,
+        );
+        runtime_stat_label(
+            ui,
+            &t!("stats.runtime.complex_scripts"),
+            &format_runtime_list(&fonts.complex_scripts),
+            muted_color,
+        );
+
+        let mermaid = crate::markdown::mermaid::runtime_stats();
+        let total = mermaid.hits + mermaid.misses;
+        let hit_rate = if total == 0 {
+            0.0
+        } else {
+            mermaid.hits as f64 / total as f64 * 100.0
+        };
+        runtime_stat_label(
+            ui,
+            &t!("stats.runtime.mermaid_cache"),
+            &format!(
+                "{} · {:.0}% hit",
+                t!("stats.runtime.entries", count = mermaid.entries),
+                hit_rate
+            ),
+            muted_color,
+        );
+        runtime_stat_label(
+            ui,
+            &t!("stats.runtime.terminal_sessions"),
+            &self.runtime_terminal_sessions.to_string(),
+            muted_color,
+        );
+        ui.add_space(8.0);
     }
 
     /// Render a single outline item (for Markdown documents).
@@ -1419,6 +1479,23 @@ fn truncate_text(text: &str, max_width: f32, font_size: f32) -> String {
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
+fn format_runtime_list(items: &[&str]) -> String {
+    if items.is_empty() {
+        "—".to_string()
+    } else {
+        items.join(", ")
+    }
+}
+
+fn runtime_stat_label(ui: &mut Ui, label: &str, value: &str, color: Color32) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(label).size(10.5).color(color));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(RichText::new(value).size(10.5).color(color));
+        });
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1470,5 +1547,14 @@ mod tests {
             let _dark = heading_level_color(level, true, a);
             let _light = heading_level_color(level, false, a);
         }
+    }
+
+    #[test]
+    fn test_format_runtime_list() {
+        assert_eq!(format_runtime_list(&[]), "—");
+        assert_eq!(
+            format_runtime_list(&["Korean", "Japanese"]),
+            "Korean, Japanese"
+        );
     }
 }

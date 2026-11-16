@@ -3044,6 +3044,46 @@ pub fn get_rendered_styled_font_family(
     get_styled_font_family(bold, italic, rendered_font)
 }
 
+/// Read-only runtime font report for the Stats panel.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FontRuntimeStats {
+    pub cjk: Vec<&'static str>,
+    pub complex_scripts: Vec<&'static str>,
+}
+
+/// Snapshot which optional font families are currently loaded.
+pub fn runtime_font_stats() -> FontRuntimeStats {
+    let mut stats = FontRuntimeStats::default();
+    for (loaded, name) in [
+        (KOREAN_FONTS_LOADED.load(Ordering::Relaxed), "Korean"),
+        (JAPANESE_FONTS_LOADED.load(Ordering::Relaxed), "Japanese"),
+        (CHINESE_SC_FONTS_LOADED.load(Ordering::Relaxed), "Chinese (SC)"),
+        (CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed), "Chinese (TC)"),
+    ] {
+        if loaded {
+            stats.cjk.push(name);
+        }
+    }
+    for (loaded, name) in [
+        (ARABIC_FONTS_LOADED.load(Ordering::Relaxed), "Arabic"),
+        (BENGALI_FONTS_LOADED.load(Ordering::Relaxed), "Bengali"),
+        (DEVANAGARI_FONTS_LOADED.load(Ordering::Relaxed), "Devanagari"),
+        (THAI_FONTS_LOADED.load(Ordering::Relaxed), "Thai"),
+        (HEBREW_FONTS_LOADED.load(Ordering::Relaxed), "Hebrew"),
+        (TAMIL_FONTS_LOADED.load(Ordering::Relaxed), "Tamil"),
+        (GEORGIAN_FONTS_LOADED.load(Ordering::Relaxed), "Georgian"),
+        (ARMENIAN_FONTS_LOADED.load(Ordering::Relaxed), "Armenian"),
+        (ETHIOPIC_FONTS_LOADED.load(Ordering::Relaxed), "Ethiopic"),
+        (OTHER_INDIC_FONTS_LOADED.load(Ordering::Relaxed), "Other Indic"),
+        (SOUTHEAST_ASIAN_FONTS_LOADED.load(Ordering::Relaxed), "Southeast Asian"),
+    ] {
+        if loaded {
+            stats.complex_scripts.push(name);
+        }
+    }
+    stats
+}
+
 /// FontId for terminal text, using the configured custom family when loaded.
 #[must_use]
 pub fn terminal_font_id(size: f32) -> FontId {
@@ -3134,6 +3174,19 @@ mod tests {
             get_styled_font_family(true, true, &EditorFont::JetBrainsMono),
             FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into())
         );
+    }
+
+    #[test]
+    fn test_runtime_font_stats_reports_known_modules() {
+        let stats = runtime_font_stats();
+        assert!(stats
+            .cjk
+            .iter()
+            .all(|name| matches!(*name, "Korean" | "Japanese" | "Chinese (SC)" | "Chinese (TC)")));
+        assert!(stats
+            .complex_scripts
+            .iter()
+            .all(|name| !name.is_empty()));
     }
 
     #[test]

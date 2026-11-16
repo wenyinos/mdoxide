@@ -107,6 +107,28 @@ where
     f(cache)
 }
 
+/// Read-only Mermaid cache snapshot for the Stats panel.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MermaidRuntimeStats {
+    pub entries: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+}
+
+/// Snapshot the global Mermaid cache.
+pub fn runtime_stats() -> MermaidRuntimeStats {
+    with_cache(|cache| {
+        let stats = cache.stats();
+        MermaidRuntimeStats {
+            entries: cache.len(),
+            hits: stats.hits,
+            misses: stats.misses,
+            evictions: stats.evictions,
+        }
+    })
+}
+
 /// Clear the global diagram cache.
 ///
 /// Call this when theme or global font settings change.
