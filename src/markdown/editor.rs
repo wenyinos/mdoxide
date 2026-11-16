@@ -720,6 +720,8 @@ pub struct MarkdownEditor<'a> {
     search_highlights: Option<Vec<(usize, usize)>>,
     /// Whether rendered preview editing is locked.
     preview_locked: bool,
+    /// Directory used to resolve relative links.
+    document_dir: Option<std::path::PathBuf>,
     /// Index of the currently focused search match
     current_search_match: usize,
     /// Gating and cwd for running fenced code from the preview (optional).
@@ -767,6 +769,7 @@ impl<'a> MarkdownEditor<'a> {
             strict_line_breaks: false,
             search_highlights: None,
             preview_locked: false,
+            document_dir: None,
             current_search_match: 0,
             code_execution: None,
             source_epoch: 0,
@@ -793,6 +796,13 @@ impl<'a> MarkdownEditor<'a> {
     #[must_use]
     pub fn word_wrap(mut self, wrap: bool) -> Self {
         self.word_wrap = wrap;
+        self
+    }
+
+    /// Set the directory used to resolve relative links.
+    #[must_use]
+    pub fn document_dir(mut self, dir: Option<std::path::PathBuf>) -> Self {
+        self.document_dir = dir;
         self
     }
 
@@ -1085,6 +1095,8 @@ impl<'a> MarkdownEditor<'a> {
                     .insert_temp(egui::Id::new("wikilink_resolution_context"), ctx.clone());
             });
         }
+
+        crate::markdown::widgets::set_link_base_dir(self.document_dir.clone());
 
         // Store strict line breaks flag in egui memory for render_inline_node
         ui.memory_mut(|mem| {
@@ -6282,8 +6294,11 @@ fn resolve_image_path(
         return None;
     }
 
-    // Strip leading file:// protocol if present
+    // Strip leading file:// protocol if present and normalize MarkText-style
+    // Windows separators / leading "./".
     let path_str = url.strip_prefix("file://").unwrap_or(url);
+    let path_str = path_str.replace('\\', "/");
+    let path_str = path_str.strip_prefix("./").unwrap_or(&path_str);
 
     let path = Path::new(path_str);
 
@@ -6303,11 +6318,27 @@ fn resolve_image_path(
         }
     }
 
+    // MarkText-style bare filename: try `<dir>/assets/<name>`.
+    if let Some(name) = Path::new(path_str).file_name() {
+        if let Some(dir) = current_dir {
+            let resolved = dir.join("assets").join(name);
+            if resolved.is_file() {
+                return Some(resolved);
+            }
+        }
+    }
+
     // Fall back to workspace root
     if let Some(root) = workspace_root {
         let resolved = root.join(path_str);
         if resolved.is_file() {
             return Some(resolved);
+        }
+        if let Some(name) = Path::new(path_str).file_name() {
+            let resolved = root.join("assets").join(name);
+            if resolved.is_file() {
+                return Some(resolved);
+            }
         }
     }
 

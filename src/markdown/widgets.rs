@@ -14,6 +14,9 @@
 // Allow dead code for WYSIWYG widgets that are designed but not yet fully integrated
 #![allow(dead_code)]
 
+use std::cell::RefCell;
+use std::path::{Path, PathBuf};
+
 use crate::config::{EditorFont, Theme};
 use crate::fonts::get_styled_font_family;
 use crate::markdown::ansi_render;
@@ -4509,6 +4512,46 @@ pub struct RenderedLinkOutput {
     pub click_consumed: bool,
 }
 
+thread_local! {
+    /// Directory of the document currently being rendered, used to resolve local links.
+    static LINK_BASE_DIR: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Set the directory used to resolve relative links in the rendered preview.
+pub(crate) fn set_link_base_dir(dir: Option<PathBuf>) {
+    LINK_BASE_DIR.with(|slot| *slot.borrow_mut() = dir);
+}
+
+/// Open a link target: http(s) in the browser, local paths in the file manager.
+fn open_link_target(url: &str) -> Result<(), String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return open::that(url).map_err(|error| error.to_string());
+    }
+
+    let raw = url.split('#').next().unwrap_or(url);
+    let path = Path::new(raw);
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        LINK_BASE_DIR.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .map(|base| base.join(path))
+                .unwrap_or_else(|| path.to_path_buf())
+        })
+    };
+
+    if resolved.is_dir() {
+        return open::that(&resolved).map_err(|error| error.to_string());
+    }
+    if resolved.is_file() {
+        if let Some(parent) = resolved.parent() {
+            return open::that(parent).map_err(|error| error.to_string());
+        }
+    }
+    Err(format!("Local link not found: {}", resolved.display()))
+}
+
 /// A rendered link widget with hover menu for editing.
 ///
 /// This widget provides:
@@ -4632,14 +4675,10 @@ impl<'a> RenderedLinkWidget<'a> {
         // Check for middle-click first (always opens in browser)
         if link_response.middle_clicked() {
             click_consumed = true;
-            let can_open = self.state.edit_url.starts_with("http://")
-                || self.state.edit_url.starts_with("https://");
-            if can_open {
-                if let Err(e) = open::that(&self.state.edit_url) {
-                    log::error!("Failed to open URL: {}", e);
-                } else {
-                    log::debug!("Opened URL via middle-click: {}", self.state.edit_url);
-                }
+            if let Err(error) = open_link_target(&self.state.edit_url) {
+                log::warn!("Failed to open link via middle-click: {}", error);
+            } else {
+                log::debug!("Opened link via middle-click: {}", self.state.edit_url);
             }
         } else if clicked_on_link {
             click_consumed = true;
@@ -4648,14 +4687,10 @@ impl<'a> RenderedLinkWidget<'a> {
 
             if open_in_browser {
                 // Ctrl+Click / Cmd+Click: Open URL in default browser
-                let can_open = self.state.edit_url.starts_with("http://")
-                    || self.state.edit_url.starts_with("https://");
-                if can_open {
-                    if let Err(e) = open::that(&self.state.edit_url) {
-                        log::error!("Failed to open URL: {}", e);
-                    } else {
-                        log::debug!("Opened URL via Ctrl+Click: {}", self.state.edit_url);
-                    }
+                if let Err(error) = open_link_target(&self.state.edit_url) {
+                    log::warn!("Failed to open link via Ctrl+Click: {}", error);
+                } else {
+                    log::debug!("Opened link via Ctrl+Click: {}", self.state.edit_url);
                 }
             } else {
                 // Regular click: Open edit popup
@@ -4783,10 +4818,10 @@ impl<'a> RenderedLinkWidget<'a> {
                                 open_button.on_hover_text(hover_text);
 
                                 if open_clicked && can_open {
-                                    if let Err(e) = open::that(&self.state.edit_url) {
-                                        log::error!("Failed to open URL: {}", e);
+                                    if let Err(error) = open_link_target(&self.state.edit_url) {
+                                        log::warn!("Failed to open link: {}", error);
                                     } else {
-                                        log::debug!("Opened URL: {}", self.state.edit_url);
+                                        log::debug!("Opened link: {}", self.state.edit_url);
                                     }
                                 }
 

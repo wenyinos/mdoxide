@@ -2071,10 +2071,16 @@ impl MDOxideApp {
                                         let tab_id = tab.id;
                                         let content_version = tab.content_version();
                                         let preview_locked = tab.preview_locked;
+                                        let document_dir = tab
+                                            .path
+                                            .as_ref()
+                                            .and_then(|path| path.parent())
+                                            .map(|path| path.to_path_buf());
 
                                         let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                             .mode(EditorMode::Rendered)
                                             .preview_locked(preview_locked)
+                                            .document_dir(document_dir)
                                             .document_id(tab_id)
                                             .content_version(content_version)
                                             .font_size(font_size)
@@ -2446,10 +2452,16 @@ impl MDOxideApp {
                                     let tab_id = tab.id;
                                     let content_version = tab.content_version();
                                     let preview_locked = tab.preview_locked;
+                                    let document_dir = tab
+                                        .path
+                                        .as_ref()
+                                        .and_then(|path| path.parent())
+                                        .map(|path| path.to_path_buf());
 
                                     let mut md_editor = MarkdownEditor::new(&mut tab.content)
                                         .mode(EditorMode::Rendered)
                                         .preview_locked(preview_locked)
+                                        .document_dir(document_dir)
                                         .document_id(tab_id)
                                         .content_version(content_version)
                                         .font_size(font_size)
