@@ -407,6 +407,8 @@ settings:
   terminal:
     title: "Terminal"
     enable: "Enable Integrated Terminal"
+    font_family: "Font Family"
+    font_default: "JetBrains Mono (default)"
     font_size: "Font Size"
     scrollback: "Scrollback Lines"
     copy_selection: "Copy Selection Automatically"

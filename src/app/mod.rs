@@ -316,7 +316,9 @@ impl MDOxideApp {
             .as_ref()
             .and_then(|font| font.custom_name())
             .map(str::to_string);
-        if custom_font.is_some() || rendered_custom_font.is_some() {
+        let terminal_font = state.settings.terminal_font_family.clone();
+        fonts::set_terminal_font_name(terminal_font.as_deref());
+        if custom_font.is_some() || rendered_custom_font.is_some() || terminal_font.is_some() {
             if let Some(reason) = fonts::reload_fonts(
                 &cc.egui_ctx,
                 custom_font.as_deref(),

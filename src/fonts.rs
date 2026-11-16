@@ -64,6 +64,13 @@ static RENDERED_CUSTOM_FONT_BYTES: std::sync::Mutex<Option<&'static [u8]>> =
 static RENDERED_CUSTOM_FONT_NAME: std::sync::Mutex<Option<String>> =
     std::sync::Mutex::new(None);
 
+/// Cached raw bytes of the terminal custom font, for HarfRust shaping.
+static TERMINAL_FONT_BYTES: std::sync::Mutex<Option<&'static [u8]>> =
+    std::sync::Mutex::new(None);
+
+/// Name of the terminal custom font, kept across lazy font rebuilds.
+static TERMINAL_FONT_NAME: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 fn set_rendered_custom_font_name(name: Option<&str>) {
     *RENDERED_CUSTOM_FONT_NAME
         .lock()
@@ -72,6 +79,20 @@ fn set_rendered_custom_font_name(name: Option<&str>) {
 
 fn current_rendered_custom_font_name() -> Option<String> {
     RENDERED_CUSTOM_FONT_NAME
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Select the terminal font family (None = JetBrains Mono).
+pub fn set_terminal_font_name(name: Option<&str>) {
+    *TERMINAL_FONT_NAME
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = name.map(str::to_string);
+}
+
+fn current_terminal_font_name() -> Option<String> {
+    TERMINAL_FONT_NAME
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
@@ -1000,6 +1021,8 @@ const FONT_SOUTHEAST_ASIAN: &str = "SoutheastAsian";
 const FONT_CUSTOM: &str = "Custom";
 /// Key for the custom font used only by the rendered preview.
 const FONT_CUSTOM_RENDERED: &str = "CustomRendered";
+/// Key for the custom terminal font.
+const FONT_TERMINAL_CUSTOM: &str = "TerminalCustom";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HarfRust shaping: TTF bytes aligned with egui font families
@@ -1054,6 +1077,10 @@ pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .unwrap_or(INTER_REGULAR),
+            FONT_TERMINAL_CUSTOM => TERMINAL_FONT_BYTES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or(JETBRAINS_REGULAR),
             _ => INTER_REGULAR,
         },
     }
@@ -1838,6 +1865,50 @@ fn register_rendered_custom_family(
     }
 }
 
+/// Load the terminal custom font into its own key (falling back to JetBrains).
+fn load_terminal_custom_font(fonts: &mut FontDefinitions, font_name: &str) -> bool {
+    match load_system_font_by_name(font_name) {
+        Ok(data) => {
+            let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
+            *TERMINAL_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = Some(raw);
+            fonts
+                .font_data
+                .insert(FONT_TERMINAL_CUSTOM.to_owned(), Arc::new(data));
+            info!("Loaded terminal custom font: {}", font_name);
+            true
+        }
+        Err(reason) => {
+            warn!("Terminal custom font failed: {}", reason);
+            *TERMINAL_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            false
+        }
+    }
+}
+
+fn register_terminal_custom_family(
+    fonts: &mut FontDefinitions,
+    loaded: bool,
+    load_cjk: bool,
+    cjk_state: &CjkFontState,
+    cjk_preference: CjkFontPreference,
+) {
+    if !loaded {
+        return;
+    }
+    let family = FontFamily::Name(FONT_TERMINAL_CUSTOM.into());
+    fonts.families.insert(
+        family.clone(),
+        vec![
+            FONT_TERMINAL_CUSTOM.to_owned(),
+            FONT_JETBRAINS.to_owned(),
+            FONT_INTER.to_owned(),
+        ],
+    );
+    if load_cjk {
+        add_cjk_fallbacks(fonts, family, cjk_state, cjk_preference);
+    }
+}
+
 pub fn create_font_definitions_with_cjk_spec(
     custom_font: Option<&str>,
     rendered_custom_font: Option<&str>,
@@ -1952,6 +2023,15 @@ pub fn create_font_definitions_with_cjk_spec(
         *RENDERED_CUSTOM_FONT_BYTES
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    let terminal_font_name = current_terminal_font_name();
+    let terminal_font_loaded = terminal_font_name
+        .as_deref()
+        .map(|name| load_terminal_custom_font(&mut fonts, name))
+        .unwrap_or(false);
+    if terminal_font_name.is_none() {
+        *TERMINAL_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     let cjk_state = load_cjk_fonts_selective(&mut fonts, spec);
@@ -2101,6 +2181,7 @@ pub fn create_font_definitions_with_cjk_spec(
     );
 
     register_rendered_custom_family(&mut fonts, rendered_custom_loaded, true, &cjk_state, cjk_preference);
+    register_terminal_custom_family(&mut fonts, terminal_font_loaded, true, &cjk_state, cjk_preference);
 
     info!(
         "Loaded fonts: CJK(KR={}, JP={}, SC={}, TC={}), ComplexScript={}",
@@ -2216,6 +2297,15 @@ pub fn create_font_definitions_with_settings(
         *RENDERED_CUSTOM_FONT_BYTES
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    let terminal_font_name = current_terminal_font_name();
+    let terminal_font_loaded = terminal_font_name
+        .as_deref()
+        .map(|name| load_terminal_custom_font(&mut fonts, name))
+        .unwrap_or(false);
+    if terminal_font_name.is_none() {
+        *TERMINAL_FONT_BYTES.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     // Load CJK fonts only if requested (supports lazy loading)
@@ -2378,6 +2468,7 @@ pub fn create_font_definitions_with_settings(
     );
 
     register_rendered_custom_family(&mut fonts, rendered_custom_loaded, load_cjk, &cjk_state, cjk_preference);
+    register_terminal_custom_family(&mut fonts, terminal_font_loaded, load_cjk, &cjk_state, cjk_preference);
 
     info!(
         "Loaded fonts: Inter, JetBrains Mono, CJK={} (preference: {:?}), custom: {}",
@@ -2953,6 +3044,25 @@ pub fn get_rendered_styled_font_family(
     get_styled_font_family(bold, italic, rendered_font)
 }
 
+/// FontId for terminal text, using the configured custom family when loaded.
+#[must_use]
+pub fn terminal_font_id(size: f32) -> FontId {
+    let loaded = TERMINAL_FONT_BYTES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_some();
+    terminal_font_id_with(current_terminal_font_name().as_deref(), size, loaded)
+}
+
+fn terminal_font_id_with(name: Option<&str>, size: f32, loaded: bool) -> FontId {
+    match name {
+        Some(name) if !name.trim().is_empty() && loaded => {
+            FontId::new(size, FontFamily::Name(FONT_TERMINAL_CUSTOM.into()))
+        }
+        _ => FontId::monospace(size),
+    }
+}
+
 /// Create a FontId for styled text.
 ///
 /// Convenience function that combines size with the appropriate styled font family.
@@ -3023,6 +3133,22 @@ mod tests {
         assert_eq!(
             get_styled_font_family(true, true, &EditorFont::JetBrainsMono),
             FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into())
+        );
+    }
+
+    #[test]
+    fn test_terminal_font_id_falls_back_to_monospace() {
+        assert_eq!(
+            terminal_font_id_with(None, 12.0, false).family,
+            FontFamily::Monospace
+        );
+        assert_eq!(
+            terminal_font_id_with(Some("Missing Font"), 12.0, false).family,
+            FontFamily::Monospace
+        );
+        assert_eq!(
+            terminal_font_id_with(Some("Custom Mono"), 12.0, true).family,
+            FontFamily::Name(FONT_TERMINAL_CUSTOM.into())
         );
     }
 

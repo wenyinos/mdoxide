@@ -2451,6 +2451,9 @@ pub struct Settings {
     /// Terminal font size in pixels
     pub terminal_font_size: f32,
 
+    /// Optional terminal font family; None uses JetBrains Mono.
+    pub terminal_font_family: Option<String>,
+
     /// Maximum scrollback lines for the terminal
     pub terminal_scrollback_lines: usize,
 
@@ -2694,6 +2697,7 @@ impl Default for Settings {
             terminal_enabled: true, // Terminal feature enabled by default
             terminal_panel_height: 300.0, // Default panel height
             terminal_font_size: 14.0, // Default terminal font size
+            terminal_font_family: None,
             terminal_scrollback_lines: 10000, // Default scrollback buffer size
             terminal_copy_on_select: false, // Manual copy by default
             terminal_theme_name: String::from("MDOxide Dark"), // Default theme

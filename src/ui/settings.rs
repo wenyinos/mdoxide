@@ -190,6 +190,7 @@ enum SettingId {
     BubbleToolbar,
     RecentFiles,
     TerminalFontSize,
+    TerminalFontFamily,
     TerminalTheme,
     Keyboard,
     About,
@@ -219,6 +220,7 @@ const SETTING_SEARCH_INDEX: &[SettingSearchEntry] = &[
     SettingSearchEntry { id: SettingId::BubbleToolbar, label_key: "settings.editor.bubble_toolbar", keywords: "toolbar selection 工具栏", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::RecentFiles, label_key: "settings.files.recent_files", keywords: "recent files 最近文件", section: SettingsSection::Files },
     SettingSearchEntry { id: SettingId::TerminalFontSize, label_key: "settings.terminal.font_size", keywords: "terminal font 终端 字体", section: SettingsSection::Terminal },
+    SettingSearchEntry { id: SettingId::TerminalFontFamily, label_key: "settings.terminal.font_family", keywords: "terminal font family 终端字体", section: SettingsSection::Terminal },
     SettingSearchEntry { id: SettingId::TerminalTheme, label_key: "settings.terminal.theme", keywords: "terminal theme 终端主题", section: SettingsSection::Terminal },
     SettingSearchEntry { id: SettingId::Keyboard, label_key: "settings.keyboard.title", keywords: "shortcut keybinding 快捷键", section: SettingsSection::Keyboard },
     SettingSearchEntry { id: SettingId::About, label_key: "settings.about.title", keywords: "about version update 版本 更新", section: SettingsSection::About },
@@ -730,6 +732,41 @@ impl SettingsPanel {
                     )
                     .changed();
             }
+            SettingId::TerminalFontFamily => {
+                let selected = settings
+                    .terminal_font_family
+                    .clone()
+                    .unwrap_or_else(|| t!("settings.terminal.font_default").to_string());
+                let system_fonts = fonts::list_system_fonts();
+                egui::ComboBox::from_id_salt("filtered_terminal_font_family")
+                    .selected_text(selected)
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(
+                                settings.terminal_font_family.is_none(),
+                                t!("settings.terminal.font_default"),
+                            )
+                            .clicked()
+                        {
+                            settings.terminal_font_family = None;
+                            changed = true;
+                        }
+                        egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                            for font_name in system_fonts.iter() {
+                                let selected = settings
+                                    .terminal_font_family
+                                    .as_deref()
+                                    == Some(font_name.as_str());
+                                if ui.selectable_label(selected, font_name).clicked() {
+                                    settings.terminal_font_family =
+                                        Some(font_name.clone());
+                                    changed = true;
+                                }
+                            }
+                        });
+                    });
+            }
             SettingId::TerminalFontSize => {
                 changed |= ui
                     .add(
@@ -795,6 +832,46 @@ impl SettingsPanel {
         if font_slider.changed() {
             changed = true;
         }
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Terminal font family
+        ui.label(RichText::new(t!("settings.terminal.font_family").to_string()).strong());
+        ui.add_space(4.0);
+        let selected_terminal_font = settings
+            .terminal_font_family
+            .clone()
+            .unwrap_or_else(|| t!("settings.terminal.font_default").to_string());
+        let system_fonts = fonts::list_system_fonts();
+        egui::ComboBox::from_id_salt("terminal_font_family")
+            .selected_text(selected_terminal_font)
+            .width(220.0)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(
+                        settings.terminal_font_family.is_none(),
+                        t!("settings.terminal.font_default"),
+                    )
+                    .clicked()
+                {
+                    settings.terminal_font_family = None;
+                    changed = true;
+                }
+                egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                    for font_name in system_fonts.iter() {
+                        let selected = settings
+                            .terminal_font_family
+                            .as_deref()
+                            == Some(font_name.as_str());
+                        if ui.selectable_label(selected, font_name).clicked() {
+                            settings.terminal_font_family = Some(font_name.clone());
+                            changed = true;
+                        }
+                    }
+                });
+            });
 
         ui.add_space(12.0);
         ui.separator();

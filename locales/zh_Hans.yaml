@@ -402,6 +402,8 @@ settings:
   terminal:
     title: 终端
     enable: 使用集成终端
+    font_family: 字体
+    font_default: JetBrains Mono（默认）
     font_size: 字体大小
     scrollback: 回滚行数
     copy_selection: 自动复制选定内容

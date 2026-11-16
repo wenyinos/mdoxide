@@ -114,7 +114,7 @@ impl<'a> TerminalWidget<'a> {
 
     /// Calculate character dimensions for the monospace font.
     fn char_size(&self, ui: &Ui) -> Vec2 {
-        let font_id = FontId::monospace(self.font_size);
+        let font_id = crate::fonts::terminal_font_id(self.font_size);
         let char_width = ui.fonts_mut(|f| f.glyph_width(&font_id, 'M'));
         let line_height = self.font_size * 1.2;
         Vec2::new(char_width, line_height)
@@ -801,7 +801,7 @@ impl<'a> TerminalWidget<'a> {
         let total_lines = scrollback_len + rows;
         let end = total_lines.saturating_sub(scroll_offset);
         let start = end.saturating_sub(rows);
-        let font_id = FontId::monospace(self.font_size);
+        let font_id = crate::fonts::terminal_font_id(self.font_size);
 
         // Render each cell
         for row_idx in 0..rows {
@@ -915,7 +915,7 @@ impl<'a> TerminalWidget<'a> {
                     }
 
                     let font = if cell.attrs.bold {
-                        FontId::monospace(self.font_size)
+                        crate::fonts::terminal_font_id(self.font_size)
                     } else {
                         font_id.clone()
                     };

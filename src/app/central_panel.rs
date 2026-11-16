@@ -2801,6 +2801,8 @@ impl MDOxideApp {
                 let prev_font_family = self.state.settings.font_family.clone();
                 let prev_rendered_font_family =
                     self.state.settings.rendered_font_family.clone();
+                let prev_terminal_font_family =
+                    self.state.settings.terminal_font_family.clone();
                 let prev_cjk_preference = self.state.settings.cjk_font_preference;
                 let prev_language = self.state.settings.language;
 
@@ -2822,9 +2824,14 @@ impl MDOxideApp {
                     let font_changed = prev_font_family != self.state.settings.font_family
                         || prev_rendered_font_family
                             != self.state.settings.rendered_font_family
+                        || prev_terminal_font_family
+                            != self.state.settings.terminal_font_family
                         || prev_cjk_preference != self.state.settings.cjk_font_preference;
 
                     if font_changed {
+                        crate::fonts::set_terminal_font_name(
+                            self.state.settings.terminal_font_family.as_deref(),
+                        );
                         let custom_font = self
                             .state
                             .settings
@@ -2892,6 +2899,7 @@ impl MDOxideApp {
                 if output.reset_requested {
                     let default_settings = crate::config::Settings::default();
                     self.state.settings = default_settings;
+                    crate::fonts::set_terminal_font_name(None);
                     self.theme_manager.set_theme(self.state.settings.theme);
                     self.theme_manager
                         .sync_accent_rgb(self.state.settings.accent_color);
