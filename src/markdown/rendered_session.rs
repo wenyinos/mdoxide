@@ -104,6 +104,8 @@ pub struct RenderedEditSession {
     pub blocks: HashMap<BlockRef, BlockEditState>,
     /// Preview lock: block editing is gated while true.
     pub locked: bool,
+    /// Index into the current navigable-block list (rendered keyboard cursor).
+    pub block_cursor: Option<usize>,
 }
 
 impl RenderedEditSession {

@@ -1303,7 +1303,67 @@ impl<'a> MarkdownEditor<'a> {
         rendered_session.locked = self.preview_locked;
         if rendered_session.locked {
             rendered_session.active = None;
+            rendered_session.block_cursor = None;
         }
+        if rendered_session.active.is_some() {
+            rendered_session.block_cursor = None;
+        }
+
+        // Keyboard block navigation: ArrowUp/Down moves a block cursor, Enter edits.
+        let mut navigable_blocks: Vec<BlockRef> = Vec::new();
+        collect_navigable_blocks(&doc.root, false, &mut navigable_blocks);
+        if rendered_session.active.is_none()
+            && !rendered_session.locked
+            && !ui.ctx().wants_keyboard_input()
+        {
+            let forward = ui.input(|input| input.key_pressed(egui::Key::ArrowDown));
+            let backward = ui.input(|input| input.key_pressed(egui::Key::ArrowUp));
+            if forward || backward {
+                if let Some(index) = next_block_index(
+                    rendered_session.block_cursor,
+                    navigable_blocks.len(),
+                    forward,
+                ) {
+                    rendered_session.block_cursor = Some(index);
+                    ui.ctx().request_repaint();
+                    let key = if forward {
+                        egui::Key::ArrowDown
+                    } else {
+                        egui::Key::ArrowUp
+                    };
+                    ui.input_mut(|input| {
+                        input.consume_key(egui::Modifiers::NONE, key);
+                    });
+                }
+            }
+
+            if ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                if let Some(block) = rendered_session
+                    .block_cursor
+                    .and_then(|index| navigable_blocks.get(index).copied())
+                {
+                    rendered_session.switch_to(
+                        block,
+                        PendingActivation {
+                            cursor_char_index: Some(0),
+                            request_focus: true,
+                        },
+                        &mut |_block, _state| {},
+                    );
+                    if let Some(state) = rendered_session.blocks.get_mut(&block) {
+                        state.formatted_editing = true;
+                    }
+                    ui.input_mut(|input| {
+                        input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+                    });
+                }
+            }
+        }
+        set_current_block_cursor(
+            rendered_session
+                .block_cursor
+                .and_then(|index| navigable_blocks.get(index).copied()),
+        );
 
         // Collect line mappings during render for scroll sync
         let mut line_mappings: Vec<LineMapping> = Vec::new();
@@ -1998,6 +2058,8 @@ fn render_node_with_structural_keys(
     paragraph_indent: ParagraphIndent,
     header_spacing: HeaderSpacing,
 ) {
+    let nav_top = ui.cursor().top();
+    let nav_rect = ui.available_rect_before_wrap();
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
             render_heading(
@@ -2235,6 +2297,15 @@ fn render_node_with_structural_keys(
             }
         }
     }
+    paint_block_cursor(
+        ui,
+        node,
+        true,
+        nav_top,
+        nav_rect.left(),
+        nav_rect.right(),
+        colors.link,
+    );
 }
 
 /// Render a markdown node as an editable egui widget.
@@ -2252,6 +2323,8 @@ fn render_node(
     paragraph_indent: ParagraphIndent,
     header_spacing: HeaderSpacing,
 ) {
+    let nav_top = ui.cursor().top();
+    let nav_rect = ui.available_rect_before_wrap();
     match &node.node_type {
         MarkdownNodeType::Heading { level, .. } => {
             render_heading(
@@ -2486,6 +2559,15 @@ fn render_node(
             }
         }
     }
+    paint_block_cursor(
+        ui,
+        node,
+        false,
+        nav_top,
+        nav_rect.left(),
+        nav_rect.right(),
+        colors.link,
+    );
 }
 
 /// Get (top_margin, bottom_margin) in pixels for a heading level and spacing preset.
@@ -2741,6 +2823,127 @@ fn set_current_rendered_doc(doc: &std::sync::Arc<MarkdownDocument>) {
 
 fn with_current_rendered_doc<R>(f: impl FnOnce(&MarkdownDocument) -> R) -> Option<R> {
     CURRENT_RENDERED_DOC.with(|cell| cell.borrow().as_ref().map(|doc| f(doc)))
+}
+
+thread_local! {
+    /// Rendered block currently selected by keyboard navigation.
+    static CURRENT_BLOCK_CURSOR: std::cell::RefCell<Option<BlockRef>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn set_current_block_cursor(block: Option<BlockRef>) {
+    CURRENT_BLOCK_CURSOR.with(|cell| *cell.borrow_mut() = block);
+}
+
+fn current_block_cursor() -> Option<BlockRef> {
+    CURRENT_BLOCK_CURSOR.with(|cell| *cell.borrow())
+}
+
+/// Whether a paragraph/item needs the formatted inline renderer.
+fn paragraph_has_inline_elements(node: &MarkdownNode) -> bool {
+    node.children.iter().any(|child| {
+        matches!(
+            child.node_type,
+            MarkdownNodeType::Link { .. }
+                | MarkdownNodeType::Wikilink { .. }
+                | MarkdownNodeType::Strong
+                | MarkdownNodeType::Emphasis
+                | MarkdownNodeType::Strikethrough
+                | MarkdownNodeType::Code(_)
+                | MarkdownNodeType::Image { .. }
+        )
+    })
+}
+
+/// BlockRef used by the render path for a heading/paragraph node.
+fn block_ref_for_node(node: &MarkdownNode, structural: bool) -> Option<BlockRef> {
+    match &node.node_type {
+        MarkdownNodeType::Heading { .. } => Some(BlockRef::Heading {
+            line: node.start_line,
+            structural,
+        }),
+        MarkdownNodeType::Paragraph => {
+            if paragraph_has_inline_elements(node) {
+                Some(BlockRef::FormattedParagraph {
+                    line: node.start_line,
+                    structural,
+                })
+            } else {
+                Some(BlockRef::Paragraph {
+                    line: node.start_line,
+                })
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Collect headings and paragraphs in document order for keyboard navigation.
+fn collect_navigable_blocks(node: &MarkdownNode, structural: bool, out: &mut Vec<BlockRef>) {
+    if let Some(block) = block_ref_for_node(node, structural) {
+        out.push(block);
+        return;
+    }
+    match &node.node_type {
+        MarkdownNodeType::BlockQuote
+        | MarkdownNodeType::Callout { .. }
+        | MarkdownNodeType::Details { .. }
+        | MarkdownNodeType::AlignedDiv { .. } => {
+            for child in &node.children {
+                collect_navigable_blocks(child, false, out);
+            }
+        }
+        MarkdownNodeType::Document => {
+            for child in &node.children {
+                collect_navigable_blocks(child, true, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn next_block_index(current: Option<usize>, len: usize, forward: bool) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    Some(match (current, forward) {
+        (Some(index), true) => (index + 1).min(len - 1),
+        (Some(index), false) => index.saturating_sub(1),
+        (None, true) => 0,
+        (None, false) => len - 1,
+    })
+}
+
+/// Draw the keyboard block cursor around the node just rendered.
+fn paint_block_cursor(
+    ui: &Ui,
+    node: &MarkdownNode,
+    structural: bool,
+    top: f32,
+    left: f32,
+    right: f32,
+    color: egui::Color32,
+) {
+    let Some(block) = block_ref_for_node(node, structural) else {
+        return;
+    };
+    if current_block_cursor() != Some(block) {
+        return;
+    }
+    let bottom = ui.cursor().top();
+    if bottom <= top || right <= left {
+        return;
+    }
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(left, top),
+        egui::pos2(right, bottom),
+    );
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        egui::Stroke::new(1.5, color),
+        egui::StrokeKind::Inside,
+    );
 }
 
 /// Plain-text projection across top-level blocks (headings/lists lose markers).
@@ -7354,6 +7557,41 @@ mod tests {
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Source Update Tests
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+    #[test]
+    fn test_navigable_block_registry_order_and_kinds() {
+        let doc = crate::markdown::parser::parse_markdown(
+            "# Title\n\nBody\n\n> Quote\n\nBody **bold**",
+        )
+        .unwrap();
+        let mut blocks = Vec::new();
+        collect_navigable_blocks(&doc.root, false, &mut blocks);
+        assert_eq!(
+            blocks,
+            vec![
+                BlockRef::Heading {
+                    line: 1,
+                    structural: true
+                },
+                BlockRef::Paragraph { line: 3 },
+                BlockRef::Paragraph { line: 5 },
+                BlockRef::FormattedParagraph {
+                    line: 7,
+                    structural: true
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_next_block_index_clamps_and_starts() {
+        assert_eq!(next_block_index(None, 4, true), Some(0));
+        assert_eq!(next_block_index(None, 4, false), Some(3));
+        assert_eq!(next_block_index(Some(0), 4, false), Some(0));
+        assert_eq!(next_block_index(Some(3), 4, true), Some(3));
+        assert_eq!(next_block_index(Some(1), 4, true), Some(2));
+        assert_eq!(next_block_index(Some(1), 0, true), None);
+    }
 
     #[test]
     fn test_update_source_line() {
