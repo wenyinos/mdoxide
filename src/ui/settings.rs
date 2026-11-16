@@ -175,6 +175,7 @@ const SETTINGS_SECTIONS: [SettingsSection; 6] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SettingId {
     Theme,
+    SystemTitleBar,
     AccentColor,
     Language,
     SyntaxTheme,
@@ -206,6 +207,7 @@ struct SettingSearchEntry {
 
 const SETTING_SEARCH_INDEX: &[SettingSearchEntry] = &[
     SettingSearchEntry { id: SettingId::Theme, label_key: "settings.appearance.theme", keywords: "theme dark light 主题 外观", section: SettingsSection::Appearance },
+    SettingSearchEntry { id: SettingId::SystemTitleBar, label_key: "settings.appearance.system_title_bar", keywords: "system title bar native decorations 系统标题栏", section: SettingsSection::Appearance },
     SettingSearchEntry { id: SettingId::AccentColor, label_key: "settings.appearance.accent_color", keywords: "accent color 主题色", section: SettingsSection::Appearance },
     SettingSearchEntry { id: SettingId::Language, label_key: "settings.appearance.language", keywords: "language locale 语言", section: SettingsSection::Appearance },
     SettingSearchEntry { id: SettingId::SyntaxTheme, label_key: "settings.appearance.syntax_theme", keywords: "syntax highlight 语法高亮", section: SettingsSection::Appearance },
@@ -515,6 +517,22 @@ impl SettingsPanel {
         ui.add_space(4.0);
 
         match entry.id {
+            SettingId::SystemTitleBar => {
+                let supported = cfg!(target_os = "linux");
+                let response = ui.add_enabled(
+                    supported,
+                    egui::Checkbox::new(
+                        &mut settings.use_system_title_bar,
+                        t!("settings.appearance.system_title_bar"),
+                    ),
+                );
+                changed |= response.changed();
+                response.on_hover_text(if supported {
+                    t!("settings.appearance.system_title_bar_restart")
+                } else {
+                    t!("settings.appearance.system_title_bar_unsupported")
+                });
+            }
             SettingId::Theme => {
                 ui.horizontal_wrapped(|ui| {
                     for (theme, key) in [
@@ -1875,6 +1893,28 @@ impl SettingsPanel {
                     }
                 }
             });
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Native system title bar (Linux only; restart required)
+        let system_title_bar_supported = cfg!(target_os = "linux");
+        let response = ui.add_enabled(
+            system_title_bar_supported,
+            egui::Checkbox::new(
+                &mut settings.use_system_title_bar,
+                t!("settings.appearance.system_title_bar"),
+            ),
+        );
+        if response.changed() {
+            changed = true;
+        }
+        response.on_hover_text(if system_title_bar_supported {
+            t!("settings.appearance.system_title_bar_restart")
+        } else {
+            t!("settings.appearance.system_title_bar_unsupported")
+        });
 
         changed
     }

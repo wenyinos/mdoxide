@@ -368,6 +368,9 @@ settings:
     files_count: "%{count} files"
   appearance:
     title: "Appearance"
+    system_title_bar: "Use system title bar"
+    system_title_bar_restart: "Requires restart. Disables the custom MarkText-style title bar."
+    system_title_bar_unsupported: "Only available on Linux."
     accent_color: "MDOxide accent"
     accent_color_hint: "Rendered headings (H1–H6), selection tint, tabs, and highlighted controls. Hyperlinks stay standard blue."
     accent_reset: "Reset color"

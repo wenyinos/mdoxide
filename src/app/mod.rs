@@ -1525,17 +1525,21 @@ impl MDOxideApp {
             egui::Color32::from_rgb(30, 30, 30)
         };
 
-        // Render custom title bar
-        self.render_title_bar(
-            ui,
-            is_maximized,
-            is_dark,
-            zen_mode,
-            title_bar_color,
-            button_hover_color,
-            close_hover_color,
-            text_color,
-        );
+        // Render custom title bar unless the OS title bar is enabled (Linux).
+        let use_system_title_bar =
+            cfg!(target_os = "linux") && self.state.settings.use_system_title_bar;
+        if !use_system_title_bar {
+            self.render_title_bar(
+                ui,
+                is_maximized,
+                is_dark,
+                zen_mode,
+                title_bar_color,
+                button_hover_color,
+                close_hover_color,
+                text_color,
+            );
+        }
 
         let mut deferred_format_action: Option<DeferredFormatAction> = None;
 

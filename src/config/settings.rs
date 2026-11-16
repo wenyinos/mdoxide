@@ -2071,6 +2071,8 @@ pub struct Settings {
     // ─────────────────────────────────────────────────────────────────────────
     /// Color theme (light, dark, or system)
     pub theme: Theme,
+    /// Use the OS title bar instead of the custom frameless chrome (Linux, restart required).
+    pub use_system_title_bar: bool,
 
     /// MDOxide accent RGB: rendered headings (H1–H6), checkboxes in preview, editor selection tint,
     /// and highlighted UI widgets. Markdown hyperlink color is fixed (standard blue) for readability.
@@ -2571,6 +2573,7 @@ impl Default for Settings {
         Self {
             // Appearance
             theme: Theme::default(),
+            use_system_title_bar: false,
             accent_color: crate::theme::accent::DEFAULT_ACCENT_RGB,
             view_mode: ViewMode::default(),
             show_line_numbers: true,
@@ -3129,6 +3132,7 @@ mod tests {
         assert_eq!(settings.split_ratio, 0.5);
         assert!(settings.linux_middle_click_paste);
         assert!(settings.terminal_font_family.is_none());
+        assert!(!settings.use_system_title_bar);
     }
 
     #[test]

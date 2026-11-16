@@ -363,6 +363,9 @@ settings:
     files_count: '%{count} 个文件'
   appearance:
     title: 界面
+    system_title_bar: 使用系统标题栏
+    system_title_bar_restart: 需要重启生效。将禁用 MarkText 风格自定义标题栏。
+    system_title_bar_unsupported: 仅 Linux 可用。
     accent_color: MDOxide 强调色
     accent_color_hint: 渲染标题（H1–H6）、选区着色、标签页和高亮控件使用此强调色。超链接保持标准蓝色。
     accent_reset: 重置颜色

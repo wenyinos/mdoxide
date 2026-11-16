@@ -298,11 +298,14 @@ fn main() -> eframe::Result<()> {
     // (notably Intel HD 4600) when decorations are disabled, causing black bars and
     // input offset. See: https://github.com/emilk/egui/issues/2770
     // The window still appears opaque because eframe paints an opaque background each frame.
+    // Optional native decorations (Linux only). Requires a restart because
+    // eframe/winit fixes the decoration mode when the viewport is created.
+    let use_system_title_bar = cfg!(target_os = "linux") && settings.use_system_title_bar;
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title(APP_NAME)
         .with_app_id("mdoxide")
-        .with_decorations(false)
-        .with_transparent(true)
+        .with_decorations(use_system_title_bar)
+        .with_transparent(!use_system_title_bar)
         .with_inner_size([window_size.width, window_size.height])
         .with_min_inner_size([400.0, 300.0]);
 

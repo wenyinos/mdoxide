@@ -370,6 +370,56 @@ impl MDOxideApp {
                     egui::Sense::hover()
                 );
 
+                // With the native title bar the custom hamburger menu is gone;
+                // keep the essential actions reachable from the tab strip.
+                let use_system_title_bar =
+                    cfg!(target_os = "linux") && self.state.settings.use_system_title_bar;
+                if use_system_title_bar {
+                    let menu_rect = egui::Rect::from_min_size(
+                        tab_bar_rect.min + egui::vec2(4.0, 4.0),
+                        egui::vec2(28.0, tab_height - 8.0),
+                    );
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(menu_rect)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                        |ui| {
+                            ui.menu_button("☰", |ui| {
+                                if ui.button(t!("shortcuts.commands.new").to_string()).clicked() {
+                                    self.state.new_tab();
+                                    ui.close();
+                                }
+                                if ui.button(t!("shortcuts.commands.open").to_string()).clicked() {
+                                    self.handle_open_file();
+                                    ui.close();
+                                }
+                                if ui.button(t!("menu.file.save").to_string()).clicked() {
+                                    self.handle_save_file();
+                                    ui.close();
+                                }
+                                if ui.button(t!("menu.file.save_as").to_string()).clicked() {
+                                    self.handle_save_as_file();
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui
+                                    .button(t!("shortcuts.commands.open_settings").to_string())
+                                    .clicked()
+                                {
+                                    self.state.open_settings_tab();
+                                    ui.close();
+                                }
+                                if ui.button(t!("menu.file.exit").to_string()).clicked() {
+                                    if self.state.request_exit() {
+                                        self.should_exit = true;
+                                    }
+                                    ui.close();
+                                }
+                            });
+                        },
+                    );
+                }
+
                 // Compute the + button slot first: it participates in the last row's width.
                 let (plus_x, plus_row) = if tab_positions.is_empty() || tab_widths.is_empty() {
                     (0.0, 0usize)
