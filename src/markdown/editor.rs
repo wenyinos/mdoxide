@@ -7205,6 +7205,29 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_paragraph_content_strips_nested_list_prefix() {
+        let source = "  - nested text\n    continuation";
+        assert_eq!(
+            extract_paragraph_content(source, 1, 2),
+            "nested text\ncontinuation"
+        );
+    }
+
+    #[test]
+    fn test_update_source_range_preserves_nested_list_prefix() {
+        let mut source = "  - nested text\n    continuation".to_string();
+        update_source_range(&mut source, 1, 2, "changed\nmore");
+        assert_eq!(source, "  - changed\n    more");
+    }
+
+    #[test]
+    fn test_update_source_range_preserves_quote_list_prefix() {
+        let mut source = "> - item text".to_string();
+        update_source_range(&mut source, 1, 1, "- new text");
+        assert_eq!(source, "> - new text");
+    }
+
+    #[test]
     fn test_update_source_range_preserves_nested_quote_prefix() {
         let mut source = "> > nested quote\n> > second".to_string();
         update_source_range(&mut source, 1, 2, "changed\nstill quoted");

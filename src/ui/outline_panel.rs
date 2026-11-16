@@ -1252,6 +1252,18 @@ impl OutlinePanel {
                 .rect_filled(rect, egui::CornerRadius::same(3), hover_bg);
         }
 
+        // Indent guide lines make deep heading levels easier to scan.
+        for level in 1..item.level {
+            let guide_x = rect.min.x + 8.0 + level as f32 * INDENT_PER_LEVEL - 5.0;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(guide_x, rect.top() + 4.0),
+                    egui::pos2(guide_x, rect.bottom() - 4.0),
+                ],
+                egui::Stroke::new(1.0, muted_color.gamma_multiply(0.18)),
+            );
+        }
+
         // Draw collapse/expand indicator if has children
         let text_start_x = rect.min.x + 8.0 + indent;
         if has_children {
