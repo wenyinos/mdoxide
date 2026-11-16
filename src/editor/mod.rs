@@ -46,3 +46,20 @@ pub(crate) fn read_clipboard_text() -> Option<String> {
         .ok()
         .and_then(|mut clipboard| clipboard.get_text().ok())
 }
+
+/// Read the Linux primary selection (middle-click paste source).
+#[cfg(target_os = "linux")]
+pub(crate) fn read_primary_selection_text() -> Option<String> {
+    use arboard::{Clipboard, GetExtLinux, LinuxClipboardKind};
+    let mut clipboard = Clipboard::new().ok()?;
+    clipboard
+        .get()
+        .clipboard(LinuxClipboardKind::Primary)
+        .text()
+        .ok()
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn read_primary_selection_text() -> Option<String> {
+    None
+}

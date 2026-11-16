@@ -182,6 +182,7 @@ enum SettingId {
     RenderedFont,
     FontSize,
     WordWrap,
+    MiddleClickPaste,
     TabSize,
     UseSpaces,
     LineNumbers,
@@ -212,6 +213,7 @@ const SETTING_SEARCH_INDEX: &[SettingSearchEntry] = &[
     SettingSearchEntry { id: SettingId::RenderedFont, label_key: "settings.editor.rendered_font", keywords: "font rendered preview 字体 渲染", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::FontSize, label_key: "settings.editor.font_size", keywords: "font size zoom 字号 缩放", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::WordWrap, label_key: "settings.editor.word_wrap", keywords: "word wrap 自动换行", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::MiddleClickPaste, label_key: "settings.editor.linux_middle_click_paste", keywords: "middle click primary selection 中键 主选区", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::TabSize, label_key: "settings.editor.tab_size", keywords: "tab indent 缩进 制表符", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::UseSpaces, label_key: "settings.editor.use_spaces", keywords: "spaces indent 空格", section: SettingsSection::Editor },
     SettingSearchEntry { id: SettingId::LineNumbers, label_key: "settings.editor.show_line_numbers", keywords: "line numbers 行号", section: SettingsSection::Editor },
@@ -677,6 +679,14 @@ impl SettingsPanel {
             SettingId::WordWrap => {
                 changed |= ui
                     .checkbox(&mut settings.word_wrap, t!("settings.editor.word_wrap"))
+                    .changed();
+            }
+            SettingId::MiddleClickPaste => {
+                changed |= ui
+                    .checkbox(
+                        &mut settings.linux_middle_click_paste,
+                        t!("settings.editor.linux_middle_click_paste"),
+                    )
                     .changed();
             }
             SettingId::TabSize => {
@@ -1893,6 +1903,16 @@ impl SettingsPanel {
                 if ui
                     .checkbox(&mut settings.word_wrap, t!("settings.editor.word_wrap"))
                     .on_hover_text(t!("settings.editor.word_wrap_tooltip"))
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .checkbox(
+                        &mut settings.linux_middle_click_paste,
+                        t!("settings.editor.linux_middle_click_paste"),
+                    )
+                    .on_hover_text(t!("settings.editor.linux_middle_click_paste_tooltip"))
                     .changed()
                 {
                     changed = true;

@@ -224,6 +224,8 @@ pub struct EditorWidget<'a> {
     tab_size: usize,
     /// Whether Tab inserts spaces instead of a hard tab.
     use_spaces_for_tab: bool,
+    /// Linux middle-click primary-selection paste.
+    middle_click_paste: bool,
 }
 
 impl<'a> EditorWidget<'a> {
@@ -257,6 +259,7 @@ impl<'a> EditorWidget<'a> {
             vim_mode: false,
             tab_size: 4,
             use_spaces_for_tab: true,
+            middle_click_paste: true,
         }
     }
 
@@ -451,6 +454,13 @@ impl<'a> EditorWidget<'a> {
         self
     }
 
+    /// Enable/disable Linux middle-click primary-selection paste.
+    #[must_use]
+    pub fn middle_click_paste(mut self, enabled: bool) -> Self {
+        self.middle_click_paste = enabled;
+        self
+    }
+
     /// Set whether Vim modal editing is enabled.
     #[must_use]
     pub fn vim_mode(mut self, enabled: bool) -> Self {
@@ -561,6 +571,7 @@ impl<'a> EditorWidget<'a> {
         editor.set_wrap_enabled(self.word_wrap);
         editor.set_auto_close_brackets(self.auto_close_brackets);
         editor.set_indent_options(self.tab_size, self.use_spaces_for_tab);
+        editor.set_middle_click_paste(self.middle_click_paste);
         editor.set_vim_mode(self.vim_mode);
 
         // Apply max line width setting (convert character count to pixels)
@@ -722,6 +733,8 @@ impl<'a> EditorWidget<'a> {
         // Clone the context to avoid borrow conflict
         let ctx = ui.ctx().clone();
         let response = editor.ui(&ctx, ui);
+        #[cfg(target_os = "linux")]
+        editor.publish_primary_selection_if_due();
 
         // Typewriter mode: keep the cursor line centred while typing, but not
         // while the user is merely wheel-scrolling (which would snap back).

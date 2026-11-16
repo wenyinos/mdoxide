@@ -87,6 +87,12 @@ pub struct MDOxideEditor {
     pub(crate) tab_size: usize,
     /// Whether Tab inserts spaces instead of a hard tab.
     pub(crate) use_spaces_for_tab: bool,
+    /// Linux middle-click primary-selection paste.
+    pub(crate) middle_click_paste_enabled: bool,
+    /// Last primary selection text published from this editor.
+    primary_last_published: Option<String>,
+    /// When the last primary selection publish was attempted.
+    primary_last_publish: Option<std::time::Instant>,
     /// Viewport state for virtual scrolling.
     pub(crate) view: ViewState,
     /// Galley cache for efficient rendering.
@@ -239,6 +245,9 @@ impl MDOxideEditor {
             line_ending: LineEnding::Lf,
             tab_size: 4,
             use_spaces_for_tab: true,
+            middle_click_paste_enabled: true,
+            primary_last_published: None,
+            primary_last_publish: None,
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -313,6 +322,9 @@ impl MDOxideEditor {
             line_ending: LineEnding::detect(content),
             tab_size: 4,
             use_spaces_for_tab: true,
+            middle_click_paste_enabled: true,
+            primary_last_published: None,
+            primary_last_publish: None,
             view: ViewState::new(),
             line_cache: LineCache::new(),
             // Multi-cursor: start with single cursor at position 0
@@ -1197,6 +1209,42 @@ impl MDOxideEditor {
         self.content_dirty = true;
         self.view
             .ensure_line_visible(self.primary_selection().head.line, self.buffer.line_count());
+    }
+
+    /// Publish the current primary selection on Linux (150 ms debounce).
+    #[cfg(target_os = "linux")]
+    pub fn publish_primary_selection_if_due(&mut self) {
+        let Some(selection) = self.selections.iter().find(|selection| selection.is_range()) else {
+            return;
+        };
+        let (start, end) = selection.ordered();
+        let start = InputHandler::cursor_to_char_pos(&self.buffer, &start);
+        let end = InputHandler::cursor_to_char_pos(&self.buffer, &end);
+        if start >= end || end > self.buffer.len() {
+            return;
+        }
+        let text = self.buffer.slice(start, end);
+        if !should_publish_primary(
+            self.primary_last_published.as_deref(),
+            &text,
+            self.primary_last_publish.map(|instant| instant.elapsed()),
+        ) {
+            return;
+        }
+
+        use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
+        let Ok(mut clipboard) = Clipboard::new() else {
+            return;
+        };
+        if clipboard
+            .set()
+            .clipboard(LinuxClipboardKind::Primary)
+            .text(text.clone())
+            .is_ok()
+        {
+            self.primary_last_published = Some(text);
+            self.primary_last_publish = Some(std::time::Instant::now());
+        }
     }
 
     /// Performs backspace at all cursor positions with proper offset adjustment.
@@ -2305,6 +2353,30 @@ impl MDOxideEditor {
             }
         }
 
+        // Linux: middle-click pastes the primary selection at the click position.
+        #[cfg(target_os = "linux")]
+        if self.middle_click_paste_enabled
+            && ui.input(|input| input.pointer.button_clicked(egui::PointerButton::Middle))
+        {
+            if let Some(pos) = ui.input(|input| input.pointer.interact_pos()) {
+                if rect.contains(pos) {
+                    if let Some(text) = crate::editor::read_primary_selection_text() {
+                        let cursor = self.pos_to_cursor(
+                            pos,
+                            rect,
+                            text_start_x,
+                            &font_id,
+                            effective_wrap_width,
+                            total_lines,
+                            ui,
+                        );
+                        self.set_cursor(cursor);
+                        self.insert_text_at_all_cursors(&text);
+                    }
+                }
+            }
+        }
+
         // Diagnostic hover tooltips
         if !self.diagnostics.is_empty() {
             if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
@@ -3392,6 +3464,11 @@ impl MDOxideEditor {
         self.use_spaces_for_tab = use_spaces;
     }
 
+    /// Enable/disable Linux middle-click primary-selection paste.
+    pub fn set_middle_click_paste(&mut self, enabled: bool) {
+        self.middle_click_paste_enabled = enabled;
+    }
+
     /// Enables or disables Vim modal editing mode.
     /// When enabled, the editor uses Normal/Insert/Visual modes with Vim keybindings.
     /// When transitioning from enabled to disabled, resets Vim state to Normal mode.
@@ -3882,6 +3959,19 @@ impl MDOxideEditor {
         // Draw the scrollbar thumb with rounded corners
         painter.rect_filled(thumb_rect, visual_width / 2.0, thumb_color);
     }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn should_publish_primary(
+    last_published: Option<&str>,
+    current: &str,
+    elapsed: Option<std::time::Duration>,
+) -> bool {
+    !current.is_empty()
+        && last_published != Some(current)
+        && elapsed.map_or(true, |elapsed| {
+            elapsed >= std::time::Duration::from_millis(150)
+        })
 }
 
 #[cfg(test)]
@@ -4465,6 +4555,24 @@ mod tests {
         // Scroll up by 2 lines
         editor.view.scroll_by(-2.0 * FIXED_LINE_HEIGHT, 101);
         assert_eq!(editor.view.first_visible_line(), 2);
+    }
+
+    #[test]
+    fn test_primary_selection_publish_debounce() {
+        use std::time::Duration;
+        assert!(should_publish_primary(None, "hello", None));
+        assert!(!should_publish_primary(Some("hello"), "hello", None));
+        assert!(!should_publish_primary(None, "", None));
+        assert!(!should_publish_primary(
+            Some("old"),
+            "new",
+            Some(Duration::from_millis(100))
+        ));
+        assert!(should_publish_primary(
+            Some("old"),
+            "new",
+            Some(Duration::from_millis(150))
+        ));
     }
 
     #[test]

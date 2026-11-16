@@ -2121,6 +2121,8 @@ pub struct Settings {
     /// Show a floating format bar next to the selection (MarkText bubble bar).
     #[serde(default = "default_true")]
     pub bubble_toolbar: bool,
+    /// Linux: publish selections to the primary clipboard and paste with middle-click.
+    pub linux_middle_click_paste: bool,
 
     /// Tab size (number of spaces)
     pub tab_size: u8,
@@ -2583,6 +2585,7 @@ impl Default for Settings {
             typewriter_mode: false,
             focus_mode: false,
             bubble_toolbar: true,
+            linux_middle_click_paste: true,
             tab_size: 4,
             use_spaces: true,
             auto_save_enabled_default: false,
@@ -3124,6 +3127,8 @@ mod tests {
         assert_eq!(settings.window_size.width, 1200.0);
         assert_eq!(settings.window_size.height, 800.0);
         assert_eq!(settings.split_ratio, 0.5);
+        assert!(settings.linux_middle_click_paste);
+        assert!(settings.terminal_font_family.is_none());
     }
 
     #[test]

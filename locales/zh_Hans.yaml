@@ -262,6 +262,8 @@ settings:
     complex_script_default: 默认（系统）
     tab_size: 制表符长度
     spaces: 空格
+    linux_middle_click_paste: Linux 中键主选区粘贴
+    linux_middle_click_paste_tooltip: 将选中的文本写入 X11/Wayland 主选区，并可用中键粘贴。
     word_wrap: 自动换行
     typewriter: 打字机模式
     typewriter_tooltip: 输入时保持光标行垂直居中

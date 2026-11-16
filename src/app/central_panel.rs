@@ -738,6 +738,7 @@ impl MDOxideApp {
                 let auto_close_brackets = self.state.settings.auto_close_brackets;
                 let tab_size = self.state.settings.tab_size as usize;
                 let use_spaces_for_tab = self.state.settings.use_spaces;
+                let linux_middle_click_paste = self.state.settings.linux_middle_click_paste;
                 let vim_mode = self.state.settings.vim_mode;
 
                 // Get theme colors for line number styling
@@ -1101,6 +1102,8 @@ impl MDOxideApp {
                                     .syntax_theme(syntax_theme.clone())
                                     .auto_close_brackets(auto_close_brackets)
                                     .indent_options(tab_size, use_spaces_for_tab)
+                                        .middle_click_paste(linux_middle_click_paste)
+                                    .middle_click_paste(linux_middle_click_paste)
                                     .vim_mode(vim_mode)
                                     .diagnostics(tab_diagnostics.clone());
 

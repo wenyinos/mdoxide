@@ -265,6 +265,8 @@ settings:
     complex_script_default: "Default (System)"
     tab_size: "Tab Size"
     spaces: "spaces"
+    linux_middle_click_paste: "Linux middle-click primary selection"
+    linux_middle_click_paste_tooltip: "Publish selections to the X11/Wayland primary selection and paste it with middle-click."
     word_wrap: "Word Wrap"
     typewriter: "Typewriter mode"
     typewriter_tooltip: "Keep the cursor line vertically centred while typing"
