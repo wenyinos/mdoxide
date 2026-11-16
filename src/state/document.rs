@@ -1823,7 +1823,7 @@ impl Tab {
         if ops.is_empty() {
             return;
         }
-        self.edit_history.record_operations(ops);
+        self.edit_history.record_typing_operations(ops);
         self.content_version = self.content_version.wrapping_add(1);
         self.bump_source_epoch();
         self.pending_undo_snapshot = None;

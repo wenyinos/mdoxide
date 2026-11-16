@@ -305,7 +305,24 @@ impl EditHistory {
     /// Used by the diff-based recording path: one edit frame produces 0–2 operations
     /// (delete and/or insert) that must undo together. Each call is a separate undo step;
     /// rapid typing creates one step per dirty frame, not one step per typing session.
-    pub fn record_operations(&mut self, mut ops: Vec<EditOperation>) {
+    pub fn record_operations(&mut self, ops: Vec<EditOperation>) {
+        if ops.is_empty() {
+            return;
+        }
+        self.undo_stack.push(OperationGroup::from_operations(ops));
+
+        while self.undo_stack.len() > self.max_groups {
+            self.undo_stack.remove(0);
+        }
+
+        self.redo_stack.clear();
+        self.last_typing_at = None;
+        self.last_typing_end = None;
+    }
+
+    /// Records raw-editor typing operations, merging consecutive single-character
+    /// inserts typed within 700 ms into one undo step.
+    pub fn record_typing_operations(&mut self, mut ops: Vec<EditOperation>) {
         if ops.is_empty() {
             return;
         }
@@ -1187,15 +1204,15 @@ mod tests {
     #[test]
     fn test_typing_run_coalesces_into_one_group() {
         let mut history = EditHistory::new();
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 0,
             text: "a".to_string(),
         }]);
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 1,
             text: "b".to_string(),
         }]);
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 2,
             text: "c".to_string(),
         }]);
@@ -1209,15 +1226,15 @@ mod tests {
     #[test]
     fn test_newline_and_paste_break_typing_run() {
         let mut history = EditHistory::new();
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 0,
             text: "a".to_string(),
         }]);
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 1,
             text: "\n".to_string(),
         }]);
-        history.record_operations(vec![EditOperation::Insert {
+        history.record_typing_operations(vec![EditOperation::Insert {
             pos: 2,
             text: "paste".to_string(),
         }]);
