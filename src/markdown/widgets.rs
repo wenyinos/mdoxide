@@ -1098,6 +1098,26 @@ fn table_cell_raw_cursor_at_click(
 
 /// Maps a cursor position in displayed text (without formatting markers) to the
 /// corresponding position in raw markdown text (with formatting markers).
+/// Recognise the small inline HTML subset we render natively.
+///
+/// Returns `(consumed_bytes, is_line_break)` for `<kbd>`, `<sup>`, `<sub>`,
+/// `<br>` and `<img>`. Other HTML is left untouched.
+fn inline_html_tag(text: &str) -> Option<(usize, bool)> {
+    if !text.starts_with('<') {
+        return None;
+    }
+    let end = text.find('>')?;
+    let tag = &text[1..end];
+    let name = tag
+        .trim_start_matches('/')
+        .split(|ch: char| ch.is_whitespace() || ch == '/')
+        .next()
+        .unwrap_or("");
+    let name = name.to_ascii_lowercase();
+    let known = matches!(name.as_str(), "kbd" | "sup" | "sub" | "br" | "img");
+    known.then_some((end + 1, name == "br"))
+}
+
 pub(crate) fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usize {
     let chars: Vec<char> = raw_text.chars().collect();
     let mut raw_pos = 0;
@@ -1105,6 +1125,19 @@ pub(crate) fn map_displayed_to_raw(displayed_idx: usize, raw_text: &str) -> usiz
 
     while raw_pos < chars.len() {
         let remaining: String = chars[raw_pos..].iter().collect();
+
+        if chars[raw_pos] == '<' {
+            if let Some((consumed, is_break)) = inline_html_tag(&remaining) {
+                if is_break {
+                    if displayed_pos >= displayed_idx {
+                        return raw_pos;
+                    }
+                    displayed_pos += 1;
+                }
+                raw_pos += consumed;
+                continue;
+            }
+        }
 
         if remaining.starts_with("**") || remaining.starts_with("__") || remaining.starts_with("~~")
         {
@@ -1365,6 +1398,44 @@ fn parse_inline_markdown(
     let mut plain_start = 0;
 
     while i < len {
+        if bytes[i] == b'<' {
+            if let Some((consumed, is_break)) = inline_html_tag(&text[i..]) {
+                flush_plain(
+                    text,
+                    plain_start,
+                    i,
+                    job,
+                    bold,
+                    italic,
+                    strike,
+                    font_size,
+                    editor_font,
+                    text_color,
+                );
+                if is_break {
+                    let family = get_styled_font_family(bold, italic, editor_font);
+                    let mut fmt = egui::text::TextFormat {
+                        font_id: FontId::new(font_size, family),
+                        color: text_color,
+                        line_height: Some(
+                            font_size * crate::markdown::RENDER_LINE_HEIGHT_FACTOR,
+                        ),
+                        ..Default::default()
+                    };
+                    if italic {
+                        fmt.italics = true;
+                    }
+                    if strike {
+                        fmt.strikethrough = egui::Stroke::new(1.0, text_color);
+                    }
+                    job.append("\n", 0.0, fmt);
+                }
+                i += consumed;
+                plain_start = i;
+                continue;
+            }
+        }
+
         if i + 1 < len && bytes[i] == b'[' && bytes[i + 1] == b'[' {
             if let Some((visible, consumed)) = parse_wikilink_span(&text[i..]) {
                 flush_plain(
@@ -6535,5 +6606,15 @@ mod tests {
         };
         assert!(output.changed);
         assert_eq!(output.diagram_type, MermaidDiagramType::Flowchart);
+    }
+
+    #[test]
+    fn test_map_displayed_to_raw_skips_inline_html_tags() {
+        let raw = "<kbd>Ctrl</kbd>+C";
+        assert_eq!(map_displayed_to_raw(0, raw), 5);
+        assert_eq!(map_displayed_to_raw(4, raw), raw.chars().count());
+        // <br> occupies one displayed character.
+        assert_eq!(map_displayed_to_raw(1, "a<br>b"), 1);
+        assert_eq!(map_displayed_to_raw(2, "a<br>b"), 5);
     }
 }
