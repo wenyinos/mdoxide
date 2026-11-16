@@ -205,6 +205,7 @@ dialog:
     open_after_export: 导出后打开文件
     export: 导出…
 settings:
+  open_section: 打开设置分区
   search_hint: 搜索设置…
   search_no_results: 没有匹配的设置
   title: 设置

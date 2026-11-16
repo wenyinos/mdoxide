@@ -172,33 +172,66 @@ const SETTINGS_SECTIONS: [SettingsSection; 6] = [
     SettingsSection::About,
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingId {
+    Theme,
+    AccentColor,
+    Language,
+    SyntaxTheme,
+    FontFamily,
+    RenderedFont,
+    FontSize,
+    WordWrap,
+    TabSize,
+    UseSpaces,
+    LineNumbers,
+    Minimap,
+    AutoSave,
+    BubbleToolbar,
+    RecentFiles,
+    TerminalFontSize,
+    TerminalTheme,
+    Keyboard,
+    About,
+}
+
 struct SettingSearchEntry {
+    id: SettingId,
     label_key: &'static str,
     keywords: &'static str,
     section: SettingsSection,
 }
 
 const SETTING_SEARCH_INDEX: &[SettingSearchEntry] = &[
-    SettingSearchEntry { label_key: "settings.appearance.theme", keywords: "theme dark light 主题 外观", section: SettingsSection::Appearance },
-    SettingSearchEntry { label_key: "settings.appearance.accent_color", keywords: "accent color 主题色", section: SettingsSection::Appearance },
-    SettingSearchEntry { label_key: "settings.appearance.language", keywords: "language locale 语言", section: SettingsSection::Appearance },
-    SettingSearchEntry { label_key: "settings.appearance.syntax_theme", keywords: "syntax highlight 语法高亮", section: SettingsSection::Appearance },
-    SettingSearchEntry { label_key: "settings.editor.font_family", keywords: "font family 字体", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.rendered_font", keywords: "font rendered preview 字体 渲染", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.font_size", keywords: "font size zoom 字号 缩放", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.word_wrap", keywords: "word wrap 自动换行", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.tab_size", keywords: "tab indent 缩进 制表符", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.use_spaces", keywords: "spaces indent 空格", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.show_line_numbers", keywords: "line numbers 行号", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.show_minimap", keywords: "minimap 小地图", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.enable_auto_save", keywords: "auto save 自动保存", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.editor.bubble_toolbar", keywords: "toolbar selection 工具栏", section: SettingsSection::Editor },
-    SettingSearchEntry { label_key: "settings.files.recent_files", keywords: "recent files 最近文件", section: SettingsSection::Files },
-    SettingSearchEntry { label_key: "settings.terminal.font_size", keywords: "terminal font 终端 字体", section: SettingsSection::Terminal },
-    SettingSearchEntry { label_key: "settings.terminal.theme", keywords: "terminal theme 终端主题", section: SettingsSection::Terminal },
-    SettingSearchEntry { label_key: "settings.keyboard.title", keywords: "shortcut keybinding 快捷键", section: SettingsSection::Keyboard },
-    SettingSearchEntry { label_key: "settings.about.title", keywords: "about version update 版本 更新", section: SettingsSection::About },
+    SettingSearchEntry { id: SettingId::Theme, label_key: "settings.appearance.theme", keywords: "theme dark light 主题 外观", section: SettingsSection::Appearance },
+    SettingSearchEntry { id: SettingId::AccentColor, label_key: "settings.appearance.accent_color", keywords: "accent color 主题色", section: SettingsSection::Appearance },
+    SettingSearchEntry { id: SettingId::Language, label_key: "settings.appearance.language", keywords: "language locale 语言", section: SettingsSection::Appearance },
+    SettingSearchEntry { id: SettingId::SyntaxTheme, label_key: "settings.appearance.syntax_theme", keywords: "syntax highlight 语法高亮", section: SettingsSection::Appearance },
+    SettingSearchEntry { id: SettingId::FontFamily, label_key: "settings.editor.font_family", keywords: "font family 字体", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::RenderedFont, label_key: "settings.editor.rendered_font", keywords: "font rendered preview 字体 渲染", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::FontSize, label_key: "settings.editor.font_size", keywords: "font size zoom 字号 缩放", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::WordWrap, label_key: "settings.editor.word_wrap", keywords: "word wrap 自动换行", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::TabSize, label_key: "settings.editor.tab_size", keywords: "tab indent 缩进 制表符", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::UseSpaces, label_key: "settings.editor.use_spaces", keywords: "spaces indent 空格", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::LineNumbers, label_key: "settings.editor.show_line_numbers", keywords: "line numbers 行号", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::Minimap, label_key: "settings.editor.show_minimap", keywords: "minimap 小地图", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::AutoSave, label_key: "settings.editor.enable_auto_save", keywords: "auto save 自动保存", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::BubbleToolbar, label_key: "settings.editor.bubble_toolbar", keywords: "toolbar selection 工具栏", section: SettingsSection::Editor },
+    SettingSearchEntry { id: SettingId::RecentFiles, label_key: "settings.files.recent_files", keywords: "recent files 最近文件", section: SettingsSection::Files },
+    SettingSearchEntry { id: SettingId::TerminalFontSize, label_key: "settings.terminal.font_size", keywords: "terminal font 终端 字体", section: SettingsSection::Terminal },
+    SettingSearchEntry { id: SettingId::TerminalTheme, label_key: "settings.terminal.theme", keywords: "terminal theme 终端主题", section: SettingsSection::Terminal },
+    SettingSearchEntry { id: SettingId::Keyboard, label_key: "settings.keyboard.title", keywords: "shortcut keybinding 快捷键", section: SettingsSection::Keyboard },
+    SettingSearchEntry { id: SettingId::About, label_key: "settings.about.title", keywords: "about version update 版本 更新", section: SettingsSection::About },
 ];
+
+fn setting_matches_query(entry: &SettingSearchEntry, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    t!(entry.label_key).to_lowercase().contains(query)
+        || entry.keywords.contains(query)
+        || entry.section.label().to_lowercase().contains(query)
+}
 
 /// Result of showing the settings panel.
 #[derive(Debug, Clone, Default)]
@@ -336,12 +369,7 @@ impl SettingsPanel {
                         .max_height(available.y - 180.0)
                         .show(ui, |ui| {
                             for entry in SETTING_SEARCH_INDEX {
-                                let label = t!(entry.label_key).to_lowercase();
-                                let section_label = entry.section.label().to_lowercase();
-                                if !label.contains(&query)
-                                    && !entry.keywords.contains(&query)
-                                    && !section_label.contains(&query)
-                                {
+                                if !setting_matches_query(entry, &query) {
                                     continue;
                                 }
                                 matches += 1;
@@ -397,41 +425,70 @@ impl SettingsPanel {
                 let content_width = (available.x - sidebar_width - 24.0).max(300.0);
                 ui.set_min_width(content_width);
 
+                let searching = !self.search.trim().is_empty();
+                let scroll_id = if searching {
+                    "settings_search_results".to_string()
+                } else {
+                    format!("settings_inline_scroll_{:?}", self.active_section)
+                };
                 egui::ScrollArea::vertical()
-                    .id_salt(format!("settings_inline_scroll_{:?}", self.active_section))
+                    .id_salt(scroll_id)
                     .show(ui, |ui| {
                         ui.set_min_width(content_width - 16.0);
                         ui.add_space(8.0);
 
-                        match self.active_section {
-                            SettingsSection::Appearance => {
-                                if self.show_appearance_section(ui, settings, is_dark) {
+                        if searching {
+                            let query = self.search.trim().to_lowercase();
+                            let mut any = false;
+                            for entry in SETTING_SEARCH_INDEX {
+                                if !setting_matches_query(entry, &query) {
+                                    continue;
+                                }
+                                any = true;
+                                if self.render_filtered_setting(ui, settings, entry, is_dark) {
                                     output.changed = true;
                                 }
+                                ui.separator();
                             }
-                            SettingsSection::Editor => {
-                                if self.show_editor_section(ui, settings, workspace_root) {
-                                    output.changed = true;
+                            if !any {
+                                ui.label(
+                                    RichText::new(
+                                        t!("settings.search_no_results").to_string(),
+                                    )
+                                    .italics(),
+                                );
+                            }
+                        } else {
+                            match self.active_section {
+                                SettingsSection::Appearance => {
+                                    if self.show_appearance_section(ui, settings, is_dark) {
+                                        output.changed = true;
+                                    }
                                 }
-                            }
-                            SettingsSection::Files => {
-                                if self.show_files_section(ui, settings) {
-                                    output.changed = true;
+                                SettingsSection::Editor => {
+                                    if self.show_editor_section(ui, settings, workspace_root) {
+                                        output.changed = true;
+                                    }
                                 }
-                            }
-                            SettingsSection::Keyboard => {
-                                if self.show_keyboard_section(ui, settings) {
-                                    output.changed = true;
+                                SettingsSection::Files => {
+                                    if self.show_files_section(ui, settings) {
+                                        output.changed = true;
+                                    }
                                 }
-                            }
-                            SettingsSection::Terminal => {
-                                if self.show_terminal_section(ui, settings) {
-                                    output.changed = true;
+                                SettingsSection::Keyboard => {
+                                    if self.show_keyboard_section(ui, settings) {
+                                        output.changed = true;
+                                    }
                                 }
-                            }
-                            SettingsSection::About => {
-                                let ctx = ui.ctx().clone();
-                                self.show_about_section(ui, &ctx);
+                                SettingsSection::Terminal => {
+                                    if self.show_terminal_section(ui, settings) {
+                                        output.changed = true;
+                                    }
+                                }
+                                SettingsSection::About => {
+                                    let ctx = ui.ctx().clone();
+                                    self.show_about_section(ui, &ctx);
+                                }
                             }
                         }
                     });
@@ -439,6 +496,222 @@ impl SettingsPanel {
         });
 
         output
+    }
+
+    /// Render one settings row in the filtered search results.
+    fn render_filtered_setting(
+        &mut self,
+        ui: &mut Ui,
+        settings: &mut Settings,
+        entry: &SettingSearchEntry,
+        _is_dark: bool,
+    ) -> bool {
+        let mut changed = false;
+        ui.label(RichText::new(t!(entry.label_key)).strong());
+        ui.add_space(4.0);
+
+        match entry.id {
+            SettingId::Theme => {
+                ui.horizontal_wrapped(|ui| {
+                    for (theme, key) in [
+                        (Theme::Light, "settings.general.theme_light"),
+                        (Theme::Dark, "settings.general.theme_dark"),
+                        (Theme::System, "settings.general.theme_system"),
+                        (
+                            Theme::DuskfoxBlurred,
+                            "settings.general.theme_duskfox_blurred",
+                        ),
+                    ] {
+                        if ui
+                            .selectable_value(&mut settings.theme, theme, t!(key))
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                    }
+                });
+            }
+            SettingId::AccentColor => {
+                let mut color = egui::Color32::from_rgb(
+                    settings.accent_color[0],
+                    settings.accent_color[1],
+                    settings.accent_color[2],
+                );
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    settings.accent_color = [color.r(), color.g(), color.b()];
+                    changed = true;
+                }
+            }
+            SettingId::Language => {
+                egui::ComboBox::from_id_salt("filtered_language")
+                    .selected_text(settings.language.selector_display_name())
+                    .show_ui(ui, |ui| {
+                        for language in Language::all() {
+                            if ui
+                                .selectable_value(
+                                    &mut settings.language,
+                                    *language,
+                                    language.selector_display_name(),
+                                )
+                                .changed()
+                            {
+                                settings.language_explicit = true;
+                                set_locale(settings.language.locale_code());
+                                changed = true;
+                            }
+                        }
+                    });
+            }
+            SettingId::SyntaxTheme => {
+                changed |= ui
+                    .add(
+                        egui::TextEdit::singleline(&mut settings.syntax_theme)
+                            .hint_text(t!("settings.appearance.syntax_theme_auto")),
+                    )
+                    .changed();
+            }
+            SettingId::FontFamily => {
+                egui::ComboBox::from_id_salt("filtered_font_family")
+                    .selected_text(settings.font_family.display_name())
+                    .show_ui(ui, |ui| {
+                        for font in EditorFont::builtin_fonts() {
+                            if ui
+                                .selectable_value(
+                                    &mut settings.font_family,
+                                    font.clone(),
+                                    font.display_name(),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        }
+                    });
+            }
+            SettingId::RenderedFont => {
+                let mut same = settings.rendered_font_family.is_none();
+                if ui
+                    .checkbox(&mut same, t!("settings.editor.rendered_font_same"))
+                    .changed()
+                {
+                    settings.rendered_font_family = if same {
+                        None
+                    } else {
+                        Some(settings.font_family.clone())
+                    };
+                    changed = true;
+                }
+                if let Some(font) = settings.rendered_font_family.as_mut() {
+                    egui::ComboBox::from_id_salt("filtered_rendered_font")
+                        .selected_text(font.display_name())
+                        .show_ui(ui, |ui| {
+                            for option in EditorFont::builtin_fonts() {
+                                if ui
+                                    .selectable_label(
+                                        *font == *option,
+                                        option.display_name(),
+                                    )
+                                    .clicked()
+                                {
+                                    *font = option.clone();
+                                    changed = true;
+                                }
+                            }
+                        });
+                }
+            }
+            SettingId::FontSize => {
+                changed |= ui
+                    .add(
+                        egui::Slider::new(
+                            &mut settings.font_size,
+                            Settings::MIN_FONT_SIZE..=Settings::MAX_FONT_SIZE,
+                        )
+                        .suffix("px"),
+                    )
+                    .changed();
+            }
+            SettingId::WordWrap => {
+                changed |= ui
+                    .checkbox(&mut settings.word_wrap, t!("settings.editor.word_wrap"))
+                    .changed();
+            }
+            SettingId::TabSize => {
+                changed |= ui
+                    .add(
+                        egui::DragValue::new(&mut settings.tab_size)
+                            .range(Settings::MIN_TAB_SIZE..=Settings::MAX_TAB_SIZE),
+                    )
+                    .changed();
+            }
+            SettingId::UseSpaces => {
+                changed |= ui
+                    .checkbox(&mut settings.use_spaces, t!("settings.editor.use_spaces"))
+                    .changed();
+            }
+            SettingId::LineNumbers => {
+                changed |= ui
+                    .checkbox(
+                        &mut settings.show_line_numbers,
+                        t!("settings.editor.show_line_numbers"),
+                    )
+                    .changed();
+            }
+            SettingId::Minimap => {
+                changed |= ui
+                    .checkbox(
+                        &mut settings.minimap_enabled,
+                        t!("settings.editor.show_minimap"),
+                    )
+                    .changed();
+            }
+            SettingId::AutoSave => {
+                changed |= ui
+                    .checkbox(
+                        &mut settings.auto_save_enabled_default,
+                        t!("settings.editor.enable_auto_save"),
+                    )
+                    .changed();
+            }
+            SettingId::BubbleToolbar => {
+                changed |= ui
+                    .checkbox(
+                        &mut settings.bubble_toolbar,
+                        t!("settings.editor.bubble_toolbar"),
+                    )
+                    .changed();
+            }
+            SettingId::RecentFiles => {
+                changed |= ui
+                    .add(
+                        egui::DragValue::new(&mut settings.max_recent_files)
+                            .range(0..=50),
+                    )
+                    .changed();
+            }
+            SettingId::TerminalFontSize => {
+                changed |= ui
+                    .add(
+                        egui::Slider::new(&mut settings.terminal_font_size, 10.0..=32.0)
+                            .suffix("px"),
+                    )
+                    .changed();
+            }
+            SettingId::TerminalTheme => {
+                changed |= ui
+                    .add(egui::TextEdit::singleline(&mut settings.terminal_theme_name))
+                    .changed();
+            }
+            SettingId::Keyboard | SettingId::About => {
+                if ui.button(t!("settings.open_section").to_string()).clicked() {
+                    self.active_section = entry.section;
+                    self.search.clear();
+                }
+            }
+        }
+
+        ui.add_space(8.0);
+        changed
     }
 
     /// Show the Terminal settings section.
@@ -2668,5 +2941,31 @@ mod tests {
         let output = SettingsPanelOutput::default();
         assert!(!output.changed);
         assert!(!output.reset_requested);
+    }
+
+    fn filtered_ids(query: &str) -> Vec<SettingId> {
+        let query = query.to_lowercase();
+        SETTING_SEARCH_INDEX
+            .iter()
+            .filter(|entry| setting_matches_query(entry, &query))
+            .map(|entry| entry.id)
+            .collect()
+    }
+
+    #[test]
+    fn test_setting_search_matches_keywords() {
+        assert!(filtered_ids("zoom").contains(&SettingId::FontSize));
+        assert!(filtered_ids("minimap").contains(&SettingId::Minimap));
+        assert!(filtered_ids("language").contains(&SettingId::Language));
+        assert!(filtered_ids("缩进").contains(&SettingId::TabSize));
+    }
+
+    #[test]
+    fn test_setting_search_returns_all_matches_and_empty_result() {
+        let matches = filtered_ids("font");
+        assert!(matches.contains(&SettingId::FontFamily));
+        assert!(matches.contains(&SettingId::FontSize));
+        assert!(matches.contains(&SettingId::RenderedFont));
+        assert!(filtered_ids("no-such-setting").is_empty());
     }
 }

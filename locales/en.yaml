@@ -208,6 +208,7 @@ dialog:
     open_after_export: "Open the file after export"
     export: "Export…"
 settings:
+  open_section: "Open settings section"
   search_hint: "Search settings…"
   search_no_results: "No matching settings"
   title: "Settings"
