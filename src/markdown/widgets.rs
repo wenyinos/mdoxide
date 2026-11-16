@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use crate::config::{EditorFont, Theme};
-use crate::fonts::get_styled_font_family;
+use crate::fonts::get_rendered_styled_font_family;
 use crate::markdown::ansi_render;
 use crate::markdown::code_execution::{
     self as code_exec_mod, CodeExecutionUi, RunHandle, RunStatus,
@@ -1046,7 +1046,7 @@ pub(crate) fn build_inline_markdown_layout_job(
         code_bg,
     );
     if job.sections.is_empty() {
-        let family = get_styled_font_family(false, false, editor_font);
+        let family = get_rendered_styled_font_family(false, false, editor_font);
         job.append(
             text,
             0.0,
@@ -1250,7 +1250,7 @@ fn build_cell_layout_job_with_base_bold(
         code_bg,
     );
     if job.sections.is_empty() {
-        let family = get_styled_font_family(true, false, editor_font);
+        let family = get_rendered_styled_font_family(true, false, editor_font);
         job.append(
             text,
             0.0,
@@ -1362,7 +1362,7 @@ fn append_link_span(
     if text.is_empty() {
         return;
     }
-    let family = get_styled_font_family(bold, italic, editor_font);
+    let family = get_rendered_styled_font_family(bold, italic, editor_font);
     let mut fmt = egui::text::TextFormat {
         font_id: FontId::new(font_size, family),
         color: link_color,
@@ -1413,7 +1413,7 @@ fn parse_inline_markdown(
                     text_color,
                 );
                 if is_break {
-                    let family = get_styled_font_family(bold, italic, editor_font);
+                    let family = get_rendered_styled_font_family(bold, italic, editor_font);
                     let mut fmt = egui::text::TextFormat {
                         font_id: FontId::new(font_size, family),
                         color: text_color,
@@ -1693,7 +1693,7 @@ fn flush_plain(
     if slice.is_empty() {
         return;
     }
-    let family = get_styled_font_family(bold, italic, editor_font);
+    let family = get_rendered_styled_font_family(bold, italic, editor_font);
     let mut fmt = egui::text::TextFormat {
         font_id: FontId::new(font_size, family),
         color: text_color,

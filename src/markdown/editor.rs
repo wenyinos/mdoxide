@@ -1001,7 +1001,7 @@ impl<'a> MarkdownEditor<'a> {
         let word_wrap = self.word_wrap;
         let editor_font = self.font_family.clone();
 
-        let font_family = fonts::get_styled_font_family(false, false, &editor_font);
+        let font_family = fonts::get_rendered_styled_font_family(false, false, &editor_font);
 
         let scroll_output = ScrollArea::vertical()
             .id_salt(id.with("scroll"))
@@ -1141,7 +1141,7 @@ impl<'a> MarkdownEditor<'a> {
         let target_scroll_offset: Option<f32> = if let Some(target_line) = self.scroll_to_line {
             let font_id = FontId::new(
                 self.font_size,
-                fonts::get_styled_font_family(false, false, &self.font_family),
+                fonts::get_rendered_styled_font_family(false, false, &self.font_family),
             );
             let line_height = ui.fonts_mut(|f| f.row_height(&font_id));
             let viewport_height = ui.available_height();
@@ -3563,7 +3563,7 @@ fn render_heading(
         HeadingLevel::H6 => base_font_size,
     };
 
-    let font_family = fonts::get_styled_font_family(true, false, editor_font);
+    let font_family = fonts::get_rendered_styled_font_family(true, false, editor_font);
     let (top_margin, bottom_margin) = header_margins(header_spacing, level);
     ui.add_space(top_margin);
 
@@ -3751,7 +3751,7 @@ fn render_paragraph_with_structural_keys(
         )
     });
 
-    let font_family = fonts::get_styled_font_family(false, false, editor_font);
+    let font_family = fonts::get_rendered_styled_font_family(false, false, editor_font);
 
     // Calculate CJK paragraph indentation (only for top-level paragraphs)
     let cjk_indent = if indent_level == 0 {
@@ -4387,7 +4387,7 @@ fn render_list_item_with_structural_keys(
     // Use 4.0 to match BASE_INDENT used by headings, paragraphs, code blocks, etc.
     let base_indent = 4.0;
     let nested_indent = indent_level as f32 * 20.0;
-    let font_family = fonts::get_styled_font_family(false, false, editor_font);
+    let font_family = fonts::get_rendered_styled_font_family(false, false, editor_font);
 
     let available_width = ui.available_width();
     ui.horizontal(|ui| {
@@ -4613,7 +4613,7 @@ fn render_paragraph(
     });
 
     // Get font family for regular (non-styled) text
-    let font_family = fonts::get_styled_font_family(false, false, editor_font);
+    let font_family = fonts::get_rendered_styled_font_family(false, false, editor_font);
 
     // Calculate CJK paragraph indentation (only for top-level paragraphs)
     let cjk_indent = if indent_level == 0 {
@@ -4802,7 +4802,7 @@ impl TextStyle {
     /// on egui's `.strong()` method which may not work with all fonts.
     fn apply(&self, text: RichText, font_size: f32, editor_font: &EditorFont) -> RichText {
         // Get the appropriate font family for the style combination
-        let family = fonts::get_styled_font_family(self.bold, self.italic, editor_font);
+        let family = fonts::get_rendered_styled_font_family(self.bold, self.italic, editor_font);
         let mut styled = text.font(FontId::new(font_size, family));
 
         // Strikethrough is a separate decoration, not a font variant
@@ -4912,7 +4912,7 @@ fn compute_displayed_cursor_index(
         ui.fonts_mut(|f| f.layout_job(job))
     } else {
         let starts_with_bold = raw_text.starts_with("**") || raw_text.starts_with("__");
-        let font_family = fonts::get_styled_font_family(starts_with_bold, false, editor_font);
+        let font_family = fonts::get_rendered_styled_font_family(starts_with_bold, false, editor_font);
         let font_id = FontId::new(font_size, font_family);
         ui.fonts_mut(|f| {
             f.layout(
@@ -5785,7 +5785,7 @@ fn render_list_item(
     // Use 4.0 to match BASE_INDENT used by headings, paragraphs, code blocks, etc.
     let base_indent = 4.0;
     let nested_indent = indent_level as f32 * 20.0;
-    let font_family = fonts::get_styled_font_family(false, false, editor_font);
+    let font_family = fonts::get_rendered_styled_font_family(false, false, editor_font);
 
     let available_width = ui.available_width();
     let focus_info: (bool, Option<(usize, usize)>, Option<usize>) =     ui.horizontal(|ui| {

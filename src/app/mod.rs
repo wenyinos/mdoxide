@@ -310,10 +310,17 @@ impl MDOxideApp {
             .font_family
             .custom_name()
             .map(|s| s.to_string());
-        if custom_font.is_some() {
+        let rendered_custom_font = state
+            .settings
+            .rendered_font_family
+            .as_ref()
+            .and_then(|font| font.custom_name())
+            .map(str::to_string);
+        if custom_font.is_some() || rendered_custom_font.is_some() {
             if let Some(reason) = fonts::reload_fonts(
                 &cc.egui_ctx,
                 custom_font.as_deref(),
+                rendered_custom_font.as_deref(),
                 state.settings.cjk_font_preference,
                 Some(&state.settings.complex_script_font_preferences),
             ) {
@@ -354,6 +361,7 @@ impl MDOxideApp {
                     &cc.egui_ctx,
                     lang_cjk,
                     custom_font.as_deref(),
+                    rendered_custom_font.as_deref(),
                 );
                 info!(
                     "Preloaded CJK font for UI language {:?} at startup",
@@ -2536,7 +2544,19 @@ impl eframe::App for MDOxideApp {
                     .font_family
                     .custom_name()
                     .map(|s| s.to_string());
-                fonts::preload_explicit_cjk_font_with_custom(ctx, lang_cjk, custom_font.as_deref());
+                let rendered_custom_font = self
+                    .state
+                    .settings
+                    .rendered_font_family
+                    .as_ref()
+                    .and_then(|font| font.custom_name())
+                    .map(str::to_string);
+                fonts::preload_explicit_cjk_font_with_custom(
+                    ctx,
+                    lang_cjk,
+                    custom_font.as_deref(),
+                    rendered_custom_font.as_deref(),
+                );
                 info!(
                     "Per-frame: loaded CJK font for UI language {:?}",
                     self.state.settings.language

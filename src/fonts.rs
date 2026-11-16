@@ -56,6 +56,27 @@ static SYSTEM_FONTS_CACHE: OnceLock<Vec<String>> = OnceLock::new();
 /// Stored as a leaked `&'static [u8]` so `ttf_bytes_for_font_id_shaping` can return `&'static [u8]`.
 static CUSTOM_FONT_BYTES: std::sync::Mutex<Option<&'static [u8]>> = std::sync::Mutex::new(None);
 
+/// Cached raw bytes of the rendered-view custom font, for HarfRust shaping.
+static RENDERED_CUSTOM_FONT_BYTES: std::sync::Mutex<Option<&'static [u8]>> =
+    std::sync::Mutex::new(None);
+
+/// Name of the rendered-view custom font, kept across lazy font rebuilds.
+static RENDERED_CUSTOM_FONT_NAME: std::sync::Mutex<Option<String>> =
+    std::sync::Mutex::new(None);
+
+fn set_rendered_custom_font_name(name: Option<&str>) {
+    *RENDERED_CUSTOM_FONT_NAME
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = name.map(str::to_string);
+}
+
+fn current_rendered_custom_font_name() -> Option<String> {
+    RENDERED_CUSTOM_FONT_NAME
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 /// Last error from custom font loading, used to propagate errors from
 /// `create_font_definitions_*` back to `reload_fonts`.
 static LAST_CUSTOM_FONT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
@@ -230,7 +251,7 @@ pub fn preload_system_locale_cjk_font(
         };
 
         info!("Preloading CJK font for system locale: {:?}", detected);
-        let fonts = create_font_definitions_with_cjk_spec(None, detected, &spec, None);
+        let fonts = create_font_definitions_with_cjk_spec(None, None, detected, &spec, None);
         ctx.set_fonts(fonts);
         bump_font_generation();
         configure_text_styles(ctx);
@@ -250,7 +271,7 @@ pub fn preload_system_locale_cjk_font(
 ///
 /// Returns `true` if a font was preloaded, `false` otherwise.
 pub fn preload_explicit_cjk_font(ctx: &egui::Context, cjk_preference: CjkFontPreference) -> bool {
-    preload_explicit_cjk_font_with_custom(ctx, cjk_preference, None)
+    preload_explicit_cjk_font_with_custom(ctx, cjk_preference, None, None)
 }
 
 /// Preload the CJK font for an explicit preference, preserving custom font.
@@ -261,6 +282,7 @@ pub fn preload_explicit_cjk_font_with_custom(
     ctx: &egui::Context,
     cjk_preference: CjkFontPreference,
     custom_font: Option<&str>,
+    rendered_custom_font: Option<&str>,
 ) -> bool {
     // Only preload for explicit preferences (not Auto)
     if cjk_preference == CjkFontPreference::Auto {
@@ -287,11 +309,18 @@ pub fn preload_explicit_cjk_font_with_custom(
         CjkFontPreference::Auto => return false,
     };
 
+    set_rendered_custom_font_name(rendered_custom_font);
     info!(
         "Preloading CJK font for explicit preference: {:?}",
         cjk_preference
     );
-    let fonts = create_font_definitions_with_cjk_spec(custom_font, cjk_preference, &spec, None);
+    let fonts = create_font_definitions_with_cjk_spec(
+        custom_font,
+        rendered_custom_font,
+        cjk_preference,
+        &spec,
+        None,
+    );
     ctx.set_fonts(fonts);
     bump_font_generation();
     configure_text_styles(ctx);
@@ -969,6 +998,8 @@ const FONT_SOUTHEAST_ASIAN: &str = "SoutheastAsian";
 
 /// Key for custom user-selected font
 const FONT_CUSTOM: &str = "Custom";
+/// Key for the custom font used only by the rendered preview.
+const FONT_CUSTOM_RENDERED: &str = "CustomRendered";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HarfRust shaping: TTF bytes aligned with egui font families
@@ -1016,6 +1047,10 @@ pub fn ttf_bytes_for_font_id_shaping(font_id: &FontId) -> &'static [u8] {
             FONT_JETBRAINS_BOLD_ITALIC => JETBRAINS_BOLD_ITALIC,
             FONT_CJK_SC_BOLD => SOURCE_HAN_SANS_SC_BOLD,
             FONT_CUSTOM => CUSTOM_FONT_BYTES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or(INTER_REGULAR),
+            FONT_CUSTOM_RENDERED => RENDERED_CUSTOM_FONT_BYTES
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .unwrap_or(INTER_REGULAR),
@@ -1739,7 +1774,7 @@ fn add_complex_script_fallbacks(
 /// - Optional custom system font
 /// - CJK fonts in order based on user preference
 pub fn create_font_definitions() -> FontDefinitions {
-    create_font_definitions_with_settings(None, CjkFontPreference::Auto, true, None)
+    create_font_definitions_with_settings(None, None, CjkFontPreference::Auto, true, None)
 }
 
 /// Create font definitions without loading CJK fonts.
@@ -1747,20 +1782,71 @@ pub fn create_font_definitions() -> FontDefinitions {
 /// Use this for faster startup when CJK support is not immediately needed.
 /// Call `load_cjk_for_text()` later when CJK text is detected.
 pub fn create_font_definitions_lazy() -> FontDefinitions {
-    create_font_definitions_with_settings(None, CjkFontPreference::Auto, false, None)
+    create_font_definitions_with_settings(None, None, CjkFontPreference::Auto, false, None)
 }
 
 /// Create font definitions with selective CJK font loading.
 ///
 /// This function loads only the specific CJK fonts specified in the `CjkLoadSpec`,
 /// enabling memory-efficient font loading based on detected scripts.
+/// Load the rendered-view custom font into its own key (falling back to Inter on failure).
+fn load_rendered_custom_font(fonts: &mut FontDefinitions, font_name: &str) -> bool {
+    match load_system_font_by_name(font_name) {
+        Ok(data) => {
+            let raw: &'static [u8] = Box::leak(data.font.to_vec().into_boxed_slice());
+            *RENDERED_CUSTOM_FONT_BYTES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(raw);
+            fonts
+                .font_data
+                .insert(FONT_CUSTOM_RENDERED.to_owned(), Arc::new(data));
+            info!("Loaded rendered-view custom font: {}", font_name);
+            true
+        }
+        Err(reason) => {
+            warn!("Rendered-view custom font failed: {}", reason);
+            *RENDERED_CUSTOM_FONT_BYTES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            false
+        }
+    }
+}
+
+/// Register the rendered custom family with Inter/JetBrains/CJK fallbacks.
+fn register_rendered_custom_family(
+    fonts: &mut FontDefinitions,
+    loaded: bool,
+    load_cjk: bool,
+    cjk_state: &CjkFontState,
+    cjk_preference: CjkFontPreference,
+) {
+    if !loaded {
+        return;
+    }
+    let family = FontFamily::Name(FONT_CUSTOM_RENDERED.into());
+    fonts.families.insert(
+        family.clone(),
+        vec![
+            FONT_CUSTOM_RENDERED.to_owned(),
+            FONT_INTER.to_owned(),
+            FONT_JETBRAINS.to_owned(),
+        ],
+    );
+    if load_cjk {
+        add_cjk_fallbacks(fonts, family, cjk_state, cjk_preference);
+    }
+}
+
 pub fn create_font_definitions_with_cjk_spec(
     custom_font: Option<&str>,
+    rendered_custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     spec: &CjkLoadSpec,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
     let custom_font = non_empty_custom_font_name(custom_font);
+    let rendered_custom_font = non_empty_custom_font_name(rendered_custom_font);
     let mut fonts = FontDefinitions::default();
 
     // Insert Inter font variants (always available as UI fallback)
@@ -1859,6 +1945,15 @@ pub fn create_font_definitions_with_cjk_spec(
     };
 
     // Load only the specified CJK fonts
+    let rendered_custom_loaded = rendered_custom_font
+        .map(|name| load_rendered_custom_font(&mut fonts, name))
+        .unwrap_or(false);
+    if rendered_custom_font.is_none() {
+        *RENDERED_CUSTOM_FONT_BYTES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
     let cjk_state = load_cjk_fonts_selective(&mut fonts, spec);
 
     // Load complex script fonts from atomic flags (preserves already-loaded fonts across rebuilds)
@@ -2005,6 +2100,8 @@ pub fn create_font_definitions_with_cjk_spec(
         jetbrains_bold_italic_family,
     );
 
+    register_rendered_custom_family(&mut fonts, rendered_custom_loaded, true, &cjk_state, cjk_preference);
+
     info!(
         "Loaded fonts: CJK(KR={}, JP={}, SC={}, TC={}), ComplexScript={}",
         cjk_state.kr_loaded,
@@ -2029,11 +2126,13 @@ pub fn create_font_definitions_with_cjk_spec(
 
 pub fn create_font_definitions_with_settings(
     custom_font: Option<&str>,
+    rendered_custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     load_cjk: bool,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> FontDefinitions {
     let custom_font = non_empty_custom_font_name(custom_font);
+    let rendered_custom_font = non_empty_custom_font_name(rendered_custom_font);
     let mut fonts = FontDefinitions::default();
 
     // Insert Inter font variants (always available as UI fallback)
@@ -2109,6 +2208,15 @@ pub fn create_font_definitions_with_settings(
             .unwrap_or_else(|e| e.into_inner()) = None;
         false
     };
+
+    let rendered_custom_loaded = rendered_custom_font
+        .map(|name| load_rendered_custom_font(&mut fonts, name))
+        .unwrap_or(false);
+    if rendered_custom_font.is_none() {
+        *RENDERED_CUSTOM_FONT_BYTES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+    }
 
     // Load CJK fonts only if requested (supports lazy loading)
     let cjk_state = if load_cjk {
@@ -2269,6 +2377,8 @@ pub fn create_font_definitions_with_settings(
         jetbrains_bold_italic_family,
     );
 
+    register_rendered_custom_family(&mut fonts, rendered_custom_loaded, load_cjk, &cjk_state, cjk_preference);
+
     info!(
         "Loaded fonts: Inter, JetBrains Mono, CJK={} (preference: {:?}), custom: {}",
         if load_cjk { "loaded" } else { "deferred" },
@@ -2383,8 +2493,10 @@ pub fn setup_fonts_with_settings(
     cjk_preference: CjkFontPreference,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) {
+    let rendered_custom = current_rendered_custom_font_name();
     let fonts = create_font_definitions_with_settings(
         custom_font,
+        rendered_custom.as_deref(),
         cjk_preference,
         true,
         complex_script_preferences,
@@ -2404,6 +2516,7 @@ pub fn setup_fonts_with_settings(
         );
         create_font_definitions_with_settings(
             custom_font,
+            rendered_custom.as_deref(),
             CjkFontPreference::Auto,
             true,
             complex_script_preferences,
@@ -2464,12 +2577,14 @@ fn configure_text_styles(ctx: &egui::Context) {
 pub fn reload_fonts(
     ctx: &egui::Context,
     custom_font: Option<&str>,
+    rendered_custom_font: Option<&str>,
     cjk_preference: CjkFontPreference,
     complex_script_preferences: Option<&ComplexScriptFontPreferences>,
 ) -> Option<String> {
+    set_rendered_custom_font_name(rendered_custom_font);
     info!(
-        "Reloading fonts with custom_font={:?}, cjk_preference={:?}",
-        custom_font, cjk_preference
+        "Reloading fonts with custom_font={:?}, rendered_custom_font={:?}, cjk_preference={:?}",
+        custom_font, rendered_custom_font, cjk_preference
     );
 
     // Build a CjkLoadSpec from what's ALREADY loaded - don't load new ones
@@ -2486,8 +2601,10 @@ pub fn reload_fonts(
         spec.load_korean, spec.load_japanese, spec.load_chinese_sc, spec.load_chinese_tc
     );
 
+    let rendered_custom = current_rendered_custom_font_name();
     let fonts = create_font_definitions_with_cjk_spec(
         custom_font,
+        rendered_custom.as_deref(),
         cjk_preference,
         &spec,
         complex_script_preferences,
@@ -2529,8 +2646,10 @@ pub fn ensure_cjk_fonts_loaded(
 ) -> bool {
     // Load all CJK fonts
     info!("Loading all CJK fonts");
+    let rendered_custom = current_rendered_custom_font_name();
     let fonts = create_font_definitions_with_settings(
         custom_font,
+        rendered_custom.as_deref(),
         cjk_preference,
         true,
         complex_script_preferences,
@@ -2594,8 +2713,10 @@ pub fn load_cjk_for_text(
     );
 
     // Rebuild fonts with the new CJK fonts
+    let rendered_custom = current_rendered_custom_font_name();
     let fonts = create_font_definitions_with_cjk_spec(
         custom_font,
+        rendered_custom.as_deref(),
         cjk_preference,
         &spec,
         complex_script_preferences,
@@ -2735,8 +2856,10 @@ pub fn load_complex_script_fonts_for_text(
         load_chinese_tc: CHINESE_TC_FONTS_LOADED.load(Ordering::Relaxed),
     };
 
+    let rendered_custom = current_rendered_custom_font_name();
     let fonts = create_font_definitions_with_cjk_spec(
         custom_font,
+        rendered_custom.as_deref(),
         cjk_preference,
         &cjk_spec,
         complex_script_preferences,
@@ -2804,6 +2927,30 @@ pub fn get_base_font_family(editor_font: &EditorFont) -> FontFamily {
         EditorFont::JetBrainsMono => FontFamily::Monospace,
         EditorFont::Custom(_) => FontFamily::Name(FONT_CUSTOM.into()),
     }
+}
+
+/// Font family for rendered-view text, honouring a separate custom preview font.
+#[must_use]
+pub fn get_rendered_styled_font_family(
+    bold: bool,
+    italic: bool,
+    rendered_font: &EditorFont,
+) -> FontFamily {
+    if let EditorFont::Custom(name) = rendered_font {
+        if name.trim().is_empty() {
+            return get_styled_font_family(bold, italic, rendered_font);
+        }
+        return if RENDERED_CUSTOM_FONT_BYTES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+        {
+            FontFamily::Name(FONT_CUSTOM_RENDERED.into())
+        } else {
+            get_styled_font_family(bold, italic, &EditorFont::Inter)
+        };
+    }
+    get_styled_font_family(bold, italic, rendered_font)
 }
 
 /// Create a FontId for styled text.
@@ -2876,6 +3023,23 @@ mod tests {
         assert_eq!(
             get_styled_font_family(true, true, &EditorFont::JetBrainsMono),
             FontFamily::Name(FONT_JETBRAINS_BOLD_ITALIC.into())
+        );
+    }
+
+    #[test]
+    fn test_rendered_font_builtin_matches_editor_family() {
+        assert_eq!(
+            get_rendered_styled_font_family(false, false, &EditorFont::JetBrainsMono),
+            get_styled_font_family(false, false, &EditorFont::JetBrainsMono)
+        );
+    }
+
+    #[test]
+    fn test_rendered_custom_pending_uses_inter_fallback() {
+        let pending = EditorFont::Custom(String::new());
+        assert_eq!(
+            get_rendered_styled_font_family(false, false, &pending),
+            get_styled_font_family(false, false, &EditorFont::Inter)
         );
     }
 

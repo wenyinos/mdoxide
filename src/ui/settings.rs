@@ -617,7 +617,48 @@ impl SettingsPanel {
                                     changed = true;
                                 }
                             }
+                            if ui
+                                .selectable_label(
+                                    font.is_custom(),
+                                    t!("settings.editor.custom_font"),
+                                )
+                                .clicked()
+                            {
+                                *font = EditorFont::Custom(String::new());
+                                changed = true;
+                            }
                         });
+
+                    if let EditorFont::Custom(name) = font {
+                        let current = name.clone();
+                        let system_fonts = fonts::list_system_fonts();
+                        egui::ComboBox::from_id_salt("filtered_rendered_custom_font")
+                            .selected_text(if current.trim().is_empty() {
+                                t!("settings.editor.custom_font_pick_placeholder").to_string()
+                            } else {
+                                current.clone()
+                            })
+                            .width(200.0)
+                            .show_ui(ui, |ui| {
+                                egui::ScrollArea::vertical().max_height(200.0).show(
+                                    ui,
+                                    |ui| {
+                                        for font_name in system_fonts.iter() {
+                                            if ui
+                                                .selectable_label(
+                                                    font_name == &current,
+                                                    font_name,
+                                                )
+                                                .clicked()
+                                            {
+                                                *name = font_name.clone();
+                                                changed = true;
+                                            }
+                                        }
+                                    },
+                                );
+                            });
+                    }
                 }
             }
             SettingId::FontSize => {
@@ -1565,7 +1606,37 @@ impl SettingsPanel {
                             *font = option.clone();
                         }
                     }
+                    if ui
+                        .selectable_label(font.is_custom(), t!("settings.editor.custom_font"))
+                        .clicked()
+                    {
+                        *font = EditorFont::Custom(String::new());
+                    }
                 });
+
+            if let EditorFont::Custom(name) = font {
+                let current = name.clone();
+                let system_fonts = fonts::list_system_fonts();
+                egui::ComboBox::from_id_salt("rendered_system_font_combo")
+                    .selected_text(if current.trim().is_empty() {
+                        t!("settings.editor.custom_font_pick_placeholder").to_string()
+                    } else {
+                        current.clone()
+                    })
+                    .width(200.0)
+                    .show_ui(ui, |ui| {
+                        egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                            for font_name in system_fonts.iter() {
+                                if ui
+                                    .selectable_label(font_name == &current, font_name)
+                                    .clicked()
+                                {
+                                    *name = font_name.clone();
+                                }
+                            }
+                        });
+                    });
+            }
         }
 
         ui.add_space(16.0);

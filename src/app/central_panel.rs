@@ -2799,6 +2799,8 @@ impl MDOxideApp {
             SpecialTabKind::Settings => {
                 let is_dark = ui.visuals().dark_mode;
                 let prev_font_family = self.state.settings.font_family.clone();
+                let prev_rendered_font_family =
+                    self.state.settings.rendered_font_family.clone();
                 let prev_cjk_preference = self.state.settings.cjk_font_preference;
                 let prev_language = self.state.settings.language;
 
@@ -2818,6 +2820,8 @@ impl MDOxideApp {
                     self.state.mark_settings_dirty();
 
                     let font_changed = prev_font_family != self.state.settings.font_family
+                        || prev_rendered_font_family
+                            != self.state.settings.rendered_font_family
                         || prev_cjk_preference != self.state.settings.cjk_font_preference;
 
                     if font_changed {
@@ -2827,9 +2831,17 @@ impl MDOxideApp {
                             .font_family
                             .custom_name()
                             .map(|s| s.to_string());
+                        let rendered_custom_font = self
+                            .state
+                            .settings
+                            .rendered_font_family
+                            .as_ref()
+                            .and_then(|font| font.custom_name())
+                            .map(str::to_string);
                         let load_err = crate::fonts::reload_fonts(
                             ui.ctx(),
                             custom_font.as_deref(),
+                            rendered_custom_font.as_deref(),
                             self.state.settings.cjk_font_preference,
                             Some(&self.state.settings.complex_script_font_preferences),
                         );
@@ -2856,10 +2868,18 @@ impl MDOxideApp {
                                 .font_family
                                 .custom_name()
                                 .map(|s| s.to_string());
+                            let rendered_custom_font = self
+                                .state
+                                .settings
+                                .rendered_font_family
+                                .as_ref()
+                                .and_then(|font| font.custom_name())
+                                .map(str::to_string);
                             crate::fonts::preload_explicit_cjk_font_with_custom(
                                 ui.ctx(),
                                 cjk_pref,
                                 custom_font.as_deref(),
+                                rendered_custom_font.as_deref(),
                             );
                             info!(
                                 "Loaded CJK fonts for language: {:?}",
@@ -2880,6 +2900,7 @@ impl MDOxideApp {
 
                     let _ = crate::fonts::reload_fonts(
                         ui.ctx(),
+                        None,
                         None,
                         crate::config::CjkFontPreference::Auto,
                         None,
@@ -2919,10 +2940,18 @@ impl MDOxideApp {
                                 .font_family
                                 .custom_name()
                                 .map(|s| s.to_string());
+                            let rendered_custom_font = self
+                                .state
+                                .settings
+                                .rendered_font_family
+                                .as_ref()
+                                .and_then(|font| font.custom_name())
+                                .map(str::to_string);
                             crate::fonts::preload_explicit_cjk_font_with_custom(
                                 ui.ctx(),
                                 cjk_pref,
                                 custom_font.as_deref(),
+                                rendered_custom_font.as_deref(),
                             );
                             info!(
                                 "Loaded CJK fonts for language: {:?}",
