@@ -17,15 +17,6 @@ pub enum HtmlExportThemeChoice {
 }
 
 impl HtmlExportThemeChoice {
-    pub fn label(&self) -> &'static str {
-        match self {
-            HtmlExportThemeChoice::FollowEditor => "Follow editor",
-            HtmlExportThemeChoice::Light => "Light",
-            HtmlExportThemeChoice::Dark => "Dark",
-            HtmlExportThemeChoice::Auto => "Auto (system)",
-        }
-    }
-
     pub fn label_localized(&self) -> String {
         match self {
             HtmlExportThemeChoice::FollowEditor => {

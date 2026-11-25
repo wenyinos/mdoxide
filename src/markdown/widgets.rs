@@ -880,13 +880,6 @@ pub fn serialize_node(node: &MarkdownNode) -> String {
                 format!("![{}]({} \"{}\")", alt, url, title)
             }
         }
-        MarkdownNodeType::Math { literal, display } => {
-            if *display {
-                format!("$${}$$", literal)
-            } else {
-                format!("${}$", literal)
-            }
-        }
         MarkdownNodeType::SoftBreak => " ".to_string(),
         MarkdownNodeType::LineBreak => "  \n".to_string(),
 
@@ -5854,8 +5847,8 @@ mod tests {
         let ctx = egui::Context::default();
         signal_table_force_commit(&ctx, 9);
 
-        ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 assert!(
                     take_table_force_commit(ui, 9),
                     "first take should observe the signal"

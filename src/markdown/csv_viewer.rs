@@ -126,17 +126,6 @@ pub fn delimiter_display_name(delimiter: u8) -> &'static str {
     }
 }
 
-/// Get short display symbol for a delimiter byte (for status bar).
-pub fn delimiter_symbol(delimiter: u8) -> &'static str {
-    match delimiter {
-        b',' => ",",
-        b'\t' => "⇥",
-        b';' => ";",
-        b'|' => "|",
-        _ => "?",
-    }
-}
-
 /// Detect the most likely delimiter from file content.
 ///
 /// Analyzes the first few lines and scores each candidate delimiter
@@ -859,6 +848,7 @@ impl CsvViewerState {
     }
 
     /// Get the effective delimiter (override or detected).
+    #[cfg(test)]
     pub fn effective_delimiter(&self) -> Option<u8> {
         self.delimiter_override.or(self.detected_delimiter)
     }
@@ -876,6 +866,7 @@ impl CsvViewerState {
     }
 
     /// Clear manual delimiter override (return to auto-detect).
+    #[cfg(test)]
     pub fn clear_delimiter_override(&mut self) {
         self.delimiter_override = None;
         self.cached_data = None;
@@ -887,6 +878,7 @@ impl CsvViewerState {
     }
 
     /// Check if delimiter is manually overridden.
+    #[cfg(test)]
     pub fn has_delimiter_override(&self) -> bool {
         self.delimiter_override.is_some()
     }
@@ -920,11 +912,13 @@ impl CsvViewerState {
     }
 
     /// Set a manual header override.
+    #[cfg(test)]
     pub fn set_header_override(&mut self, has_header: bool) {
         self.header_override = Some(has_header);
     }
 
     /// Clear the manual header override (return to auto-detect).
+    #[cfg(test)]
     pub fn clear_header_override(&mut self) {
         self.header_override = None;
     }
@@ -2234,14 +2228,6 @@ mod tests {
     }
 
     #[test]
-    fn test_delimiter_symbols() {
-        assert_eq!(delimiter_symbol(b','), ",");
-        assert_eq!(delimiter_symbol(b'\t'), "⇥");
-        assert_eq!(delimiter_symbol(b';'), ";");
-        assert_eq!(delimiter_symbol(b'|'), "|");
-    }
-
-    #[test]
     fn test_csv_viewer_state_delimiter() {
         let mut state = CsvViewerState::new();
 
@@ -2846,7 +2832,7 @@ mod tests {
 
         let mut modified = content.clone();
         modified[10_000] = b'y'; // Modify the middle (outside sample)
-        let hash2 = hash_content_bytes(&modified);
+        let _hash2 = hash_content_bytes(&modified);
         // Middle change might not be detected (by design for speed)
         // This is acceptable — the hash is for fast invalidation, not cryptographic
 

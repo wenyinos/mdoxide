@@ -11,6 +11,10 @@ pub fn get_open_file_paths() -> Vec<std::path::PathBuf> {
     Vec::new()
 }
 
+/// Windows-only: grant the primary instance the right to take foreground.
+///
+/// Called by the secondary instance right before forwarding open paths, so the
+/// already-running window can come to front instead of flashing in the taskbar.
 #[cfg(target_os = "windows")]
 pub fn allow_set_foreground_window(process_id: u32) -> bool {
     extern "system" {
@@ -18,9 +22,4 @@ pub fn allow_set_foreground_window(process_id: u32) -> bool {
     }
 
     unsafe { AllowSetForegroundWindow(process_id) != 0 }
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn allow_set_foreground_window(_process_id: u32) -> bool {
-    false
 }

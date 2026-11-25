@@ -4072,15 +4072,16 @@ mod tests {
         let run_editor = |ctx: &egui::Context,
                           editor: &mut MDOxideEditor,
                           events: Vec<egui::Event>| {
-            ctx.run(
+            ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(screen),
                     events,
                     ..Default::default()
                 },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        editor.ui(ctx, ui);
+                |ui| {
+                    let ctx = ui.ctx().clone();
+                    egui::CentralPanel::default().show_inside(ui, |ui| {
+                        editor.ui(&ctx, ui);
                     });
                 },
             )

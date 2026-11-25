@@ -105,7 +105,7 @@ impl Terminal {
         let (status_tx, status_rx) = mpsc::channel();
         let (stop_tx, stop_rx) = mpsc::channel();
 
-        let pid = pty.pid();
+        let _pid = pty.pid();
         let wd = working_dir.clone();
 
         thread::spawn(move || {
@@ -138,7 +138,7 @@ impl Terminal {
                 }
 
                 // 2. Check Process (Windows)
-                let mut fg_process = None;
+                let fg_process = None;
                 #[cfg(target_os = "windows")]
                 if pid > 0 {
                     use std::os::windows::process::CommandExt;

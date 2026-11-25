@@ -6,7 +6,7 @@
 use super::screen::TerminalScreen;
 use super::theme::TerminalTheme;
 use arboard::Clipboard;
-use eframe::egui::{self, Color32, FontId, Key, Modifiers, Rect, Sense, StrokeKind, Ui, Vec2};
+use eframe::egui::{self, Color32, Key, Modifiers, Rect, Sense, StrokeKind, Ui, Vec2};
 use std::sync::{Arc, Mutex};
 
 /// Output from the terminal widget.

@@ -235,6 +235,8 @@ fn get_pid_file_path() -> Option<PathBuf> {
     get_config_dir().ok().map(|dir| dir.join(PID_FILE_NAME))
 }
 
+/// Read the primary instance PID (Windows foreground permission only).
+#[cfg(target_os = "windows")]
 fn read_primary_pid() -> Option<u32> {
     let pid_path = get_pid_file_path()?;
     let content = std::fs::read_to_string(pid_path).ok()?;

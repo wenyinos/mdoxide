@@ -12,8 +12,7 @@ use crate::ui::file_tree::{FileTreeOutput, FileTreePanel};
 use crate::ui::docked_sidebar::{self, DockedSidebarEdge};
 use crate::ui::frontmatter_panel::FrontmatterPanel;
 use crate::ui::phosphor_icons::{
-    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, FOLDER, LINK, LIST,
-    LIST_CHECKS, MAGNIFYING_GLASS, NOTE_PENCIL, TEXT_T, TIMER, X,
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_RIGHT, CHART_BAR, FOLDER, LINK, LIST, MAGNIFYING_GLASS, NOTE_PENCIL, TIMER, X,
 };
 use crate::ui::productivity_panel::ProductivityPanel;
 use eframe::egui::{self, Color32, FontId, Response, RichText, ScrollArea, Sense, Ui, Vec2};

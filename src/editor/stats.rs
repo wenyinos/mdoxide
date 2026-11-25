@@ -116,16 +116,6 @@ impl TextStats {
 
         stats
     }
-
-    /// Format the statistics for display in the status bar.
-    ///
-    /// Returns a compact string like "150 words | 892 chars | 25 lines"
-    pub fn format_compact(&self) -> String {
-        format!(
-            "{} words | {} chars | {} lines",
-            self.words, self.characters, self.lines
-        )
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -532,18 +522,6 @@ mod tests {
     fn test_stats_mixed_whitespace() {
         let stats = TextStats::from_text("word1  word2\t\tword3");
         assert_eq!(stats.words, 3);
-    }
-
-    #[test]
-    fn test_stats_format_compact() {
-        let stats = TextStats {
-            words: 150,
-            characters: 892,
-            characters_no_spaces: 743,
-            lines: 25,
-            paragraphs: 5,
-        };
-        assert_eq!(stats.format_compact(), "150 words | 892 chars | 25 lines");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

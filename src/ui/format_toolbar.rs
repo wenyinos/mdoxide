@@ -11,7 +11,7 @@ use crate::app::modifier_symbol;
 use crate::markdown::formatting::{FormattingState, MarkdownFormatCommand};
 use crate::markdown::mermaid::{mermaid_kind_menu_label, MermaidTemplateKind};
 use crate::ui::phosphor_icons::{
-    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_LEFT, CARET_UP, CODE, CODE_BLOCK, LINK,
+    phosphor_font, phosphor_rich_text, CARET_DOWN, CARET_UP, CODE, CODE_BLOCK, LINK,
     LIST, LIST_BULLETS, LIST_NUMBERS, QUOTES, TEXT_B, TEXT_ITALIC,
 };
 use crate::ui::RibbonAction;
@@ -517,89 +517,6 @@ fn toolbar_separator(ui: &mut Ui, color: Color32, height: f32) {
         [rect.center_top(), rect.center_bottom()],
         egui::Stroke::new(1.0, color),
     );
-}
-
-/// Render the side panel toggle strip (shown when the outline panel is closed).
-///
-/// Returns true if the user clicked to open the side panel.
-///
-/// When `blocks_clicks` is true (window resize cursor active), the strip ignores
-/// clicks so east-edge resize is not mistaken for "open side panel".
-pub fn side_panel_toggle_strip(ui: &mut egui::Ui, is_dark: bool, blocks_clicks: bool) -> bool {
-    let mut clicked = false;
-
-    let strip_width = 20.0;
-
-    let bg = if is_dark {
-        Color32::from_rgb(35, 35, 35)
-    } else {
-        Color32::from_rgb(245, 245, 245)
-    };
-
-    let separator_color = if is_dark {
-        Color32::from_rgb(60, 60, 60)
-    } else {
-        Color32::from_rgb(200, 200, 200)
-    };
-
-    let chevron_color = if is_dark {
-        Color32::from_rgb(140, 140, 140)
-    } else {
-        Color32::from_rgb(120, 120, 120)
-    };
-
-    egui::Panel::right("side_panel_toggle_strip")
-        .resizable(false)
-        .exact_size(strip_width)
-        .frame(
-            egui::Frame::NONE
-                .fill(bg)
-                .stroke(egui::Stroke::NONE)
-                .inner_margin(egui::Margin::ZERO),
-        )
-        .show_inside(ui, |ui| {
-            // Left border
-            let panel_rect = ui.available_rect_before_wrap();
-            ui.painter().line_segment(
-                [panel_rect.left_top(), panel_rect.left_bottom()],
-                egui::Stroke::new(1.0, separator_color),
-            );
-
-            // Clickable area for the whole strip (disabled while resize cursor is active)
-            let sense = if blocks_clicks {
-                egui::Sense::hover()
-            } else {
-                egui::Sense::click()
-            };
-            let response = ui.allocate_rect(panel_rect, sense);
-
-            // Hover effect
-            if response.hovered() {
-                let hover_bg = if is_dark {
-                    Color32::from_rgb(50, 50, 50)
-                } else {
-                    Color32::from_rgb(230, 230, 230)
-                };
-                ui.painter().rect_filled(panel_rect, 0.0, hover_bg);
-            }
-
-            // Chevron pointing left (to indicate "open panel")
-            ui.painter().text(
-                panel_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                CARET_LEFT,
-                phosphor_font(12.0),
-                chevron_color,
-            );
-
-            if response.clicked() && !blocks_clicks {
-                clicked = true;
-            }
-
-            response.on_hover_text(t!("format_toolbar.show_side_panel_tooltip"));
-        });
-
-    clicked
 }
 
 impl FormatToolbar {

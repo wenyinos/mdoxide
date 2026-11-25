@@ -36,7 +36,6 @@ use crate::markdown::{
     CsvViewerState, TreeViewerState,
 };
 pub use helpers::modifier_symbol;
-use helpers::*;
 use types::*;
 // Note: SyncScrollState is available for future split-view sync scrolling
 #[allow(unused_imports)]

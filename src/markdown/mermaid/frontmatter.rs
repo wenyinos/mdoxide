@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn test_frontmatter_config_only() {
         let source = "---\nconfig:\n  theme: forest\n---\nsequenceDiagram\n  A->>B: Hello";
-        let (fm, remaining) = parse_frontmatter(source);
+        let (fm, _remaining) = parse_frontmatter(source);
 
         assert!(fm.is_some());
         let fm = fm.unwrap();

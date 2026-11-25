@@ -303,7 +303,7 @@ fn render_mermaid_popup(
             ui.separator();
             egui::ScrollArea::both()
                 .auto_shrink([false, false])
-                .drag_to_scroll(true)
+                .scroll_source(egui::containers::scroll_area::ScrollSource::ALL)
                 .show(ui, |ui| {
                     ui.set_min_width(820.0);
                     let _ = render_mermaid_diagram_inner(
@@ -2070,7 +2070,7 @@ mod tests {
         }
 
         let d = layout.nodes.get("D").unwrap();
-        let e = layout.nodes.get("E").unwrap();
+        let _e = layout.nodes.get("E").unwrap();
         let f = layout.nodes.get("F").unwrap();
         let c = layout.nodes.get("C").unwrap();
 

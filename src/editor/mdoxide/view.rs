@@ -1584,7 +1584,7 @@ mod tests {
         // - Lines 0-4: 5 * 40 = 200px
         // - Need 200px more, so lines 5-9: 200px (at 20px each = 10 lines)
         // - So we need at least 10 lines to fill viewport
-        let (start, end) = view.get_visible_line_range(20);
+        let (_start, end) = view.get_visible_line_range(20);
 
         // Should render enough lines to fill the viewport
         // Lines 0-4 = 200px, need 200px more

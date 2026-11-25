@@ -20,6 +20,7 @@ const TRUSTED_VIDEO_HOSTS: &[&str] = &[
 /// Parse a URL string into video embed metadata.
 ///
 /// Returns `None` when the URL is missing, uses a non-http(s) scheme, or has no host.
+#[cfg(test)]
 pub fn parse_video_embed_url(raw_url: &str) -> Option<VideoEmbedInfo> {
     parse_video_embed_url_with_source(raw_url, raw_url.trim().to_string())
 }

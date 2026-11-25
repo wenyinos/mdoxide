@@ -46,11 +46,6 @@ pub struct AnsiLine {
 
 #[cfg(test)]
 impl AnsiLine {
-    /// Total visible character count (sum of segment text lengths).
-    pub fn char_count(&self) -> usize {
-        self.segments.iter().map(|s| s.text.chars().count()).sum()
-    }
-
     /// Concatenate segments into a plain (no-style) string.
     pub fn plain_text(&self) -> String {
         let mut out = String::new();

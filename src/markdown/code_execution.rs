@@ -300,50 +300,6 @@ pub fn spawn_run(
     handle
 }
 
-/// Synchronous helper: run a snippet and return the combined output string.
-///
-/// Test-only blocking API; production uses [`spawn_run`].
-#[cfg(test)]
-pub fn run_snippet(
-    code: &str,
-    fence_lang: &str,
-    working_directory: Option<&Path>,
-    timeout: Duration,
-) -> Result<String, String> {
-    let timeout_secs = timeout.as_secs().min(u32::MAX as u64) as u32;
-    let handle: RunHandle = Arc::new(Mutex::new(RunState::new(timeout_secs)));
-    let res = run_snippet_inner(code, fence_lang, working_directory, timeout, Some(&handle));
-    let state = handle.lock().map_err(|e| e.to_string())?;
-    let mut combined = String::new();
-    if !state.stdout.is_empty() {
-        combined.push_str(&String::from_utf8_lossy(&state.stdout));
-    }
-    if !state.stderr.is_empty() {
-        if !combined.is_empty() && !combined.ends_with('\n') {
-            combined.push('\n');
-        }
-        combined.push_str("[stderr]\n");
-        combined.push_str(&String::from_utf8_lossy(&state.stderr));
-    }
-    drop(state);
-
-    match res {
-        Ok(0) => Ok(if combined.is_empty() {
-            "(no output)".into()
-        } else {
-            combined
-        }),
-        Ok(code) => Err(if combined.is_empty() {
-            format!("Exited with code {code}.")
-        } else {
-            format!("Exited with code {code}.\n{combined}")
-        }),
-        Err(RunError::TimedOut) => Err("Process timed out.".into()),
-        Err(RunError::Cancelled) => Err("Run cancelled by user.".into()),
-        Err(RunError::Spawn(msg)) | Err(RunError::Io(msg)) => Err(msg),
-    }
-}
-
 #[derive(Debug)]
 enum RunError {
     Spawn(String),

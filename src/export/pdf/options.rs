@@ -38,16 +38,6 @@ impl PdfPageSize {
         }
     }
 
-    /// Human-readable label.
-    pub fn label(self) -> &'static str {
-        match self {
-            PdfPageSize::A4 => "A4",
-            PdfPageSize::UsLetter => "US Letter",
-            PdfPageSize::UsLegal => "US Legal",
-            PdfPageSize::A5 => "A5",
-        }
-    }
-
     /// Localized label for UI.
     pub fn label_localized(self) -> String {
         match self {
@@ -150,15 +140,6 @@ pub enum PdfMarginPreset {
 }
 
 impl PdfMarginPreset {
-    pub fn label(self) -> &'static str {
-        match self {
-            PdfMarginPreset::Narrow => "Narrow (10 mm)",
-            PdfMarginPreset::Comfortable => "Comfortable (19 mm)",
-            PdfMarginPreset::Wide => "Wide (25 mm)",
-            PdfMarginPreset::Custom => "Custom…",
-        }
-    }
-
     pub fn label_localized(self) -> String {
         match self {
             PdfMarginPreset::Narrow => rust_i18n::t!("dialog.pdf_export.margin_narrow"),

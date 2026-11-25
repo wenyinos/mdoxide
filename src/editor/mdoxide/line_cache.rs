@@ -1021,7 +1021,7 @@ mod tests {
                 let ctx = egui::Context::default();
                 ctx.set_fonts(egui::FontDefinitions::default());
                 let mut galley = None;
-                ctx.run_ui(egui::RawInput::default(), |ui| {
+                let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
                     galley = Some(ui.ctx().fonts_mut(|fonts| {
                         fonts.layout_job(LayoutJob::simple(
                             " ".to_owned(),

@@ -4466,7 +4466,7 @@ mod tests {
 
     #[test]
     fn test_keyboard_shortcuts_conflict_detection() {
-        let mut shortcuts = KeyboardShortcuts::default();
+        let shortcuts = KeyboardShortcuts::default();
 
         // Get Save binding
         let save_binding = shortcuts.get(ShortcutCommand::Save);

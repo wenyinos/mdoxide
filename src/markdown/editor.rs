@@ -1314,7 +1314,7 @@ impl<'a> MarkdownEditor<'a> {
         collect_navigable_blocks(&doc.root, false, &mut navigable_blocks);
         if rendered_session.active.is_none()
             && !rendered_session.locked
-            && !ui.ctx().wants_keyboard_input()
+            && !ui.ctx().egui_wants_keyboard_input()
         {
             let forward = ui.input(|input| input.key_pressed(egui::Key::ArrowDown));
             let backward = ui.input(|input| input.key_pressed(egui::Key::ArrowUp));
@@ -2797,12 +2797,11 @@ fn ensure_formatted_block_initialized(
     }
 }
 
-/// Session-backed raw-markdown TextEdit for formatted blocks (paragraphs / list items).
-///
-/// Renders the multiline TextEdit bound to `session.blocks[block_ref].text`, applies any
-/// `PendingActivation` (focus + cursor), and handles Enter (commit + return to display),
-/// Escape (discard + return to display), and lost_focus (commit). Caller is responsible
-/// for parent layout (horizontal row, indent space).
+// NOTE: Session-backed raw-markdown TextEdit for formatted blocks (paragraphs / list items).
+// Renders the multiline TextEdit bound to `session.blocks[block_ref].text`, applies any
+// `PendingActivation` (focus + cursor), and handles Enter (commit + return to display),
+// Escape (discard + return to display), and lost_focus (commit). Caller is responsible
+// for parent layout (horizontal row, indent space).
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rendered-mode context menu / clipboard helpers
@@ -3004,7 +3003,7 @@ fn add_document_copy_menu(ui: &mut Ui, source: &str) {
 /// Copy/cut/paste/select-all for one rendered TextEdit block.
 /// Returns true when the menu changed the block text.
 fn add_text_edit_context_menu(
-    ui: &mut Ui,
+    _ui: &mut Ui,
     response: &Response,
     text: &mut String,
     cursor: &mut egui::text_selection::TextCursorState,
@@ -7797,7 +7796,7 @@ mod tests {
         let mut captured: Vec<egui::Id> = Vec::new();
 
         for _content in ["# Alpha\n", "# Alpha edited\n"] {
-            ctx.run_ui(egui::RawInput::default(), |ctx| {
+            let _ = ctx.run_ui(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show_inside(ctx, |ui| {
                     ui.push_id(editor_id, |ui| {
                         ui.push_id(0u64, |ui| {
@@ -7828,7 +7827,7 @@ mod tests {
         let mut ids = Vec::new();
 
         for epoch in [0u64, 1u64] {
-            ctx.run_ui(egui::RawInput::default(), |ctx| {
+            let _ = ctx.run_ui(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show_inside(ctx, |ui| {
                     ui.push_id(editor_id, |ui| {
                         ui.push_id(epoch, |ui| {

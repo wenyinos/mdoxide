@@ -360,16 +360,6 @@ impl FileTreePanel {
             text_color,
         );
 
-        // Calculate name width for badge positioning
-        let name_galley = ui.fonts_mut(|f| {
-            f.layout_no_wrap(
-                node.name.clone(),
-                egui::FontId::proportional(12.0),
-                text_color,
-            )
-        });
-        content_pos.x += name_galley.size().x + 4.0;
-
         // Handle click
         if row_response.clicked() {
             if is_dir {

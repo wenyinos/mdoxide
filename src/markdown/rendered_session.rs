@@ -394,7 +394,7 @@ mod tests {
 
     fn with_ui(mut f: impl FnMut(&mut Ui)) {
         let ctx = egui::Context::default();
-        ctx.run_ui(egui::RawInput::default(), |ctx| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show_inside(ctx, |ui| {
                 f(ui);
             });

@@ -1047,50 +1047,6 @@ impl MDOxideApp {
         }
     }
 
-    /// Build status-bar text for LSP (compact) and optional hover detail.
-    ///
-    /// Only shows servers that have been started (on demand) rather than
-    /// scanning the workspace for potential servers each frame.
-    pub(crate) fn lsp_status_bar_text(&self) -> (String, String) {
-        use crate::lsp::state::ServerStatus;
-
-        if !self.state.settings.lsp_enabled {
-            return (
-                "LSP: Disabled".to_string(),
-                "Language servers are disabled in Settings.".to_string(),
-            );
-        }
-
-        if self.lsp_status_by_server.is_empty() {
-            return (
-                "LSP".to_string(),
-                "No language servers running. Servers start on demand when you open a supported file.".to_string(),
-            );
-        }
-
-        let mut keys: Vec<&String> = self.lsp_status_by_server.keys().collect();
-        keys.sort();
-
-        let mut parts = Vec::new();
-        let mut detail = String::from("Language server status:\n");
-        for key in &keys {
-            let status = self
-                .lsp_status_by_server
-                .get(*key)
-                .cloned()
-                .unwrap_or(ServerStatus::Disconnected);
-            let label = status.short_label();
-            parts.push(format!("{}: {}", key, label));
-            if let ServerStatus::Error(e) = &status {
-                detail.push_str(&format!("• {} — {} ({})\n", key, label, e));
-            } else {
-                detail.push_str(&format!("• {} — {}\n", key, label));
-            }
-        }
-        let summary = format!("LSP {}", parts.join(" · "));
-        (summary, detail.trim_end().to_string())
-    }
-
     /// Force an immediate session save (bypasses throttling).
     ///
     /// Use this after important state changes like opening/closing workspaces
