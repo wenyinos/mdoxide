@@ -2,6 +2,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.8.1] - 2026-11-25
+
+### 新增
+
+- UI 缩放持久化：`Ctrl+=` / `Ctrl+-` / `Ctrl+0` 与 `Ctrl+滚轮` 调整的整体缩放保存到设置，重启后自动恢复（范围 0.2–5.0，配置中的非法值重置为 100%）
+
+### 变更
+
+- 清理全部编译告警（33 → 0）：移除 MarkText 化重构后遗留的未使用代码（状态栏专用 LSP 文本、标题栏 logo 纹理加载、侧栏切换条、`TextStats::format_compact` 等），迁移废弃的 egui 0.34 API（`egui_wants_keyboard_input`、`scroll_source`、测试中的 `run_ui`/`show_inside`）
+
 ## [0.8.0] - 2026-11-17
 
 ### 新增

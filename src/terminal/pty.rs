@@ -169,7 +169,7 @@ impl TerminalPty {
 
     /// Build the shell command for the specified shell type.
     fn build_shell_command(
-        _shell_type: ShellType,
+        #[cfg_attr(not(windows), allow(unused_variables))] shell_type: ShellType,
         working_dir: Option<std::path::PathBuf>,
     ) -> CommandBuilder {
         #[cfg(windows)]

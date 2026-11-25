@@ -105,7 +105,9 @@ impl Terminal {
         let (status_tx, status_rx) = mpsc::channel();
         let (stop_tx, stop_rx) = mpsc::channel();
 
-        let _pid = pty.pid();
+        // Only the Windows foreground-process probe uses the PID.
+        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+        let pid = pty.pid();
         let wd = working_dir.clone();
 
         thread::spawn(move || {
@@ -138,7 +140,8 @@ impl Terminal {
                 }
 
                 // 2. Check Process (Windows)
-                let fg_process = None;
+                #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
+                let mut fg_process = None;
                 #[cfg(target_os = "windows")]
                 if pid > 0 {
                     use std::os::windows::process::CommandExt;

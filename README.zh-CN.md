@@ -10,7 +10,7 @@ MDOxide 是对 [MarkText](https://github.com/marktext/marktext) 编辑体验的 
 
 ## 当前状态
 
-**v0.8.0 已发布。** 六个里程碑全部完成。本版同步上游 Ferrite v0.3.1 的可用能力：`<details>` 与对齐块、Mermaid 弹窗/gitGraph/autonumber、渲染视图块导航、编辑器/渲染/终端独立字体与 Nerd Font 回退、设置搜索、文件树润色、原生标题栏与 Linux 主选区粘贴。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
+**v0.8.1 已发布。** 六个里程碑全部完成；本版是 v0.8.0（同步上游 Ferrite v0.3.1：`<details>` 与对齐块、Mermaid 弹窗/gitGraph/autonumber、渲染视图块导航、独立字体与 Nerd Font 回退、设置搜索、文件树润色、原生标题栏、Linux 主选区粘贴）之上的维护版本。新增 UI 缩放持久化（`Ctrl+=`/`Ctrl+-`/`Ctrl+0`/`Ctrl+滚轮`，范围 0.2–5.0，重启后恢复）；编译告警从 33 条清零，移除 MarkText 化重构遗留的死代码并迁移废弃的 egui 0.34 API。发布产物由 GitHub Actions 构建，覆盖 Linux x86_64/aarch64 与 Windows x64/ARM64。
 
 ## 已具备的能力
 

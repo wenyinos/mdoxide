@@ -10,7 +10,7 @@ The name: **Oxide** (Rust's oxidized-iron identity) + **MD** (Markdown).
 
 ## Status
 
-**v0.8.0 released.** All six milestones are complete. This release ports the usable parts of upstream Ferrite v0.3.1: HTML `<details>` and aligned blocks, Mermaid popup/gitGraph/autonumber, rendered block navigation, custom editor/rendered/terminal fonts with Nerd Font fallback, settings search, file-tree polish, native title bar and Linux primary-selection paste. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
+**v0.8.1 released.** All six milestones are complete; this is a maintenance release on top of v0.8.0, which ported the usable parts of upstream Ferrite v0.3.1 (HTML `<details>` and aligned blocks, Mermaid popup/gitGraph/autonumber, rendered block navigation, custom editor/rendered/terminal fonts with Nerd Font fallback, settings search, file-tree polish, native title bar and Linux primary-selection paste). v0.8.1 persists the global UI zoom across restarts (`Ctrl+=` / `Ctrl+-` / `Ctrl+0` / `Ctrl+wheel`, clamped to 0.2–5.0) and clears all 33 compiler warnings, removing dead code left over from the MarkText-chrome refactor and migrating off deprecated egui 0.34 APIs. Release artifacts are built by GitHub Actions for Linux x86_64/aarch64 and Windows x64/ARM64.
 
 ## What works today
 
