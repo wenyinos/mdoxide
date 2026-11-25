@@ -187,6 +187,10 @@ pub struct MDOxideApp {
     /// Set when a file is opened during the UI render pass, checked at end of update().
     /// This ensures CJK fonts are loaded immediately rather than waiting for next frame.
     pending_cjk_check: bool,
+    /// Whether the persisted UI zoom has been requested from egui yet.
+    ui_zoom_restore_requested: bool,
+    /// Whether the restored UI zoom is active, so later changes can be persisted.
+    ui_zoom_restored: bool,
     /// Last active tab index (for detecting tab switches to refresh backlinks)
     last_active_tab_for_backlinks: usize,
     /// Flag to trigger backlink refresh (set on file save or tab switch)
@@ -489,6 +493,8 @@ impl MDOxideApp {
             window_diagnostic_logged: false,
             platform_init_done: false,
             pending_cjk_check: false,
+            ui_zoom_restore_requested: false,
+            ui_zoom_restored: false,
             last_active_tab_for_backlinks: usize::MAX,
             backlinks_need_refresh: true,
             instance_listener: None,
@@ -2364,6 +2370,32 @@ impl MDOxideApp {
             }
         }
     }
+
+    /// Restore the persisted UI zoom on startup, then persist every later change
+    /// (Ctrl+= / Ctrl+- / Ctrl+0, Ctrl+mouse wheel).
+    ///
+    /// `set_zoom_factor` only takes effect at the start of the next pass, so we
+    /// wait until egui reports the restored value before syncing changes back;
+    /// otherwise the default 1.0 would overwrite the saved zoom.
+    fn sync_ui_zoom(&mut self, ctx: &egui::Context) {
+        let saved = self.state.settings.ui_zoom;
+        if !self.ui_zoom_restored {
+            if !self.ui_zoom_restore_requested {
+                self.ui_zoom_restore_requested = true;
+                ctx.set_zoom_factor(saved);
+            }
+            if (ctx.zoom_factor() - saved).abs() <= f32::EPSILON {
+                self.ui_zoom_restored = true;
+            }
+            return;
+        }
+
+        let zoom = ctx.zoom_factor();
+        if (zoom - saved).abs() > f32::EPSILON {
+            self.state.settings.ui_zoom = zoom;
+            self.state.mark_settings_dirty();
+        }
+    }
 }
 
 impl eframe::App for MDOxideApp {
@@ -2478,6 +2510,14 @@ impl eframe::App for MDOxideApp {
     /// Called each time the UI needs repainting.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         crate::diag::next_frame();
+
+        // Restore the persisted UI zoom on startup, then persist every later change
+        // (Ctrl+= / Ctrl+- / Ctrl+0, Ctrl+mouse wheel).
+        //
+        // `set_zoom_factor` only takes effect at the start of the next pass, so we
+        // wait until egui reports the restored value before syncing changes back;
+        // otherwise the default 1.0 would overwrite the saved zoom.
+        self.sync_ui_zoom(ctx);
 
         // Handle window resize for borderless window (must be early, before UI)
         // This detects mouse near edges, changes cursor, and initiates resize
