@@ -106,6 +106,11 @@ pub struct RenderedEditSession {
     pub locked: bool,
     /// Index into the current navigable-block list (rendered keyboard cursor).
     pub block_cursor: Option<usize>,
+    /// Top-level headings (by start line) whose sections are folded.
+    ///
+    /// Transient view state: it never touches the document text or undo history,
+    /// matching MarkText's fold behavior.
+    pub folded_headings: std::collections::HashSet<usize>,
 }
 
 impl RenderedEditSession {

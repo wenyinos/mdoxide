@@ -23,7 +23,7 @@ CommonMark/GFM 块与内联、表格（自动换行/行高）、任务列表、�
 
 | 编号 | 特性 | 上游实现 | 本分支现状 | 优先级 | 实施要点 |
 |---|---|---|---|---|---|
-| E-1 | 标题折叠 | `headingFoldToggle` + `folding.ts`：按级别折叠章节、嵌套、状态保存 | 无 | **P1** | 渲染视图按块渲染，折叠态需按标题层级隐藏后续块；状态存 `RenderedEditSession`，不写回正文 |
+| E-1 | 标题折叠 | `headingFoldToggle` + `folding.ts`：按级别折叠章节、嵌套、状态保存 | **已实施**：标题左侧 ▾/▸ 折叠按钮，按级别隐藏后续块 | 已实施 | 折叠态存 `RenderedEditSession.folded_headings`（瞬态，不写回正文）；culling 按折叠签名失效并零高度隐藏；块导航跳过隐藏块；行号键在编辑后可能漂移（MarkText 用 path，后续可改进） |
 | E-2 | 表格棋盘插入 | `ui/tableChessboard`：悬浮 6×8 棋盘选行列 | **已实施**：Format 菜单 → 插入表格 → 6×8 棋盘 | P1 | `MarkdownFormatCommand::Table{rows,cols}` + `apply_table_snippet_format` + `table_picker_grid`；4 个测试 |
 | E-3 | 代码块语言选择器 | `ui/codeBlockLanguageSelector`：点击语言弹模糊搜索 | **已覆盖**：代码块标题栏 ComboBox 可选语言并回写 fence | — | 交互形态不同（下拉 vs 搜索），功能等价 |
 | E-4 | 图片缩放 | `ui/imageResizeBar`：拖拽角柄改宽度 | 图片固定渲染，无尺寸控制 | P1 | 拖拽生成 `width` 属性（HTML img 或 `{width=}`），需 AST/源文同步 |
@@ -63,7 +63,7 @@ CommonMark/GFM 块与内联、表格（自动换行/行高）、任务列表、�
 
 - **第一批（v0.8.2 候选，本次实施）**：R-1 脚注渲染、R-2 上标渲染、R-3 描述列表渲染
 - **第二批**：E-2 表格棋盘插入、E-3 代码块语言选择器
-- **第三批**：E-1 标题折叠、E-4 图片缩放
+- **第三批（E-1 已完成）**：E-1 标题折叠；E-4 图片缩放待做
 - **第四批**：E-5 快速插入菜单、E-6 Emoji 选择器、E-8 链接工具
 - **桌面层**：D-2、D-3、D-7、D-12、D-1 按需排期
 

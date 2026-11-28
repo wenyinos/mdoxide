@@ -185,6 +185,8 @@ struct ViewportCullingState {
     /// `(start_line, end_line)` per top-level block — used to reuse layout when only
     /// inline content changes (e.g. task checkbox toggles) without remeasuring.
     block_line_ranges: Vec<(usize, usize)>,
+    /// Hash of the folded-heading set; a change invalidates cached heights.
+    fold_signature: u64,
 }
 
 fn block_line_ranges_from_nodes(children: &[MarkdownNode]) -> Vec<(usize, usize)> {
@@ -1310,8 +1312,16 @@ impl<'a> MarkdownEditor<'a> {
         }
 
         // Keyboard block navigation: ArrowUp/Down moves a block cursor, Enter edits.
+        // Folded sections are skipped so the cursor never lands on hidden blocks.
+        let folded_for_nav = rendered_session.folded_headings.clone();
+        let hidden_for_nav = compute_hidden_blocks(&doc.root.children, &folded_for_nav);
         let mut navigable_blocks: Vec<BlockRef> = Vec::new();
-        collect_navigable_blocks(&doc.root, false, &mut navigable_blocks);
+        for (index, child) in doc.root.children.iter().enumerate() {
+            if hidden_for_nav.get(index).copied().unwrap_or(false) {
+                continue;
+            }
+            collect_navigable_blocks(child, true, &mut navigable_blocks);
+        }
         if rendered_session.active.is_none()
             && !rendered_session.locked
             && !ui.ctx().egui_wants_keyboard_input()
@@ -1409,15 +1419,22 @@ impl<'a> MarkdownEditor<'a> {
         FOOTNOTE_NUMBERS.with(|cell| {
             *cell.borrow_mut() = build_footnote_numbers(&doc.root);
         });
+        // Folded heading sections: hidden blocks keep zero height in the culling
+        // state so scroll offsets stay consistent across frames.
+        let folded_headings = rendered_session.folded_headings.clone();
+        let hidden_blocks = compute_hidden_blocks(&doc.root.children, &folded_headings);
+        let current_fold_signature = fold_signature(&folded_headings);
         let block_structure_valid = culling_state.as_ref().map_or(false, |s| {
             s.block_heights.len() == block_count
                 && (s.available_width - outer_available_width).abs() < 1.0
+                && s.fold_signature == current_fold_signature
                 && block_structure_matches(&s.block_line_ranges, &doc.root.children)
         });
         let has_valid_heights = culling_state.as_ref().map_or(false, |s| {
             s.content_hash == content_hash
                 && s.block_heights.len() == block_count
                 && (s.available_width - outer_available_width).abs() < 1.0
+                && s.fold_signature == current_fold_signature
         }) || block_structure_valid;
 
         // Accumulator for the updated culling state (populated inside the closure).
@@ -1482,6 +1499,11 @@ impl<'a> MarkdownEditor<'a> {
                             let is_dark_mode = ui.visuals().dark_mode;
 
                             for i in first_vis..=last_vis.min(block_count.saturating_sub(1)) {
+                                if hidden_blocks.get(i).copied().unwrap_or(false) {
+                                    updated_heights[i] = 0.0;
+                                    updated_measured[i] = true;
+                                    continue;
+                                }
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
                                 let block_left = ui.cursor().left();
@@ -1584,23 +1606,17 @@ impl<'a> MarkdownEditor<'a> {
 
                             // If any heights changed, rebuild start_y and total_height.
                             if new_measures_this_frame > 0 {
-                                let mut start_y = Vec::with_capacity(block_count);
-                                let mut y = 0.0f32;
-                                for (i, &h) in updated_heights.iter().enumerate() {
-                                    start_y.push(y);
-                                    y += h;
-                                    if i + 1 < block_count {
-                                        y += BLOCK_ITEM_SPACING_Y;
-                                    }
-                                }
+                                let (start_y, total_height) =
+                                    accumulate_block_offsets(&updated_heights, &hidden_blocks);
                                 new_culling = Some(ViewportCullingState {
                                     content_hash,
                                     available_width: outer_available_width,
                                     block_start_y: start_y,
                                     block_heights: updated_heights,
-                                    total_height: y,
+                                    total_height,
                                     block_measured: updated_measured,
                                     block_line_ranges: block_line_ranges.clone(),
+                                    fold_signature: current_fold_signature,
                                 });
                                 // Still have unmeasured blocks â€” request another frame
                                 // so the progressive pass continues.
@@ -1626,8 +1642,14 @@ impl<'a> MarkdownEditor<'a> {
                             let mut boot_measured: Vec<bool> = Vec::with_capacity(block_count);
 
                             // Phase 1: Determine height for every block from cache
-                            // or heuristic, without rendering anything.
-                            for node in &doc.root.children {
+                            // or heuristic, without rendering anything. Folded
+                            // blocks stay at zero height.
+                            for (index, node) in doc.root.children.iter().enumerate() {
+                                if hidden_blocks.get(index).copied().unwrap_or(false) {
+                                    boot_heights.push(0.0);
+                                    boot_measured.push(true);
+                                    continue;
+                                }
                                 let cached_h = {
                                     let s = block_source_slice(
                                         self.content,
@@ -1652,22 +1674,8 @@ impl<'a> MarkdownEditor<'a> {
                             }
 
                             // Phase 2: Build start_y from the heights.
-                            let mut boot_start_y: Vec<f32> = Vec::with_capacity(block_count);
-                            {
-                                let mut y = 0.0f32;
-                                for (i, &h) in boot_heights.iter().enumerate() {
-                                    boot_start_y.push(y);
-                                    y += h;
-                                    if i + 1 < block_count {
-                                        y += BLOCK_ITEM_SPACING_Y;
-                                    }
-                                }
-                            }
-                            let boot_total: f32 = if block_count > 0 {
-                                boot_start_y[block_count - 1] + boot_heights[block_count - 1]
-                            } else {
-                                0.0
-                            };
+                            let (boot_start_y, boot_total) =
+                                accumulate_block_offsets(&boot_heights, &hidden_blocks);
 
                             // Set the min height so the scrollbar approximates the
                             // full document even on the very first frame.
@@ -1701,6 +1709,15 @@ impl<'a> MarkdownEditor<'a> {
                             // rather than accessing children[0].
                             let render_end = (last_vis + 1).min(block_count);
                             for i in first_vis..render_end {
+                                if hidden_blocks.get(i).copied().unwrap_or(false) {
+                                    line_mappings.push(LineMapping {
+                                        start_line: doc.root.children[i].start_line,
+                                        end_line: doc.root.children[i].end_line,
+                                        rendered_y: boot_start_y[i],
+                                        rendered_height: 0.0,
+                                    });
+                                    continue;
+                                }
                                 let node = &doc.root.children[i];
                                 let y_before = ui.cursor().top();
                                 let block_left = ui.cursor().left();
@@ -1807,22 +1824,8 @@ impl<'a> MarkdownEditor<'a> {
                             }
 
                             // Rebuild start_y in case visible-block heights changed.
-                            let mut final_start_y: Vec<f32> = Vec::with_capacity(block_count);
-                            {
-                                let mut y = 0.0f32;
-                                for (i, &h) in boot_heights.iter().enumerate() {
-                                    final_start_y.push(y);
-                                    y += h;
-                                    if i + 1 < block_count {
-                                        y += BLOCK_ITEM_SPACING_Y;
-                                    }
-                                }
-                            }
-                            let final_total: f32 = if block_count > 0 {
-                                final_start_y[block_count - 1] + boot_heights[block_count - 1]
-                            } else {
-                                0.0
-                            };
+                            let (final_start_y, final_total) =
+                                accumulate_block_offsets(&boot_heights, &hidden_blocks);
 
                             new_culling = Some(ViewportCullingState {
                                 content_hash,
@@ -1832,6 +1835,7 @@ impl<'a> MarkdownEditor<'a> {
                                 total_height: final_total,
                                 block_measured: boot_measured,
                                 block_line_ranges: block_line_ranges.clone(),
+                                fold_signature: current_fold_signature,
                             });
 
                             if new_culling
@@ -2939,6 +2943,74 @@ fn footnote_number(name: &str) -> usize {
     FOOTNOTE_NUMBERS.with(|cell| cell.borrow().get(name).copied().unwrap_or(0))
 }
 
+/// Top-level blocks hidden by folded heading sections.
+///
+/// A folded heading hides everything up to the next heading of the same or a
+/// higher level; nested folds fall out of the same linear walk.
+fn compute_hidden_blocks(
+    blocks: &[MarkdownNode],
+    folded: &std::collections::HashSet<usize>,
+) -> Vec<bool> {
+    let mut hidden = vec![false; blocks.len()];
+    let mut fold_level: Option<u8> = None;
+    for (index, block) in blocks.iter().enumerate() {
+        let level = match &block.node_type {
+            MarkdownNodeType::Heading { level, .. } => Some(*level as u8),
+            _ => None,
+        };
+        match level {
+            Some(level) => {
+                // Still inside an outer folded section.
+                if fold_level.is_some_and(|folded_level| level > folded_level) {
+                    hidden[index] = true;
+                    continue;
+                }
+                // Same or higher level closes the previous section.
+                fold_level = None;
+                if folded.contains(&block.start_line) {
+                    fold_level = Some(level);
+                }
+            }
+            None => {
+                if fold_level.is_some() {
+                    hidden[index] = true;
+                }
+            }
+        }
+    }
+    hidden
+}
+
+/// Stable hash of the folded-heading set, used to invalidate cached heights.
+fn fold_signature(folded: &std::collections::HashSet<usize>) -> u64 {
+    let mut lines: Vec<usize> = folded.iter().copied().collect();
+    lines.sort_unstable();
+    lines.iter().fold(0u64, |acc, &line| {
+        acc.wrapping_mul(1_099_511_628_211)
+            .wrapping_add(line as u64 + 1)
+    })
+}
+
+/// Accumulate block start offsets, adding inter-block spacing only where a
+/// visible block is followed by another visible block.
+///
+/// Folded blocks contribute zero height and no spacing, so the scroll range
+/// shrinks exactly by the hidden content.
+fn accumulate_block_offsets(heights: &[f32], hidden: &[bool]) -> (Vec<f32>, f32) {
+    let is_hidden = |i: usize| hidden.get(i).copied().unwrap_or(false);
+    let last_visible = (0..heights.len()).rev().find(|&i| !is_hidden(i));
+    let mut start_y = Vec::with_capacity(heights.len());
+    let mut y = 0.0f32;
+    for (i, &h) in heights.iter().enumerate() {
+        start_y.push(y);
+        y += h;
+        if Some(i) != last_visible && !is_hidden(i) {
+            y += BLOCK_ITEM_SPACING_Y;
+        }
+    }
+    (start_y, y)
+}
+
 fn set_current_block_cursor(block: Option<BlockRef>) {
     CURRENT_BLOCK_CURSOR.with(|cell| *cell.borrow_mut() = block);
 }
@@ -3691,10 +3763,28 @@ fn render_heading(
         HeadingLevel::H5 => 5,
         HeadingLevel::H6 => 6,
     });
+    // MarkText-style fold chevron: transient section folding, never written back.
+    let folded = session.folded_headings.contains(&node.start_line);
+    let mut fold_toggle = false;
+
     let (has_focus, selection) = ui
         .horizontal(|ui| {
             ui.set_max_width(available_width);
             ui.add_space(4.0);
+
+            let chevron = if folded { "\u{25B8}" } else { "\u{25BE}" };
+            let fold_button = ui.add(
+                egui::Button::new(
+                    RichText::new(chevron)
+                        .size((font_size * 0.6).max(9.0))
+                        .color(colors.quote_text.gamma_multiply(0.75)),
+                )
+                .frame(false)
+                .min_size(egui::vec2(14.0, 14.0)),
+            );
+            if fold_button.clicked() {
+                fold_toggle = true;
+            }
 
             if show_marker {
                 ui.label(
@@ -3822,6 +3912,14 @@ fn render_heading(
             (has_focus, selection)
         })
         .inner;
+
+    if fold_toggle {
+        if folded {
+            session.folded_headings.remove(&node.start_line);
+        } else {
+            session.folded_headings.insert(node.start_line);
+        }
+    }
 
     if has_focus {
         edit_state.set_focus(node_id, selection);
@@ -8397,6 +8495,49 @@ mod tests {
         assert!(text.contains("Title"));
         assert!(text.contains("Body bold"));
         assert!(text.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_compute_hidden_blocks_folds_section() {
+        let doc = crate::markdown::parser::parse_markdown(
+            "# A\ntext a\n## B\ntext b\n# C\ntext c\n",
+        )
+        .expect("parse");
+        let folded: std::collections::HashSet<usize> = [1].into_iter().collect();
+        let hidden = compute_hidden_blocks(&doc.root.children, &folded);
+        assert_eq!(hidden, vec![false, true, true, true, false, false]);
+    }
+
+    #[test]
+    fn test_compute_hidden_blocks_nested_folds() {
+        let doc = crate::markdown::parser::parse_markdown(
+            "## A\ntext a\n### B\ntext b\n## C\ntext c\n",
+        )
+        .expect("parse");
+        let folded: std::collections::HashSet<usize> = [1, 3].into_iter().collect();
+        let hidden = compute_hidden_blocks(&doc.root.children, &folded);
+        // B stays hidden under A's section; C ends it.
+        assert_eq!(hidden, vec![false, true, true, true, false, false]);
+    }
+
+    #[test]
+    fn test_accumulate_block_offsets_skips_hidden_spacing() {
+        let heights = [10.0, 20.0, 30.0];
+        let hidden = [false, true, false];
+        let (start, total) = accumulate_block_offsets(&heights, &hidden);
+        assert_eq!(start[0], 0.0);
+        // Hidden block contributes no height; the visible blocks keep one spacing.
+        assert_eq!(start[2], 10.0 + BLOCK_ITEM_SPACING_Y);
+        assert_eq!(total, 10.0 + BLOCK_ITEM_SPACING_Y + 30.0);
+    }
+
+    #[test]
+    fn test_fold_signature_order_independent() {
+        let a: std::collections::HashSet<usize> = [3, 1, 2].into_iter().collect();
+        let b: std::collections::HashSet<usize> = [1, 2, 3].into_iter().collect();
+        let c: std::collections::HashSet<usize> = [1, 2].into_iter().collect();
+        assert_eq!(fold_signature(&a), fold_signature(&b));
+        assert_ne!(fold_signature(&a), fold_signature(&c));
     }
 
     #[test]
