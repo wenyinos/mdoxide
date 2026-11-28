@@ -1419,6 +1419,17 @@ impl<'a> MarkdownEditor<'a> {
         FOOTNOTE_NUMBERS.with(|cell| {
             *cell.borrow_mut() = build_footnote_numbers(&doc.root);
         });
+        // Menu "fold all / unfold all" applies to every top-level heading first.
+        if let Some(fold) = take_fold_all_request() {
+            rendered_session.folded_headings.clear();
+            if fold {
+                for child in &doc.root.children {
+                    if matches!(child.node_type, MarkdownNodeType::Heading { .. }) {
+                        rendered_session.folded_headings.insert(child.start_line);
+                    }
+                }
+            }
+        }
         // Folded heading sections: hidden blocks keep zero height in the culling
         // state so scroll offsets stay consistent across frames.
         let folded_headings = rendered_session.folded_headings.clone();
@@ -2911,6 +2922,18 @@ thread_local! {
     /// Numbers follow first-reference order, matching GitHub/MarkText output.
     static FOOTNOTE_NUMBERS: std::cell::RefCell<std::collections::HashMap<String, usize>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    /// Pending "fold all headings" request from the menu (true = fold).
+    static FOLD_ALL_REQUEST: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Ask the rendered view to fold (true) or unfold (false) every heading.
+pub fn request_fold_all(fold: bool) {
+    FOLD_ALL_REQUEST.with(|cell| cell.set(Some(fold)));
+}
+
+/// Consume a pending fold-all request.
+fn take_fold_all_request() -> Option<bool> {
+    FOLD_ALL_REQUEST.with(|cell| cell.take())
 }
 
 /// Build the `label -> number` map in first-reference order.

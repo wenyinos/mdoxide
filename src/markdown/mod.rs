@@ -78,7 +78,8 @@ pub use csv_viewer::{
     delimiter_display_name, get_tabular_file_type, CsvViewer, CsvViewerState,
 };
 pub use editor::{
-    cleanup_rendered_editor_memory, EditorMode, LineMapping, MarkdownEditor, WikilinkContext,
+    cleanup_rendered_editor_memory, request_fold_all, EditorMode, LineMapping, MarkdownEditor,
+    WikilinkContext,
 };
 pub use rendered_session::rendered_editor_id;
 pub use formatting::{

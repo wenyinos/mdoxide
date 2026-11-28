@@ -31,6 +31,8 @@ menu:
     split: 分屏
     rendered: 渲染
     preview_lock: 锁定预览
+    fold_all_headings: 折叠全部标题
+    unfold_all_headings: 展开全部标题
   line_numbers: 行号
   help:
     label: 帮助

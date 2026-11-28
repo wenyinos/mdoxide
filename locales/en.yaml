@@ -35,6 +35,8 @@ menu:
     split: "Split View"
     rendered: "Rendered"
     preview_lock: "Lock Preview"
+    fold_all_headings: "Fold All Headings"
+    unfold_all_headings: "Unfold All Headings"
   line_numbers: "Line Numbers"
   help:
     label: "Help"

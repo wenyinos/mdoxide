@@ -45,6 +45,8 @@ enum TitleBarAction {
     OpenRecent(PathBuf),
     ReloadFromDisk,
     TogglePreviewLock,
+    /// Fold or unfold every heading in the rendered view.
+    FoldAllHeadings(bool),
     ChangeEncoding(&'static str),
 }
 
@@ -474,6 +476,18 @@ impl MDOxideApp {
                                         ui,
                                         t!("menu.view.line_numbers"),
                                         || TitleBarAction::ToggleLineNumbers,
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.fold_all_headings"),
+                                        || TitleBarAction::FoldAllHeadings(true),
+                                        &mut action,
+                                    );
+                                    menu_action(
+                                        ui,
+                                        t!("menu.view.unfold_all_headings"),
+                                        || TitleBarAction::FoldAllHeadings(false),
                                         &mut action,
                                     );
                                     menu_action(
@@ -910,6 +924,10 @@ impl MDOxideApp {
             }
             TitleBarAction::ReloadFromDisk => {
                 self.handle_reload_from_disk_request();
+            }
+            TitleBarAction::FoldAllHeadings(fold) => {
+                crate::markdown::request_fold_all(fold);
+                ctx.request_repaint();
             }
             TitleBarAction::TogglePreviewLock => {
                 if let Some(tab) = self.state.active_tab_mut() {
