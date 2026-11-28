@@ -90,6 +90,11 @@ format_toolbar:
   mermaid_timeline: "Timeline"
   mermaid_gitgraph: "Git graph"
 
+# Hover tools on rendered images
+image_tools:
+  copy_path: "Copy path"
+  reveal: "Open containing folder"
+
 # Status bar
 status:
   errors: "%{count} err"
@@ -940,6 +945,8 @@ widgets:
     text_label: "Text:"
     url_label: "URL:"
     copy_tooltip: "Copy URL to clipboard"
+    unlink: "Unlink"
+    unlink_tooltip: "Remove the link, keep the text"
 
 # CSV Viewer
 csv:

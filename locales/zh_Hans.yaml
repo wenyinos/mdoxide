@@ -77,6 +77,11 @@ format_toolbar:
   mermaid_mindmap: 思维导图
   mermaid_timeline: 时间线
   mermaid_gitgraph: Git 图
+# 渲染图片的悬停工具
+image_tools:
+  copy_path: 复制路径
+  reveal: 打开所在文件夹
+
 status:
   errors: '%{count} 个错误'
   warnings: '%{count} 个警告'
@@ -888,6 +893,8 @@ widgets:
     text_label: 文本：
     url_label: 网址：
     copy_tooltip: 复制链接到剪贴板
+    unlink: 取消链接
+    unlink_tooltip: 移除链接语法，保留文本
 csv:
   delimiter_auto: 自动检测
   error: CSV 解析失败

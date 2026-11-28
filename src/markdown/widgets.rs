@@ -4574,6 +4574,8 @@ pub struct RenderedLinkOutput {
     pub is_autolink: bool,
     /// Whether this link consumed a click event (prevents parent from entering edit mode)
     pub click_consumed: bool,
+    /// Whether the user asked to remove the link markup (keep the text).
+    pub unlink: bool,
 }
 
 thread_local! {
@@ -4778,6 +4780,7 @@ impl<'a> RenderedLinkWidget<'a> {
         }
 
         // Show link edit popup (egui 0.34 Popup API; local bool avoids borrow conflict with edit fields).
+        let mut unlink_requested = false;
         let mut popup_open = self.state.popup_open;
         let was_popup_open = popup_open;
         if popup_open {
@@ -4900,10 +4903,24 @@ impl<'a> RenderedLinkWidget<'a> {
                                     ui.ctx().copy_text(self.state.edit_url.clone());
                                     log::debug!("Copied URL to clipboard: {}", self.state.edit_url);
                                 }
+
+                                ui.add_space(4.0);
+
+                                // Unlink: keep the visible text, drop the markup.
+                                if ui
+                                    .button(t!("widgets.link.unlink").to_string())
+                                    .on_hover_text(t!("widgets.link.unlink_tooltip").to_string())
+                                    .clicked()
+                                {
+                                    unlink_requested = true;
+                                }
                             });
                         })
                 });
 
+            if unlink_requested {
+                popup_open = false;
+            }
             self.state.popup_open = popup_open;
             // Commit edits when the popup closes (click outside or Escape).
             if was_popup_open && !popup_open && self.state.is_modified() {
@@ -4935,6 +4952,7 @@ impl<'a> RenderedLinkWidget<'a> {
             markdown,
             is_autolink,
             click_consumed,
+            unlink: unlink_requested,
         }
     }
 }
@@ -6389,6 +6407,7 @@ mod tests {
             markdown: "[Link Text](https://example.com)".to_string(),
             is_autolink: false,
             click_consumed: false,
+            unlink: false,
         };
         assert!(output.changed);
         assert_eq!(output.text, "Link Text");
@@ -6406,6 +6425,7 @@ mod tests {
             markdown: "https://example.com".to_string(), // Just the URL for autolinks
             is_autolink: true,
             click_consumed: false,
+            unlink: false,
         };
         assert!(output.is_autolink);
         // For autolinks, markdown is just the URL (no [text](url) syntax)

@@ -3417,6 +3417,12 @@ fn add_document_copy_menu(ui: &mut Ui, source: &str) {
         ui.ctx().copy_text(source.to_string());
         ui.close();
     }
+    if ui.button(t!("menu.file.export_clipboard")).clicked() {
+        if let Err(error) = crate::export::copy_html_to_clipboard(source) {
+            log::warn!("Copy as HTML from the rendered menu failed: {error}");
+        }
+        ui.close();
+    }
 }
 
 /// Copy/cut/paste/select-all for one rendered TextEdit block.
@@ -7077,6 +7083,13 @@ fn render_link(
         });
     }
 
+    // Unlink: keep the visible text and drop the link syntax on this line.
+    if output.unlink
+        && remove_link_markup(source, node.start_line, node.end_line, &text, url, title)
+    {
+        edit_state.add_node(text.clone(), node.start_line, node.end_line);
+    }
+
     // Handle changes - update the markdown source
     if output.changed {
         // Update the link in the source
@@ -7103,6 +7116,49 @@ fn render_link(
             node.start_line, text, url, output.text, output.url, output.is_autolink
         );
     }
+}
+
+/// Remove `[text](url "title")` (or a bare autolink) on the link's lines,
+/// leaving the visible text in place.
+fn remove_link_markup(
+    source: &mut String,
+    start_line: usize,
+    end_line: usize,
+    text: &str,
+    url: &str,
+    title: &str,
+) -> bool {
+    let with_title = format!("[{text}]({url} \"{title}\")");
+    let plain = format!("[{text}]({url})");
+    let candidates = [with_title.as_str(), plain.as_str(), url];
+
+    let eol = crate::state::LineEnding::detect(source).as_str();
+    let trailing = if source.ends_with('\n') { eol } else { "" };
+    let mut lines: Vec<String> = source.lines().map(|line| line.to_string()).collect();
+    if start_line == 0 || start_line > lines.len() {
+        return false;
+    }
+    let start = start_line - 1;
+    let end = end_line.saturating_sub(1).min(lines.len() - 1);
+
+    for line in start..=end {
+        for candidate in candidates {
+            if candidate.is_empty() {
+                continue;
+            }
+            if let Some(pos) = lines[line].find(candidate) {
+                lines[line] = format!(
+                    "{}{}{}",
+                    &lines[line][..pos],
+                    text,
+                    &lines[line][pos + candidate.len()..]
+                );
+                *source = format!("{}{}", lines.join(eol), trailing);
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Render a wikilink as a clickable label.
@@ -7446,7 +7502,61 @@ fn render_image(
             // Show tooltip with alt text and/or title on hover
             let tooltip = build_image_tooltip(&alt_text, title, url);
             if !tooltip.is_empty() {
-                response.on_hover_text(tooltip);
+                response.clone().on_hover_text(tooltip);
+            }
+
+            // Hover tools: copy the resolved path, reveal it in the file manager.
+            // Use rect containment (not `hovered`) so the buttons stay visible
+            // while the pointer is over them.
+            if ui.rect_contains_pointer(response.rect) {
+                let button = egui::vec2(24.0, 22.0);
+                let top = response.rect.top() + 6.0;
+                let right = response.rect.right() - 6.0;
+                let copy_rect = egui::Rect::from_min_size(
+                    egui::pos2(right - button.x, top),
+                    button,
+                );
+                let folder_rect = egui::Rect::from_min_size(
+                    egui::pos2(right - button.x * 2.0 - 4.0, top),
+                    button,
+                );
+                let bar = egui::Rect::from_min_max(
+                    folder_rect.min - egui::vec2(4.0, 4.0),
+                    copy_rect.max + egui::vec2(4.0, 4.0),
+                );
+                ui.painter()
+                    .rect_filled(bar, 6.0, colors.code_bg.gamma_multiply(0.92));
+
+                let copy_btn = ui.put(
+                    copy_rect,
+                    egui::Button::new(crate::ui::phosphor_icons::phosphor_rich_text(
+                        crate::ui::phosphor_icons::COPY,
+                        font_size * 0.9,
+                    ))
+                    .frame(false),
+                );
+                if copy_btn
+                    .on_hover_text(t!("image_tools.copy_path"))
+                    .clicked()
+                {
+                    ui.ctx().copy_text(resolved.display().to_string());
+                }
+
+                let folder_btn = ui.put(
+                    folder_rect,
+                    egui::Button::new(crate::ui::phosphor_icons::phosphor_rich_text(
+                        crate::ui::phosphor_icons::FOLDER_OPEN,
+                        font_size * 0.9,
+                    ))
+                    .frame(false),
+                );
+                if folder_btn.on_hover_text(t!("image_tools.reveal")).clicked() {
+                    if let Some(parent) = resolved.parent() {
+                        if let Err(error) = open::that(parent) {
+                            log::warn!("Failed to reveal image folder: {}", error);
+                        }
+                    }
+                }
             }
         }
         ImageLoadResult::Failed(msg) => {
@@ -8743,6 +8853,48 @@ mod tests {
         assert!(text.contains("Title"));
         assert!(text.contains("Body bold"));
         assert!(text.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_remove_link_markup_keeps_text() {
+        let mut source = "See [docs](https://example.com) here\n".to_string();
+        assert!(remove_link_markup(
+            &mut source,
+            1,
+            1,
+            "docs",
+            "https://example.com",
+            ""
+        ));
+        assert_eq!(source, "See docs here\n");
+    }
+
+    #[test]
+    fn test_remove_link_markup_title_form_keeps_prefix() {
+        let mut source = "- [Rust](https://rust-lang.org \"site\")\n".to_string();
+        assert!(remove_link_markup(
+            &mut source,
+            1,
+            1,
+            "Rust",
+            "https://rust-lang.org",
+            "site"
+        ));
+        assert_eq!(source, "- Rust\n");
+    }
+
+    #[test]
+    fn test_remove_link_markup_missing_is_noop() {
+        let mut source = "nothing here\n".to_string();
+        assert!(!remove_link_markup(
+            &mut source,
+            1,
+            1,
+            "docs",
+            "https://example.com",
+            ""
+        ));
+        assert_eq!(source, "nothing here\n");
     }
 
     #[test]

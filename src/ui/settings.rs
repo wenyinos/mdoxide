@@ -456,6 +456,31 @@ impl SettingsPanel {
                                 }
                                 ui.separator();
                             }
+                            // Keyboard shortcuts answer the same search box.
+                            for cmd in ShortcutCommand::all() {
+                                let name = shortcut_command_name(cmd);
+                                let binding = settings.keyboard_shortcuts.get(*cmd).display_string();
+                                let haystack = format!(
+                                    "{} {}",
+                                    name.to_lowercase(),
+                                    binding.to_lowercase()
+                                );
+                                if !haystack.contains(&query) {
+                                    continue;
+                                }
+                                any = true;
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(name).size(12.0));
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        RichText::new(binding)
+                                            .monospace()
+                                            .size(12.0)
+                                            .weak(),
+                                    );
+                                });
+                                ui.separator();
+                            }
                             if !any {
                                 ui.label(
                                     RichText::new(
