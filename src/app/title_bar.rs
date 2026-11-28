@@ -433,6 +433,17 @@ impl MDOxideApp {
                                             },
                                             &mut action,
                                         );
+                                        ui.menu_button(
+                                            t!("shortcuts.commands.insert_table"),
+                                            |ui| {
+                                                if let Some((rows, cols)) = table_picker_grid(ui) {
+                                                    action = Some(TitleBarAction::Format(
+                                                        MarkdownFormatCommand::Table { rows, cols },
+                                                    ));
+                                                    ui.close();
+                                                }
+                                            },
+                                        );
                                     });
                                 }
 
@@ -950,6 +961,62 @@ fn menu_action(
     if ui.button(label.into()).clicked() {
         *out = Some(action());
         ui.close();
+    }
+}
+
+/// MarkText-style table picker: a 6×8 hover grid returning `(rows, cols)` on click.
+///
+/// The whole grid is one allocation so hover can highlight from the top-left
+/// cell to the pointer, matching MarkText's chessboard.
+fn table_picker_grid(ui: &mut egui::Ui) -> Option<(usize, usize)> {
+    const ROWS: usize = 6;
+    const COLS: usize = 8;
+    const CELL: f32 = 16.0;
+
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(COLS as f32 * CELL, ROWS as f32 * CELL + 20.0),
+        egui::Sense::click(),
+    );
+    let grid_rect = egui::Rect::from_min_size(rect.min, egui::vec2(COLS as f32 * CELL, ROWS as f32 * CELL));
+
+    let hover = response.hover_pos().and_then(|pos| {
+        if !grid_rect.contains(pos) {
+            return None;
+        }
+        let col = (((pos.x - grid_rect.left()) / CELL).floor() as usize).min(COLS - 1);
+        let row = (((pos.y - grid_rect.top()) / CELL).floor() as usize).min(ROWS - 1);
+        Some((row, col))
+    });
+
+    let accent = ui.visuals().selection.bg_fill;
+    let idle = ui.visuals().widgets.noninteractive.weak_bg_fill;
+    let painter = ui.painter();
+    for row in 0..ROWS {
+        for col in 0..COLS {
+            let cell_min = grid_rect.min + egui::vec2(col as f32 * CELL, row as f32 * CELL);
+            let cell_rect =
+                egui::Rect::from_min_size(cell_min, egui::vec2(CELL - 1.0, CELL - 1.0));
+            let active = hover.is_some_and(|(h_row, h_col)| row <= h_row && col <= h_col);
+            painter.rect_filled(cell_rect, egui::CornerRadius::same(2), if active { accent } else { idle });
+        }
+    }
+
+    let (label, size) = match hover {
+        Some((row, col)) => (format!("{} × {}", col + 1, row + 1), Some((row + 1, col + 1))),
+        None => (t!("shortcuts.commands.insert_table").to_string(), None),
+    };
+    painter.text(
+        grid_rect.left_bottom() + egui::vec2(0.0, 4.0),
+        egui::Align2::LEFT_TOP,
+        label,
+        egui::FontId::proportional(12.0),
+        ui.visuals().text_color(),
+    );
+
+    if response.clicked() {
+        size
+    } else {
+        None
     }
 }
 

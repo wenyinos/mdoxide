@@ -625,6 +625,7 @@ shortcuts:
     italic: 斜体
     inline_code: 行内代码
     code_block: 代码块
+    insert_table: 插入表格
     link: 链接
     image: 图片
     blockquote: 引用

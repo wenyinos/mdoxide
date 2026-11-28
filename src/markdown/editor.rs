@@ -1405,6 +1405,10 @@ impl<'a> MarkdownEditor<'a> {
 
         let block_count = doc.root.children.len();
         let block_line_ranges = block_line_ranges_from_nodes(&doc.root.children);
+        // Footnote numbers are per render pass, in first-reference order.
+        FOOTNOTE_NUMBERS.with(|cell| {
+            *cell.borrow_mut() = build_footnote_numbers(&doc.root);
+        });
         let block_structure_valid = culling_state.as_ref().map_or(false, |s| {
             s.block_heights.len() == block_count
                 && (s.available_width - outer_available_width).abs() < 1.0
@@ -2287,6 +2291,41 @@ fn render_node_with_structural_keys(
         MarkdownNodeType::Item => {
             // List items are handled by render_list_with_structural_keys
         }
+        MarkdownNodeType::FootnoteDefinition(name) => {
+            render_footnote_definition(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                name,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+        MarkdownNodeType::DescriptionList => {
+            render_description_list(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+        MarkdownNodeType::DescriptionItem
+        | MarkdownNodeType::DescriptionTerm
+        | MarkdownNodeType::DescriptionDetails => {
+            // Rendered by render_description_list
+        }
         MarkdownNodeType::TableRow { .. } | MarkdownNodeType::TableCell => {
             // Tables handled by render_table
         }
@@ -2547,6 +2586,41 @@ fn render_node(
         }
         MarkdownNodeType::Item => {
             // Handled by render_list
+        }
+        MarkdownNodeType::FootnoteDefinition(name) => {
+            render_footnote_definition(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                name,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+        MarkdownNodeType::DescriptionList => {
+            render_description_list(
+                ui,
+                node,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                indent_level,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+        MarkdownNodeType::DescriptionItem
+        | MarkdownNodeType::DescriptionTerm
+        | MarkdownNodeType::DescriptionDetails => {
+            // Rendered by render_description_list
         }
         MarkdownNodeType::TableRow { .. } | MarkdownNodeType::TableCell => {
             // Handled by render_table
@@ -2828,6 +2902,41 @@ thread_local! {
     /// Rendered block currently selected by keyboard navigation.
     static CURRENT_BLOCK_CURSOR: std::cell::RefCell<Option<BlockRef>> =
         const { std::cell::RefCell::new(None) };
+    /// Footnote label -> display number for the document rendered this frame.
+    ///
+    /// Numbers follow first-reference order, matching GitHub/MarkText output.
+    static FOOTNOTE_NUMBERS: std::cell::RefCell<std::collections::HashMap<String, usize>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Build the `label -> number` map in first-reference order.
+fn build_footnote_numbers(root: &MarkdownNode) -> std::collections::HashMap<String, usize> {
+    fn walk(node: &MarkdownNode, numbers: &mut std::collections::HashMap<String, usize>) {
+        match &node.node_type {
+            MarkdownNodeType::FootnoteReference(name) => {
+                if !numbers.contains_key(name) {
+                    let next = numbers.len() + 1;
+                    numbers.insert(name.clone(), next);
+                }
+                return;
+            }
+            // References inside a definition do not assign numbers.
+            MarkdownNodeType::FootnoteDefinition(_) => return,
+            _ => {}
+        }
+        for child in &node.children {
+            walk(child, numbers);
+        }
+    }
+
+    let mut numbers = std::collections::HashMap::new();
+    walk(root, &mut numbers);
+    numbers
+}
+
+/// Display number for a footnote label; falls back to 0 when unreferenced.
+fn footnote_number(name: &str) -> usize {
+    FOOTNOTE_NUMBERS.with(|cell| cell.borrow().get(name).copied().unwrap_or(0))
 }
 
 fn set_current_block_cursor(block: Option<BlockRef>) {
@@ -5042,6 +5151,34 @@ fn render_inline_node(
             }
         }
 
+        MarkdownNodeType::Superscript => {
+            // Small glyph; egui has no baseline shift, so a reduced size keeps
+            // the marker visually distinct from body text.
+            let text = node.text_content();
+            if !text.is_empty() {
+                ui.label(
+                    RichText::new(text)
+                        .size((font_size * 0.72).max(8.0))
+                        .color(colors.text),
+                );
+            }
+        }
+
+        MarkdownNodeType::FootnoteReference(name) => {
+            let number = footnote_number(name);
+            let label = if number > 0 {
+                format!("[{number}]")
+            } else {
+                format!("[{name}]")
+            };
+            ui.label(
+                RichText::new(label)
+                    .size((font_size * 0.78).max(8.0))
+                    .color(colors.link),
+            )
+            .on_hover_text(name);
+        }
+
         MarkdownNodeType::Math { literal, display } => {
             crate::markdown::math_widget::show_math(
                 ui,
@@ -6230,6 +6367,120 @@ fn update_table_in_source(
 
         let eol = crate::state::LineEnding::detect(source).as_str();
         *source = new_lines.join(eol);
+    }
+}
+
+/// Render a footnote definition: `[n] label` followed by its blocks.
+#[allow(clippy::too_many_arguments)]
+fn render_footnote_definition(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    name: &str,
+    paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
+) {
+    let number = footnote_number(name);
+    ui.horizontal(|ui| {
+        let badge = if number > 0 {
+            format!("[{number}]")
+        } else {
+            "[?]".to_string()
+        };
+        ui.label(
+            RichText::new(badge)
+                .size((font_size * 0.8).max(8.0))
+                .color(colors.link)
+                .strong(),
+        );
+        ui.label(
+            RichText::new(name)
+                .size((font_size * 0.8).max(8.0))
+                .color(colors.quote_text),
+        );
+    });
+    ui.indent(node.start_line, |ui| {
+        for child in &node.children {
+            render_node(
+                ui,
+                child,
+                source,
+                edit_state,
+                session,
+                colors,
+                font_size,
+                editor_font,
+                1,
+                paragraph_indent,
+                header_spacing,
+            );
+        }
+    });
+    ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
+}
+
+/// Render a Pandoc description list (`term` / `: definition`).
+#[allow(clippy::too_many_arguments)]
+fn render_description_list(
+    ui: &mut Ui,
+    node: &MarkdownNode,
+    source: &mut String,
+    edit_state: &mut EditState,
+    session: &mut RenderedEditSession,
+    colors: &EditorColors,
+    font_size: f32,
+    editor_font: &EditorFont,
+    indent_level: usize,
+    paragraph_indent: ParagraphIndent,
+    header_spacing: HeaderSpacing,
+) {
+    for item in &node.children {
+        for child in &item.children {
+            match &child.node_type {
+                MarkdownNodeType::DescriptionTerm => {
+                    ui.horizontal_wrapped(|ui| {
+                        for inline in &child.children {
+                            render_inline_node(
+                                ui,
+                                inline,
+                                source,
+                                edit_state,
+                                colors,
+                                font_size,
+                                editor_font,
+                                TextStyle::new().with_bold(),
+                            );
+                        }
+                    });
+                }
+                MarkdownNodeType::DescriptionDetails => {
+                    ui.indent(child.start_line, |ui| {
+                        for block in &child.children {
+                            render_node(
+                                ui,
+                                block,
+                                source,
+                                edit_state,
+                                session,
+                                colors,
+                                font_size,
+                                editor_font,
+                                indent_level + 1,
+                                paragraph_indent,
+                                header_spacing,
+                            );
+                        }
+                    });
+                }
+                _ => {}
+            }
+        }
+        ui.add_space(PARAGRAPH_TRAILING_SPACE_Y);
     }
 }
 
@@ -8146,5 +8397,51 @@ mod tests {
         assert!(text.contains("Title"));
         assert!(text.contains("Body bold"));
         assert!(text.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_footnote_numbers_follow_first_reference_order() {
+        let doc = crate::markdown::parser::parse_markdown(
+            "Alpha[^b] beta[^a].\n\n[^a]: first note\n[^b]: second note\n",
+        )
+        .expect("parse");
+        let numbers = build_footnote_numbers(&doc.root);
+        assert_eq!(numbers.len(), 2);
+        // `b` is referenced first, so it gets number 1.
+        assert_eq!(numbers.get("b"), Some(&1));
+        assert_eq!(numbers.get("a"), Some(&2));
+    }
+
+    #[test]
+    fn test_footnote_numbers_ignore_definitions() {
+        let doc = crate::markdown::parser::parse_markdown("Only one[^x].\n\n[^x]: note body\n")
+            .expect("parse");
+        let numbers = build_footnote_numbers(&doc.root);
+        assert_eq!(numbers.len(), 1);
+        assert_eq!(numbers.get("x"), Some(&1));
+    }
+
+    #[test]
+    fn test_footnote_definition_keeps_body_children() {
+        let doc = crate::markdown::parser::parse_markdown(
+            "Ref[^x].\n\n[^x]: note body with **bold**\n",
+        )
+        .expect("parse");
+        let definition = doc
+            .root
+            .children
+            .iter()
+            .find(|n| matches!(n.node_type, MarkdownNodeType::FootnoteDefinition(_)))
+            .expect("footnote definition node");
+        assert!(
+            !definition.children.is_empty(),
+            "definition body must survive AST conversion"
+        );
+        let body = definition
+            .children
+            .iter()
+            .map(|c| c.text_content())
+            .collect::<String>();
+        assert!(body.contains("note body"));
     }
 }

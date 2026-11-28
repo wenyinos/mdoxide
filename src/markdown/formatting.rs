@@ -64,6 +64,8 @@ pub enum MarkdownFormatCommand {
     Blockquote,
     /// Insert a fenced `mermaid` code block with a starter template (`MermaidTemplateKind`).
     InsertMermaid(MermaidTemplateKind),
+    /// Insert a GFM table with the given rows (including the header row) and columns.
+    Table { rows: usize, cols: usize },
 }
 
 impl MarkdownFormatCommand {
@@ -88,6 +90,7 @@ impl MarkdownFormatCommand {
             Self::NumberedList => "Ctrl+Shift+N",
             Self::Blockquote => "Ctrl+Q",
             Self::InsertMermaid(_) => "—",
+            Self::Table { .. } => "—",
         }
     }
 
@@ -112,6 +115,7 @@ impl MarkdownFormatCommand {
             Self::NumberedList => "1.",
             Self::Blockquote => "\u{275D}", // heavy double turned comma quotation mark ❝
             Self::InsertMermaid(_) => "△",
+            Self::Table { .. } => "▦",
         }
     }
 
@@ -129,6 +133,9 @@ impl MarkdownFormatCommand {
             Self::BulletList => "Bullet List",
             Self::NumberedList => "Numbered List",
             Self::Blockquote => "Blockquote",
+            Self::Table { rows, cols } => {
+                return format!("Table {}×{} ({})", rows, cols, self.shortcut_label())
+            }
             Self::InsertMermaid(kind) => {
                 return format!(
                     "Mermaid: {}",
@@ -268,7 +275,65 @@ pub fn apply_raw_format(
         MarkdownFormatCommand::InsertMermaid(kind) => {
             apply_mermaid_snippet_format(text, selection, kind)
         }
+        MarkdownFormatCommand::Table { rows, cols } => {
+            apply_table_snippet_format(text, selection, rows, cols)
+        }
     }
+}
+
+/// Insert a GFM table skeleton at the cursor, padded with blank lines so the
+/// surrounding content keeps parsing as separate blocks.
+fn apply_table_snippet_format(
+    text: &str,
+    selection: Option<(usize, usize)>,
+    rows: usize,
+    cols: usize,
+) -> FormatResult {
+    let rows = rows.clamp(2, 20);
+    let cols = cols.clamp(1, 12);
+
+    let (start, end) = selection.unwrap_or((text.len(), text.len()));
+    let start = floor_char_boundary(text, start.min(text.len()));
+    let end = ceil_char_boundary(text, end.min(text.len()));
+    let (start, end) = if start > end {
+        (end, start)
+    } else {
+        (start, end)
+    };
+
+    let mut lines = Vec::with_capacity(rows + 1);
+    lines.push(format!("|{}", "   |".repeat(cols)));
+    lines.push(format!("|{}", " --- |".repeat(cols)));
+    for _ in 2..rows {
+        lines.push(format!("|{}", "   |".repeat(cols)));
+    }
+    let core = lines.join("\n");
+
+    // Blank line before/after keeps the table a standalone block.
+    let prefix = if start == 0 {
+        ""
+    } else if text[..start].ends_with("\n\n") {
+        ""
+    } else if text[..start].ends_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    };
+    let suffix = if end >= text.len() {
+        "\n"
+    } else if text[end..].starts_with("\n\n") {
+        ""
+    } else if text[end..].starts_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    };
+
+    let block = format!("{prefix}{core}{suffix}");
+    let new_text = format!("{}{}{}", &text[..start], block, &text[end..]);
+    // Put the caret on the first header cell so the user can type immediately.
+    let caret = start + prefix.len() + 2;
+    FormatResult::with_cursor(new_text, caret)
 }
 
 /// Insert or replace the selection with a fenced `mermaid` block using a built-in template.
@@ -1245,5 +1310,56 @@ mod tests {
                 let _ = detect_raw_formatting_state(text, i);
             }
         }
+    }
+
+    #[test]
+    fn test_table_snippet_from_empty_document() {
+        let result = apply_raw_format(
+            "",
+            Some((0, 0)),
+            MarkdownFormatCommand::Table { rows: 3, cols: 2 },
+        );
+        assert_eq!(
+            result.text,
+            "|   |   |\n| --- | --- |\n|   |   |\n"
+        );
+        // Caret lands inside the first header cell.
+        assert_eq!(result.cursor, 2);
+    }
+
+    #[test]
+    fn test_table_snippet_pads_existing_paragraph() {
+        let result = apply_raw_format(
+            "before",
+            Some((6, 6)),
+            MarkdownFormatCommand::Table { rows: 2, cols: 1 },
+        );
+        assert_eq!(
+            result.text,
+            "before\n\n|   |\n| --- |\n"
+        );
+    }
+
+    #[test]
+    fn test_table_snippet_keeps_surrounding_blank_lines() {
+        let text = "before\n\n";
+        let result = apply_raw_format(
+            text,
+            Some((text.len(), text.len())),
+            MarkdownFormatCommand::Table { rows: 2, cols: 1 },
+        );
+        // Existing blank line is reused, no extra padding.
+        assert_eq!(result.text, "before\n\n|   |\n| --- |\n");
+    }
+
+    #[test]
+    fn test_table_snippet_clamps_dimensions() {
+        let result = apply_raw_format(
+            "",
+            Some((0, 0)),
+            MarkdownFormatCommand::Table { rows: 0, cols: 0 },
+        );
+        // rows clamp to 2, cols clamp to 1.
+        assert_eq!(result.text, "|   |\n| --- |\n");
     }
 }

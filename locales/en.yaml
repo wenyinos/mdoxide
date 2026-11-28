@@ -657,6 +657,7 @@ shortcuts:
     italic: "Italic"
     inline_code: "Inline Code"
     code_block: "Code Block"
+    insert_table: "Insert Table"
     link: "Link"
     image: "Image"
     blockquote: "Blockquote"
