@@ -45,6 +45,7 @@
   - ✅ v0.6.5：正文所有权收敛到 `Document`、`state.rs` 按领域拆分（document/editor_session/ui_state/workspace）
   - ✅ v0.8.0：同步上游 Ferrite v0.3.1 可移植项（HTML 子集、Mermaid 第二波/gitGraph、块导航、字体/终端、设置搜索、文件树、原生标题栏、Linux 主选区）
   - ✅ v0.8.1：UI 缩放持久化、编译告警清零（移除重构遗留死代码、迁移废弃 egui API）
+  - ✅ v0.8.5：移植 MarkText 0.24.0-dev 特性（脚注、标题折叠、slash 菜单、emoji 补全、表格棋盘、图片缩放、标题锚点、取消链接、复制为 HTML、图片工具、快捷键搜索）
 
 ## 明确不做
 
