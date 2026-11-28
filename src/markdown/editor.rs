@@ -3993,7 +3993,7 @@ fn render_heading(
 
     let widget_id = block_ref.widget_id(ui);
     if !session.blocks.contains_key(&block_ref) {
-        session.on_text_changed(block_ref, source_text);
+        session.on_text_changed(block_ref, source_text.clone());
     }
 
     let available_width = ui.available_width();
@@ -4028,6 +4028,30 @@ fn render_heading(
             );
             if fold_button.clicked() {
                 fold_toggle = true;
+            }
+
+            // Anchor link: reserved slot, click copies `#github-slug`.
+            let (_, anchor_rect) = ui.allocate_space(egui::vec2(14.0, 14.0));
+            let anchor_response = ui.interact(
+                anchor_rect,
+                widget_id.with("anchor"),
+                egui::Sense::click(),
+            );
+            let anchor_color = if anchor_response.hovered() {
+                colors.link
+            } else {
+                colors.quote_text.gamma_multiply(0.6)
+            };
+            ui.painter().text(
+                anchor_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "#",
+                egui::FontId::new((font_size * 0.55).max(8.0), font_family.clone()),
+                anchor_color,
+            );
+            if anchor_response.on_hover_text(t!("heading.copy_anchor")).clicked() {
+                let slug = github_heading_slug(&source_text);
+                ui.ctx().copy_text(format!("#{slug}"));
             }
 
             if show_marker {
@@ -7118,6 +7142,23 @@ fn render_link(
     }
 }
 
+/// GitHub-style heading anchor slug: lowercase, spaces to `-`, punctuation
+/// dropped, letters/digits/`_`/`-` kept (including CJK).
+fn github_heading_slug(text: &str) -> String {
+    text.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter_map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                Some(c)
+            } else if c.is_whitespace() {
+                Some('-')
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 /// Remove `[text](url "title")` (or a bare autolink) on the link's lines,
 /// leaving the visible text in place.
 fn remove_link_markup(
@@ -8986,6 +9027,15 @@ mod tests {
             source,
             "<img src=\"pic.png\" alt=\"\" width=\"420\" />\n"
         );
+    }
+
+    #[test]
+    fn test_github_heading_slug() {
+        assert_eq!(github_heading_slug("Hello, World!"), "hello-world");
+        assert_eq!(github_heading_slug("Mixed_Case-2"), "mixed_case-2");
+        assert_eq!(github_heading_slug("\u{4e2d}\u{6587} \u{6807}\u{9898}"), "\u{4e2d}\u{6587}-\u{6807}\u{9898}");
+        // Punctuation-only headings collapse to their letters/digits.
+        assert_eq!(github_heading_slug("C++ & Rust"), "c--rust");
     }
 
     #[test]

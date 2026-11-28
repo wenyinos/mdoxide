@@ -95,6 +95,9 @@ image_tools:
   copy_path: "Copy path"
   reveal: "Open containing folder"
 
+heading:
+  copy_anchor: "Copy heading link"
+
 # Status bar
 status:
   errors: "%{count} err"

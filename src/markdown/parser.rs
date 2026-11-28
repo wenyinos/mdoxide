@@ -665,6 +665,15 @@ fn convert_html_img_inlines(node: &mut MarkdownNode) {
     for child in &mut node.children {
         let replacement = match &child.node_type {
             MarkdownNodeType::HtmlInline(html) => parse_html_img(html),
+            // A lone `<img ...>` line parses as an HTML block, not inline.
+            MarkdownNodeType::HtmlBlock(html) => {
+                let trimmed = html.trim();
+                if trimmed.starts_with("<img") && trimmed.ends_with('>') {
+                    parse_html_img(trimmed)
+                } else {
+                    None
+                }
+            }
             _ => None,
         };
         if let Some((src, alt, title, width)) = replacement {
