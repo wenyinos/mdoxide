@@ -269,8 +269,12 @@ pub enum MarkdownNodeType {
     Superscript,
     /// Link
     Link { url: String, title: String },
-    /// Image
-    Image { url: String, title: String },
+    /// Image, optionally with an explicit pixel width (`<img width="300">`).
+    Image {
+        url: String,
+        title: String,
+        width: Option<u32>,
+    },
     /// Footnote reference
     FootnoteReference(String),
     /// Footnote definition
@@ -454,6 +458,9 @@ pub fn parse_markdown_with_options(
     // This must run after all block-level transformations are complete.
     extract_wikilinks(&mut converted_root);
     crate::markdown::video_embed::extract_video_embeds(&mut converted_root);
+    // Render hand-written `<img ... width="N">` tags as native images so the
+    // resize handle can round-trip the width (MarkText writes the same form).
+    convert_html_img_inlines(&mut converted_root);
 
     // FIX: Comrak returns line numbers as if frontmatter doesn't exist.
     // When frontmatter is present, we need to calculate the offset and adjust all line numbers.
@@ -618,6 +625,68 @@ fn fix_false_setext_headings(node: &mut MarkdownNode, source: &str) {
 /// 2. A single blockquote with multiple paragraphs, some starting with `[!TYPE]` → split & convert
 /// 3. Consecutive separate blockquotes (handled naturally since this runs before merge)
 /// Group `<div align="…">` HTML blocks into one aligned container.
+/// Parse the attributes of an `<img ...>` tag that MDOxide understands.
+/// Returns `(src, alt, title, width)`.
+fn parse_html_img(html: &str) -> Option<(String, String, String, Option<u32>)> {
+    let lower = html.to_ascii_lowercase();
+    if !lower.starts_with("<img") {
+        return None;
+    }
+
+    let attr = |name: &str| -> Option<String> {
+        let needle = format!("{name}=");
+        let start = lower.find(&needle)? + needle.len();
+        let rest = html[start..].trim_start();
+        let quote = rest.chars().next()?;
+        if quote == '"' || quote == '\'' {
+            let after = &rest[1..];
+            let end = after.find(quote)?;
+            Some(after[..end].to_string())
+        } else {
+            let end = rest
+                .find(|c: char| c.is_whitespace() || c == '>' || c == '/')
+                .unwrap_or(rest.len());
+            Some(rest[..end].to_string())
+        }
+    };
+
+    let src = attr("src")?;
+    let alt = attr("alt").unwrap_or_default();
+    let title = attr("title").unwrap_or_default();
+    let width = attr("width")
+        .and_then(|w| w.trim().trim_end_matches("px").parse::<u32>().ok())
+        .filter(|w| *w > 0);
+    Some((src, alt, title, width))
+}
+
+/// Convert `<img src="..." width="N">` inline HTML into native Image nodes.
+fn convert_html_img_inlines(node: &mut MarkdownNode) {
+    let (start_line, end_line) = (node.start_line, node.end_line);
+    for child in &mut node.children {
+        let replacement = match &child.node_type {
+            MarkdownNodeType::HtmlInline(html) => parse_html_img(html),
+            _ => None,
+        };
+        if let Some((src, alt, title, width)) = replacement {
+            child.node_type = MarkdownNodeType::Image {
+                url: src,
+                title,
+                width,
+            };
+            if !alt.is_empty() {
+                child.children = vec![MarkdownNode {
+                    node_type: MarkdownNodeType::Text(alt),
+                    children: Vec::new(),
+                    start_line: child.start_line,
+                    end_line: child.end_line,
+                }];
+            }
+        }
+        convert_html_img_inlines(child);
+    }
+    let _ = (start_line, end_line);
+}
+
 fn convert_aligned_div_blocks(node: &mut MarkdownNode) {
     for child in &mut node.children {
         convert_aligned_div_blocks(child);
@@ -1375,6 +1444,7 @@ fn convert_node_value(
         NodeValue::Image(image) => MarkdownNodeType::Image {
             url: image.url.clone(),
             title: image.title.clone(),
+            width: None,
         },
         NodeValue::FootnoteReference(ref_data) => {
             MarkdownNodeType::FootnoteReference(ref_data.name.clone())
@@ -2683,5 +2753,50 @@ mod tests {
         let text = first.text_content();
         assert!(text.contains("Line 1"), "Should contain 'Line 1'");
         assert!(text.contains("Line 3"), "Should contain 'Line 3'");
+    }
+
+    fn find_image(node: &MarkdownNode) -> Option<&MarkdownNode> {
+        if matches!(node.node_type, MarkdownNodeType::Image { .. }) {
+            return Some(node);
+        }
+        node.children.iter().find_map(find_image)
+    }
+
+    #[test]
+    fn test_html_img_becomes_image_node_with_width() {
+        let doc = parse_markdown(
+            "Text <img src=\"pic.png\" alt=\"shot\" width=\"320\"> tail\n",
+        )
+        .expect("parse");
+        let image = find_image(&doc.root).expect("image node");
+        match &image.node_type {
+            MarkdownNodeType::Image { url, width, .. } => {
+                assert_eq!(url, "pic.png");
+                assert_eq!(*width, Some(320));
+            }
+            other => panic!("unexpected node: {other:?}"),
+        }
+        assert_eq!(image.text_content(), "shot");
+    }
+
+    #[test]
+    fn test_markdown_image_has_no_explicit_width() {
+        let doc = parse_markdown("![alt](pic.png)\n").expect("parse");
+        let image = find_image(&doc.root).expect("image node");
+        match &image.node_type {
+            MarkdownNodeType::Image { width, .. } => assert_eq!(*width, None),
+            other => panic!("unexpected node: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_html_img_attributes() {
+        let parsed = parse_html_img("<img src='a b.png' alt=\"x\" width=\"400px\">")
+            .expect("parsed");
+        assert_eq!(parsed.0, "a b.png");
+        assert_eq!(parsed.1, "x");
+        assert_eq!(parsed.3, Some(400));
+        assert!(parse_html_img("<div></div>").is_none());
+        assert!(parse_html_img("<img alt=\"no src\">").is_none());
     }
 }

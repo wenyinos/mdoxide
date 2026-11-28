@@ -872,7 +872,7 @@ pub fn serialize_node(node: &MarkdownNode) -> String {
                 format!("[{}]({} \"{}\")", text, url, title)
             }
         }
-        MarkdownNodeType::Image { url, title } => {
+        MarkdownNodeType::Image { url, title, width: _ } => {
             let alt = node.text_content();
             if title.is_empty() {
                 format!("![{}]({})", alt, url)
@@ -922,7 +922,7 @@ fn serialize_inline_node(node: &MarkdownNode) -> String {
                 format!("[{}]({} \"{}\")", inner, url, title)
             }
         }
-        MarkdownNodeType::Image { url, title } => {
+        MarkdownNodeType::Image { url, title, width: _ } => {
             let alt = serialize_inline_content(node);
             if title.is_empty() {
                 format!("![{}]({})", alt, url)

@@ -2300,8 +2300,8 @@ fn render_node_with_structural_keys(
                 );
             }
         }
-        MarkdownNodeType::Image { url, title } => {
-            render_image(ui, node, colors, font_size, url, title);
+        MarkdownNodeType::Image { url, title, width } => {
+            render_image(ui, node, source, colors, font_size, url, title, *width);
         }
         MarkdownNodeType::Item => {
             // List items are handled by render_list_with_structural_keys
@@ -2596,8 +2596,8 @@ fn render_node(
                 );
             }
         }
-        MarkdownNodeType::Image { url, title } => {
-            render_image(ui, node, colors, font_size, url, title);
+        MarkdownNodeType::Image { url, title, width } => {
+            render_image(ui, node, source, colors, font_size, url, title, *width);
         }
         MarkdownNodeType::Item => {
             // Handled by render_list
@@ -5551,10 +5551,10 @@ fn render_inline_node(
             );
         }
 
-        MarkdownNodeType::Image { url, title } => {
+        MarkdownNodeType::Image { url, title, width } => {
             // Images break out of the inline flow - end the current row and render as block
             ui.end_row();
-            render_image(ui, node, colors, font_size, url, title);
+            render_image(ui, node, source, colors, font_size, url, title, *width);
         }
 
         MarkdownNodeType::SoftBreak => {
@@ -7424,10 +7424,12 @@ fn load_image_texture(ctx: &egui::Context, path: &Path) -> Result<CachedImageTex
 fn render_image(
     ui: &mut Ui,
     node: &MarkdownNode,
+    source: &mut String,
     colors: &EditorColors,
     font_size: f32,
     url: &str,
     title: &str,
+    width: Option<u32>,
 ) {
     let alt_text = node.text_content();
 
@@ -7484,12 +7486,21 @@ fn render_image(
             let orig_w = cached_tex.original_width as f32;
             let orig_h = cached_tex.original_height as f32;
 
-            // Scale to fit available width, maintaining aspect ratio
-            let (display_w, display_h) = if orig_w > available_width {
-                let scale = available_width / orig_w;
-                (available_width, orig_h * scale)
+            // Explicit width (MarkText-style `<img width>`) wins; a live drag
+            // preview overrides it until the pointer is released. Otherwise the
+            // image fits the pane width.
+            let resize_id = egui::Id::new(("img_resize", node.start_line, url));
+            let live_width: Option<f32> = ui.memory(|m| m.data.get_temp(resize_id));
+            let max_width = available_width.max(40.0);
+            let target_w = live_width
+                .map(|w| w.clamp(40.0, max_width))
+                .or_else(|| width.map(|w| (w as f32).min(max_width)))
+                .unwrap_or_else(|| orig_w.min(max_width));
+            let display_w = target_w;
+            let display_h = if orig_w > 0.0 {
+                orig_h * (target_w / orig_w)
             } else {
-                (orig_w, orig_h)
+                orig_h
             };
 
             let sized = egui::load::SizedTexture::new(
@@ -7558,11 +7569,99 @@ fn render_image(
                     }
                 }
             }
+
+            // Resize handle: drag the bottom-right corner to set an explicit
+            // width, written back as `<img ... width="N">` (MarkText's format).
+            let handle_size = 12.0;
+            let handle_rect = egui::Rect::from_min_size(
+                egui::pos2(
+                    response.rect.right() - handle_size,
+                    response.rect.bottom() - handle_size,
+                ),
+                egui::vec2(handle_size, handle_size),
+            );
+            let handle = ui.interact(handle_rect, resize_id.with("handle"), egui::Sense::drag());
+            ui.painter()
+                .rect_filled(handle_rect, 2.0, colors.link.gamma_multiply(0.85));
+            if handle.hovered() || handle.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            if handle.dragged() {
+                if let Some(pos) = ui.ctx().pointer_latest_pos() {
+                    let new_w = (pos.x - response.rect.left()).clamp(40.0, max_width);
+                    ui.memory_mut(|m| m.data.insert_temp(resize_id, new_w));
+                    ui.ctx().request_repaint();
+                }
+            }
+            if handle.drag_stopped() {
+                let final_w = ui
+                    .memory(|m| m.data.get_temp::<f32>(resize_id))
+                    .unwrap_or(target_w)
+                    .round()
+                    .max(40.0) as u32;
+                ui.memory_mut(|m| m.data.remove::<f32>(resize_id));
+                if write_image_width(source, node, url, &alt_text, final_w) {
+                    ui.ctx().request_repaint();
+                }
+            }
         }
         ImageLoadResult::Failed(msg) => {
             render_image_placeholder(ui, colors, font_size, &alt_text, &msg);
         }
     }
+}
+
+/// Write an explicit pixel width back to the source as an HTML `<img>` tag,
+/// replacing the markdown image or the existing `<img ...>` tag on that line.
+fn write_image_width(
+    source: &mut String,
+    node: &MarkdownNode,
+    url: &str,
+    alt: &str,
+    width: u32,
+) -> bool {
+    let eol = crate::state::LineEnding::detect(source).as_str();
+    let trailing = if source.ends_with('\n') { eol } else { "" };
+    let mut lines: Vec<String> = source.lines().map(|line| line.to_string()).collect();
+    if node.start_line == 0 || node.start_line > lines.len() {
+        return false;
+    }
+    let start = node.start_line - 1;
+    let end = node.end_line.saturating_sub(1).min(lines.len() - 1);
+    let markdown_form = format!("![{alt}]({url})");
+    let replacement = format!(
+        "<img src=\"{}\" alt=\"{}\" width=\"{}\" />",
+        url.replace('"', "&quot;"),
+        alt.replace('"', "&quot;"),
+        width
+    );
+
+    for line in start..=end {
+        if let Some(pos) = lines[line].find(&markdown_form) {
+            lines[line] = format!(
+                "{}{}{}",
+                &lines[line][..pos],
+                replacement,
+                &lines[line][pos + markdown_form.len()..]
+            );
+            *source = format!("{}{}", lines.join(eol), trailing);
+            return true;
+        }
+        if let Some(open) = lines[line].find("<img") {
+            if let Some(close_rel) = lines[line][open..].find('>') {
+                let close = open + close_rel + 1;
+                lines[line] = format!(
+                    "{}{}{}",
+                    &lines[line][..open],
+                    replacement,
+                    &lines[line][close..]
+                );
+                *source = format!("{}{}", lines.join(eol), trailing);
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Build a tooltip string from alt text, title, and URL.
@@ -8853,6 +8952,40 @@ mod tests {
         assert!(text.contains("Title"));
         assert!(text.contains("Body bold"));
         assert!(text.contains("\n\n"));
+    }
+
+    fn first_image_node(doc: &crate::markdown::parser::MarkdownDocument) -> &MarkdownNode {
+        fn walk<'a>(node: &'a MarkdownNode) -> Option<&'a MarkdownNode> {
+            if matches!(node.node_type, MarkdownNodeType::Image { .. }) {
+                return Some(node);
+            }
+            node.children.iter().find_map(walk)
+        }
+        walk(&doc.root).expect("image node")
+    }
+
+    #[test]
+    fn test_write_image_width_from_markdown_image() {
+        let mut source = "![shot](pic.png)\n".to_string();
+        let doc = crate::markdown::parser::parse_markdown(&source).expect("parse");
+        let node = first_image_node(&doc);
+        assert!(write_image_width(&mut source, node, "pic.png", "shot", 300));
+        assert_eq!(
+            source,
+            "<img src=\"pic.png\" alt=\"shot\" width=\"300\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_write_image_width_updates_existing_html_img() {
+        let mut source = "<img src=\"pic.png\" width=\"100\" />\n".to_string();
+        let doc = crate::markdown::parser::parse_markdown(&source).expect("parse");
+        let node = first_image_node(&doc);
+        assert!(write_image_width(&mut source, node, "pic.png", "", 420));
+        assert_eq!(
+            source,
+            "<img src=\"pic.png\" alt=\"\" width=\"420\" />\n"
+        );
     }
 
     #[test]
