@@ -3012,6 +3012,194 @@ fn accumulate_block_offsets(heights: &[f32], hidden: &[bool]) -> (Vec<f32>, f32)
     (start_y, y)
 }
 
+/// Quick-insert trigger: the edited paragraph is only `/` or `、` plus a short
+/// filter token, matching MarkText's slash menu.
+fn quick_insert_query(text: &str) -> Option<String> {
+    let trimmed = text.trim_end();
+    let mut chars = trimmed.chars();
+    let first = chars.next()?;
+    if first != '/' && first != '\u{3001}' {
+        return None;
+    }
+    let rest = chars.as_str();
+    if rest.chars().any(char::is_whitespace) {
+        return None;
+    }
+    Some(rest.to_lowercase())
+}
+
+/// Candidate blocks for the quick-insert menu: `(label, markdown to write)`.
+fn quick_insert_candidates() -> Vec<(String, &'static str)> {
+    vec![
+        (t!("shortcuts.commands.heading_1").to_string(), "# "),
+        (t!("shortcuts.commands.heading_2").to_string(), "## "),
+        (t!("shortcuts.commands.heading_3").to_string(), "### "),
+        (t!("shortcuts.commands.bullet_list").to_string(), "- "),
+        (t!("shortcuts.commands.numbered_list").to_string(), "1. "),
+        (t!("shortcuts.commands.task_list").to_string(), "- [ ] "),
+        (t!("shortcuts.commands.blockquote").to_string(), "> "),
+        (
+            t!("shortcuts.commands.code_block").to_string(),
+            "```\n\n```",
+        ),
+        (
+            t!("shortcuts.commands.insert_table").to_string(),
+            "|   |   |\n| --- | --- |\n|   |   |",
+        ),
+        (t!("shortcuts.commands.math_block").to_string(), "$$\n\n$$"),
+        (
+            t!("format_toolbar.mermaid_flowchart").to_string(),
+            "```mermaid\ngraph TD\n    A --> B\n```",
+        ),
+        (t!("shortcuts.commands.thematic_break").to_string(), "---"),
+    ]
+}
+
+/// Filtered quick-insert candidates for the block's current buffer, if the
+/// trigger is active and at least one candidate matches.
+fn quick_insert_items(
+    session: &RenderedEditSession,
+    block_ref: BlockRef,
+) -> Option<Vec<(String, &'static str)>> {
+    let text = &session.blocks.get(&block_ref)?.text;
+    let query = quick_insert_query(text)?;
+    let items: Vec<(String, &'static str)> = quick_insert_candidates()
+        .into_iter()
+        .filter(|(label, _)| label.to_lowercase().contains(&query))
+        .collect();
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
+    }
+}
+
+/// Write the chosen snippet over the block and commit it, ending block editing
+/// so the re-parsed document shows the new block type on the next frame.
+fn apply_quick_insert(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    markdown: &'static str,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+) {
+    if let Some(state) = session.blocks.get_mut(&block_ref) {
+        state.text = markdown.to_string();
+        state.dirty = true;
+    }
+    let ctx = ui.ctx().clone();
+    if let Some(state) = session.blocks.get(&block_ref) {
+        commit_session_block(&ctx, block_ref, state, source, edit_state);
+    }
+    session.blocks.remove(&block_ref);
+    session.active = None;
+    ui.ctx().request_repaint();
+}
+
+/// Intercept Enter/Escape/arrow keys while the quick-insert menu is open.
+/// Returns true when a snippet was applied (the block type changed).
+fn quick_insert_handle_keys(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+) -> bool {
+    let quick_id = block_ref.widget_id(ui).with("quick_insert");
+    let Some(items) = quick_insert_items(session, block_ref) else {
+        return false;
+    };
+    let buffer_text = session
+        .blocks
+        .get(&block_ref)
+        .map(|s| s.text.clone())
+        .unwrap_or_default();
+    let dismissed: Option<String> = ui.memory(|m| m.data.get_temp(quick_id.with("dismissed")));
+    if dismissed.as_deref() == Some(buffer_text.as_str()) {
+        return false;
+    }
+
+    let mut selected: usize = ui.memory(|m| m.data.get_temp(quick_id).unwrap_or(0));
+    selected = selected.min(items.len().saturating_sub(1));
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
+        selected = (selected + 1).min(items.len().saturating_sub(1));
+    }
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
+        selected = selected.saturating_sub(1);
+    }
+    ui.memory_mut(|m| m.data.insert_temp(quick_id, selected));
+
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        ui.memory_mut(|m| {
+            m.data
+                .insert_temp(quick_id.with("dismissed"), buffer_text);
+        });
+        return false;
+    }
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
+        let markdown = items[selected].1;
+        apply_quick_insert(ui, block_ref, markdown, session, source, edit_state);
+        return true;
+    }
+    false
+}
+
+/// Draw the open quick-insert menu below the edited row, MarkText slash-menu
+/// style. Returns true when a snippet was applied via click.
+fn quick_insert_show_popup(
+    ui: &mut Ui,
+    block_ref: BlockRef,
+    session: &mut RenderedEditSession,
+    source: &mut String,
+    edit_state: &mut EditState,
+    font_size: f32,
+) -> bool {
+    let quick_id = block_ref.widget_id(ui).with("quick_insert");
+    let Some(items) = quick_insert_items(session, block_ref) else {
+        return false;
+    };
+    let buffer_text = session
+        .blocks
+        .get(&block_ref)
+        .map(|s| s.text.clone())
+        .unwrap_or_default();
+    let dismissed: Option<String> = ui.memory(|m| m.data.get_temp(quick_id.with("dismissed")));
+    if dismissed.as_deref() == Some(buffer_text.as_str()) {
+        return false;
+    }
+    let selected: usize = ui
+        .memory(|m| m.data.get_temp(quick_id).unwrap_or(0))
+        .min(items.len().saturating_sub(1));
+
+    // Anchor under the row being edited.
+    let pos = ui.cursor().left_bottom() + egui::vec2(0.0, 4.0);
+    let mut clicked: Option<&'static str> = None;
+    egui::Area::new(quick_id.with("popup"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(pos)
+        .show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_min_width(180.0);
+                ui.spacing_mut().item_spacing.y = 2.0;
+                for (index, (label, markdown)) in items.iter().enumerate() {
+                    let button = egui::Button::new(RichText::new(label).size(font_size * 0.85))
+                        .selected(index == selected)
+                        .min_size(egui::vec2(168.0, 22.0));
+                    if ui.add(button).clicked() {
+                        clicked = Some(*markdown);
+                    }
+                }
+            });
+        });
+
+    if let Some(markdown) = clicked {
+        apply_quick_insert(ui, block_ref, markdown, session, source, edit_state);
+        return true;
+    }
+    false
+}
+
 fn set_current_block_cursor(block: Option<BlockRef>) {
     CURRENT_BLOCK_CURSOR.with(|cell| *cell.borrow_mut() = block);
 }
@@ -3988,6 +4176,10 @@ fn render_paragraph_with_structural_keys(
         let available_width = ui.available_width();
 
         if editing {
+            // Slash menu: keys are consumed before the TextEdit sees them.
+            if quick_insert_handle_keys(ui, block_ref, session, source, edit_state) {
+                return;
+            }
             let (has_focus, selection) = ui
                 .horizontal(|ui| {
                     ui.set_max_width(available_width);
@@ -4010,6 +4202,7 @@ fn render_paragraph_with_structural_keys(
             if has_focus {
                 edit_state.set_focus(node_id, selection);
             }
+            let _ = quick_insert_show_popup(ui, block_ref, session, source, edit_state, font_size);
         } else {
             let raw_display = session
                 .blocks
@@ -4848,6 +5041,10 @@ fn render_paragraph(
         let available_width = ui.available_width();
 
         if editing {
+            // Slash menu: keys are consumed before the TextEdit sees them.
+            if quick_insert_handle_keys(ui, block_ref, session, source, edit_state) {
+                return;
+            }
             let (has_focus, selection) = ui
                 .horizontal(|ui| {
                     ui.set_max_width(available_width);
@@ -4870,6 +5067,7 @@ fn render_paragraph(
             if has_focus {
                 edit_state.set_focus(node_id, selection);
             }
+            let _ = quick_insert_show_popup(ui, block_ref, session, source, edit_state, font_size);
         } else {
             let raw_display = session
                 .blocks
@@ -8496,6 +8694,18 @@ mod tests {
         assert!(text.contains("Title"));
         assert!(text.contains("Body bold"));
         assert!(text.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_quick_insert_query_trigger() {
+        assert_eq!(quick_insert_query("/"), Some(String::new()));
+        assert_eq!(quick_insert_query("/h1"), Some("h1".to_string()));
+        assert_eq!(quick_insert_query("\u{3001}\u{8868}"), Some("\u{8868}".to_string()));
+        // Trailing whitespace is ignored, inner whitespace disables the menu.
+        assert_eq!(quick_insert_query("/h1 "), Some("h1".to_string()));
+        assert_eq!(quick_insert_query("/ h1"), None);
+        assert_eq!(quick_insert_query("text /h1"), None);
+        assert_eq!(quick_insert_query(""), None);
     }
 
     #[test]

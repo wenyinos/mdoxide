@@ -27,7 +27,7 @@ CommonMark/GFM 块与内联、表格（自动换行/行高）、任务列表、�
 | E-2 | 表格棋盘插入 | `ui/tableChessboard`：悬浮 6×8 棋盘选行列 | **已实施**：Format 菜单 → 插入表格 → 6×8 棋盘 | P1 | `MarkdownFormatCommand::Table{rows,cols}` + `apply_table_snippet_format` + `table_picker_grid`；4 个测试 |
 | E-3 | 代码块语言选择器 | `ui/codeBlockLanguageSelector`：点击语言弹模糊搜索 | **已覆盖**：代码块标题栏 ComboBox 可选语言并回写 fence | — | 交互形态不同（下拉 vs 搜索），功能等价 |
 | E-4 | 图片缩放 | `ui/imageResizeBar`：拖拽角柄改宽度 | 图片固定渲染，无尺寸控制 | P1 | 拖拽生成 `width` 属性（HTML img 或 `{width=}`），需 AST/源文同步 |
-| E-5 | 快速插入菜单 | `paragraphQuickInsertMenu` + `paragraphFrontButton`：空段落 Bolt 菜单 | 无 | P2 | 空段落 hover 显示按钮，弹块类型候选 |
+| E-5 | 快速插入菜单 | `paragraphQuickInsertMenu`：段落输入 `/` 或 `、` 弹块类型候选 | **已实施**：段落编辑态输入 `/`/`、` 触发候选浮层 | 已实施 | `quick_insert_query` 检测；候选 12 项（标题/列表/任务/引用/代码/表格/公式/Mermaid/分隔线）；Enter/点击应用，Esc 关闭并记忆；复用块提交路径 |
 | E-6 | Emoji 选择器 | `ui/emojiSelector`：`:` 触发补全 | 短代码仅显示替换 | P2 | 输入 `:` 时弹补全列表，选中插入 `:name:` |
 | E-7 | 表格拖拽条/列菜单 | `tableDragBar` / `tableRowColumMenu` | 无 | P2 | 列宽拖拽、插入/删除行列、对齐切换 |
 | E-8 | 链接工具 | `ui/linkTools`：打开/编辑/复制/取消 | 点击链接跳转 | P2 | hover 显示工具条 |
@@ -64,7 +64,7 @@ CommonMark/GFM 块与内联、表格（自动换行/行高）、任务列表、�
 - **第一批（v0.8.2 候选，本次实施）**：R-1 脚注渲染、R-2 上标渲染、R-3 描述列表渲染
 - **第二批**：E-2 表格棋盘插入、E-3 代码块语言选择器
 - **第三批（E-1 已完成）**：E-1 标题折叠；E-4 图片缩放待做
-- **第四批**：E-5 快速插入菜单、E-6 Emoji 选择器、E-8 链接工具
+- **第四批（E-5 已完成）**：E-5 快速插入菜单；E-6 Emoji 选择器、E-8 链接工具待做
 - **桌面层**：D-2、D-3、D-7、D-12、D-1 按需排期
 
 ## 四、不做
