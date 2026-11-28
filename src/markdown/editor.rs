@@ -3003,7 +3003,8 @@ fn accumulate_block_offsets(heights: &[f32], hidden: &[bool]) -> (Vec<f32>, f32)
     let mut y = 0.0f32;
     for (i, &h) in heights.iter().enumerate() {
         start_y.push(y);
-        y += h;
+        // Hidden blocks contribute no height even if a stale measurement remains.
+        y += if is_hidden(i) { 0.0 } else { h };
         if Some(i) != last_visible && !is_hidden(i) {
             y += BLOCK_ITEM_SPACING_Y;
         }
