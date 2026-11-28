@@ -3055,23 +3055,49 @@ fn quick_insert_candidates() -> Vec<(String, &'static str)> {
     ]
 }
 
-/// Filtered quick-insert candidates for the block's current buffer, if the
-/// trigger is active and at least one candidate matches.
-fn quick_insert_items(
+/// Emoji completion trigger: the buffer is `:` plus a short name prefix.
+fn emoji_query(text: &str) -> Option<String> {
+    let trimmed = text.trim_end();
+    let rest = trimmed.strip_prefix(':')?;
+    if rest.is_empty() || rest.chars().any(|c| c.is_whitespace() || c == ':') {
+        return None;
+    }
+    Some(rest.to_lowercase())
+}
+
+/// Matching emoji as `(glyph + name, shortcode snippet)` pairs.
+fn emoji_candidates(query: &str) -> Vec<(String, String)> {
+    crate::markdown::emoji::entries()
+        .iter()
+        .filter(|(name, _)| name.contains(query))
+        .take(24)
+        .map(|(name, glyph)| (format!("{glyph}  :{name}:"), format!(":{name}: ")))
+        .collect()
+}
+
+/// Filtered candidates for the inline menu (`/`, `、` blocks or `:` emoji).
+fn inline_menu_items(
     session: &RenderedEditSession,
     block_ref: BlockRef,
-) -> Option<Vec<(String, &'static str)>> {
+) -> Option<Vec<(String, String)>> {
     let text = &session.blocks.get(&block_ref)?.text;
-    let query = quick_insert_query(text)?;
-    let items: Vec<(String, &'static str)> = quick_insert_candidates()
-        .into_iter()
-        .filter(|(label, _)| label.to_lowercase().contains(&query))
-        .collect();
-    if items.is_empty() {
-        None
-    } else {
-        Some(items)
+    if let Some(query) = quick_insert_query(text) {
+        let items: Vec<(String, String)> = quick_insert_candidates()
+            .into_iter()
+            .filter(|(label, _)| label.to_lowercase().contains(&query))
+            .map(|(label, snippet)| (label, snippet.to_string()))
+            .collect();
+        if !items.is_empty() {
+            return Some(items);
+        }
     }
+    if let Some(query) = emoji_query(text) {
+        let items = emoji_candidates(&query);
+        if !items.is_empty() {
+            return Some(items);
+        }
+    }
+    None
 }
 
 /// Write the chosen snippet over the block and commit it, ending block editing
@@ -3079,7 +3105,7 @@ fn quick_insert_items(
 fn apply_quick_insert(
     ui: &mut Ui,
     block_ref: BlockRef,
-    markdown: &'static str,
+    markdown: &str,
     session: &mut RenderedEditSession,
     source: &mut String,
     edit_state: &mut EditState,
@@ -3107,7 +3133,7 @@ fn quick_insert_handle_keys(
     edit_state: &mut EditState,
 ) -> bool {
     let quick_id = block_ref.widget_id(ui).with("quick_insert");
-    let Some(items) = quick_insert_items(session, block_ref) else {
+    let Some(items) = inline_menu_items(session, block_ref) else {
         return false;
     };
     let buffer_text = session
@@ -3138,15 +3164,15 @@ fn quick_insert_handle_keys(
         return false;
     }
     if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-        let markdown = items[selected].1;
-        apply_quick_insert(ui, block_ref, markdown, session, source, edit_state);
+        let markdown = items[selected].1.clone();
+        apply_quick_insert(ui, block_ref, &markdown, session, source, edit_state);
         return true;
     }
     false
 }
 
-/// Draw the open quick-insert menu below the edited row, MarkText slash-menu
-/// style. Returns true when a snippet was applied via click.
+/// Draw the open inline menu below the edited row, MarkText style.
+/// Returns true when a snippet was applied via click.
 fn quick_insert_show_popup(
     ui: &mut Ui,
     block_ref: BlockRef,
@@ -3156,7 +3182,7 @@ fn quick_insert_show_popup(
     font_size: f32,
 ) -> bool {
     let quick_id = block_ref.widget_id(ui).with("quick_insert");
-    let Some(items) = quick_insert_items(session, block_ref) else {
+    let Some(items) = inline_menu_items(session, block_ref) else {
         return false;
     };
     let buffer_text = session
@@ -3174,7 +3200,7 @@ fn quick_insert_show_popup(
 
     // Anchor under the row being edited.
     let pos = ui.cursor().left_bottom() + egui::vec2(0.0, 4.0);
-    let mut clicked: Option<&'static str> = None;
+    let mut clicked: Option<String> = None;
     egui::Area::new(quick_id.with("popup"))
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
@@ -3187,14 +3213,14 @@ fn quick_insert_show_popup(
                         .selected(index == selected)
                         .min_size(egui::vec2(168.0, 22.0));
                     if ui.add(button).clicked() {
-                        clicked = Some(*markdown);
+                        clicked = Some(markdown.clone());
                     }
                 }
             });
         });
 
     if let Some(markdown) = clicked {
-        apply_quick_insert(ui, block_ref, markdown, session, source, edit_state);
+        apply_quick_insert(ui, block_ref, &markdown, session, source, edit_state);
         return true;
     }
     false
@@ -8706,6 +8732,24 @@ mod tests {
         assert_eq!(quick_insert_query("/ h1"), None);
         assert_eq!(quick_insert_query("text /h1"), None);
         assert_eq!(quick_insert_query(""), None);
+    }
+
+    #[test]
+    fn test_emoji_query_trigger() {
+        assert_eq!(emoji_query(":sm"), Some("sm".to_string()));
+        assert_eq!(emoji_query(":SMILE"), Some("smile".to_string()));
+        // A completed shortcode must not keep the menu open.
+        assert_eq!(emoji_query(":smile:"), None);
+        assert_eq!(emoji_query(": sm"), None);
+        assert_eq!(emoji_query("text :sm"), None);
+        assert_eq!(emoji_query(":"), None);
+    }
+
+    #[test]
+    fn test_emoji_candidates_match_prefix() {
+        let items = emoji_candidates("smile");
+        assert!(items.iter().any(|(label, snippet)| label.contains("smile")
+            && snippet == ":smile: "));
     }
 
     #[test]

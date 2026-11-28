@@ -111,6 +111,11 @@ const EMOJI: &[(&str, &str)] = &[
     ("arrow_down", "⬇️"),
 ];
 
+/// Known `(name, glyph)` pairs, for the `:` completion menu.
+pub fn entries() -> &'static [(&'static str, &'static str)] {
+    EMOJI
+}
+
 /// Replace `:name:` shortcodes with emoji glyphs.
 ///
 /// Unknown shortcodes and stray colons are preserved verbatim.
